@@ -1,0 +1,2168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forge IDE</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root, [data-theme="dark"] {
+      --bg: #1e1e1e; --bg-sidebar: #252526; --bg-editor: #1e1e1e; --bg-title: #3c3c3c;
+      --bg-tab: #2d2d2d; --bg-tab-active: #1e1e1e; --bg-hover: #2a2d2e; --bg-input: #3c3c3c;
+      --bg-menu: #252526; --bg-status: #007acc; --bg-panel: #1e1e1e; --bg-badge: #4d4d4d;
+      --fg: #cccccc; --fg-dim: #9d9d9d; --fg-bright: #ffffff; --border: #3c3c3c;
+      --accent: #007acc; --accent-2: #0e639c; --danger: #f14c4c; --warn: #cca700;
+      --ok: #89d185; --info: #3794ff; --error: #f14c4c; --selection: #264f78;
+      --shadow: 0 8px 24px rgba(0,0,0,.45); --mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+      --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    [data-theme="light"] {
+      --bg: #ffffff; --bg-sidebar: #f3f3f3; --bg-editor: #ffffff; --bg-title: #dddddd;
+      --bg-tab: #ececec; --bg-tab-active: #ffffff; --bg-hover: #e8e8e8; --bg-input: #ffffff;
+      --bg-menu: #ffffff; --bg-status: #007acc; --bg-panel: #ffffff; --bg-badge: #d0d0d0;
+      --fg: #333333; --fg-dim: #6d6d6d; --fg-bright: #111111; --border: #e0e0e0;
+      --accent: #007acc; --accent-2: #0062a3; --selection: #add6ff; --shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    * { box-sizing: border-box; }
+    html, body, .ide-host { height: 100%; margin: 0; overflow: hidden; }
+    body { background: var(--bg); color: var(--fg); font-family: var(--ui); font-size: 13px; }
+    button, input, select { font: inherit; color: inherit; }
+    button { background: none; border: 0; cursor: pointer; }
+    .ide-host { display: flex; flex-direction: column; }
+    .titlebar { display: flex; align-items: center; height: 35px; background: var(--bg-title); border-bottom: 1px solid var(--border); flex-shrink: 0; user-select: none; }
+    .brand { display: flex; align-items: center; gap: 8px; padding: 0 12px; font-weight: 600; letter-spacing: .02em; }
+    .brand svg { width: 16px; height: 16px; }
+    .menubar { display: flex; height: 100%; }
+    .menu-root { position: relative; height: 100%; }
+    .menu-root > button { height: 100%; padding: 0 10px; color: var(--fg); }
+    .menu-root > button:hover, .menu-root.open > button { background: var(--bg-hover); }
+    .menu { display: none; position: absolute; top: 100%; left: 0; min-width: 260px; background: var(--bg-menu); border: 1px solid var(--border); box-shadow: var(--shadow); z-index: 50; padding: 4px 0; }
+    .menu-root.open .menu { display: block; }
+    .menu-item, .menu-check { display: flex; align-items: center; width: 100%; padding: 5px 12px 5px 28px; text-align: left; color: var(--fg); position: relative; }
+    .menu-item:hover, .menu-check:hover { background: var(--accent); color: #fff; }
+    .menu-item[disabled] { opacity: .45; pointer-events: none; }
+    .menu-item.danger { color: var(--danger); }
+    .menu-item .sc { margin-left: auto; color: var(--fg-dim); padding-left: 24px; font-size: 11px; }
+    .menu-item:hover .sc { color: #fff; }
+    .menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+    .menu-check.checked::before { content: "✓"; position: absolute; left: 10px; }
+    .toolbar { display: flex; align-items: center; gap: 2px; margin-left: auto; padding-right: 8px; }
+    .tb-btn { width: 28px; height: 24px; display: grid; place-items: center; border-radius: 3px; color: var(--fg); }
+    .tb-btn:hover { background: var(--bg-hover); }
+    .tb-btn:disabled { opacity: .35; pointer-events: none; }
+    .tb-btn.danger:hover { background: #5a1d1d; color: #ff8080; }
+    .tb-btn svg { width: 16px; height: 16px; }
+    .workbench { flex: 1; display: flex; min-height: 0; }
+    .sidebar { width: var(--sidebar-w, 260px); min-width: 160px; max-width: 480px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .ide-host.no-sidebar .sidebar { display: none; }
+    .sidebar-header { display: flex; align-items: center; height: 35px; padding: 0 8px 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--fg-dim); text-transform: uppercase; }
+    .sidebar-header .sp { flex: 1; }
+    .sidebar-body { flex: 1; overflow: auto; padding: 4px 0 12px; }
+    .tree-row { display: flex; align-items: center; height: 22px; padding: 0 8px 0 var(--depth, 8px); gap: 4px; width: 100%; text-align: left; color: var(--fg); }
+    .tree-row:hover { background: var(--bg-hover); }
+    .tree-row.active { background: var(--selection); }
+    .tree-row svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .tree-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-row input { flex: 1; min-width: 0; background: var(--bg-input); border: 1px solid var(--accent); padding: 1px 4px; outline: none; }
+    .chev { width: 16px; height: 16px; display: grid; place-items: center; color: var(--fg-dim); }
+    .sash-v, .sash-h { background: transparent; z-index: 5; }
+    .sash-v { width: 5px; cursor: col-resize; margin: 0 -2px; }
+    .sash-h { height: 5px; cursor: row-resize; margin: -2px 0; }
+    .sash-v:hover, .sash-h:hover { background: var(--accent); }
+    .center { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .editor-row { flex: 1; display: flex; min-height: 0; min-width: 0; }
+    .editor-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .tabs { display: flex; height: 35px; background: var(--bg-tab); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; }
+    .tab { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 10px; border-right: 1px solid var(--border); color: var(--fg-dim); white-space: nowrap; }
+    .tab.active { background: var(--bg-tab-active); color: var(--fg-bright); border-top: 1px solid var(--accent); }
+    .tab:hover { color: var(--fg); }
+    .tab .x { width: 18px; height: 18px; border-radius: 3px; display: grid; place-items: center; opacity: 0; }
+    .tab:hover .x, .tab.active .x { opacity: 1; }
+    .tab .x:hover { background: var(--bg-hover); }
+    .editor-host { flex: 1; position: relative; min-height: 0; }
+    .editor-host .monaco { position: absolute; inset: 0; }
+    .editor-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg-editor); color: var(--fg-dim); white-space: pre-wrap; text-align: center; padding: 24px; z-index: 2; }
+    .editor-overlay.hidden { display: none; }
+    .preview { width: var(--preview-w, 420px); min-width: 220px; border-left: 1px solid var(--border); display: none; flex-direction: column; background: var(--bg); }
+    .ide-host.preview-split .preview, .ide-host.preview-only .preview, .ide-host.preview-full .preview { display: flex; }
+    .ide-host.preview-only .editor-col { display: none; }
+    .ide-host.preview-full .sidebar, .ide-host.preview-full .panel, .ide-host.preview-full .titlebar, .ide-host.preview-full .statusbar { display: none; }
+    .ide-host.preview-full .preview { width: 100% !important; border: 0; }
+    .preview-toolbar { display: flex; align-items: center; height: 35px; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); background: var(--bg-tab); }
+    .preview-toolbar .target { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); font-size: 12px; }
+    .preview-frame-wrap { flex: 1; min-height: 0; background: #fff; }
+    .preview-frame-wrap iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+    .panel { height: var(--panel-h, 200px); min-height: 80px; border-top: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-panel); }
+    .ide-host.no-panel .panel { display: none; }
+    .panel-header { display: flex; align-items: center; height: 35px; padding: 0 8px; gap: 2px; border-bottom: 1px solid var(--border); }
+    .panel-tab { padding: 4px 10px; color: var(--fg-dim); border-bottom: 1px solid transparent; display: flex; align-items: center; gap: 6px; }
+    .panel-tab.active { color: var(--fg-bright); border-bottom-color: var(--accent); }
+    .panel-tab .count { background: var(--bg-badge); border-radius: 8px; padding: 0 6px; font-size: 11px; }
+    .panel-tab .count.errors { background: var(--danger); color: #fff; }
+    .panel-header .spacer { flex: 1; }
+    .icon-btn { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 3px; color: var(--fg-dim); }
+    .icon-btn:hover { background: var(--bg-hover); color: var(--fg); }
+    .icon-btn svg { width: 16px; height: 16px; }
+    .panel-body { flex: 1; min-height: 0; position: relative; }
+    .channel { display: none; position: absolute; inset: 0; overflow: auto; font-family: var(--mono); font-size: 12px; padding: 6px 10px; }
+    .channel.active { display: block; }
+    .channel.terminal { display: none; flex-direction: column; padding: 0; }
+    .channel.terminal.active { display: flex; }
+    .terminal-log { flex: 1; overflow: auto; padding: 6px 10px; }
+    .terminal-input-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding: 4px 10px; }
+    .terminal-input-row .prompt { color: var(--accent); font-family: var(--mono); }
+    .terminal-input-row input { flex: 1; background: transparent; border: 0; outline: none; font-family: var(--mono); }
+    .line { white-space: pre-wrap; word-break: break-word; }
+    .line.stdout, .line.info { color: var(--fg); }
+    .line.stderr, .line.error { color: var(--error); }
+    .line.warn { color: var(--warn); }
+    .line.system { color: var(--info); }
+    .line.cmd { color: var(--ok); }
+    .line.build { color: var(--fg); }
+    .problems-empty { color: var(--fg-dim); padding: 12px; }
+    .problem-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 3px 8px; }
+    .problem-row:hover { background: var(--bg-hover); }
+    .problem-row .sev svg { width: 14px; height: 14px; }
+    .problem-row .msg { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .problem-row .src { color: var(--fg-dim); font-size: 11px; }
+    .problem-row .loc { color: var(--fg-dim); font-size: 11px; }
+    .statusbar { display: flex; align-items: center; height: 22px; background: var(--bg-status); color: #fff; font-size: 12px; flex-shrink: 0; }
+    .sb-item { padding: 0 8px; height: 100%; display: flex; align-items: center; gap: 5px; }
+    .sb-item:hover { background: rgba(255,255,255,.12); }
+    .sb-item svg { width: 14px; height: 14px; }
+    .sb-sp { flex: 1; }
+    .overlay-back { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 80; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+    .dialog { background: var(--bg-menu); border: 1px solid var(--border); box-shadow: var(--shadow); min-width: 360px; max-width: 520px; padding: 16px 18px; }
+    .dialog h3 { margin: 0 0 8px; font-size: 14px; }
+    .dialog p { margin: 0 0 16px; color: var(--fg-dim); white-space: pre-wrap; line-height: 1.5; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn { padding: 5px 14px; border-radius: 2px; background: var(--accent-2); color: #fff; }
+    .btn:hover { filter: brightness(1.1); }
+    .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+    .btn.danger { background: #a1260d; }
+    .quick-open { background: var(--bg-menu); border: 1px solid var(--border); box-shadow: var(--shadow); width: min(560px, 92vw); }
+    .quick-open input { width: 100%; background: var(--bg-input); border: 0; border-bottom: 1px solid var(--border); padding: 10px 12px; outline: none; }
+    .qo-list { max-height: 320px; overflow: auto; }
+    .qo-item { display: flex; justify-content: space-between; padding: 6px 12px; }
+    .qo-item.active, .qo-item:hover { background: var(--selection); }
+    .qo-item .path { color: var(--fg-dim); font-size: 11px; }
+    .settings-panel { position: absolute; inset: 35px 0 22px 0; background: var(--bg); z-index: 20; overflow: auto; padding: 24px 32px; display: none; }
+    .settings-panel.open { display: block; }
+    .settings-panel h2 { margin: 0 0 16px; }
+    .set-row { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .set-row input[type="number"], .set-row select { background: var(--bg-input); border: 1px solid var(--border); padding: 4px 8px; width: 160px; }
+    .ctx { position: fixed; z-index: 90; min-width: 200px; background: var(--bg-menu); border: 1px solid var(--border); box-shadow: var(--shadow); padding: 4px 0; }
+    .toasts { position: fixed; right: 16px; bottom: 36px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
+    .toast { min-width: 240px; max-width: 360px; padding: 10px 12px; background: var(--bg-menu); border: 1px solid var(--border); box-shadow: var(--shadow); border-left: 3px solid var(--info); }
+    .toast.error { border-left-color: var(--danger); }
+    .toast.success { border-left-color: var(--ok); }
+    .toast.info { border-left-color: var(--info); }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #424242; }
+    [data-theme="light"] ::-webkit-scrollbar-thumb { background: #c1c1c1; }
+  </style>
+</head>
+<body>
+  <div id="ide-host" class="ide-host"></div>
+  <script>
+(function () {
+  "use strict";
+
+  const MONACO_VER = "0.52.2";
+  const MONACO_BASE = "https://cdn.jsdelivr.net/npm/monaco-editor@" + MONACO_VER + "/min";
+  const PYODIDE_VER = "0.27.7";
+  const ASC_URL = "https://esm.sh/assemblyscript@0.27.31/dist/asc.js";
+  const ROOT = "/";
+  const DEFAULT_OPEN_FILE = "/index.html";
+  const DB_NAME = "forge-ide";
+  const DB_STORE = "nodes";
+  const SETTINGS_KEY = "forge-ide.settings";
+  const UI_KEY = "forge-ide.ui";
+  const MAX_LINES = 4000;
+  const MESSAGE_SOURCE = "forge-preview";
+  const MARKER_OWNER_PREFIX = "forge-";
+
+  const icons = {
+    logo: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h5v5H2zm7 0h5v5H9zM2 9h5v5H2zm7 0h5v5H9z"/></svg>',
+    file: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 1H3.5A1.5 1.5 0 0 0 2 2.5v11A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V6.5L9.5 1zM9 2.5V6h3.5L9 2.5z"/></svg>',
+    folder: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 3 6.3 1.8A1 1 0 0 0 5.6 1.5H2.5A1.5 1.5 0 0 0 1 3v10a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 15 13V5.5A1.5 1.5 0 0 0 13.5 4H8.2L7.5 3z"/></svg>',
+    chevron: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="m6 4 4 4-4 4z"/></svg>',
+    run: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>',
+    build: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M14.5 7.5 9 2 7.5 3.5l1 1-5 5L2 8v6h6l-1.5-1.5 5-5 1 1z"/></svg>',
+    stop: '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10"/></svg>',
+    preview: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3C3 3 1 8 1 8s2 5 7 5 7-5 7-5-2-5-7-5zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>',
+    search: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.5 9.5 14 13l-1 1-3.5-3.5A4.5 4.5 0 1 1 10.5 9.5zM6.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/></svg>',
+    settings: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 5.5A2.5 2.5 0 1 1 8 10.5 2.5 2.5 0 0 1 8 5.5zM6.2 1.5l-.5 1.7-1.6.7L2.4 3 1.5 4.5l1.3 1.2v1.6L1.5 8.5 2.4 10l1.7-.9 1.6.7.5 1.7h1.8l.5-1.7 1.6-.7 1.7.9.9-1.5-1.3-1.2V7.7l1.3-1.2L13.6 5l-1.7.9-1.6-.7-.5-1.7H8z"/></svg>',
+    close: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="m3.5 3.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>',
+    clear: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 4h8v1H4zm1 2h6l-.7 7H5.7z"/></svg>',
+    copy: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3h8v9h-1V4H5zm-2 2h8v9H3z"/></svg>',
+    scrollDown: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3v8.3L4.7 8 4 8.7 8.5 13 13 8.7 12.3 8 9 11.3V3z"/></svg>',
+    collapse: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 9h10v1H3z"/></svg>',
+    refresh: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M13 8A5 5 0 1 1 8 3v2l3-2.5L8 0v2a6 6 0 1 0 6 6z"/></svg>',
+    check: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="m3.5 8 3 3 6-6-.7-.7-5.3 5.3-2.3-2.3z"/></svg>',
+    split: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h5v12H2zm7 0h5v12H9z"/></svg>',
+    fullscreen: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3h4v1H4v3H3zm6 0h4v4h-1V4H9zM3 9h1v3h3v1H3zm9 0h1v4H9v-1h3z"/></svg>',
+    error: '<svg viewBox="0 0 16 16" fill="#f14c4c"><circle cx="8" cy="8" r="6"/><path d="M8 4v5M8 11v1" stroke="#fff" stroke-width="1.4"/></svg>',
+    warning: '<svg viewBox="0 0 16 16" fill="#cca700"><path d="M8 2 15 14H1z"/><path d="M8 6v5M8 12v1" stroke="#000" stroke-width="1.2"/></svg>',
+    info: '<svg viewBox="0 0 16 16" fill="#3794ff"><circle cx="8" cy="8" r="6"/><path d="M8 7v5M8 5v1" stroke="#fff" stroke-width="1.4"/></svg>',
+    add: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M7 3h2v10H7zM3 7h10v2H3z"/></svg>',
+    newFile: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M9 1H4v14h8V5L9 1zm0 1.5L11.5 5H9zM8 8H6v1h2v2h1V9h2V8H9V6H8z"/></svg>'
+  };
+
+  const LANGUAGES = [
+    { id: "javascript", title: "JavaScript", monaco: "javascript", exts: [".js", ".mjs", ".cjs"], runner: "javascript", color: "#f7df1e" },
+    { id: "typescript", title: "TypeScript", monaco: "typescript", exts: [".ts"], runner: "typescript", color: "#3178c6" },
+    { id: "javascriptreact", title: "JavaScript React", monaco: "javascript", exts: [".jsx"], runner: "javascript", color: "#f7df1e" },
+    { id: "typescriptreact", title: "TypeScript React", monaco: "typescript", exts: [".tsx"], runner: "typescript", color: "#3178c6" },
+    { id: "python", title: "Python", monaco: "python", exts: [".py"], runner: "python", color: "#3572A5" },
+    { id: "assemblyscript", title: "AssemblyScript", monaco: "typescript", exts: [".as"], runner: "assemblyscript", color: "#007acc" },
+    { id: "html", title: "HTML", monaco: "html", exts: [".html", ".htm"], runner: "html", color: "#e34c26" },
+    { id: "css", title: "CSS", monaco: "css", exts: [".css"], runner: null, color: "#563d7c" },
+    { id: "json", title: "JSON", monaco: "json", exts: [".json"], runner: null, color: "#cbcb41" },
+    { id: "markdown", title: "Markdown", monaco: "markdown", exts: [".md"], runner: null, color: "#083fa1" },
+    { id: "c", title: "C", monaco: "c", exts: [".c", ".h"], runner: "c", color: "#555555" },
+    { id: "cpp", title: "C++", monaco: "cpp", exts: [".cpp", ".cc", ".cxx", ".hpp"], runner: "cpp", color: "#f34b7d" },
+    { id: "csharp", title: "C#", monaco: "csharp", exts: [".cs"], runner: "csharp", color: "#178600" },
+    { id: "java", title: "Java", monaco: "java", exts: [".java"], runner: "java", color: "#b07219" },
+    { id: "xml", title: "XML", monaco: "xml", exts: [".xml"], runner: null, color: "#e37933" },
+    { id: "plaintext", title: "Plain Text", monaco: "plaintext", exts: [".txt"], runner: null, color: "#888" }
+  ];
+  const LANG_BY_ID = Object.fromEntries(LANGUAGES.map((l) => [l.id, l]));
+  const LANG_BY_EXT = {};
+  for (const l of LANGUAGES) for (const e of l.exts) LANG_BY_EXT[e] = l;
+
+  function languageFromPath(path, override) {
+    if (override && LANG_BY_ID[override]) return LANG_BY_ID[override];
+    const ext = extname(path).toLowerCase();
+    if (ext === ".ts" && path.split("/").includes("assembly")) return LANG_BY_ID.assemblyscript;
+    return LANG_BY_EXT[ext] || LANG_BY_ID.plaintext;
+  }
+
+  function el(tag, className, attrs) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (k === "text") e.textContent = v;
+      else if (k === "html") e.innerHTML = v;
+      else e.setAttribute(k, v);
+    }
+    return e;
+  }
+  function iconBtn(icon, title, onClick) {
+    const b = el("button", "icon-btn");
+    b.type = "button"; b.title = title; b.setAttribute("aria-label", title);
+    b.innerHTML = icons[icon]; b.addEventListener("click", onClick); return b;
+  }
+
+  function normalizePath(p) {
+    if (!p) return ROOT;
+    const parts = String(p).replace(/\\/g, "/").split("/");
+    const out = [];
+    for (const part of parts) {
+      if (!part || part === ".") continue;
+      if (part === "..") out.pop();
+      else out.push(part);
+    }
+    return "/" + out.join("/");
+  }
+  function basename(p) { const n = normalizePath(p); return n === ROOT ? "" : n.slice(n.lastIndexOf("/") + 1); }
+  function dirname(p) { const n = normalizePath(p); if (n === ROOT) return ROOT; const i = n.lastIndexOf("/"); return i <= 0 ? ROOT : n.slice(0, i); }
+  function extname(p) { const b = basename(p); const i = b.lastIndexOf("."); return i > 0 ? b.slice(i) : ""; }
+  function joinPath(a, b) { return normalizePath((a === ROOT ? "" : a) + "/" + b); }
+  function resolveRelative(fromDir, rel) {
+    if (!rel) return fromDir;
+    if (/^(https?:|data:|blob:|javascript:)/i.test(rel)) return rel;
+    if (rel.startsWith("/")) return normalizePath(rel);
+    return normalizePath(fromDir + "/" + rel);
+  }
+
+  class EventEmitter {
+    constructor() { this._l = new Map(); }
+    on(ev, fn) { const a = this._l.get(ev) || []; a.push(fn); this._l.set(ev, a); return () => this.off(ev, fn); }
+    off(ev, fn) { const a = this._l.get(ev); if (!a) return; this._l.set(ev, a.filter((f) => f !== fn)); }
+    emit(ev, data) { for (const fn of this._l.get(ev) || []) try { fn(data); } catch (e) { console.error(e); } }
+  }
+
+  class SettingsManager extends EventEmitter {
+    constructor() {
+      super();
+      this.state = {
+        theme: "dark", fontSize: 14, fontFamily: "JetBrains Mono, Cascadia Code, Consolas, monospace",
+        tabSize: 2, insertSpaces: true, wordWrap: "on", minimap: false, lineNumbers: "on",
+        autosaveDelayMs: 400, previewAutoRefresh: true, cursorBlinking: "blink", renderWhitespace: "selection"
+      };
+      try { Object.assign(this.state, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch {}
+    }
+    get() { return this.state; }
+    update(partial) {
+      const changed = Object.keys(partial).filter((k) => this.state[k] !== partial[k]);
+      Object.assign(this.state, partial);
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.state)); } catch {}
+      if (changed.length) this.emit("change", { changed, state: this.state });
+    }
+  }
+
+  class UIStateManager extends EventEmitter {
+    constructor() {
+      super();
+      this.state = {
+        sidebarVisible: true, panelVisible: true, settingsVisible: false,
+        sidebarWidth: 260, panelHeight: 200, previewWidth: 420,
+        previewMode: "hidden", previewFile: null,
+        openTabs: [], activeFile: null, expandedDirs: [ROOT, "/lib", "/assembly", "/data", "/src"],
+        activePanelTab: "output", runState: "idle", runLabel: "Ready"
+      };
+      try {
+        const saved = JSON.parse(localStorage.getItem(UI_KEY) || "{}");
+        Object.assign(this.state, saved, { runState: "idle", runLabel: "Ready", settingsVisible: false });
+      } catch {}
+    }
+    get() { return this.state; }
+    set(partial) {
+      const changed = Object.keys(partial).filter((k) => this.state[k] !== partial[k]);
+      Object.assign(this.state, partial);
+      const persist = { ...this.state }; delete persist.runState; delete persist.runLabel; delete persist.settingsVisible;
+      try { localStorage.setItem(UI_KEY, JSON.stringify(persist)); } catch {}
+      if (changed.length) this.emit("change", { changed, state: this.state });
+    }
+    toggle(key) { this.set({ [key]: !this.state[key] }); }
+  }
+
+  class ProjectManager extends EventEmitter {
+    constructor() { super(); this.nodes = new Map(); }
+    load(records) {
+      this.nodes.clear();
+      this.nodes.set(ROOT, { path: ROOT, type: "dir", name: "", content: null, language: null });
+      for (const r of records) this.nodes.set(r.path, { ...r, name: r.path === ROOT ? "" : basename(r.path) });
+      this.emit("loaded", {});
+    }
+    allNodes() { return [...this.nodes.values()].filter((n) => n.path !== ROOT); }
+    get(path) { return this.nodes.get(normalizePath(path)) || null; }
+    exists(path) { return this.nodes.has(normalizePath(path)); }
+    getFile(path) { const n = this.get(path); return n && n.type === "file" ? n : null; }
+    isDir(path) { const n = this.get(path); return !!(n && n.type === "dir"); }
+    readFile(path) { const n = this.getFile(path); return n ? n.content ?? "" : null; }
+    languageOf(path) { const n = this.get(path); return languageFromPath(path, n && n.language); }
+    setLanguage(path, id) {
+      const n = this.getFile(path); if (!n) return;
+      n.language = id; this.emit("languageChanged", { path }); this.emit("changed", { path });
+    }
+    children(dir) {
+      const p = normalizePath(dir);
+      return this.allNodes().filter((n) => dirname(n.path) === p).sort((a, b) => {
+        if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    files() { return this.allNodes().filter((n) => n.type === "file"); }
+    filesByLanguage(id) { return this.files().filter((n) => this.languageOf(n.path).id === id); }
+    findEntry(names) {
+      for (const name of names) {
+        const hits = this.files().filter((n) => n.name === name);
+        if (hits.length) return hits.sort((a, b) => a.path.length - b.path.length)[0];
+      }
+      return null;
+    }
+    ensureDir(path) {
+      path = normalizePath(path);
+      if (path === ROOT) return;
+      this.ensureDir(dirname(path));
+      if (!this.exists(path)) {
+        this.nodes.set(path, { path, type: "dir", name: basename(path), content: null, language: null });
+      }
+    }
+    createFolder(path) {
+      path = normalizePath(path);
+      if (this.exists(path)) throw new Error("Already exists: " + path);
+      this.ensureDir(dirname(path));
+      this.nodes.set(path, { path, type: "dir", name: basename(path), content: null, language: null });
+      this.emit("created", { path, type: "dir" }); this.emit("changed", { path });
+    }
+    createFile(path, content, language) {
+      path = normalizePath(path);
+      if (this.exists(path)) throw new Error("Already exists: " + path);
+      this.ensureDir(dirname(path));
+      const lang = language || languageFromPath(path).id;
+      this.nodes.set(path, { path, type: "file", name: basename(path), content: content ?? "", language: lang });
+      this.emit("created", { path, type: "file" }); this.emit("changed", { path });
+    }
+    writeFile(path, content) {
+      const n = this.getFile(path); if (!n) return;
+      n.content = content; this.emit("contentChanged", { path, content }); this.emit("changed", { path });
+    }
+    delete(path) {
+      path = normalizePath(path);
+      const n = this.get(path); if (!n) return;
+      const paths = n.type === "dir" ? [...this.nodes.keys()].filter((p) => p === path || p.startsWith(path + "/")) : [path];
+      for (const p of paths) this.nodes.delete(p);
+      this.emit("deleted", { paths }); this.emit("changed", { path });
+    }
+    rename(from, to) {
+      from = normalizePath(from); to = normalizePath(to);
+      if (!this.exists(from)) throw new Error("Not found: " + from);
+      if (this.exists(to)) throw new Error("Already exists: " + to);
+      this.ensureDir(dirname(to));
+      const moves = [];
+      const n = this.get(from);
+      if (n.type === "file") {
+        const copy = { ...n, path: to, name: basename(to) };
+        this.nodes.delete(from); this.nodes.set(to, copy); moves.push({ from, to });
+      } else {
+        const affected = [...this.nodes.keys()].filter((p) => p === from || p.startsWith(from + "/"));
+        for (const p of affected) {
+          const np = to + p.slice(from.length);
+          const node = this.nodes.get(p);
+          this.nodes.delete(p);
+          this.nodes.set(np, { ...node, path: np, name: basename(np) });
+          moves.push({ from: p, to: np });
+        }
+      }
+      this.emit("renamed", { moves }); this.emit("changed", { path: to });
+      return moves;
+    }
+    duplicate(path) {
+      path = normalizePath(path);
+      const n = this.get(path); if (!n || n.type !== "file") throw new Error("Not a file");
+      const dir = dirname(path); const ext = extname(path); const base = basename(path).slice(0, -ext.length || undefined);
+      let i = 1, dest;
+      do { dest = joinPath(dir, base + " copy" + (i > 1 ? " " + i : "") + ext); i++; } while (this.exists(dest));
+      this.createFile(dest, n.content, n.language);
+      return dest;
+    }
+    snapshot() {
+      return [...this.nodes.values()].filter((n) => n.path !== ROOT).map((n) => ({ path: n.path, type: n.type, content: n.content, language: n.language }));
+    }
+  }
+
+  class PersistenceManager extends EventEmitter {
+    constructor() { super(); this.db = null; this.isAvailable = false; this._timer = null; this._project = null; this._delay = () => 400; this._state = "idle"; }
+    async open() {
+      try {
+        this.db = await new Promise((res, rej) => {
+          const req = indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE, { keyPath: "path" });
+          req.onsuccess = () => res(req.result);
+          req.onerror = () => rej(req.error);
+        });
+        this.isAvailable = true;
+      } catch {
+        this.isAvailable = false;
+        this.emit("unavailable", { message: "Browser storage (IndexedDB) is unavailable: edits will be lost on reload." });
+      }
+    }
+    async loadNodes() {
+      if (!this.db) return [];
+      return new Promise((res, rej) => {
+        const tx = this.db.transaction(DB_STORE, "readonly");
+        const req = tx.objectStore(DB_STORE).getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => rej(req.error);
+      });
+    }
+    async writeAll(records) {
+      if (!this.db) return;
+      await new Promise((res, rej) => {
+        const tx = this.db.transaction(DB_STORE, "readwrite");
+        const store = tx.objectStore(DB_STORE);
+        store.clear();
+        for (const r of records) store.put(r);
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+      });
+    }
+    attach(project, delayFn) {
+      this._project = project; this._delay = delayFn;
+      project.on("changed", () => this.schedule());
+      project.on("contentChanged", () => this.schedule());
+      project.on("created", () => this.schedule());
+      project.on("deleted", () => this.schedule());
+      project.on("renamed", () => this.schedule());
+    }
+    schedule() {
+      if (!this.isAvailable) return;
+      this.setState("pending", "Unsaved changes");
+      clearTimeout(this._timer);
+      this._timer = setTimeout(() => void this.flush(), this._delay());
+    }
+    async flush() {
+      if (!this.isAvailable || !this._project) return;
+      this.setState("saving", "Saving…");
+      try {
+        await this.writeAll(this._project.snapshot());
+        this.setState("saved", "Saved");
+      } catch (err) {
+        this.setState("error", "Autosave failed: " + err.message);
+      }
+    }
+    setState(state, message) { this._state = state; this.emit("stateChange", { state, message }); }
+    dispose() { clearTimeout(this._timer); if (this.db) this.db.close(); }
+  }
+
+  function createDefaultProject() {
+    const files = [
+      { path: "/src", type: "dir" }, { path: "/lib", type: "dir" }, { path: "/assembly", type: "dir" }, { path: "/data", type: "dir" },
+      { path: "/README.md", type: "file", language: "markdown", content: `# Forge IDE
+
+A desktop-style IDE that runs entirely inside a normal browser tab: real **Monaco Editor**, a virtual
+project filesystem persisted to **IndexedDB** with automatic debounced autosave, and isolated
+in-browser execution for **JavaScript**, **TypeScript**, **Python (Pyodide)**, **AssemblyScript → WebAssembly**
+and **HTML preview**. There is no application backend of any kind: nothing you type is ever sent to a server.
+
+## Try it
+
+- Open \`/src/main.js\` and press **Ctrl/Cmd+Enter** to run JavaScript in a Web Worker.
+- Open \`/src/app.ts\` and run TypeScript (compiled by Monaco's TS worker).
+- Open \`/src/hello.py\` to run Python via Pyodide (lazy-loaded).
+- Open \`/assembly/add.ts\` to compile AssemblyScript to WebAssembly.
+- Open \`/index.html\` and use **Preview** for a sandboxed live page.
+
+C / C++ / C# / Java adapters are present but report "not installed" unless local browser toolchain assets are registered.
+` },
+      { path: "/index.html", type: "file", language: "html", content: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Forge Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1>Forge IDE</h1>
+  <p>This page is served from the virtual project filesystem.</p>
+  <p>Sum from <code>/lib/util.js</code>: <strong id="out">…</strong></p>
+  <script src="src/browser.js"></script>
+</body>
+</html>
+` },
+      { path: "/styles.css", type: "file", language: "css", content: `body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; background: #0f172a; color: #e2e8f0; }
+h1 { color: #38bdf8; }
+code { background: #1e293b; padding: 0.1em 0.35em; border-radius: 4px; }
+` },
+      { path: "/src/main.js", type: "file", language: "javascript", content: `const { add } = require("../lib/util.js");
+
+console.log("Hello from JavaScript in a Web Worker");
+console.log("2 + 3 =", add(2, 3));
+console.log("Project files can require() each other.");
+` },
+      { path: "/src/browser.js", type: "file", language: "javascript", content: `function add(a, b) { return a + b; }
+document.getElementById("out").textContent = String(add(2, 3));
+console.log("browser.js loaded in the HTML preview");
+` },
+      { path: "/src/app.ts", type: "file", language: "typescript", content: `import { add } from "../lib/math";
+
+function greet(name: string): string {
+  return \`Hello, \${name}!\`;
+}
+
+console.log(greet("TypeScript"));
+console.log("2 + 3 =", add(2, 3));
+` },
+      { path: "/src/hello.py", type: "file", language: "python", content: `print("Hello from Forge IDE (Pyodide)")
+for i in range(5):
+    print(f"  count {i}")
+
+from math import sqrt
+print("sqrt(16) =", sqrt(16))
+` },
+      { path: "/lib/util.js", type: "file", language: "javascript", content: `function add(a, b) { return a + b; }
+module.exports = { add };
+` },
+      { path: "/lib/math.ts", type: "file", language: "typescript", content: `export function add(a: number, b: number): number {
+  return a + b;
+}
+` },
+      { path: "/assembly/add.ts", type: "file", language: "assemblyscript", content: `export function add(a: i32, b: i32): i32 {
+  return a + b;
+}
+
+export function fib(n: i32): i32 {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+` },
+      { path: "/data/sample.json", type: "file", language: "json", content: `{
+  "name": "Forge IDE",
+  "runtimes": ["javascript", "typescript", "python", "assemblyscript", "html"]
+}
+` },
+      { path: "/src/hello.c", type: "file", language: "c", content: `#include <stdio.h>
+int main(void) {
+  printf("Hello from C\\n");
+  return 0;
+}
+` }
+    ];
+    return files;
+  }
+
+  class Toasts {
+    constructor() {
+      this.root = el("div", "toasts");
+      document.body.appendChild(this.root);
+    }
+    show(message, kind, ms) {
+      const t = el("div", "toast " + (kind || "info")); t.textContent = message;
+      this.root.appendChild(t);
+      setTimeout(() => t.remove(), ms || 4000);
+    }
+  }
+
+  function confirmDialog({ title, message, confirmLabel, danger }) {
+    return new Promise((resolve) => {
+      const back = el("div", "overlay-back");
+      const box = el("div", "dialog");
+      box.innerHTML = "";
+      const h = el("h3"); h.textContent = title;
+      const p = el("p"); p.textContent = message;
+      const actions = el("div", "dialog-actions");
+      const cancel = el("button", "btn ghost"); cancel.textContent = confirmLabel === "OK" ? "Close" : "Cancel";
+      const ok = el("button", "btn" + (danger ? " danger" : "")); ok.textContent = confirmLabel || "OK";
+      if (confirmLabel === "OK") { actions.append(ok); } else { actions.append(cancel, ok); }
+      box.append(h, p, actions); back.appendChild(box); document.body.appendChild(back);
+      const done = (v) => { back.remove(); resolve(v); };
+      cancel.onclick = () => done(false);
+      ok.onclick = () => done(true);
+      back.addEventListener("click", (e) => { if (e.target === back) done(false); });
+      document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { document.removeEventListener("keydown", esc); done(false); } });
+    });
+  }
+
+  class Shell {
+    constructor(host, ui, settings, actions) {
+      this.host = host; this.ui = ui; this.settings = settings; this.actions = actions;
+      host.innerHTML = "";
+      this.refs = {};
+      this._menus = [];
+      this._build();
+      this._bind();
+      this.applyChrome();
+    }
+    _build() {
+      const host = this.host;
+      const title = el("div", "titlebar");
+      const brand = el("div", "brand"); brand.innerHTML = icons.logo + "<span>Forge IDE</span>";
+      const menubar = el("div", "menubar"); this.menubar = menubar;
+      const toolbar = el("div", "toolbar");
+      const mkTb = (icon, title, fn, cls) => {
+        const b = el("button", "tb-btn" + (cls ? " " + cls : "")); b.type = "button"; b.title = title; b.innerHTML = icons[icon]; b.onclick = fn; return b;
+      };
+      this.runBtn = mkTb("run", "Run Current File (Ctrl/Cmd+Enter)", () => this.actions.run());
+      this.buildBtn = mkTb("build", "Build Project", () => this.actions.build());
+      this.stopBtn = mkTb("stop", "Stop", () => this.actions.stop(), "danger");
+      toolbar.append(
+        this.runBtn, this.buildBtn, this.stopBtn,
+        mkTb("preview", "Preview HTML", () => this.actions.preview()),
+        mkTb("search", "Quick Open (Ctrl/Cmd+P)", () => this.actions.quickOpen()),
+        mkTb("settings", "Settings", () => this.actions.toggleSettings())
+      );
+      title.append(brand, menubar, toolbar);
+
+      const workbench = el("div", "workbench");
+      const sidebar = el("div", "sidebar");
+      this.refs.sidebarHeader = el("div", "sidebar-header");
+      this.refs.sidebarBody = el("div", "sidebar-body");
+      sidebar.append(this.refs.sidebarHeader, this.refs.sidebarBody);
+      const sashV = el("div", "sash-v");
+      this._drag(sashV, "x", (dx) => this.ui.set({ sidebarWidth: Math.max(160, Math.min(480, this.ui.get().sidebarWidth + dx)) }));
+
+      const center = el("div", "center");
+      const editorRow = el("div", "editor-row");
+      const editorCol = el("div", "editor-col");
+      this.refs.tabs = el("div", "tabs");
+      this.refs.editorHost = el("div", "editor-host");
+      this.overlay = el("div", "editor-overlay");
+      this.refs.editorHost.appendChild(this.overlay);
+      editorCol.append(this.refs.tabs, this.refs.editorHost);
+      const sashPrev = el("div", "sash-v");
+      this._drag(sashPrev, "x", (dx) => this.ui.set({ previewWidth: Math.max(220, this.ui.get().previewWidth - dx) }));
+      this.refs.preview = el("div", "preview");
+      editorRow.append(editorCol, sashPrev, this.refs.preview);
+
+      const sashH = el("div", "sash-h");
+      this._drag(sashH, "y", (dy) => this.ui.set({ panelHeight: Math.max(80, Math.min(this.host.clientHeight - 160, this.ui.get().panelHeight - dy)) }));
+      this.refs.panel = el("div", "panel");
+      center.append(editorRow, sashH, this.refs.panel);
+
+      workbench.append(sidebar, sashV, center);
+      this.refs.statusbar = el("div", "statusbar");
+      this.refs.main = host;
+      this.settingsEl = el("div", "settings-panel");
+      host.append(title, workbench, this.refs.statusbar, this.settingsEl);
+    }
+    _drag(elSash, axis, onDelta) {
+      elSash.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        const start = axis === "x" ? e.clientX : e.clientY;
+        let last = start;
+        const move = (ev) => { const cur = axis === "x" ? ev.clientX : ev.clientY; onDelta(cur - last); last = cur; };
+        const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+        window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+      });
+    }
+    _bind() {
+      this.ui.on("change", () => this.applyChrome());
+      this.settings.on("change", ({ changed }) => {
+        if (changed.includes("theme")) this.applyChrome();
+      });
+    }
+    applyChrome() {
+      const s = this.ui.get(); const th = this.settings.get().theme;
+      document.documentElement.setAttribute("data-theme", th);
+      this.host.classList.toggle("no-sidebar", !s.sidebarVisible);
+      this.host.classList.toggle("no-panel", !s.panelVisible);
+      this.host.classList.remove("preview-split", "preview-only", "preview-full");
+      if (s.previewMode === "split") this.host.classList.add("preview-split");
+      if (s.previewMode === "only") this.host.classList.add("preview-only");
+      if (s.previewMode === "fullscreen") this.host.classList.add("preview-full");
+      this.host.style.setProperty("--sidebar-w", s.sidebarWidth + "px");
+      this.host.style.setProperty("--panel-h", s.panelHeight + "px");
+      this.host.style.setProperty("--preview-w", s.previewWidth + "px");
+      const running = s.runState !== "idle";
+      this.runBtn.disabled = running; this.buildBtn.disabled = running; this.stopBtn.disabled = !running;
+      this.settingsEl.classList.toggle("open", s.settingsVisible);
+    }
+    setMenus(menus) {
+      this.menubar.innerHTML = "";
+      this._menus = menus;
+      for (const m of menus) {
+        const root = el("div", "menu-root");
+        const btn = el("button"); btn.type = "button"; btn.textContent = m.label;
+        const list = el("div", "menu");
+        btn.addEventListener("click", (e) => { e.stopPropagation(); this._openMenu(root, list, m); });
+        root.append(btn, list); this.menubar.appendChild(root);
+      }
+      document.addEventListener("click", () => this._closeMenus());
+    }
+    _openMenu(root, list, m) {
+      const already = root.classList.contains("open");
+      this._closeMenus();
+      if (already) return;
+      list.innerHTML = "";
+      for (const item of m.items()) {
+        if (item.separator) { list.appendChild(el("div", "menu-sep")); continue; }
+        const b = el("button", item.checked !== undefined ? "menu-check" : "menu-item");
+        if (item.checked) b.classList.add("checked");
+        if (item.danger) b.classList.add("danger");
+        if (item.disabled) b.setAttribute("disabled", "");
+        b.appendChild(document.createTextNode(item.label));
+        if (item.shortcut) { const sc = el("span", "sc"); sc.textContent = item.shortcut; b.appendChild(sc); }
+        b.addEventListener("click", (e) => { e.stopPropagation(); this._closeMenus(); item.onSelect && item.onSelect(); });
+        list.appendChild(b);
+      }
+      root.classList.add("open");
+    }
+    _closeMenus() { this.menubar.querySelectorAll(".menu-root").forEach((r) => r.classList.remove("open")); }
+    setEditorOverlay(state, message) {
+      this.overlay.className = "editor-overlay" + (state === "hidden" ? " hidden" : "");
+      this.overlay.textContent = state === "empty" ? "Open a file from the explorer, or press Ctrl/Cmd+P." : (message || "");
+    }
+    setProblemsBadge() {}
+  }
+
+  class Explorer {
+    constructor(header, body, project, ui, hooks) {
+      this.header = header; this.body = body; this.project = project; this.ui = ui; this.hooks = hooks;
+      this.creating = null; this.renaming = null;
+      header.innerHTML = '<span>Explorer</span><span class="sp"></span>';
+      header.append(
+        iconBtn("newFile", "New File", () => this.startCreate("file")),
+        iconBtn("folder", "New Folder", () => this.startCreate("folder"))
+      );
+      project.on("changed", () => this.render());
+      project.on("loaded", () => this.render());
+      ui.on("change", ({ changed }) => {
+        if (changed.some((k) => ["activeFile", "expandedDirs"].includes(k))) this.render();
+      });
+      this.render();
+      document.addEventListener("click", () => this._hideCtx());
+    }
+    startCreate(kind) {
+      const active = this.ui.get().activeFile;
+      const dir = active ? (this.project.isDir(active) ? active : dirname(active)) : ROOT;
+      this.creating = { kind, dir }; this._expand(dir); this.render();
+    }
+    revealActive() { const p = this.ui.get().activeFile; if (p) this._expand(dirname(p)); this.render(); }
+    _expand(dir) {
+      const set = new Set(this.ui.get().expandedDirs);
+      let d = dir;
+      while (d && d !== ROOT) { set.add(d); d = dirname(d); }
+      set.add(ROOT);
+      this.ui.set({ expandedDirs: [...set] });
+    }
+    render() {
+      const { expandedDirs, activeFile } = this.ui.get();
+      const expanded = new Set(expandedDirs);
+      this.body.innerHTML = "";
+      const walk = (dir, depth) => {
+        for (const node of this.project.children(dir)) {
+          this.body.appendChild(this._row(node, depth, activeFile, expanded));
+          if (node.type === "dir" && expanded.has(node.path)) walk(node.path, depth + 1);
+        }
+        if (this.creating && this.creating.dir === dir) this.body.appendChild(this._createRow(depth));
+      };
+      walk(ROOT, 0);
+    }
+    _row(node, depth, activeFile, expanded) {
+      const row = el("button", "tree-row" + (node.path === activeFile ? " active" : ""));
+      row.type = "button";
+      row.style.setProperty("--depth", 8 + depth * 14 + "px");
+      if (this.renaming === node.path) {
+        const input = el("input"); input.value = node.name;
+        row.appendChild(input);
+        setTimeout(() => { input.focus(); input.select(); }, 0);
+        const commit = () => {
+          const name = input.value.trim(); this.renaming = null;
+          if (name && name !== node.name) {
+            try { const moves = this.project.rename(node.path, joinPath(dirname(node.path), name)); this.hooks.open(moves[0].to); }
+            catch (e) { this.hooks.onError(e.message); }
+          } else this.render();
+        };
+        input.addEventListener("blur", commit);
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { this.renaming = null; this.render(); } });
+        return row;
+      }
+      if (node.type === "dir") {
+        const ch = el("span", "chev"); ch.innerHTML = icons.chevron; ch.style.transform = expanded.has(node.path) ? "rotate(90deg)" : "";
+        row.appendChild(ch);
+        const ic = el("span"); ic.innerHTML = icons.folder; row.appendChild(ic);
+      } else {
+        row.appendChild(el("span", "chev"));
+        const ic = el("span"); ic.innerHTML = icons.file; ic.style.color = this.project.languageOf(node.path).color; row.appendChild(ic);
+      }
+      const name = el("span", "name"); name.textContent = node.name; row.appendChild(name);
+      row.addEventListener("click", () => {
+        if (node.type === "dir") {
+          const set = new Set(this.ui.get().expandedDirs);
+          if (set.has(node.path)) set.delete(node.path); else set.add(node.path);
+          this.ui.set({ expandedDirs: [...set] });
+        } else this.hooks.open(node.path);
+      });
+      row.addEventListener("dblclick", () => { if (node.type === "file") this.hooks.runFile(node.path); });
+      row.addEventListener("contextmenu", (e) => { e.preventDefault(); this._ctx(e.clientX, e.clientY, node); });
+      row.addEventListener("keydown", (e) => { if (e.key === "F2") { e.preventDefault(); this.renaming = node.path; this.render(); } });
+      return row;
+    }
+    _createRow(depth) {
+      const row = el("div", "tree-row"); row.style.setProperty("--depth", 8 + depth * 14 + "px");
+      const input = el("input"); input.placeholder = this.creating.kind === "dir" ? "folder name" : "file name";
+      row.appendChild(input);
+      setTimeout(() => input.focus(), 0);
+      const commit = () => {
+        const name = input.value.trim(); const kind = this.creating && this.creating.kind; const dir = this.creating && this.creating.dir;
+        this.creating = null;
+        if (!name) { this.render(); return; }
+        try {
+          const path = joinPath(dir, name);
+          if (kind === "dir") this.project.createFolder(path);
+          else { this.project.createFile(path, "", null); this.hooks.open(path); }
+        } catch (e) { this.hooks.onError(e.message); this.render(); }
+      };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { this.creating = null; this.render(); } });
+      return row;
+    }
+    _hideCtx() { if (this.ctx) { this.ctx.remove(); this.ctx = null; } }
+    _ctx(x, y, node) {
+      this._hideCtx();
+      const m = el("div", "ctx"); m.style.left = x + "px"; m.style.top = y + "px";
+      const item = (label, fn, danger) => {
+        const b = el("button", "menu-item" + (danger ? " danger" : "")); b.textContent = label;
+        b.onclick = (e) => { e.stopPropagation(); this._hideCtx(); fn(); }; m.appendChild(b);
+      };
+      item("New File…", () => { this.creating = { kind: "file", dir: node.type === "dir" ? node.path : dirname(node.path) }; this._expand(this.creating.dir); this.render(); });
+      item("New Folder…", () => { this.creating = { kind: "folder", dir: node.type === "dir" ? node.path : dirname(node.path) }; this._expand(this.creating.dir); this.render(); });
+      m.appendChild(el("div", "menu-sep"));
+      item("Rename", () => { this.renaming = node.path; this.render(); });
+      if (node.type === "file") item("Duplicate", () => { try { this.hooks.open(this.project.duplicate(node.path)); } catch (e) { this.hooks.onError(e.message); } });
+      item("Delete…", () => this.hooks.requestDelete(node.path), true);
+      if (node.type === "file") {
+        m.appendChild(el("div", "menu-sep"));
+        item("Run", () => this.hooks.runFile(node.path));
+        if (this.project.languageOf(node.path).id === "html") item("Preview", () => this.hooks.preview(node.path));
+      }
+      document.body.appendChild(m); this.ctx = m;
+    }
+  }
+
+  class TabManager {
+    constructor(root, ui, project, persistence) {
+      this.root = root; this.ui = ui; this.project = project; this.persistence = persistence;
+      ui.on("change", ({ changed }) => { if (changed.some((k) => ["openTabs", "activeFile"].includes(k))) this.render(); });
+      project.on("deleted", ({ paths }) => {
+        const tabs = ui.get().openTabs.filter((t) => !paths.includes(t));
+        let active = ui.get().activeFile;
+        if (paths.includes(active)) active = tabs[tabs.length - 1] || null;
+        ui.set({ openTabs: tabs, activeFile: active });
+      });
+      project.on("renamed", ({ moves }) => {
+        const map = Object.fromEntries(moves.map((m) => [m.from, m.to]));
+        const tabs = ui.get().openTabs.map((t) => map[t] || t);
+        const active = map[ui.get().activeFile] || ui.get().activeFile;
+        ui.set({ openTabs: tabs, activeFile: active });
+      });
+      this.render();
+    }
+    open(path) {
+      const tabs = this.ui.get().openTabs.slice();
+      if (!tabs.includes(path)) tabs.push(path);
+      this.ui.set({ openTabs: tabs, activeFile: path });
+    }
+    close(path) {
+      const tabs = this.ui.get().openTabs.filter((t) => t !== path);
+      let active = this.ui.get().activeFile;
+      if (active === path) active = tabs[tabs.length - 1] || null;
+      this.ui.set({ openTabs: tabs, activeFile: active });
+    }
+    closeAll() { this.ui.set({ openTabs: [], activeFile: null }); }
+    prune() {
+      const tabs = this.ui.get().openTabs.filter((t) => this.project.getFile(t));
+      let active = this.ui.get().activeFile;
+      if (active && !this.project.getFile(active)) active = tabs[0] || null;
+      this.ui.set({ openTabs: tabs, activeFile: active });
+    }
+    render() {
+      const { openTabs, activeFile } = this.ui.get();
+      this.root.innerHTML = "";
+      for (const path of openTabs) {
+        const t = el("button", "tab" + (path === activeFile ? " active" : "")); t.type = "button"; t.title = path;
+        const ic = el("span"); ic.innerHTML = icons.file; t.appendChild(ic);
+        const lab = el("span"); lab.textContent = basename(path); t.appendChild(lab);
+        const x = el("span", "x"); x.innerHTML = icons.close;
+        x.addEventListener("click", (e) => { e.stopPropagation(); this.close(path); });
+        t.appendChild(x);
+        t.addEventListener("click", () => this.ui.set({ activeFile: path }));
+        t.addEventListener("auxclick", (e) => { if (e.button === 1) { e.preventDefault(); this.close(path); } });
+        this.root.appendChild(t);
+      }
+    }
+  }
+
+  class StatusBar {
+    constructor(root, hooks) {
+      this.root = root; this.hooks = hooks;
+      this.problems = el("button", "sb-item"); this.problems.onclick = () => hooks.openProblems();
+      this.run = el("button", "sb-item"); this.run.onclick = () => hooks.showRunOutput();
+      this.save = el("span", "sb-item");
+      this.lang = el("button", "sb-item");
+      this.indent = el("button", "sb-item");
+      this.cursor = el("span", "sb-item");
+      const enc = el("span", "sb-item"); enc.textContent = "UTF-8";
+      root.append(this.problems, this.run, this.save, el("span", "sb-sp"), this.lang, this.indent, this.cursor, enc);
+      this.setProblems(0, 0); this.setRun("idle", "Ready"); this.setAutosave("saved", "Saved"); this.setCursor(1, 1); this.setIndent(2, true); this.setLanguage(null, null);
+      this.lang.onclick = () => {
+        const id = prompt("Language id (javascript, typescript, python, html, …)", "");
+        if (id) hooks.setLanguage(id);
+      };
+      this.indent.onclick = () => {
+        const n = Number(prompt("Tab size", "2"));
+        if (n) hooks.setIndentation(n, true);
+      };
+    }
+    setProblems(errors, warnings) { this.problems.innerHTML = icons.error + " " + errors + "  " + icons.warning + " " + warnings; }
+    setRun(state, label) { this.run.textContent = label || state; }
+    setAutosave(state, message) { this.save.textContent = message || state; }
+    setLanguage(lang, path) { this.lang.textContent = lang ? lang.title : "Plain Text"; }
+    setIndent(tabSize, insertSpaces) { this.indent.textContent = (insertSpaces ? "Spaces" : "Tabs") + ": " + tabSize; }
+    setCursor(line, column) { this.cursor.textContent = "Ln " + line + ", Col " + column; }
+  }
+
+  class SettingsPanel {
+    constructor(host, settings, ui) {
+      this.settings = settings; this.ui = ui;
+      this.root = host.querySelector(".settings-panel");
+      this.render();
+      settings.on("change", () => this.render());
+      ui.on("change", ({ changed }) => { if (changed.includes("settingsVisible")) this.root.classList.toggle("open", ui.get().settingsVisible); });
+    }
+    render() {
+      const s = this.settings.get();
+      this.root.innerHTML = "<h2>Settings</h2>";
+      const row = (label, control) => {
+        const r = el("div", "set-row"); const l = el("div"); l.textContent = label; r.append(l, control); this.root.appendChild(r);
+      };
+      const select = (key, opts) => {
+        const sel = el("select");
+        for (const [v, t] of opts) { const o = document.createElement("option"); o.value = v; o.textContent = t; if (String(s[key]) === String(v)) o.selected = true; sel.appendChild(o); }
+        sel.onchange = () => this.settings.update({ [key]: sel.value });
+        return sel;
+      };
+      const num = (key, min, max) => {
+        const i = el("input"); i.type = "number"; i.value = s[key]; i.min = min; i.max = max;
+        i.onchange = () => this.settings.update({ [key]: Number(i.value) }); return i;
+      };
+      const chk = (key) => {
+        const i = el("input"); i.type = "checkbox"; i.checked = !!s[key];
+        i.onchange = () => this.settings.update({ [key]: i.checked }); return i;
+      };
+      row("Color theme", select("theme", [["dark", "Dark"], ["light", "Light"]]));
+      row("Font size", num("fontSize", 10, 24));
+      row("Tab size", num("tabSize", 1, 8));
+      row("Insert spaces", chk("insertSpaces"));
+      row("Word wrap", select("wordWrap", [["on", "On"], ["off", "Off"]]));
+      row("Minimap", chk("minimap"));
+      row("Line numbers", select("lineNumbers", [["on", "On"], ["off", "Off"]]));
+      row("Autosave delay (ms)", num("autosaveDelayMs", 100, 5000));
+      row("Preview auto-refresh", chk("previewAutoRefresh"));
+      const close = el("button", "btn"); close.textContent = "Close"; close.style.marginTop = "16px";
+      close.onclick = () => this.ui.set({ settingsVisible: false });
+      this.root.appendChild(close);
+    }
+  }
+
+  class QuickOpen {
+    constructor(project, open) { this.project = project; this.openFn = open; }
+    open() {
+      const back = el("div", "overlay-back");
+      const box = el("div", "quick-open");
+      const input = el("input"); input.placeholder = "Go to file";
+      const list = el("div", "qo-list");
+      box.append(input, list); back.appendChild(box); document.body.appendChild(back);
+      let items = []; let idx = 0;
+      const render = () => {
+        const q = input.value.toLowerCase();
+        items = this.project.files().filter((n) => n.path.toLowerCase().includes(q) || n.name.toLowerCase().includes(q));
+        list.innerHTML = "";
+        items.slice(0, 50).forEach((n, i) => {
+          const row = el("button", "qo-item" + (i === idx ? " active" : ""));
+          row.innerHTML = "<span>" + n.name + "</span><span class='path'>" + n.path + "</span>";
+          row.onclick = () => choose(n.path);
+          list.appendChild(row);
+        });
+      };
+      const choose = (p) => { back.remove(); this.openFn(p); };
+      const close = () => back.remove();
+      input.addEventListener("input", () => { idx = 0; render(); });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") close();
+        if (e.key === "ArrowDown") { idx = Math.min(idx + 1, items.length - 1); render(); e.preventDefault(); }
+        if (e.key === "ArrowUp") { idx = Math.max(idx - 1, 0); render(); e.preventDefault(); }
+        if (e.key === "Enter" && items[idx]) choose(items[idx].path);
+      });
+      back.addEventListener("click", (e) => { if (e.target === back) close(); });
+      render(); setTimeout(() => input.focus(), 0);
+    }
+  }
+
+  function installShortcuts(h) {
+    const handler = (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "p") { e.preventDefault(); h.quickOpen(); }
+      else if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); h.toggleSidebar(); }
+      else if (mod && e.key.toLowerCase() === "j") { e.preventDefault(); h.togglePanel(); }
+      else if (mod && e.key === "Enter") { e.preventDefault(); h.runFile(); }
+      else if (e.key === "F5") { e.preventDefault(); h.runProject(); }
+      else if (mod && e.key.toLowerCase() === "f" && !h.editorHasFocus()) { e.preventDefault(); h.find(); }
+      else if (mod && e.key.toLowerCase() === "h" && !h.editorHasFocus()) { e.preventDefault(); h.replace(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }
+
+  function loadMonaco() {
+    return new Promise((resolve, reject) => {
+      if (window.monaco) return resolve(window.monaco);
+      const script = document.createElement("script");
+      script.src = MONACO_BASE + "/vs/loader.js";
+      script.onload = () => {
+        window.require.config({ paths: { vs: MONACO_BASE + "/vs" } });
+        window.MonacoEnvironment = {
+          getWorkerUrl() {
+            const src = `self.MonacoEnvironment={baseUrl:'${MONACO_BASE}/'};importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
+            return URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+          }
+        };
+        window.require(["vs/editor/editor.main"], () => resolve(window.monaco));
+      };
+      script.onerror = () => reject(new Error("Failed to load Monaco loader from " + MONACO_BASE));
+      document.head.appendChild(script);
+    });
+  }
+
+  class EditorManager extends EventEmitter {
+    constructor(project, settings) {
+      super(); this.project = project; this.settings = settings;
+      this.monaco = null; this.editor = null; this.models = new Map(); this.views = new Map(); this._applying = false;
+    }
+    async init(host) {
+      this.monaco = await loadMonaco();
+      const monaco = this.monaco;
+      monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+        target: monaco.languages.typescript.ScriptTarget.ES2020,
+        module: monaco.languages.typescript.ModuleKind.CommonJS,
+        moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+        esModuleInterop: true, allowJs: true, checkJs: false, strict: false, skipLibCheck: true
+      });
+      monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+        target: monaco.languages.typescript.ScriptTarget.ES2020, allowJs: true, checkJs: false
+      });
+      const s = this.settings.get();
+      this.editor = monaco.editor.create(host, {
+        automaticLayout: true, theme: s.theme === "light" ? "vs" : "vs-dark",
+        fontSize: s.fontSize, fontFamily: s.fontFamily, tabSize: s.tabSize, insertSpaces: s.insertSpaces,
+        wordWrap: s.wordWrap, minimap: { enabled: s.minimap }, lineNumbers: s.lineNumbers,
+        renderWhitespace: s.renderWhitespace, cursorBlinking: s.cursorBlinking, smoothScrolling: true,
+        padding: { top: 8 }
+      });
+      host.querySelector(".monaco") || this.editor.getDomNode().classList.add("monaco");
+      this.editor.onDidChangeCursorPosition((e) => this.emit("cursor", { line: e.position.lineNumber, column: e.position.column }));
+      this.editor.onDidChangeModelContent(() => {
+        if (this._applying) return;
+        const model = this.editor.getModel(); if (!model) return;
+        const path = this._pathOf(model);
+        if (path) this.project.writeFile(path, model.getValue());
+      });
+      this.project.on("contentChanged", ({ path, content }) => {
+        const m = this.models.get(path); if (m && m.getValue() !== content) { this._applying = true; m.setValue(content); this._applying = false; }
+      });
+      this.project.on("deleted", ({ paths }) => { for (const p of paths) this._disposeModel(p); });
+      this.project.on("renamed", ({ moves }) => {
+        for (const { from, to } of moves) {
+          const m = this.models.get(from); if (!m) continue;
+          this.models.delete(from); this._disposeModel(from);
+          this._model(to);
+        }
+      });
+      this.settings.on("change", () => this._applySettings());
+      for (const f of this.project.files()) this._model(f.path);
+    }
+    _uri(path) { return this.monaco.Uri.parse("file://" + path); }
+    _pathOf(model) { return model.uri.path; }
+    _model(path) {
+      if (this.models.has(path)) return this.models.get(path);
+      const file = this.project.getFile(path); if (!file) return null;
+      const lang = this.project.languageOf(path).monaco;
+      const model = this.monaco.editor.createModel(file.content ?? "", lang, this._uri(path));
+      this.models.set(path, model); return model;
+    }
+    _disposeModel(path) {
+      const m = this.models.get(path); if (m) { m.dispose(); this.models.delete(path); } this.views.delete(path);
+    }
+    _applySettings() {
+      if (!this.editor) return;
+      const s = this.settings.get();
+      this.monaco.editor.setTheme(s.theme === "light" ? "vs" : "vs-dark");
+      this.editor.updateOptions({
+        fontSize: s.fontSize, fontFamily: s.fontFamily, tabSize: s.tabSize, insertSpaces: s.insertSpaces,
+        wordWrap: s.wordWrap, minimap: { enabled: s.minimap }, lineNumbers: s.lineNumbers
+      });
+    }
+    showFile(path) {
+      if (!this.editor) return;
+      if (!path) { this.editor.setModel(null); return; }
+      const current = this.editor.getModel();
+      if (current) this.views.set(this._pathOf(current), this.editor.saveViewState());
+      const model = this._model(path);
+      this.editor.setModel(model);
+      const vs = this.views.get(path); if (vs) this.editor.restoreViewState(vs);
+      this.editor.focus();
+    }
+    layout() { this.editor && this.editor.layout(); }
+    focus() { this.editor && this.editor.focus(); }
+    revealPosition(line, column) {
+      if (!this.editor) return;
+      this.editor.revealPositionInCenter({ lineNumber: line, column: column });
+      this.editor.setPosition({ lineNumber: line, column: column });
+    }
+    addCommand(keybinding, fn) { if (this.editor) this.editor.addCommand(keybinding, fn); }
+    runAction(id) { const a = this.editor && this.editor.getAction(id); if (a) a.run(); }
+    getIndentation() { const s = this.settings.get(); return { tabSize: s.tabSize, insertSpaces: s.insertSpaces }; }
+    hasModel(file) { return this.models.has(file); }
+    setMarkers(owner, file, markers) {
+      const m = this.models.get(file); if (!m) return;
+      this.monaco.editor.setModelMarkers(m, owner, markers);
+    }
+    dispose() { this.editor && this.editor.dispose(); for (const m of this.models.values()) m.dispose(); }
+  }
+
+  class OutputManager extends EventEmitter {
+    constructor(root, ui) {
+      super(); this.ui = ui;
+      root.classList.add("panel");
+      const header = el("div", "panel-header");
+      this.tabButtons = new Map(); this.problemsCount = el("span", "count");
+      for (const [id, label] of [["output", "Output"], ["terminal", "Terminal"], ["problems", "Problems"], ["build", "Build"]]) {
+        const b = el("button", "panel-tab"); b.type = "button"; b.textContent = label; b.setAttribute("role", "tab");
+        if (id === "problems") b.appendChild(this.problemsCount);
+        b.addEventListener("click", () => ui.set({ activePanelTab: id }));
+        this.tabButtons.set(id, b); header.appendChild(b);
+      }
+      header.appendChild(el("span", "spacer"));
+      header.append(
+        iconBtn("clear", "Clear", () => this.clear()),
+        iconBtn("copy", "Copy contents", () => void this.copy()),
+        iconBtn("scrollDown", "Scroll to bottom", () => this.scrollToBottom()),
+        iconBtn("collapse", "Collapse panel", () => ui.set({ panelVisible: false }))
+      );
+      const body = el("div", "panel-body");
+      this.channels = { output: el("div", "channel output"), terminal: el("div", "channel terminal"), build: el("div", "channel build") };
+      this.problemsContainer = el("div", "channel problems");
+      for (const c of Object.values(this.channels)) { c.setAttribute("role", "log"); c.setAttribute("aria-live", "polite"); }
+      this.terminalLog = el("div", "terminal-log");
+      const inputRow = el("div", "terminal-input-row");
+      const prompt = el("span", "prompt"); prompt.textContent = "forge ❯";
+      this.terminalInput = document.createElement("input");
+      this.terminalInput.type = "text";
+      this.terminalInput.placeholder = "IDE command console — type `help` (this is not an OS shell)";
+      this.terminalInput.setAttribute("aria-label", "IDE command console input");
+      this.terminalInput.spellcheck = false;
+      this.terminalInput.addEventListener("keydown", (e) => this.onTerminalKey(e));
+      inputRow.append(prompt, this.terminalInput);
+      this.channels.terminal.append(this.terminalLog, inputRow);
+      this.channels.terminal.addEventListener("click", (e) => {
+        if (e.target.closest(".terminal-log") && !window.getSelection().toString()) this.terminalInput.focus();
+      });
+      body.append(this.channels.output, this.channels.terminal, this.problemsContainer, this.channels.build);
+      root.append(header, body);
+      this.sink = {
+        write: (kind, text) => this.append("output", kind, text),
+        build: (kind, text) => this.append("build", kind, text),
+        status: (text) => this.emit("status", { text })
+      };
+      this.history = []; this.historyIndex = -1;
+      ui.on("change", ({ changed }) => { if (changed.includes("activePanelTab")) this.renderActive(); });
+      this.renderActive();
+      this.append("terminal", "system", "Forge IDE command console. Commands run inside the IDE (no operating-system shell is available in the browser). Type `help`.");
+    }
+    append(channel, kind, text) {
+      const target = channel === "terminal" ? this.terminalLog : this.channels[channel];
+      const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 40;
+      for (const lineText of String(text).split("\n")) {
+        const line = el("div", "line " + kind); line.textContent = lineText; target.appendChild(line);
+      }
+      while (target.childElementCount > MAX_LINES) target.removeChild(target.firstElementChild);
+      if (nearBottom) target.scrollTop = target.scrollHeight;
+    }
+    terminalEcho(command) {
+      const line = el("div", "line cmd"); line.textContent = command; this.terminalLog.appendChild(line);
+      this.terminalLog.scrollTop = this.terminalLog.scrollHeight;
+    }
+    show(tab) { this.ui.set({ panelVisible: true, activePanelTab: tab }); }
+    setProblemCount(errors, warnings) {
+      const total = errors + warnings;
+      this.problemsCount.textContent = total ? String(total) : "";
+      this.problemsCount.classList.toggle("errors", errors > 0);
+      this.problemsCount.style.display = total ? "" : "none";
+    }
+    clear(tab) {
+      tab = tab || this.ui.get().activePanelTab;
+      if (tab === "problems") return;
+      const target = tab === "terminal" ? this.terminalLog : this.channels[tab];
+      target.textContent = "";
+    }
+    async copy(tab) {
+      tab = tab || this.ui.get().activePanelTab;
+      const target = tab === "problems" ? this.problemsContainer : tab === "terminal" ? this.terminalLog : this.channels[tab];
+      const text = Array.from(target.querySelectorAll(".line, .problem-row")).map((l) => l.innerText).join("\n");
+      try { await navigator.clipboard.writeText(text); this.emit("status", { text: "Copied panel contents" }); }
+      catch { this.emit("status", { text: "Clipboard access denied" }); }
+    }
+    scrollToBottom(tab) {
+      tab = tab || this.ui.get().activePanelTab;
+      const target = tab === "problems" ? this.problemsContainer : tab === "terminal" ? this.terminalLog : this.channels[tab];
+      target.scrollTop = target.scrollHeight;
+    }
+    focusTerminal() { this.terminalInput.focus(); }
+    renderActive() {
+      const active = this.ui.get().activePanelTab;
+      for (const [id, b] of this.tabButtons) { b.classList.toggle("active", id === active); b.setAttribute("aria-selected", String(id === active)); }
+      this.channels.output.classList.toggle("active", active === "output");
+      this.channels.terminal.classList.toggle("active", active === "terminal");
+      this.channels.build.classList.toggle("active", active === "build");
+      this.problemsContainer.classList.toggle("active", active === "problems");
+    }
+    onTerminalKey(e) {
+      if (e.key === "Enter") {
+        const cmd = this.terminalInput.value.trim(); this.terminalInput.value = ""; if (!cmd) return;
+        this.history.push(cmd); this.historyIndex = this.history.length; this.terminalEcho(cmd); this.emit("command", { command: cmd });
+      } else if (e.key === "ArrowUp") {
+        if (this.historyIndex > 0) this.terminalInput.value = this.history[--this.historyIndex]; e.preventDefault();
+      } else if (e.key === "ArrowDown") {
+        if (this.historyIndex < this.history.length - 1) this.terminalInput.value = this.history[++this.historyIndex];
+        else { this.historyIndex = this.history.length; this.terminalInput.value = ""; }
+        e.preventDefault();
+      }
+    }
+  }
+
+  class DiagnosticsManager extends EventEmitter {
+    constructor(container, editor, project) {
+      super(); this.container = container; this.editor = editor; this.project = project;
+      this.bySource = new Map(); this.monacoByFile = new Map(); this.renderQueued = false;
+      project.on("deleted", ({ paths }) => {
+        const set = new Set(paths);
+        for (const p of paths) this.monacoByFile.delete(p);
+        for (const [source, list] of this.bySource) {
+          const next = list.filter((d) => !set.has(d.file));
+          if (next.length) this.bySource.set(source, next); else this.bySource.delete(source);
+        }
+        this.scheduleRender();
+      });
+      project.on("renamed", ({ moves }) => this.handleRenamed(moves));
+    }
+    set(source, diagnostics) {
+      this.bySource.set(source, diagnostics || []);
+      const files = new Set((diagnostics || []).map((d) => d.file));
+      for (const file of files) this.applyMarkers(source, file);
+      this.scheduleRender();
+    }
+    all() {
+      const out = [];
+      for (const list of this.bySource.values()) out.push(...list);
+      return out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+    }
+    counts() {
+      const items = this.all();
+      return { errors: items.filter((d) => d.severity === "error").length, warnings: items.filter((d) => d.severity === "warning").length };
+    }
+    handleRenamed(moves) {
+      const map = new Map(moves.map((m) => [m.from, m.to]));
+      for (const [from, to] of map) {
+        const m = this.monacoByFile.get(from);
+        if (m) { this.monacoByFile.delete(from); this.monacoByFile.set(to, m.map((d) => ({ ...d, file: to }))); }
+      }
+      for (const [source, list] of this.bySource) this.bySource.set(source, list.map((d) => (map.has(d.file) ? { ...d, file: map.get(d.file) } : d)));
+      this.scheduleRender();
+    }
+    applyMarkers(source, file) {
+      const monaco = this.editor.monaco;
+      if (!monaco || !this.editor.hasModel(file)) return;
+      const list = (this.bySource.get(source) || []).filter((d) => d.file === file);
+      const sev = monaco.MarkerSeverity;
+      this.editor.setMarkers(MARKER_OWNER_PREFIX + source, file, list.map((d) => ({
+        severity: d.severity === "error" ? sev.Error : d.severity === "warning" ? sev.Warning : sev.Info,
+        message: d.message, startLineNumber: d.line, startColumn: d.column,
+        endLineNumber: d.endLine ?? d.line, endColumn: d.endColumn ?? d.column + 1, source: d.source, code: d.code
+      })));
+    }
+    scheduleRender() {
+      if (this.renderQueued) return; this.renderQueued = true;
+      requestAnimationFrame(() => { this.renderQueued = false; this.render(); });
+    }
+    render() {
+      const items = this.all(); this.container.textContent = "";
+      if (!items.length) {
+        const empty = el("div", "problems-empty"); empty.textContent = "No problems detected in the workspace."; this.container.appendChild(empty);
+      }
+      for (const d of items) {
+        const row = el("button", "problem-row"); row.type = "button"; row.title = d.file + ":" + d.line + ":" + d.column;
+        const sev = el("span", "sev " + d.severity); sev.innerHTML = d.severity === "error" ? icons.error : d.severity === "warning" ? icons.warning : icons.info;
+        const msg = el("span", "msg"); msg.textContent = d.message;
+        const src = el("span", "src"); src.textContent = d.code ? d.source + " (" + d.code + ")" : d.source;
+        const loc = el("span", "loc"); loc.textContent = d.file.replace(/^\//, "") + " [" + d.line + ", " + d.column + "]";
+        row.append(sev, msg, src, loc);
+        row.addEventListener("click", () => this.emit("navigate", { file: d.file, line: d.line, column: d.column }));
+        this.container.appendChild(row);
+      }
+      this.emit("changed", this.counts());
+    }
+  }
+
+  const BOOTSTRAP = `(function(){
+    var SRC = ${JSON.stringify(MESSAGE_SOURCE)};
+    function send(msg){ try { parent.postMessage(Object.assign({ source: SRC }, msg), "*"); } catch (e) {} }
+    function fmt(v){ try { if (typeof v === "string") return v; if (v instanceof Error) return v.stack || String(v); return JSON.stringify(v); } catch (e) { return String(v); } }
+    ["log","info","warn","error","debug"].forEach(function(level){
+      var orig = console[level];
+      console[level] = function(){ var args = Array.prototype.slice.call(arguments); send({ type: "console", level: level, text: args.map(fmt).join(" ") }); if (orig) { try { orig.apply(console, args); } catch (e) {} } };
+    });
+    window.addEventListener("error", function(e){ send({ type: "error", message: e.message, line: e.lineno, column: e.colno }); });
+    window.addEventListener("unhandledrejection", function(e){ send({ type: "error", message: "Unhandled rejection: " + fmt(e.reason) }); });
+    document.addEventListener("click", function(e){
+      var a = e.target && e.target.closest ? e.target.closest("a[data-ide-nav]") : null;
+      if (a) { e.preventDefault(); send({ type: "navigate", path: a.getAttribute("data-ide-nav") }); }
+    }, true);
+    send({ type: "loaded" });
+  })();`;
+  const TEXT_MIME = { ".svg": "image/svg+xml", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".txt": "text/plain", ".html": "text/html" };
+
+  class PreviewManager {
+    constructor(root, project, ui, settings, sink) {
+      this.project = project; this.ui = ui; this.settings = settings; this.sink = sink;
+      this.refreshTimer = null; this.previousMode = "split"; this.missing = new Set();
+      root.classList.add("preview");
+      const toolbar = el("div", "preview-toolbar");
+      this.targetLabel = el("span", "target");
+      this.autoBtn = this.button("check", "Auto Refresh (toggle)", () => settings.update({ previewAutoRefresh: !settings.get().previewAutoRefresh }));
+      this.splitBtn = this.button("split", "Toggle split editor/preview", () => this.setMode(ui.get().previewMode === "split" ? "only" : "split"));
+      this.fullBtn = this.button("fullscreen", "Full screen preview", () => this.toggleFullscreen());
+      toolbar.append(this.targetLabel, this.button("refresh", "Refresh preview", () => this.refresh(true)), this.autoBtn, this.splitBtn, this.fullBtn, this.button("close", "Close preview", () => this.close()));
+      const wrap = el("div", "preview-frame-wrap");
+      this.iframe = document.createElement("iframe");
+      this.iframe.title = "HTML preview (sandboxed)";
+      this.iframe.setAttribute("sandbox", "allow-scripts allow-modals allow-forms");
+      this.iframe.setAttribute("referrerpolicy", "no-referrer");
+      wrap.appendChild(this.iframe); root.append(toolbar, wrap);
+      window.addEventListener("message", (e) => this.onMessage(e));
+      const scheduleIfRelevant = () => { if (this.isVisible() && settings.get().previewAutoRefresh) this.scheduleRefresh(); };
+      project.on("contentChanged", scheduleIfRelevant);
+      project.on("created", scheduleIfRelevant);
+      project.on("deleted", ({ paths }) => { const file = ui.get().previewFile; if (file && paths.includes(file)) this.close(); else scheduleIfRelevant(); });
+      project.on("renamed", ({ moves }) => { const file = ui.get().previewFile; const m = file ? moves.find((x) => x.from === file) : undefined; if (m) ui.set({ previewFile: m.to }); scheduleIfRelevant(); });
+      settings.on("change", ({ changed }) => { if (changed.includes("previewAutoRefresh")) { this.renderToolbar(); if (settings.get().previewAutoRefresh && this.isVisible()) this.refresh(false); } });
+      ui.on("change", ({ changed }) => { if (changed.includes("previewMode") || changed.includes("previewFile")) this.renderToolbar(); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ui.get().previewMode === "fullscreen") this.setMode(this.previousMode === "fullscreen" ? "split" : this.previousMode); });
+      this.renderToolbar();
+    }
+    button(icon, title, onClick) { return iconBtn(icon, title, onClick); }
+    isVisible() { return this.ui.get().previewMode !== "hidden"; }
+    open(path, mode) {
+      const target = path && this.project.getFile(path) ? path : this.defaultTarget();
+      if (!target) { this.sink.write("warn", "No HTML file to preview. Create an index.html or open an .html file."); return; }
+      const current = this.ui.get().previewMode;
+      this.ui.set({ previewFile: target, previewMode: mode || (current === "hidden" ? "split" : current) });
+      this.refresh(false);
+    }
+    toggle(path) { if (this.isVisible()) this.close(); else this.open(path); }
+    close() { this.ui.set({ previewMode: "hidden" }); this.iframe.srcdoc = ""; }
+    setMode(mode) { if (mode !== "fullscreen") this.previousMode = mode; this.ui.set({ previewMode: mode }); if (mode !== "hidden" && !this.iframe.srcdoc) this.refresh(false); }
+    toggleFullscreen() {
+      const mode = this.ui.get().previewMode;
+      if (mode === "fullscreen") this.setMode(this.previousMode === "fullscreen" ? "split" : this.previousMode);
+      else { this.previousMode = mode === "hidden" ? "split" : mode; this.setMode("fullscreen"); }
+    }
+    refresh(manual) {
+      const file = this.ui.get().previewFile; if (!file || !this.project.getFile(file)) return;
+      this.missing.clear();
+      let html;
+      try { html = this.buildDocument(file); }
+      catch (err) { this.sink.write("error", "[preview] failed to build document: " + err.message); return; }
+      for (const m of this.missing) this.sink.write("warn", "[preview] resource not found in project: " + m);
+      this.iframe.srcdoc = html;
+      if (manual) this.sink.write("system", "[preview] refreshed " + file);
+    }
+    scheduleRefresh() {
+      if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
+      this.refreshTimer = window.setTimeout(() => { this.refreshTimer = null; this.refresh(false); }, 450);
+    }
+    defaultTarget() {
+      const active = this.ui.get().activeFile;
+      if (active && this.project.languageOf(active).id === "html") return active;
+      const index = this.project.findEntry(["index.html"]);
+      if (index) return index.path;
+      return (this.project.filesByLanguage("html")[0] || {}).path || null;
+    }
+    renderToolbar() {
+      const file = this.ui.get().previewFile;
+      this.targetLabel.textContent = file || "No preview target";
+      this.autoBtn.style.color = this.settings.get().previewAutoRefresh ? "var(--ok)" : "";
+    }
+    onMessage(e) {
+      const data = e.data; if (!data || data.source !== MESSAGE_SOURCE) return;
+      if (data.type === "console") this.sink.write(data.level === "error" ? "error" : data.level === "warn" ? "warn" : "stdout", "[preview] " + data.text);
+      if (data.type === "error") this.sink.write("error", "[preview] " + data.message + (data.line ? " @" + data.line : ""));
+      if (data.type === "navigate" && data.path) this.open(data.path);
+    }
+    buildDocument(path) {
+      const source = this.project.readFile(path) ?? "";
+      const dir = dirname(path);
+      const doc = new DOMParser().parseFromString(source, "text/html");
+      doc.querySelectorAll("link[rel='stylesheet'][href]").forEach((link) => {
+        const href = link.getAttribute("href"); const resolved = resolveRelative(dir, href);
+        if (/^(https?:|data:)/i.test(resolved)) return;
+        const css = this.project.readFile(resolved);
+        if (css == null) { this.missing.add(resolved); return; }
+        const style = doc.createElement("style"); style.textContent = css; link.replaceWith(style);
+      });
+      doc.querySelectorAll("script[src]").forEach((script) => {
+        const src = script.getAttribute("src"); const resolved = resolveRelative(dir, src);
+        if (/^(https?:|data:)/i.test(resolved)) return;
+        const js = this.project.readFile(resolved);
+        if (js == null) { this.missing.add(resolved); return; }
+        const inline = doc.createElement("script"); inline.textContent = js; script.replaceWith(inline);
+      });
+      doc.querySelectorAll("img[src], source[src]").forEach((node) => {
+        const src = node.getAttribute("src"); const resolved = resolveRelative(dir, src);
+        if (/^(https?:|data:)/i.test(resolved)) return;
+        const content = this.project.readFile(resolved);
+        if (content == null) { this.missing.add(resolved); return; }
+        const ext = extname(resolved);
+        const mime = TEXT_MIME[ext] || "application/octet-stream";
+        node.setAttribute("src", "data:" + mime + ";base64," + btoa(unescape(encodeURIComponent(content))));
+      });
+      doc.querySelectorAll("a[href]").forEach((a) => {
+        const href = a.getAttribute("href") || "";
+        if (/^(https?:|mailto:|#)/i.test(href)) return;
+        const resolved = resolveRelative(dir, href);
+        if (this.project.getFile(resolved) && this.project.languageOf(resolved).id === "html") {
+          a.setAttribute("href", "#"); a.setAttribute("data-ide-nav", resolved);
+        }
+      });
+      const boot = doc.createElement("script"); boot.textContent = BOOTSTRAP;
+      (doc.head || doc.documentElement).insertBefore(boot, (doc.head || doc.documentElement).firstChild);
+      return "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+    }
+  }
+
+  class WorkerHost {
+    constructor(source, opts) {
+      this.url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+      this.worker = new Worker(this.url, opts || {});
+    }
+    post(msg, transfer) { this.worker.postMessage(msg, transfer || []); }
+    on(fn) { this.worker.onmessage = (e) => fn(e.data); }
+    onError(fn) { this.worker.onerror = fn; }
+    terminate() { this.worker.terminate(); URL.revokeObjectURL(this.url); }
+  }
+
+  const JS_WORKER_SRC = `
+    const files = new Map();
+    const cache = new Map();
+    function resolve(from, spec) {
+      if (!spec.startsWith(".")) return spec;
+      const parts = (from.replace(/\\\\/g,"/").split("/").slice(0,-1).concat(spec.split("/")));
+      const out = [];
+      for (const p of parts) { if (!p || p === ".") continue; if (p === "..") out.pop(); else out.push(p); }
+      let path = "/" + out.join("/");
+      if (files.has(path)) return path;
+      for (const ext of [".js", ".mjs", ".cjs", "/index.js"]) if (files.has(path + ext)) return path + ext;
+      return path;
+    }
+    function load(path) {
+      if (cache.has(path)) return cache.get(path).exports;
+      const code = files.get(path);
+      if (code == null) throw new Error("Cannot find module " + path);
+      const module = { exports: {} }; cache.set(path, module);
+      const require = (spec) => load(resolve(path, spec));
+      const fn = new Function("require", "module", "exports", "__filename", "__dirname", code);
+      fn(require, module, module.exports, path, path.split("/").slice(0,-1).join("/") || "/");
+      return module.exports;
+    }
+    function hookConsole() {
+      const send = (kind, args) => postMessage({ type: "out", kind, text: args.map(a => {
+        try { return typeof a === "string" ? a : a instanceof Error ? (a.stack || String(a)) : JSON.stringify(a); } catch { return String(a); }
+      }).join(" ") });
+      console.log = (...a) => send("stdout", a);
+      console.info = (...a) => send("info", a);
+      console.warn = (...a) => send("warn", a);
+      console.error = (...a) => send("error", a);
+    }
+    self.onmessage = (e) => {
+      const msg = e.data;
+      if (msg.type === "run") {
+        files.clear(); cache.clear();
+        for (const [p, c] of Object.entries(msg.files)) files.set(p, c);
+        hookConsole();
+        try { load(msg.entry); postMessage({ type: "done", code: 0 }); }
+        catch (err) { postMessage({ type: "out", kind: "error", text: err && err.stack ? err.stack : String(err) }); postMessage({ type: "done", code: 1 }); }
+      }
+    };
+  `;
+
+  const PY_WORKER_SRC = `
+    let pyodide = null;
+    async function ensure() {
+      if (pyodide) return pyodide;
+      importScripts("https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VER}/full/pyodide.js");
+      pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VER}/full/" });
+      pyodide.setStdout({ batched: (s) => postMessage({ type: "out", kind: "stdout", text: s }) });
+      pyodide.setStderr({ batched: (s) => postMessage({ type: "out", kind: "error", text: s }) });
+      return pyodide;
+    }
+    self.onmessage = async (e) => {
+      const msg = e.data;
+      if (msg.type === "run") {
+        try {
+          postMessage({ type: "status", text: "Loading Pyodide…" });
+          const py = await ensure();
+          for (const [p, c] of Object.entries(msg.files)) {
+            const parts = p.split("/").filter(Boolean);
+            let dir = "";
+            for (let i = 0; i < parts.length - 1; i++) { dir += "/" + parts[i]; try { py.FS.mkdir(dir); } catch {} }
+            py.FS.writeFile(p, c);
+          }
+          postMessage({ type: "status", text: "Running Python…" });
+          await py.runPythonAsync(msg.code);
+          postMessage({ type: "done", code: 0 });
+        } catch (err) {
+          postMessage({ type: "out", kind: "error", text: String(err) });
+          postMessage({ type: "done", code: 1 });
+        }
+      }
+    };
+  `;
+
+  const ASC_WORKER_SRC = `
+    self.onmessage = async (e) => {
+      const msg = e.data;
+      if (msg.type !== "compile") return;
+      try {
+        const asc = await import("${ASC_URL}");
+        const stdout = []; const stderr = [];
+        const sources = msg.files;
+        const res = await asc.compileString(sources[msg.entry] || "", {
+          stdout: { write(s) { stdout.push(s); } },
+          stderr: { write(s) { stderr.push(s); } },
+          readFile: (name) => sources[name] ?? sources["/" + name] ?? null,
+          optimizeLevel: 0, shrinkLevel: 0, runtime: "incremental", exportRuntime: true
+        });
+        if (stderr.length) postMessage({ type: "out", kind: "error", text: stderr.join("") });
+        if (stdout.length) postMessage({ type: "out", kind: "info", text: stdout.join("") });
+        if (!res || !res.binary) { postMessage({ type: "done", code: 1, error: "AssemblyScript compilation produced no binary." }); return; }
+        postMessage({ type: "wasm", binary: res.binary, text: res.text || "" });
+        postMessage({ type: "done", code: 0 });
+      } catch (err) {
+        postMessage({ type: "out", kind: "error", text: String(err) });
+        postMessage({ type: "done", code: 1 });
+      }
+    };
+  `;
+
+  const WASM_WORKER_SRC = `
+    self.onmessage = async (e) => {
+      const msg = e.data;
+      if (msg.type !== "run") return;
+      try {
+        const memory = new WebAssembly.Memory({ initial: 256 });
+        const imports = {
+          env: { memory, abort() { throw new Error("abort"); } },
+          console: { log: (v) => postMessage({ type: "out", kind: "stdout", text: String(v) }) }
+        };
+        const { instance } = await WebAssembly.instantiate(msg.binary, imports);
+        const exp = instance.exports;
+        const names = msg.exports || Object.keys(exp).filter((k) => typeof exp[k] === "function");
+        for (const name of names) {
+          if (typeof exp[name] !== "function") continue;
+          if (name.startsWith("_") && name !== "_start") continue;
+          try {
+            const args = name === "add" ? [2, 3] : name === "fib" ? [10] : [];
+            const r = exp[name](...args);
+            postMessage({ type: "out", kind: "stdout", text: name + "(" + args.join(", ") + ") = " + String(r) });
+          } catch (err) { postMessage({ type: "out", kind: "error", text: name + ": " + err }); }
+        }
+        postMessage({ type: "done", code: 0 });
+      } catch (err) {
+        postMessage({ type: "out", kind: "error", text: String(err) });
+        postMessage({ type: "done", code: 1 });
+      }
+    };
+  `;
+
+  class JavaScriptRunner {
+    constructor() { this.id = "javascript"; this.host = null; }
+    languages() { return ["javascript", "javascriptreact"]; }
+    async run(ctx) {
+      const files = {};
+      for (const f of ctx.project.files()) {
+        const id = ctx.project.languageOf(f.path).id;
+        if (id === "javascript" || id === "javascriptreact") files[f.path] = f.content ?? "";
+      }
+      this.host = new WorkerHost(JS_WORKER_SRC);
+      return await this._exec(ctx, { type: "run", files, entry: ctx.file });
+    }
+    _exec(ctx, msg) {
+      return new Promise((resolve) => {
+        this.host.on((data) => {
+          if (data.type === "out") ctx.sink.write(data.kind, data.text);
+          if (data.type === "status") ctx.sink.status(data.text);
+          if (data.type === "done") { this.stop(); resolve(data.code); }
+        });
+        this.host.onError((err) => { ctx.sink.write("error", String(err.message || err)); this.stop(); resolve(1); });
+        this.host.post(msg);
+      });
+    }
+    stop() { if (this.host) { this.host.terminate(); this.host = null; } }
+  }
+
+  class TypeScriptCompiler {
+    constructor(editor) { this.editor = editor; }
+    async compile(project, entry) {
+      const monaco = this.editor.monaco;
+      if (!monaco) throw new Error("Monaco is not ready");
+      const worker = await monaco.languages.typescript.getTypeScriptWorker();
+      const uri = monaco.Uri.parse("file://" + entry);
+      const client = await worker(uri);
+      const diags = [
+        ...(await client.getSemanticDiagnostics(uri.toString())),
+        ...(await client.getSyntacticDiagnostics(uri.toString()))
+      ];
+      const diagnostics = diags.map((d) => ({
+        file: entry, severity: d.category === 1 ? "error" : "warning",
+        message: typeof d.messageText === "string" ? d.messageText : d.messageText.messageText,
+        line: 1, column: 1, source: "typescript", code: d.code
+      }));
+      const emitted = await client.getEmitOutput(uri.toString());
+      const js = (emitted.outputFiles || []).find((f) => f.name.endsWith(".js"));
+      return { js: js ? js.text : "", diagnostics };
+    }
+  }
+
+  class TypeScriptRunner {
+    constructor(compiler, jsRunner) { this.id = "typescript"; this.compiler = compiler; this.jsRunner = jsRunner; }
+    languages() { return ["typescript", "typescriptreact"]; }
+    async run(ctx) {
+      ctx.sink.status("Compiling TypeScript…");
+      ctx.sink.build("system", "Compiling " + ctx.file + " with Monaco TypeScript worker");
+      const { js, diagnostics } = await this.compiler.compile(ctx.project, ctx.file);
+      ctx.reportDiagnostics("typescript", diagnostics.map((d) => ({ ...d, file: ctx.file })));
+      if (!js) { ctx.sink.write("error", "TypeScript emit produced no JavaScript."); return 1; }
+      const files = {};
+      for (const f of ctx.project.files()) {
+        const id = ctx.project.languageOf(f.path).id;
+        if (id === "javascript" || id === "javascriptreact") files[f.path] = f.content ?? "";
+      }
+      const outPath = ctx.file.replace(/\.tsx?$/, ".js");
+      files[outPath] = js;
+      this.jsRunner.host = new WorkerHost(JS_WORKER_SRC);
+      return await this.jsRunner._exec(ctx, { type: "run", files, entry: outPath });
+    }
+    stop() { this.jsRunner.stop(); }
+  }
+
+  class PythonRunner {
+    constructor() { this.id = "python"; this.host = null; }
+    languages() { return ["python"]; }
+    async run(ctx) {
+      const files = {};
+      for (const f of ctx.project.files()) if (ctx.project.languageOf(f.path).id === "python") files[f.path] = f.content ?? "";
+      this.host = new WorkerHost(PY_WORKER_SRC);
+      ctx.sink.status("Starting Python worker…");
+      return await new Promise((resolve) => {
+        this.host.on((data) => {
+          if (data.type === "out") ctx.sink.write(data.kind, data.text);
+          if (data.type === "status") ctx.sink.status(data.text);
+          if (data.type === "done") { this.stop(); resolve(data.code); }
+        });
+        this.host.onError((err) => { ctx.sink.write("error", String(err.message || err)); this.stop(); resolve(1); });
+        this.host.post({ type: "run", files, code: ctx.project.readFile(ctx.file) || "" });
+      });
+    }
+    stop() { if (this.host) { this.host.terminate(); this.host = null; } }
+  }
+
+  class AssemblyScriptRunner {
+    constructor() { this.id = "assemblyscript"; this.host = null; this.wasmHost = null; }
+    languages() { return ["assemblyscript"]; }
+    async run(ctx) {
+      const files = {};
+      for (const f of ctx.project.files()) {
+        const id = ctx.project.languageOf(f.path).id;
+        if (id === "assemblyscript" || id === "typescript") files[f.path] = f.content ?? "";
+      }
+      ctx.sink.status("Compiling AssemblyScript…");
+      ctx.sink.build("system", "asc " + ctx.file);
+      this.host = new WorkerHost(ASC_WORKER_SRC, { type: "module" });
+      const binary = await new Promise((resolve, reject) => {
+        this.host.on((data) => {
+          if (data.type === "out") ctx.sink.write(data.kind, data.text);
+          if (data.type === "wasm") resolve(data.binary);
+          if (data.type === "done" && data.code) reject(new Error(data.error || "asc failed"));
+        });
+        this.host.onError((err) => reject(err));
+        this.host.post({ type: "compile", files, entry: ctx.file });
+      }).finally(() => this.stop());
+      ctx.sink.status("Running WebAssembly…");
+      this.wasmHost = new WorkerHost(WASM_WORKER_SRC);
+      return await new Promise((resolve) => {
+        this.wasmHost.on((data) => {
+          if (data.type === "out") ctx.sink.write(data.kind, data.text);
+          if (data.type === "done") { this.stop(); resolve(data.code); }
+        });
+        this.wasmHost.post({ type: "run", binary });
+      });
+    }
+    stop() { if (this.host) { this.host.terminate(); this.host = null; } if (this.wasmHost) { this.wasmHost.terminate(); this.wasmHost = null; } }
+  }
+
+  const ToolchainRegistry = {
+    _p: new Map(),
+    register(id, provider) { this._p.set(id, provider); },
+    get(id) { return this._p.get(id) || null; },
+    list() { return [...this._p.keys()]; }
+  };
+
+  class MissingToolchainRunner {
+    constructor(id, title, langs) { this.id = id; this.title = title; this._langs = langs; }
+    languages() { return this._langs; }
+    async run(ctx) {
+      const msg = this.title + " toolchain is not installed in this build. Register a BrowserToolchainProvider that downloads/instantiates its compiler as local static assets inside a Worker. There is intentionally no HTTP/remote compilation abstraction.";
+      ctx.sink.write("error", msg);
+      ctx.sink.build("error", msg);
+      return 1;
+    }
+    async build(ctx) { return this.run(ctx); }
+    stop() {}
+  }
+  class ClangRunner extends MissingToolchainRunner { constructor() { super("c", "C/C++", ["c", "cpp"]); } }
+  class CSharpRunner extends MissingToolchainRunner { constructor() { super("csharp", "C#", ["csharp"]); } }
+  class JavaRunner extends MissingToolchainRunner { constructor() { super("java", "Java", ["java"]); } }
+
+  class RunnerManager extends EventEmitter {
+    constructor(project, opts) {
+      super(); this.project = project; this.opts = opts; this.runners = []; this.current = null;
+    }
+    register(runner) { this.runners.push(runner); }
+    listLanguages() { return this.runners.flatMap((r) => r.languages()); }
+    runnerFor(langId) { return this.runners.find((r) => r.languages().includes(langId)) || null; }
+    ctx(file) {
+      return {
+        project: this.project, file, sink: this.opts.sink,
+        reportDiagnostics: this.opts.reportDiagnostics,
+        getActiveFile: this.opts.getActiveFile
+      };
+    }
+    async runFile(path) {
+      if (!path) { this.opts.sink.write("warn", "No active file to run."); return; }
+      const lang = this.project.languageOf(path);
+      if (lang.id === "html") { this.emit("previewRequested", { path }); return; }
+      const runner = this.runnerFor(lang.runner || lang.id);
+      if (!runner) { this.opts.sink.write("warn", "No runner for " + lang.title + " (" + path + ")"); return; }
+      await this._run(runner, path, lang.title);
+    }
+    async runProject() {
+      const entry = this.project.findEntry(["index.html", "main.js", "main.ts", "app.ts", "hello.py", "main.py"]) || this.project.files()[0];
+      if (!entry) { this.opts.sink.write("warn", "No project entry file found."); return; }
+      await this.runFile(entry.path);
+    }
+    async buildProject() {
+      this.opts.sink.build("system", "Build started");
+      const ts = this.project.filesByLanguage("typescript");
+      const as = this.project.filesByLanguage("assemblyscript");
+      if (!ts.length && !as.length) { this.opts.sink.build("info", "Nothing to build (no TypeScript or AssemblyScript files)."); return; }
+      const runner = this.runners.find((r) => r.id === "typescript") || this.runners.find((r) => r.id === "assemblyscript");
+      const file = (ts[0] || as[0]).path;
+      await this._run(runner, file, "build");
+      this.opts.sink.build("system", "Build finished");
+    }
+    async _run(runner, path, label) {
+      if (this.current) this.stop();
+      this.emit("stateChange", { state: "running", label: "Running " + label });
+      try {
+        if (this.opts.beforeRun) await this.opts.beforeRun();
+        this.current = runner;
+        const code = await runner.run(this.ctx(path));
+        this.opts.sink.write(code ? "error" : "system", "Process exited with code " + (code ?? 0));
+      } catch (err) {
+        this.opts.sink.write("error", String(err && err.message ? err.message : err));
+      } finally {
+        this.current = null;
+        this.emit("stateChange", { state: "idle", label: "Ready" });
+      }
+    }
+    stop() {
+      if (this.current && this.current.stop) this.current.stop();
+      this.current = null;
+      this.emit("stateChange", { state: "idle", label: "Stopped" });
+      this.opts.sink.write("system", "Execution stopped.");
+    }
+    dispose() { this.stop(); }
+  }
+
+  class IDE {
+    constructor(host) {
+      this.host = host;
+      this.settings = new SettingsManager();
+      this.ui = new UIStateManager();
+      this.project = new ProjectManager();
+      this.persistence = new PersistenceManager();
+      this.toasts = new Toasts();
+      this.disposers = [];
+      this.lastSaveErrorToast = 0;
+      this.editorReady = false;
+    }
+    async start() {
+      const { settings, ui, project, persistence } = this;
+      this.shell = new Shell(this.host, ui, settings, {
+        run: () => void this.runFile(),
+        build: () => void this.buildProject(),
+        stop: () => this.runner.stop(),
+        preview: () => this.preview.toggle(ui.get().activeFile),
+        quickOpen: () => this.quickOpen.open(),
+        toggleSettings: () => ui.toggle("settingsVisible")
+      });
+      this.shell.setEditorOverlay("loading", "Loading Monaco Editor…");
+      this.output = new OutputManager(this.shell.refs.panel, ui);
+      this.statusBar = new StatusBar(this.shell.refs.statusbar, {
+        openProblems: () => this.output.show("problems"),
+        showRunOutput: () => this.output.show("output"),
+        setLanguage: (id) => { const active = ui.get().activeFile; if (active) project.setLanguage(active, id); },
+        setIndentation: (tabSize, insertSpaces) => settings.update({ tabSize, insertSpaces })
+      });
+      this.editor = new EditorManager(project, settings);
+      this.tabs = new TabManager(this.shell.refs.tabs, ui, project, persistence);
+      this.diagnostics = new DiagnosticsManager(this.output.problemsContainer, this.editor, project);
+      this.preview = new PreviewManager(this.shell.refs.preview, project, ui, settings, this.output.sink);
+      this.explorer = new Explorer(this.shell.refs.sidebarHeader, this.shell.refs.sidebarBody, project, ui, {
+        open: (p) => this.openFile(p),
+        requestDelete: (p) => this.requestDelete(p),
+        onError: (m) => this.toasts.show(m, "error"),
+        runFile: (p) => void this.runFile(p),
+        preview: (p) => this.preview.open(p)
+      });
+      this.quickOpen = new QuickOpen(project, (p) => this.openFile(p));
+      new SettingsPanel(this.shell.refs.main, settings, ui);
+
+      this.runner = new RunnerManager(project, {
+        sink: this.output.sink,
+        reportDiagnostics: (source, d) => this.diagnostics.set(source, d),
+        getActiveFile: () => ui.get().activeFile,
+        beforeRun: () => persistence.flush()
+      });
+      const js = new JavaScriptRunner();
+      this.runner.register(js);
+      this.runner.register(new TypeScriptRunner(new TypeScriptCompiler(this.editor), js));
+      this.runner.register(new PythonRunner());
+      this.runner.register(new AssemblyScriptRunner());
+      this.runner.register(new ClangRunner());
+      this.runner.register(new CSharpRunner());
+      this.runner.register(new JavaRunner());
+
+      this.shell.setMenus(this.buildMenus());
+      this.wire();
+
+      await persistence.open();
+      let records = [];
+      let firstLaunch = false;
+      try { records = await persistence.loadNodes(); }
+      catch (err) { this.output.sink.write("error", "Failed to read the project from IndexedDB: " + err.message); }
+      if (!records.length) {
+        firstLaunch = true;
+        records = createDefaultProject();
+        if (persistence.isAvailable) {
+          try { await persistence.writeAll(records); }
+          catch (err) { this.output.sink.write("error", "Failed to persist the example project: " + err.message); }
+        }
+      }
+      project.load(records);
+      persistence.attach(project, () => settings.get().autosaveDelayMs);
+      if (!persistence.isAvailable) {
+        const msg = "Browser storage (IndexedDB) is unavailable: edits will be lost on reload.";
+        this.output.sink.write("error", msg);
+        this.toasts.show(msg, "error", 10000);
+      }
+      this.tabs.prune();
+      if (firstLaunch || !ui.get().openTabs.length) {
+        if (project.getFile(DEFAULT_OPEN_FILE)) this.tabs.open(DEFAULT_OPEN_FILE);
+        ui.set({ expandedDirs: ["/lib", "/assembly", "/data", "/src", ROOT] });
+      }
+      this.explorer.revealActive();
+      if (this.preview.isVisible()) {
+        if (ui.get().previewFile && project.getFile(ui.get().previewFile)) this.preview.refresh(false);
+        else this.preview.close();
+      }
+
+      try {
+        await this.editor.init(this.shell.refs.editorHost);
+        this.editorReady = true;
+        this.installEditorCommands();
+        this.syncEditorToState();
+      } catch (err) {
+        const message = err.message || String(err);
+        this.shell.setEditorOverlay("error", "Monaco Editor failed to load.\n\n" + message + "\n\nThe project explorer and persistence still work; reload the page once the CDN is reachable.");
+        this.output.sink.write("error", "Monaco Editor failed to load: " + message);
+        this.toasts.show("Monaco Editor failed to load — see Output.", "error", 10000);
+      }
+
+      this.disposers.push(installShortcuts({
+        quickOpen: () => this.quickOpen.open(),
+        toggleSidebar: () => ui.toggle("sidebarVisible"),
+        togglePanel: () => ui.toggle("panelVisible"),
+        runFile: () => void this.runFile(),
+        runProject: () => void this.runProject(),
+        find: () => this.editorAction("actions.find"),
+        replace: () => this.editorAction("editor.action.startFindReplaceAction"),
+        editorHasFocus: () => !!(this.editor.editor && this.editor.editor.hasTextFocus())
+      }));
+
+      this.output.sink.write("system", "Forge IDE ready — everything runs locally in this browser tab.");
+      this.output.sink.write("system", "Runtimes: JavaScript & TypeScript (isolated Web Worker), Python (Pyodide, lazy-loaded Worker), AssemblyScript (asc → WebAssembly Worker), HTML (sandboxed iframe).");
+      this.output.sink.write("system", "Browser toolchains for C/C++, C#, Java: " + (ToolchainRegistry.list().length ? ToolchainRegistry.list().join(", ") : "not bundled in this build (Run/Build reports this truthfully)."));
+    }
+    dispose() {
+      for (const d of this.disposers) d();
+      this.runner && this.runner.dispose();
+      this.editor && this.editor.dispose();
+      this.persistence.dispose();
+    }
+    wire() {
+      const { ui, settings, project, persistence } = this;
+      ui.on("change", ({ changed, state }) => {
+        if (changed.includes("activeFile")) this.syncEditorToState();
+        if (changed.some((k) => ["sidebarVisible", "panelVisible", "previewMode", "sidebarWidth", "panelHeight", "previewWidth"].includes(k))) requestAnimationFrame(() => this.editor.layout());
+        if (changed.includes("runState")) this.statusBar.setRun(state.runState, state.runLabel);
+        else if (changed.includes("runLabel")) this.statusBar.setRun(state.runState, state.runLabel);
+      });
+      persistence.on("stateChange", ({ state, message }) => {
+        this.statusBar.setAutosave(state, message);
+        if (state === "error") {
+          const now = Date.now();
+          if (now - this.lastSaveErrorToast > 8000) {
+            this.lastSaveErrorToast = now;
+            this.toasts.show(message || "Autosave failed", "error", 8000);
+            this.output.sink.write("error", message || "Autosave failed");
+          }
+        }
+      });
+      persistence.on("unavailable", ({ message }) => this.toasts.show(message, "error", 10000));
+      this.runner.on("stateChange", ({ state, label }) => ui.set({ runState: state, runLabel: label }));
+      this.runner.on("previewRequested", ({ path }) => this.preview.open(path));
+      this.output.on("status", ({ text }) => { if (ui.get().runState !== "idle") ui.set({ runLabel: text }); });
+      this.output.on("command", ({ command }) => void this.handleCommand(command));
+      this.diagnostics.on("navigate", ({ file, line, column }) => { this.openFile(file); this.editor.revealPosition(line, column); });
+      this.diagnostics.on("changed", ({ errors, warnings }) => {
+        this.output.setProblemCount(errors, warnings);
+        this.statusBar.setProblems(errors, warnings);
+        this.shell.setProblemsBadge(errors + warnings);
+      });
+      this.editor.on("cursor", ({ line, column }) => this.statusBar.setCursor(line, column));
+      project.on("languageChanged", ({ path }) => { if (path === ui.get().activeFile) this.statusBar.setLanguage(project.languageOf(path), path); });
+      settings.on("change", () => { const { tabSize, insertSpaces } = this.editor.getIndentation(); this.statusBar.setIndent(tabSize, insertSpaces); });
+    }
+    syncEditorToState() {
+      const active = this.ui.get().activeFile;
+      if (this.editorReady) { this.editor.showFile(active); this.shell.setEditorOverlay(active ? "hidden" : "empty"); }
+      this.statusBar.setLanguage(active ? this.project.languageOf(active) : null, active);
+      const { tabSize, insertSpaces } = this.editor.getIndentation();
+      this.statusBar.setIndent(tabSize, insertSpaces);
+    }
+    installEditorCommands() {
+      const m = this.editor.monaco; const mod = m.KeyMod.CtrlCmd;
+      this.editor.addCommand(mod | m.KeyCode.KeyP, () => this.quickOpen.open());
+      this.editor.addCommand(mod | m.KeyCode.KeyB, () => this.ui.toggle("sidebarVisible"));
+      this.editor.addCommand(mod | m.KeyCode.KeyJ, () => this.ui.toggle("panelVisible"));
+      this.editor.addCommand(mod | m.KeyCode.Enter, () => void this.runFile());
+      this.editor.addCommand(m.KeyCode.F5, () => void this.runProject());
+    }
+    editorAction(id) { if (!this.editorReady || !this.ui.get().activeFile) return; this.editor.focus(); this.editor.runAction(id); }
+    openFile(path) {
+      if (!this.project.getFile(path)) return;
+      this.tabs.open(path);
+      if (window.innerWidth < 900 && this.ui.get().sidebarVisible) this.ui.set({ sidebarVisible: false });
+      if (this.editorReady) this.editor.focus();
+    }
+    async runFile(path) {
+      path = path === undefined ? this.ui.get().activeFile : path;
+      if (path && this.project.languageOf(path).id !== "html") this.output.show("output");
+      await this.runner.runFile(path);
+    }
+    async runProject() { this.output.show("output"); await this.runner.runProject(); }
+    async buildProject() { this.output.show("build"); await this.runner.buildProject(); }
+    async requestDelete(path) {
+      const node = this.project.get(path); if (!node) return;
+      const count = node.type === "dir" ? this.project.allNodes().filter((n) => n.path.startsWith(path + "/")).length : 0;
+      const ok = await confirmDialog({
+        title: node.type === "dir" ? "Delete folder" : "Delete file",
+        message: node.type === "dir" ? 'Delete "' + path + '" and its ' + count + " item(s)? This removes them from browser storage and cannot be undone." : 'Delete "' + path + '"? This removes it from browser storage and cannot be undone.',
+        confirmLabel: "Delete", danger: true
+      });
+      if (!ok) return;
+      await this.persistence.flush();
+      this.project.delete(path);
+      this.toasts.show("Deleted " + path, "info", 2500);
+    }
+    async resetProject() {
+      const ok = await confirmDialog({ title: "Reset example project", message: "This deletes every file in the project and restores the example files. Continue?", confirmLabel: "Reset", danger: true });
+      if (!ok) return;
+      await this.persistence.flush();
+      this.tabs.closeAll();
+      for (const child of this.project.children(ROOT)) this.project.delete(child.path);
+      for (const r of createDefaultProject()) {
+        if (r.type === "dir") { if (!this.project.exists(r.path)) this.project.createFolder(r.path); }
+        else this.project.createFile(r.path, r.content ?? "", r.language ?? null);
+      }
+      this.ui.set({ expandedDirs: ["/lib", "/assembly", "/data", "/src", ROOT], previewMode: "hidden" });
+      this.tabs.open(DEFAULT_OPEN_FILE);
+      this.toasts.show("Example project restored", "success");
+    }
+    buildMenus() {
+      const ui = this.ui;
+      return [
+        { label: "File", items: () => [
+          { label: "New File…", onSelect: () => this.explorer.startCreate("file") },
+          { label: "New Folder…", onSelect: () => this.explorer.startCreate("folder") },
+          { separator: true },
+          { label: "Quick Open…", shortcut: "Ctrl/Cmd+P", onSelect: () => this.quickOpen.open() },
+          { separator: true },
+          { label: "Close Tab", disabled: !ui.get().activeFile, onSelect: () => ui.get().activeFile && this.tabs.close(ui.get().activeFile) },
+          { label: "Close All Tabs", disabled: !ui.get().openTabs.length, onSelect: () => this.tabs.closeAll() },
+          { separator: true },
+          { label: "Reset Example Project…", danger: true, onSelect: () => void this.resetProject() }
+        ]},
+        { label: "View", items: () => [
+          { label: "Sidebar", shortcut: "Ctrl/Cmd+B", checked: ui.get().sidebarVisible, onSelect: () => ui.toggle("sidebarVisible") },
+          { label: "Bottom Panel", shortcut: "Ctrl/Cmd+J", checked: ui.get().panelVisible, onSelect: () => ui.toggle("panelVisible") },
+          { separator: true },
+          { label: "Output", onSelect: () => this.output.show("output") },
+          { label: "Terminal (IDE console)", onSelect: () => { this.output.show("terminal"); this.output.focusTerminal(); } },
+          { label: "Problems", onSelect: () => this.output.show("problems") },
+          { label: "Build", onSelect: () => this.output.show("build") },
+          { separator: true },
+          { label: "Preview", checked: ui.get().previewMode !== "hidden", onSelect: () => this.preview.toggle(ui.get().activeFile) },
+          { label: "Split Editor / Preview", checked: ui.get().previewMode === "split", onSelect: () => (ui.get().previewMode === "hidden" ? this.preview.open(ui.get().activeFile, "split") : this.preview.setMode(ui.get().previewMode === "split" ? "only" : "split")) },
+          { label: "Full Screen Preview", disabled: ui.get().previewMode === "hidden", onSelect: () => this.preview.toggleFullscreen() },
+          { separator: true },
+          { label: "Settings", checked: ui.get().settingsVisible, onSelect: () => ui.toggle("settingsVisible") }
+        ]},
+        { label: "Run", items: () => [
+          { label: "Run Current File", shortcut: "Ctrl/Cmd+Enter", disabled: ui.get().runState !== "idle", onSelect: () => void this.runFile() },
+          { label: "Run Project", shortcut: "F5", disabled: ui.get().runState !== "idle", onSelect: () => void this.runProject() },
+          { label: "Build Project", disabled: ui.get().runState !== "idle", onSelect: () => void this.buildProject() },
+          { label: "Stop", disabled: ui.get().runState === "idle", danger: true, onSelect: () => this.runner.stop() },
+          { separator: true },
+          { label: "Preview HTML", onSelect: () => this.preview.open(ui.get().activeFile) }
+        ]},
+        { label: "Help", items: () => [
+          { label: "Keyboard Shortcuts", onSelect: () => void confirmDialog({ title: "Keyboard shortcuts", message: "Ctrl/Cmd+P Quick Open · Ctrl/Cmd+F Find · Ctrl/Cmd+H Replace · Ctrl/Cmd+B Sidebar · Ctrl/Cmd+J Panel · Ctrl/Cmd+Enter Run file · F5 Run project · F2 Rename (explorer) · Esc Close overlays. Files autosave — there is no Save command.", confirmLabel: "OK" }) },
+          { label: "About Forge IDE", onSelect: () => void confirmDialog({ title: "Forge IDE", message: "A browser-only IDE. Files live in IndexedDB, code runs in Web Workers / sandboxed iframes, and nothing is sent to a server. Monaco Editor, Pyodide and the AssemblyScript compiler are loaded as static assets from pinned CDN URLs.", confirmLabel: "OK" }) }
+        ]}
+      ];
+    }
+    async handleCommand(command) {
+      const out = (kind, text) => this.output.append("terminal", kind, text);
+      const [name, ...rest] = command.split(/\s+/);
+      const arg = rest.join(" ");
+      const resolve = (p) => normalizePath(p.startsWith("/") ? p : "/" + p);
+      switch (name.toLowerCase()) {
+        case "help":
+          out("info", "IDE console commands (this is an IDE command interface, not a system shell):");
+          out("stdout", "  help                 show this list\n  ls [dir]             list project files\n  cat <file>           print a file\n  open <file>          open a file in the editor\n  new <file>           create (and open) a file\n  mkdir <dir>          create a folder\n  run [file]           run a file (default: active file)\n  build                build the project\n  stop                 stop execution\n  preview [file]       open the HTML preview\n  languages            list language runners\n  echo <text>          print text\n  clear                clear this console");
+          break;
+        case "ls": {
+          const dir = arg ? resolve(arg) : ROOT;
+          if (!this.project.isDir(dir)) return out("stderr", "ls: not a directory: " + dir);
+          const children = this.project.children(dir);
+          out("stdout", children.length ? children.map((c) => (c.type === "dir" ? c.name + "/" : c.name)).join("\n") : "(empty)");
+          break;
+        }
+        case "cat": {
+          if (!arg) return out("stderr", "cat: missing file");
+          const p = resolve(arg); const content = this.project.readFile(p);
+          if (content == null) return out("stderr", "cat: not a file: " + p);
+          out("stdout", content); break;
+        }
+        case "open": {
+          if (!arg) return out("stderr", "open: missing file");
+          const p = resolve(arg);
+          if (!this.project.getFile(p)) return out("stderr", "open: not found: " + p);
+          this.openFile(p); out("info", "opened " + p); break;
+        }
+        case "new": {
+          if (!arg) return out("stderr", "new: missing path");
+          const p = resolve(arg);
+          try { this.project.createFile(p, "", null); this.openFile(p); out("info", "created " + p); }
+          catch (e) { out("stderr", e.message); }
+          break;
+        }
+        case "mkdir": {
+          if (!arg) return out("stderr", "mkdir: missing path");
+          const p = resolve(arg);
+          try { this.project.createFolder(p); out("info", "created " + p); }
+          catch (e) { out("stderr", e.message); }
+          break;
+        }
+        case "run": await this.runFile(arg ? resolve(arg) : this.ui.get().activeFile); break;
+        case "build": await this.buildProject(); break;
+        case "stop": this.runner.stop(); break;
+        case "preview": this.preview.open(arg ? resolve(arg) : this.ui.get().activeFile); break;
+        case "languages": out("stdout", this.runner.listLanguages().join("\n")); break;
+        case "echo": out("stdout", arg); break;
+        case "clear": this.output.clear("terminal"); break;
+        default: out("stderr", "unknown command: " + name + ". Type `help`.");
+      }
+    }
+  }
+
+  const host = document.getElementById("ide-host");
+  const ide = new IDE(host);
+  ide.start();
+})();
+  </script>
+</body>
+</html>
