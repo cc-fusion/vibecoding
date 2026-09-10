@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>FLIP Fluid</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; overscroll-behavior: none;
+    background: #0b1020;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #sim {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    display: block; touch-action: none;
+  }
+  #menuToggle {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    right: calc(env(safe-area-inset-right, 0px) + 10px);
+    width: 40px; height: 40px; border-radius: 9999px;
+    background: rgba(255,255,255,0.10); color: #e5edff;
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 30; touch-action: manipulation;
+  }
+  #menuToggle:active { background: rgba(255,255,255,0.22); }
+  #menuToggle svg { width: 20px; height: 20px; }
+  #panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(300px, 86vw);
+    background: rgba(12, 17, 34, 0.88);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-left: 1px solid rgba(255,255,255,0.10);
+    color: #dbe4ff; z-index: 20;
+    transform: translateX(100%); visibility: hidden;
+    transition: transform 0.22s ease, visibility 0.22s;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    touch-action: pan-y; overscroll-behavior: contain;
+    padding: calc(env(safe-area-inset-top, 0px) + 60px) calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 20px) 16px;
+    font-size: 13px;
+  }
+  #panel.open { transform: translateX(0); visibility: visible; }
+  .ctl { margin-bottom: 12px; }
+  .ctl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .ctl-head label { color: #b8c4e6; white-space: nowrap; }
+  .ctl input[type="number"] {
+    width: 68px; background: rgba(255,255,255,0.07); color: #f1f5ff;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+    padding: 3px 6px; font-size: 12px; text-align: right; outline: none;
+    -moz-appearance: textfield;
+  }
+  .ctl input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .ctl input[type="range"] { width: 100%; height: 22px; accent-color: #4f8cff; margin: 0; touch-action: pan-y; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; color: #b8c4e6; }
+  .toggle input { width: 18px; height: 18px; accent-color: #4f8cff; }
+  .btn {
+    width: 100%; padding: 9px 10px; margin-top: 6px; border-radius: 8px;
+    background: rgba(79,140,255,0.18); color: #e8efff;
+    border: 1px solid rgba(79,140,255,0.45); cursor: pointer; font-size: 13px;
+    touch-action: manipulation;
+  }
+  .btn:active { background: rgba(79,140,255,0.35); }
+  .btn.warn { background: rgba(255,120,90,0.14); border-color: rgba(255,120,90,0.4); }
+  .sep { height: 1px; background: rgba(255,255,255,0.10); margin: 12px 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="sim"></canvas>
+
+<button id="menuToggle" aria-label="Settings" aria-expanded="false">
+  <svg id="iconMenu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  <svg id="iconClose" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="hidden"><path d="M6 6l12 12M18 6L6 18"/></svg>
+</button>
+
+<aside id="panel" aria-hidden="true">
+  <div id="controls"></div>
+  <div class="sep"></div>
+  <div class="toggle">
+    <label for="accelToggle">Accelerometer</label>
+    <input type="checkbox" id="accelToggle">
+  </div>
+  <button id="motionPermBtn" class="btn hidden">Enable motion sensors</button>
+  <div class="sep"></div>
+  <button id="resetBtn" class="btn warn">Reset simulation</button>
+</aside>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+ *  CONFIGURATION — every tunable / numerical constant lives here.
+ *  The settings menu binds directly to the fields of this object.
+ * ===================================================================== */
+const CONFIG = {
+  // ---- user-facing simulation parameters (exposed in the side menu) ----
+  flipRatio: 0.9,            // particleVel = flipRatio * FLIP + (1 - flipRatio) * PIC
+  gravity: 9.81,             // gravity magnitude (world units / s^2)
+  useAccelerometer: true,    // use device motion as gravity direction when available
+  accelScale: 1.0,           // multiplier applied to normalized sensor gravity
+  pointerStrength: 1.0,      // multiplier on pointer velocity transferred to fluid
+  pointerRadiusCells: 5,     // pointer obstacle radius in grid cells
+  resolution: 80,            // grid cells along the shorter viewport side (set from device class at startup)
+  particleVisualScale: 1.0,  // visual radius as multiple of physical particle radius
+  simSpeed: 1.0,             // simulation time multiplier
+  pressureIters: 50,         // Gauss-Seidel iterations for incompressibility
+  separationIters: 2,        // particle push-apart iterations per step
+
+  // ---- solver internals (tutorial conventions) ----
+  domainShortSide: 3.0,             // world length of the shorter viewport side
+  fluidDensity: 1000.0,             // density used for the pressure scale (cp = density*h/dt)
+  overRelaxation: 1.9,              // SOR factor in the pressure solve
+  compensateDrift: true,            // push fluid apart in over-dense cells (volume conservation)
+  driftCompensationGain: 1.0,       // 'k' factor on the density compression term
+  particleRadiusCellFraction: 0.3,  // physical particle radius = fraction * cell size
+  particleHashSpacingFactor: 2.2,   // spatial hash cell size = factor * particle radius
+  initialFillWidth: 0.6,            // initial fluid block width as fraction of interior width
+  initialFillHeight: 0.75,          // initial fluid block height as fraction of interior height
+  maxFillFraction: 0.8,             // resize resets the sim if fluid would exceed this fraction of the domain
+  hexRowOffsetFraction: 0.5,        // odd hex-lattice rows are shifted by this fraction of particle diameter
+
+  // ---- time stepping ----
+  maxTimeStep: 1 / 60,       // largest allowed sub-step (s)
+  maxFrameDelta: 1 / 20,     // frame deltas above this are clamped (tab switching, hitches)
+  maxStepsPerFrame: 3,       // cap on sub-steps per rendered frame
+
+  // ---- pointer interaction ----
+  pointerMaxSpeed: 12.0,          // clamp on pointer velocity (world units / s)
+  pointerVelocitySmoothing: 0.5,  // per-frame lerp factor for pointer velocity estimate
+  pointerMinFrameDt: 0.001,       // guard against division by a zero frame delta
+
+  // ---- device motion ----
+  accelReferenceG: 9.81,     // sensor magnitude corresponding to one unit of gravity
+  accelMinMagnitude: 1.0,    // readings weaker than this are treated as invalid
+  accelStaleMs: 1500,        // fall back to downward gravity if no reading within this time
+  accelSmoothing: 0.2,       // per-frame lerp factor applied to gravity vector changes
+  accelSign: 'auto',         // 'auto' | 1 | -1 : sign convention of accelerationIncludingGravity
+
+  // ---- resolution / device scaling ----
+  desktopResolution: 80,
+  mobileResolution: 46,
+  minPixelsPerCell: 4,       // never use more cells than the viewport can display
+  minResolution: 16,
+  resizeDebounceMs: 150,     // delay before rebuilding the grid after a viewport change
+
+  // ---- rendering ----
+  backgroundColor: '#0b1020',
+  fluidColor: [56, 128, 255],
+  sprayColor: [214, 232, 255],
+  paletteSize: 8,                // number of pre-rendered particle sprites between fluid and spray color
+  sprayDensityThreshold: 0.7,    // relative density below which a particle is colored as spray
+  colorFadePerSecond: 0.6,       // how fast spray color fades back to fluid color
+  minSpriteRadiusPx: 0.75,       // smallest rendered particle radius (device px)
+  spritePaddingPx: 1,            // anti-alias padding around sprites
+};
+
+const FLUID_CELL = 0, AIR_CELL = 1, SOLID_CELL = 2;
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+
+/* =====================================================================
+ *  SIMULATION — FLIP/PIC fluid (after Matthias Müller, Ten Minute Physics #18)
+ *  Coordinates: world units, y up. Cell (i,j) index = i * fNumY + j.
+ *  u lives on vertical faces (left of cell), v on horizontal faces (bottom of cell).
+ * ===================================================================== */
+class FlipFluid {
+  constructor(density, fNumX, fNumY, h, maxParticles) {
+    this.density = density;
+    this.maxParticles = maxParticles;
+    this.numParticles = 0;
+    this.particlePos = new Float32Array(2 * maxParticles);
+    this.particleVel = new Float32Array(2 * maxParticles);
+    this.particleWhite = new Float32Array(maxParticles); // 0 = fluid color, 1 = spray color
+    this.cellParticleIds = new Int32Array(maxParticles);
+    this.particleRestDensity = 0.0;
+    this.particleRadius = CONFIG.particleRadiusCellFraction * h;
+    this.allocateGrid(fNumX, fNumY, h);
+  }
+
+  allocateGrid(fNumX, fNumY, h) {
+    this.fNumX = fNumX; this.fNumY = fNumY;
+    this.h = h; this.fInvSpacing = 1.0 / h;
+    this.fNumCells = fNumX * fNumY;
+    const nc = this.fNumCells;
+    this.u = new Float32Array(nc);  this.v = new Float32Array(nc);
+    this.du = new Float32Array(nc); this.dv = new Float32Array(nc);
+    this.prevU = new Float32Array(nc); this.prevV = new Float32Array(nc);
+    this.p = new Float32Array(nc);
+    this.s = new Float32Array(nc);
+    this.cellType = new Int32Array(nc);
+    this.particleDensity = new Float32Array(nc);
+    // closed tank: all four boundary rows/columns are solid
+    for (let i = 0; i < fNumX; i++) {
+      for (let j = 0; j < fNumY; j++) {
+        const solid = (i === 0 || i === fNumX - 1 || j === 0 || j === fNumY - 1);
+        this.s[i * fNumY + j] = solid ? 0.0 : 1.0;
+      }
+    }
+    // spatial hash for particle separation
+    this.pInvSpacing = 1.0 / (CONFIG.particleHashSpacingFactor * this.particleRadius);
+    this.pNumX = Math.floor(fNumX * h * this.pInvSpacing) + 1;
+    this.pNumY = Math.floor(fNumY * h * this.pInvSpacing) + 1;
+    this.pNumCells = this.pNumX * this.pNumY;
+    this.numCellParticles = new Int32Array(this.pNumCells);
+    this.firstCellParticle = new Int32Array(this.pNumCells + 1);
+  }
+
+  get interiorWidth() { return (this.fNumX - 2) * this.h; }
+  get interiorHeight() { return (this.fNumY - 2) * this.h; }
+
+  /** Rebuild the grid for new dimensions (same cell size), keeping particles by proportional remap. */
+  resizeGrid(fNumX, fNumY) {
+    const h = this.h;
+    const sx = ((fNumX - 2) * h) / this.interiorWidth;
+    const sy = ((fNumY - 2) * h) / this.interiorHeight;
+    const pos = this.particlePos;
+    for (let i = 0; i < this.numParticles; i++) {
+      pos[2 * i] = h + (pos[2 * i] - h) * sx;
+      pos[2 * i + 1] = h + (pos[2 * i + 1] - h) * sy;
+    }
+    this.allocateGrid(fNumX, fNumY, h);
+  }
+
+  /* ---------- particle integration ---------- */
+  integrateParticles(dt, gx, gy) {
+    const pos = this.particlePos, vel = this.particleVel;
+    for (let i = 0; i < this.numParticles; i++) {
+      vel[2 * i] += dt * gx;
+      vel[2 * i + 1] += dt * gy;
+      pos[2 * i] += vel[2 * i] * dt;
+      pos[2 * i + 1] += vel[2 * i + 1] * dt;
+    }
+  }
+
+  /* ---------- particle separation (spatial hash + relaxation) ---------- */
+  pushParticlesApart(numIters) {
+    const pos = this.particlePos;
+    const pInv = this.pInvSpacing, pNumX = this.pNumX, pNumY = this.pNumY;
+    const numCell = this.numCellParticles, first = this.firstCellParticle, ids = this.cellParticleIds;
+
+    numCell.fill(0);
+    for (let i = 0; i < this.numParticles; i++) {
+      const xi = clamp(Math.floor(pos[2 * i] * pInv), 0, pNumX - 1);
+      const yi = clamp(Math.floor(pos[2 * i + 1] * pInv), 0, pNumY - 1);
+      numCell[xi * pNumY + yi]++;
+    }
+    let acc = 0;
+    for (let i = 0; i < this.pNumCells; i++) { acc += numCell[i]; first[i] = acc; }
+    first[this.pNumCells] = acc; // guard
+    for (let i = 0; i < this.numParticles; i++) {
+      const xi = clamp(Math.floor(pos[2 * i] * pInv), 0, pNumX - 1);
+      const yi = clamp(Math.floor(pos[2 * i + 1] * pInv), 0, pNumY - 1);
+      const c = xi * pNumY + yi;
+      first[c]--;
+      ids[first[c]] = i;
+    }
+
+    const minDist = 2.0 * this.particleRadius;
+    const minDist2 = minDist * minDist;
+    for (let iter = 0; iter < numIters; iter++) {
+      for (let i = 0; i < this.numParticles; i++) {
+        const px = pos[2 * i], py = pos[2 * i + 1];
+        const pxi = Math.floor(px * pInv), pyi = Math.floor(py * pInv);
+        const x0 = Math.max(pxi - 1, 0), y0 = Math.max(pyi - 1, 0);
+        const x1 = Math.min(pxi + 1, pNumX - 1), y1 = Math.min(pyi + 1, pNumY - 1);
+        for (let xi = x0; xi <= x1; xi++) {
+          for (let yi = y0; yi <= y1; yi++) {
+            const c = xi * pNumY + yi;
+            const a = first[c], b = first[c + 1];
+            for (let k = a; k < b; k++) {
+              const id = ids[k];
+              if (id === i) continue;
+              let dx = pos[2 * id] - px, dy = pos[2 * id + 1] - py;
+              const d2 = dx * dx + dy * dy;
+              if (d2 > minDist2 || d2 === 0.0) continue;
+              const d = Math.sqrt(d2);
+              const sc = 0.5 * (minDist - d) / d;
+              dx *= sc; dy *= sc;
+              pos[2 * i] -= dx; pos[2 * i + 1] -= dy;
+              pos[2 * id] += dx; pos[2 * id + 1] += dy;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* ---------- wall + pointer-obstacle collisions ---------- */
+  handleParticleCollisions(obstacles, numObstacles, obstacleRadius) {
+    const h = this.h, r = this.particleRadius;
+    const minX = h + r, maxX = (this.fNumX - 1) * h - r;
+    const minY = h + r, maxY = (this.fNumY - 1) * h - r;
+    const minDist = obstacleRadius + r, minDist2 = minDist * minDist;
+    const pos = this.particlePos, vel = this.particleVel;
+    for (let i = 0; i < this.numParticles; i++) {
+      let x = pos[2 * i], y = pos[2 * i + 1];
+      for (let k = 0; k < numObstacles; k++) {
+        const o = obstacles[k];
+        const dx = x - o.x, dy = y - o.y;
+        if (dx * dx + dy * dy < minDist2) {
+          vel[2 * i] = o.vx; vel[2 * i + 1] = o.vy;
+        }
+      }
+      if (x < minX) { x = minX; vel[2 * i] = 0.0; }
+      if (x > maxX) { x = maxX; vel[2 * i] = 0.0; }
+      if (y < minY) { y = minY; vel[2 * i + 1] = 0.0; }
+      if (y > maxY) { y = maxY; vel[2 * i + 1] = 0.0; }
+      pos[2 * i] = x; pos[2 * i + 1] = y;
+    }
+  }
+
+  /** Mark pointer discs as moving solid cells (tutorial setObstacle). */
+  applyObstacles(obstacles, numObstacles, radius) {
+    const n = this.fNumY, h = this.h, h1 = this.fInvSpacing;
+    const s = this.s, u = this.u, v = this.v;
+    for (let i = 1; i < this.fNumX - 1; i++)
+      for (let j = 1; j < this.fNumY - 1; j++) s[i * n + j] = 1.0;
+    const r2 = radius * radius;
+    for (let k = 0; k < numObstacles; k++) {
+      const o = obstacles[k];
+      const i0 = Math.max(1, Math.floor((o.x - radius) * h1));
+      const i1 = Math.min(this.fNumX - 3, Math.floor((o.x + radius) * h1));
+      const j0 = Math.max(1, Math.floor((o.y - radius) * h1));
+      const j1 = Math.min(this.fNumY - 3, Math.floor((o.y + radius) * h1));
+      for (let i = i0; i <= i1; i++) {
+        for (let j = j0; j <= j1; j++) {
+          const dx = (i + 0.5) * h - o.x, dy = (j + 0.5) * h - o.y;
+          if (dx * dx + dy * dy < r2) {
+            const c = i * n + j;
+            s[c] = 0.0;
+            u[c] = o.vx; u[c + n] = o.vx;
+            v[c] = o.vy; v[c + 1] = o.vy;
+          }
+        }
+      }
+    }
+  }
+
+  /* ---------- particle density (for drift compensation) ---------- */
+  updateParticleDensity() {
+    const n = this.fNumY, h = this.h, h1 = this.fInvSpacing, h2 = 0.5 * h;
+    const d = this.particleDensity, pos = this.particlePos;
+    d.fill(0.0);
+    for (let i = 0; i < this.numParticles; i++) {
+      let x = clamp(pos[2 * i], h, (this.fNumX - 1) * h);
+      let y = clamp(pos[2 * i + 1], h, (this.fNumY - 1) * h);
+      const x0 = Math.floor((x - h2) * h1);
+      const tx = ((x - h2) - x0 * h) * h1;
+      const x1 = Math.min(x0 + 1, this.fNumX - 2);
+      const y0 = Math.floor((y - h2) * h1);
+      const ty = ((y - h2) - y0 * h) * h1;
+      const y1 = Math.min(y0 + 1, this.fNumY - 2);
+      const sx = 1.0 - tx, sy = 1.0 - ty;
+      if (x0 < this.fNumX && y0 < this.fNumY) d[x0 * n + y0] += sx * sy;
+      if (x1 < this.fNumX && y0 < this.fNumY) d[x1 * n + y0] += tx * sy;
+      if (x1 < this.fNumX && y1 < this.fNumY) d[x1 * n + y1] += tx * ty;
+      if (x0 < this.fNumX && y1 < this.fNumY) d[x0 * n + y1] += sx * ty;
+    }
+    if (this.particleRestDensity === 0.0) {
+      let sum = 0.0, numFluidCells = 0;
+      for (let i = 0; i < this.fNumCells; i++) {
+        if (this.cellType[i] === FLUID_CELL) { sum += d[i]; numFluidCells++; }
+      }
+      if (numFluidCells > 0) this.particleRestDensity = sum / numFluidCells;
+    }
+  }
+
+  /* ---------- particle <-> grid transfer ---------- */
+  transferVelocities(toGrid, flipRatio) {
+    const n = this.fNumY, h = this.h, h1 = this.fInvSpacing, h2 = 0.5 * h;
+    const pos = this.particlePos, vel = this.particleVel, cellType = this.cellType;
+
+    if (toGrid) {
+      this.prevU.set(this.u); this.prevV.set(this.v);
+      this.du.fill(0.0); this.dv.fill(0.0);
+      this.u.fill(0.0); this.v.fill(0.0);
+      for (let i = 0; i < this.fNumCells; i++)
+        cellType[i] = this.s[i] === 0.0 ? SOLID_CELL : AIR_CELL;
+      for (let i = 0; i < this.numParticles; i++) {
+        const xi = clamp(Math.floor(pos[2 * i] * h1), 0, this.fNumX - 1);
+        const yi = clamp(Math.floor(pos[2 * i + 1] * h1), 0, this.fNumY - 1);
+        const c = xi * n + yi;
+        if (cellType[c] === AIR_CELL) cellType[c] = FLUID_CELL;
+      }
+    }
+
+    for (let component = 0; component < 2; component++) {
+      const dx = component === 0 ? 0.0 : h2;
+      const dy = component === 0 ? h2 : 0.0;
+      const f = component === 0 ? this.u : this.v;
+      const prevF = component === 0 ? this.prevU : this.prevV;
+      const dw = component === 0 ? this.du : this.dv;
+      const offset = component === 0 ? n : 1;
+
+      for (let i = 0; i < this.numParticles; i++) {
+        let x = clamp(pos[2 * i], h, (this.fNumX - 1) * h);
+        let y = clamp(pos[2 * i + 1], h, (this.fNumY - 1) * h);
+        const x0 = Math.min(Math.floor((x - dx) * h1), this.fNumX - 2);
+        const tx = ((x - dx) - x0 * h) * h1;
+        const x1 = Math.min(x0 + 1, this.fNumX - 2);
+        const y0 = Math.min(Math.floor((y - dy) * h1), this.fNumY - 2);
+        const ty = ((y - dy) - y0 * h) * h1;
+        const y1 = Math.min(y0 + 1, this.fNumY - 2);
+        const sx = 1.0 - tx, sy = 1.0 - ty;
+        const d0 = sx * sy, d1 = tx * sy, d2 = tx * ty, d3 = sx * ty;
+        const nr0 = x0 * n + y0, nr1 = x1 * n + y0, nr2 = x1 * n + y1, nr3 = x0 * n + y1;
+
+        if (toGrid) {
+          const pv = vel[2 * i + component];
+          f[nr0] += pv * d0; dw[nr0] += d0;
+          f[nr1] += pv * d1; dw[nr1] += d1;
+          f[nr2] += pv * d2; dw[nr2] += d2;
+          f[nr3] += pv * d3; dw[nr3] += d3;
+        } else {
+          const valid0 = (cellType[nr0] !== AIR_CELL || cellType[nr0 - offset] !== AIR_CELL) ? 1.0 : 0.0;
+          const valid1 = (cellType[nr1] !== AIR_CELL || cellType[nr1 - offset] !== AIR_CELL) ? 1.0 : 0.0;
+          const valid2 = (cellType[nr2] !== AIR_CELL || cellType[nr2 - offset] !== AIR_CELL) ? 1.0 : 0.0;
+          const valid3 = (cellType[nr3] !== AIR_CELL || cellType[nr3 - offset] !== AIR_CELL) ? 1.0 : 0.0;
+          const pv = vel[2 * i + component];
+          const d = valid0 * d0 + valid1 * d1 + valid2 * d2 + valid3 * d3;
+          if (d > 0.0) {
+            const picV = (valid0 * d0 * f[nr0] + valid1 * d1 * f[nr1] + valid2 * d2 * f[nr2] + valid3 * d3 * f[nr3]) / d;
+            const corr = (valid0 * d0 * (f[nr0] - prevF[nr0]) + valid1 * d1 * (f[nr1] - prevF[nr1])
+                        + valid2 * d2 * (f[nr2] - prevF[nr2]) + valid3 * d3 * (f[nr3] - prevF[nr3])) / d;
+            const flipV = pv + corr;
+            vel[2 * i + component] = flipRatio * flipV + (1.0 - flipRatio) * picV;
+          }
+        }
+      }
+
+      if (toGrid) {
+        for (let i = 0; i < f.length; i++) if (dw[i] > 0.0) f[i] /= dw[i];
+        // restore solid cell velocities
+        for (let i = 0; i < this.fNumX; i++) {
+          for (let j = 0; j < this.fNumY; j++) {
+            const c = i * n + j;
+            const solid = cellType[c] === SOLID_CELL;
+            if (solid || (i > 0 && cellType[c - n] === SOLID_CELL)) this.u[c] = this.prevU[c];
+            if (solid || (j > 0 && cellType[c - 1] === SOLID_CELL)) this.v[c] = this.prevV[c];
+          }
+        }
+      }
+    }
+  }
+
+  /* ---------- pressure projection (Gauss-Seidel with over-relaxation) ---------- */
+  solveIncompressibility(numIters, dt, overRelaxation, compensateDrift) {
+    this.p.fill(0.0);
+    this.prevU.set(this.u); this.prevV.set(this.v);
+    const n = this.fNumY, u = this.u, v = this.v, s = this.s, p = this.p;
+    const cellType = this.cellType, dens = this.particleDensity;
+    const cp = this.density * this.h / dt;
+    const restD = this.particleRestDensity;
+    const k = CONFIG.driftCompensationGain;
+    const useDrift = compensateDrift && restD > 0.0;
+
+    for (let iter = 0; iter < numIters; iter++) {
+      for (let i = 1; i < this.fNumX - 1; i++) {
+        for (let j = 1; j < this.fNumY - 1; j++) {
+          const center = i * n + j;
+          if (cellType[center] !== FLUID_CELL) continue;
+          const left = center - n, right = center + n, bottom = center - 1, top = center + 1;
+          const sx0 = s[left], sx1 = s[right], sy0 = s[bottom], sy1 = s[top];
+          const sSum = sx0 + sx1 + sy0 + sy1;
+          if (sSum === 0.0) continue;
+          let div = u[right] - u[center] + v[top] - v[center];
+          if (useDrift) {
+            const compression = dens[center] - restD;
+            if (compression > 0.0) div -= k * compression;
+          }
+          const pr = (-div / sSum) * overRelaxation;
+          p[center] += cp * pr;
+          u[center] -= sx0 * pr;
+          u[right] += sx1 * pr;
+          v[center] -= sy0 * pr;
+          v[top] += sy1 * pr;
+        }
+      }
+    }
+  }
+
+  /* ---------- visual spray/fluid coloring ---------- */
+  updateParticleColors(dt) {
+    const n = this.fNumY, h1 = this.fInvSpacing;
+    const fade = CONFIG.colorFadePerSecond * dt;
+    const restD = this.particleRestDensity, thr = CONFIG.sprayDensityThreshold;
+    const white = this.particleWhite, pos = this.particlePos, dens = this.particleDensity;
+    for (let i = 0; i < this.numParticles; i++) {
+      let w = white[i] - fade;
+      if (w < 0.0) w = 0.0;
+      if (restD > 0.0) {
+        const xi = clamp(Math.floor(pos[2 * i] * h1), 1, this.fNumX - 2);
+        const yi = clamp(Math.floor(pos[2 * i + 1] * h1), 1, this.fNumY - 2);
+        if (dens[xi * n + yi] / restD < thr) w = 1.0;
+      }
+      white[i] = w;
+    }
+  }
+
+  /* ---------- one full FLIP step ---------- */
+  simulate(dt, gx, gy, flipRatio, numPressureIters, numParticleIters, overRelaxation, compensateDrift,
+           obstacles, numObstacles, obstacleRadius) {
+    this.integrateParticles(dt, gx, gy);
+    if (numParticleIters > 0) this.pushParticlesApart(numParticleIters);
+    this.handleParticleCollisions(obstacles, numObstacles, obstacleRadius);
+    this.applyObstacles(obstacles, numObstacles, obstacleRadius);
+    this.transferVelocities(true, flipRatio);
+    this.updateParticleDensity();
+    this.solveIncompressibility(numPressureIters, dt, overRelaxation, compensateDrift);
+    this.transferVelocities(false, flipRatio);
+    this.updateParticleColors(dt);
+  }
+}
+
+/* =====================================================================
+ *  SCENE / DOMAIN SETUP
+ * ===================================================================== */
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+const view = { cssW: 0, cssH: 0, dpr: 1 };
+const layout = { scale: 1, offsetX: 0, offsetY: 0 }; // css px per world unit and centering offsets
+let fluid = null;
+
+function effectiveResolution(cssW, cssH) {
+  const shortPx = Math.max(1, Math.min(cssW, cssH));
+  const maxRes = Math.floor(shortPx / CONFIG.minPixelsPerCell);
+  return Math.max(CONFIG.minResolution, Math.min(Math.round(CONFIG.resolution), maxRes));
+}
+
+function computeGridDims(cssW, cssH) {
+  const res = effectiveResolution(cssW, cssH);
+  const shortPx = Math.min(cssW, cssH), longPx = Math.max(cssW, cssH);
+  const h = CONFIG.domainShortSide / res;
+  const nLong = Math.max(1, Math.round((longPx / shortPx) * res));
+  const landscape = cssW >= cssH;
+  return { h, fNumX: (landscape ? nLong : res) + 2, fNumY: (landscape ? res : nLong) + 2 };
+}
+
+function createFluid(cssW, cssH) {
+  const dims = computeGridDims(cssW, cssH);
+  const h = dims.h;
+  const r = CONFIG.particleRadiusCellFraction * h;
+  const interiorW = (dims.fNumX - 2) * h, interiorH = (dims.fNumY - 2) * h;
+  const dx = 2.0 * r, dy = Math.sqrt(3.0) / 2.0 * dx;
+  const numX = Math.max(1, Math.floor((CONFIG.initialFillWidth * interiorW - 2.0 * r) / dx));
+  const numY = Math.max(1, Math.floor((CONFIG.initialFillHeight * interiorH - 2.0 * r) / dy));
+  const f = new FlipFluid(CONFIG.fluidDensity, dims.fNumX, dims.fNumY, h, numX * numY);
+  const rowShift = CONFIG.hexRowOffsetFraction * dx;
+  let p = 0;
+  for (let i = 0; i < numX; i++) {
+    for (let j = 0; j < numY; j++) {
+      f.particlePos[p++] = h + r + dx * i + (j % 2 === 0 ? 0.0 : rowShift);
+      f.particlePos[p++] = h + r + dy * j;
+    }
+  }
+  f.numParticles = numX * numY;
+  return f;
+}
+
+function resetSimulation() {
+  fluid = createFluid(view.cssW || window.innerWidth, view.cssH || window.innerHeight);
+  updateLayout();
+}
+
+/* =====================================================================
+ *  RESIZE HANDLING
+ * ===================================================================== */
+function updateLayout() {
+  if (!fluid) return;
+  const w = fluid.interiorWidth, hgt = fluid.interiorHeight;
+  layout.scale = Math.max(view.cssW / w, view.cssH / hgt); // uniform scale, no stretching
+  layout.offsetX = (view.cssW - w * layout.scale) / 2;
+  layout.offsetY = (view.cssH - hgt * layout.scale) / 2;
+}
+
+function rebuildGridForViewport() {
+  if (!fluid) return;
+  const dims = computeGridDims(view.cssW, view.cssH);
+  if (dims.fNumX === fluid.fNumX && dims.fNumY === fluid.fNumY && Math.abs(dims.h - fluid.h) < 1e-9) return;
+  if (Math.abs(dims.h - fluid.h) > 1e-9) { resetSimulation(); return; } // cell size changed → restart
+  const interiorCells = (dims.fNumX - 2) * (dims.fNumY - 2);
+  const restD = fluid.particleRestDensity > 0 ? fluid.particleRestDensity : 1.0;
+  if (fluid.numParticles / restD > CONFIG.maxFillFraction * interiorCells) { resetSimulation(); return; }
+  fluid.resizeGrid(dims.fNumX, dims.fNumY);
+  updateLayout();
+}
+
+let resizeTimer = 0;
+function onViewportChange() {
+  const cssW = Math.max(1, Math.round(canvas.clientWidth || window.innerWidth));
+  const cssH = Math.max(1, Math.round(canvas.clientHeight || window.innerHeight));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  if (cssW === view.cssW && cssH === view.cssH && dpr === view.dpr) return;
+  view.cssW = cssW; view.cssH = cssH; view.dpr = dpr;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  updateLayout();
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(rebuildGridForViewport, CONFIG.resizeDebounceMs);
+}
+
+window.addEventListener('resize', onViewportChange);
+window.addEventListener('orientationchange', onViewportChange);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onViewportChange);
+if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', onViewportChange);
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(onViewportChange).observe(canvas);
+
+/* =====================================================================
+ *  INPUT — pointer events (mouse / touch / pen share one path)
+ * ===================================================================== */
+const pointers = new Map();            // pointerId → pointer state
+const obstacleList = [];               // reused per frame; entries are {x,y,vx,vy}
+const MAX_OBSTACLES = 10;
+for (let i = 0; i < MAX_OBSTACLES; i++) obstacleList.push({ x: 0, y: 0, vx: 0, vy: 0 });
+let numObstacles = 0;
+
+function screenToWorldX(cx) { return fluid.h + (cx - layout.offsetX) / layout.scale; }
+function screenToWorldY(cy) { return fluid.h + (view.cssH - cy - layout.offsetY) / layout.scale; }
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (!fluid) return;
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  const x = screenToWorldX(e.clientX), y = screenToWorldY(e.clientY);
+  pointers.set(e.pointerId, { x, y, prevX: x, prevY: y, vx: 0, vy: 0 });
+});
+canvas.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId);
+  if (!p || !fluid) return;
+  e.preventDefault();
+  p.x = screenToWorldX(e.clientX); p.y = screenToWorldY(e.clientY);
+});
+const endPointer = (e) => { pointers.delete(e.pointerId); };
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('lostpointercapture', endPointer);
+window.addEventListener('blur', () => pointers.clear());
+
+// block iOS Safari scrolling / pinch zoom while touching the canvas
+document.addEventListener('touchmove', (e) => { if (e.target === canvas) e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function updatePointers(frameDt) {
+  const dt = Math.max(frameDt, CONFIG.pointerMinFrameDt);
+  const sm = CONFIG.pointerVelocitySmoothing, maxV = CONFIG.pointerMaxSpeed;
+  numObstacles = 0;
+  for (const p of pointers.values()) {
+    const nvx = (p.x - p.prevX) / dt, nvy = (p.y - p.prevY) / dt;
+    p.vx += (nvx - p.vx) * sm; p.vy += (nvy - p.vy) * sm;
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp > maxV) { p.vx *= maxV / sp; p.vy *= maxV / sp; }
+    p.prevX = p.x; p.prevY = p.y;
+    if (numObstacles < MAX_OBSTACLES) {
+      const o = obstacleList[numObstacles++];
+      o.x = p.x; o.y = p.y;
+      o.vx = p.vx * CONFIG.pointerStrength; o.vy = p.vy * CONFIG.pointerStrength;
+    }
+  }
+}
+
+/* =====================================================================
+ *  SENSORS — device motion → gravity vector, orientation compensated
+ * ===================================================================== */
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const motion = {
+  supported: typeof DeviceMotionEvent !== 'undefined',
+  needsPermission: typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function',
+  granted: false, listening: false, hasData: false,
+  ax: 0, ay: 0, az: 0, lastTime: 0,
+};
+const gravity = { x: 0, y: -CONFIG.gravity };
+
+function onDeviceMotion(e) {
+  const a = e.accelerationIncludingGravity;
+  if (!a || a.x == null || a.y == null) return;
+  motion.ax = a.x; motion.ay = a.y; motion.az = a.z == null ? 0 : a.z;
+  motion.lastTime = performance.now();
+  motion.hasData = true;
+}
+function startMotionListener() {
+  if (motion.listening || !motion.supported) return;
+  window.addEventListener('devicemotion', onDeviceMotion);
+  motion.listening = true;
+}
+function requestMotionPermission() {
+  if (!motion.needsPermission) { startMotionListener(); return Promise.resolve(true); }
+  return DeviceMotionEvent.requestPermission().then((state) => {
+    motion.granted = state === 'granted';
+    if (motion.granted) startMotionListener();
+    return motion.granted;
+  }).catch(() => false);
+}
+if (!motion.needsPermission) startMotionListener();
+
+function getScreenAngle() {
+  if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+  if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
+  return 0;
+}
+function accelSign() {
+  if (CONFIG.accelSign === 'auto') return isIOS ? 1 : -1; // iOS reports the gravity vector, spec reports the reaction force
+  return CONFIG.accelSign;
+}
+
+function updateGravity() {
+  let tx = 0, ty = -CONFIG.gravity;
+  const now = performance.now();
+  if (CONFIG.useAccelerometer && motion.hasData && (now - motion.lastTime) < CONFIG.accelStaleMs) {
+    const mag = Math.sqrt(motion.ax * motion.ax + motion.ay * motion.ay + motion.az * motion.az);
+    if (mag >= CONFIG.accelMinMagnitude && isFinite(mag)) {
+      const sgn = accelSign();
+      const dx = sgn * motion.ax, dy = sgn * motion.ay;            // gravity in device frame (y toward device top)
+      const th = getScreenAngle() * Math.PI / 180;                 // screen rotated CCW by th from natural
+      const c = Math.cos(th), s = Math.sin(th);
+      const sx = dx * c - dy * s, sy = dx * s + dy * c;            // rotate into screen frame (y up)
+      const k = CONFIG.gravity * CONFIG.accelScale / CONFIG.accelReferenceG;
+      tx = sx * k; ty = sy * k;
+    }
+  }
+  const sm = CONFIG.accelSmoothing;
+  gravity.x += (tx - gravity.x) * sm;
+  gravity.y += (ty - gravity.y) * sm;
+}
+
+/* =====================================================================
+ *  RENDERING — Canvas 2D, pre-rendered sprites, device-pixel precise
+ * ===================================================================== */
+const sprites = { radius: -1, size: 0, half: 0, images: [] };
+
+function buildSprites(radiusPx) {
+  const pad = CONFIG.spritePaddingPx;
+  const size = Math.ceil(radiusPx * 2) + pad * 2;
+  sprites.radius = radiusPx; sprites.size = size; sprites.half = size / 2;
+  sprites.images.length = 0;
+  const [fr, fg, fb] = CONFIG.fluidColor, [sr, sg, sb] = CONFIG.sprayColor;
+  const N = CONFIG.paletteSize;
+  for (let k = 0; k < N; k++) {
+    const t = N > 1 ? k / (N - 1) : 0;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const g = c.getContext('2d');
+    g.fillStyle = `rgb(${Math.round(fr + (sr - fr) * t)},${Math.round(fg + (sg - fg) * t)},${Math.round(fb + (sb - fb) * t)})`;
+    g.beginPath(); g.arc(size / 2, size / 2, radiusPx, 0, Math.PI * 2); g.fill();
+    sprites.images.push(c);
+  }
+}
+
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = CONFIG.backgroundColor;
+  ctx.fillRect(0, 0, W, H);
+  if (!fluid) return;
+
+  const dpr = view.dpr;
+  const scale = layout.scale * dpr;
+  const radiusPx = Math.max(CONFIG.minSpriteRadiusPx, fluid.particleRadius * scale * CONFIG.particleVisualScale);
+  if (Math.abs(radiusPx - sprites.radius) > 0.01) buildSprites(radiusPx);
+
+  const ox = layout.offsetX * dpr, oy = layout.offsetY * dpr;
+  const h = fluid.h, half = sprites.half;
+  const pos = fluid.particlePos, white = fluid.particleWhite, imgs = sprites.images;
+  const nMax = imgs.length - 1;
+  for (let i = 0; i < fluid.numParticles; i++) {
+    const x = ox + (pos[2 * i] - h) * scale - half;
+    const y = H - oy - (pos[2 * i + 1] - h) * scale - half;
+    ctx.drawImage(imgs[(white[i] * nMax + 0.5) | 0], x | 0, y | 0);
+  }
+}
+
+/* =====================================================================
+ *  UI — settings side menu bound to CONFIG
+ * ===================================================================== */
+const panel = document.getElementById('panel');
+const menuToggle = document.getElementById('menuToggle');
+const iconMenu = document.getElementById('iconMenu');
+const iconClose = document.getElementById('iconClose');
+
+function setMenu(open) {
+  panel.classList.toggle('open', open);
+  panel.setAttribute('aria-hidden', String(!open));
+  menuToggle.setAttribute('aria-expanded', String(open));
+  iconMenu.classList.toggle('hidden', open);
+  iconClose.classList.toggle('hidden', !open);
+}
+menuToggle.addEventListener('click', () => setMenu(!panel.classList.contains('open')));
+
+const CONTROLS = [
+  { key: 'flipRatio',           label: 'FLIP ratio',            min: 0,    max: 1,   step: 0.01 },
+  { key: 'gravity',             label: 'Gravity',               min: 0,    max: 30,  step: 0.1 },
+  { key: 'accelScale',          label: 'Motion scale',          min: 0,    max: 3,   step: 0.05 },
+  { key: 'pointerStrength',     label: 'Interaction strength',  min: 0,    max: 3,   step: 0.05 },
+  { key: 'pointerRadiusCells',  label: 'Interaction radius',    min: 1,    max: 20,  step: 0.5 },
+  { key: 'resolution',          label: 'Resolution',            min: 16,   max: 160, step: 2, commit: () => resetSimulation() },
+  { key: 'particleVisualScale', label: 'Particle size',         min: 0.25, max: 2.5, step: 0.05 },
+  { key: 'simSpeed',            label: 'Speed',                 min: 0.1,  max: 2,   step: 0.05 },
+  { key: 'pressureIters',       label: 'Pressure iterations',   min: 5,    max: 150, step: 5 },
+  { key: 'separationIters',     label: 'Separation iterations', min: 0,    max: 6,   step: 1 },
+];
+
+function buildControls() {
+  const host = document.getElementById('controls');
+  for (const c of CONTROLS) {
+    const wrap = document.createElement('div'); wrap.className = 'ctl';
+    const head = document.createElement('div'); head.className = 'ctl-head';
+    const label = document.createElement('label'); label.textContent = c.label; label.htmlFor = 'rng_' + c.key;
+    const num = document.createElement('input'); num.type = 'number'; num.id = 'num_' + c.key;
+    num.min = c.min; num.max = c.max; num.step = c.step; num.inputMode = 'decimal';
+    const rng = document.createElement('input'); rng.type = 'range'; rng.id = 'rng_' + c.key;
+    rng.min = c.min; rng.max = c.max; rng.step = c.step;
+    head.appendChild(label); head.appendChild(num);
+    wrap.appendChild(head); wrap.appendChild(rng);
+    host.appendChild(wrap);
+
+    const decimals = Math.max(0, Math.ceil(-Math.log10(c.step)));
+    const show = () => { const v = CONFIG[c.key]; rng.value = v; num.value = Number(v).toFixed(decimals); };
+    const apply = (raw, commit) => {
+      const v = parseFloat(raw);
+      if (!isFinite(v)) { show(); return; }
+      CONFIG[c.key] = clamp(v, c.min, c.max);
+      show();
+      if (commit && c.commit) c.commit();
+    };
+    rng.addEventListener('input', () => apply(rng.value, false));
+    rng.addEventListener('change', () => apply(rng.value, true));
+    num.addEventListener('change', () => apply(num.value, true));
+    num.addEventListener('keydown', (e) => { if (e.key === 'Enter') num.blur(); });
+    show();
+  }
+}
+
+const accelToggle = document.getElementById('accelToggle');
+const motionPermBtn = document.getElementById('motionPermBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+function syncMotionUI() {
+  accelToggle.checked = CONFIG.useAccelerometer;
+  accelToggle.disabled = !motion.supported;
+  motionPermBtn.classList.toggle('hidden', !(motion.needsPermission && !motion.granted));
+}
+accelToggle.addEventListener('change', () => {
+  CONFIG.useAccelerometer = accelToggle.checked;
+  if (accelToggle.checked && motion.needsPermission && !motion.granted) {
+    requestMotionPermission().then(syncMotionUI); // triggered inside a user gesture
+  }
+});
+motionPermBtn.addEventListener('click', () => {
+  requestMotionPermission().then((ok) => { if (ok) CONFIG.useAccelerometer = true; syncMotionUI(); });
+});
+resetBtn.addEventListener('click', () => resetSimulation());
+
+/* =====================================================================
+ *  MAIN LOOP
+ * ===================================================================== */
+let lastFrameTime = 0;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!fluid) return;
+  if (lastFrameTime === 0) { lastFrameTime = now; render(); return; }
+  let frameDt = (now - lastFrameTime) / 1000;
+  lastFrameTime = now;
+  if (!(frameDt > 0)) frameDt = 0;
+  frameDt = Math.min(frameDt, CONFIG.maxFrameDelta);
+
+  updatePointers(frameDt);
+  updateGravity();
+
+  const simTime = frameDt * CONFIG.simSpeed;
+  if (simTime > 0) {
+    const steps = clamp(Math.ceil(simTime / CONFIG.maxTimeStep), 1, CONFIG.maxStepsPerFrame);
+    const sdt = Math.min(simTime / steps, CONFIG.maxTimeStep);
+    const obstacleRadius = CONFIG.pointerRadiusCells * fluid.h;
+    for (let s = 0; s < steps; s++) {
+      fluid.simulate(sdt, gravity.x, gravity.y, CONFIG.flipRatio,
+        Math.round(CONFIG.pressureIters), Math.round(CONFIG.separationIters),
+        CONFIG.overRelaxation, CONFIG.compensateDrift,
+        obstacleList, numObstacles, obstacleRadius);
+    }
+  }
+  render();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { lastFrameTime = 0; pointers.clear(); }
+});
+
+/* =====================================================================
+ *  STARTUP
+ * ===================================================================== */
+function detectDefaultResolution() {
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const touch = navigator.maxTouchPoints > 0;
+  const small = Math.min(window.innerWidth, window.innerHeight) < 700;
+  return (coarse || (touch && small)) ? CONFIG.mobileResolution : CONFIG.desktopResolution;
+}
+CONFIG.resolution = detectDefaultResolution();
+
+buildControls();
+syncMotionUI();
+onViewportChange();
+resetSimulation();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
