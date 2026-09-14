@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Precision Lab — Arbitrary-Precision Calculator</title>
+<style>
+  :root {
+    color-scheme: dark;
+    font-family: system-ui, sans-serif;
+    background: #0a101c;
+    color: #e3ecfa;
+    --muted: #96a9c3;
+    --line: #2b3c55;
+    --accent: #74e4cd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 30px 16px;
+    background: radial-gradient(ellipse at top, #182942, #0a101c 65%);
+    min-height: 100vh;
+  }
+  main { max-width: 1080px; margin: auto; }
+  header { margin-bottom: 25px; }
+  h1 { margin: 0 0 8px; font-size: clamp(26px, 5vw, 40px); }
+  h1 span { color: var(--accent); }
+  p { color: var(--muted); line-height: 1.65; }
+  .layout { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+  .card {
+    background: #101c2ded;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 14px 45px #0002;
+  }
+  h2 { font-size: 17px; margin: 0 0 16px; }
+  label { display: block; margin: 0 0 8px; color: #c6d7ed; font-size: 13px; }
+  textarea, input, select {
+    width: 100%;
+    color: #edf5ff;
+    border: 1px solid #3b506e;
+    border-radius: 8px;
+    background: #080f1d;
+    padding: 12px;
+    font: 15px ui-monospace, Consolas, monospace;
+  }
+  textarea { resize: vertical; line-height: 1.6; }
+  #expression { min-height: 125px; font-size: 20px; }
+  #definitions { min-height: 90px; }
+  #result {
+    min-height: 150px;
+    max-height: 450px;
+    color: #a4f3df;
+    font-size: 17px;
+    overflow-wrap: anywhere;
+  }
+  textarea:focus, input:focus, select:focus {
+    outline: 2px solid #74e4cd77;
+    border-color: var(--accent);
+  }
+  .row { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 140px; }
+  button {
+    font: inherit;
+    border: 1px solid #486382;
+    background: #1b304c;
+    color: #e1eeff;
+    padding: 11px 17px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #294667; border-color: #7bdccf; }
+  button:disabled { opacity: .45; cursor: default; }
+  .primary { background: #185449; color: #caffed; border-color: #54bda5; font-weight: 700; }
+  .danger { background: #502b35; border-color: #9c5367; }
+  .actions { margin-top: 18px; }
+  .small { font-size: 12px; color: var(--muted); line-height: 1.65; }
+  .examples { display: flex; flex-wrap: wrap; gap: 7px; }
+  .examples button { padding: 7px 10px; font: 12px ui-monospace, monospace; }
+  details { margin-top: 18px; }
+  summary { cursor: pointer; color: #b9cfeb; font-size: 13px; }
+  details p { font-size: 13px; }
+  code, kbd { color: #b6eddc; font-family: ui-monospace, monospace; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td { padding: 9px 0; border-bottom: 1px solid #23344b; vertical-align: top; line-height: 1.6; }
+  td:first-child { width: 45%; padding-right: 10px; color: #b6eddc; font-family: monospace; }
+  td:last-child { color: #aabdd6; }
+  .result-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .result-head h2 { margin: 0; }
+  .result-head button { padding: 6px 11px; font-size: 12px; }
+  #error { color: #ffb2b9; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #error:empty { display: none; }
+  #status { font-size: 13px; color: #a8bed8; margin-top: 10px; }
+  .engine {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+  .spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid #2d425b;
+    border-top-color: var(--accent);
+  }
+  .busy .spinner { animation: spin 1s linear infinite; }
+  .track {
+    height: 6px;
+    margin: 17px 0 12px;
+    background: #081221;
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .track div { width: 30%; height: 100%; background: var(--accent); opacity: .25; }
+  .busy .track div { opacity: 1; animation: scan 1.6s ease-in-out infinite alternate; }
+  #stage { color: #d5f5eb; font-size: 13px; }
+  #detail { font-size: 11px; color: var(--muted); margin-top: 5px; overflow-wrap: anywhere; }
+  #trace {
+    margin: 0;
+    min-height: 100px;
+    max-height: 210px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #8faac7;
+    font: 11px/1.8 ui-monospace, Consolas, monospace;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #9bd8c8;
+    border: 1px solid #31584e;
+    border-radius: 5px;
+    padding: 4px 7px;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes scan { from { transform: translateX(-30%); } to { transform: translateX(265%); } }
+  @media (max-width: 780px) {
+    .layout { grid-template-columns: 1fr; }
+    body { padding: 20px 12px; }
+    .card { padding: 17px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .busy .spinner, .busy .track div { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="badge">BIGINT DECIMAL ENGINE · COOPERATIVE EXECUTION</div>
+    <h1>Precision <span>Lab</span></h1>
+    <p>A real-number expression calculator with adjustable precision, large exponents,
+      and a live calculation trace.</p>
+  </header>
+
+  <div class="layout">
+    <section>
+      <form id="form" class="card">
+        <label for="expression">Expression · Ctrl/⌘ + Enter to calculate</label>
+        <textarea id="expression" spellcheck="false">sqrt(2)^2 + log_2 8 + sin(pi/2)</textarea>
+
+        <div class="row" style="margin-top:16px">
+          <div class="field">
+            <label for="precision">Significant decimal digits</label>
+            <input id="precision" type="number" min="1" step="1" value="50">
+          </div>
+          <div class="field">
+            <label for="angle">Angle unit</label>
+            <select id="angle">
+              <option value="rad">Radians</option>
+              <option value="deg">Degrees</option>
+            </select>
+          </div>
+        </div>
+
+        <details>
+          <summary>Variables and definitions</summary>
+          <p>One definition per line or separated by semicolons.
+            Names contain letters only. Definitions can reference each other;
+            circular references are rejected.</p>
+          <textarea id="definitions" spellcheck="false">a = 2
+b = 8</textarea>
+        </details>
+
+        <div class="row actions">
+          <button id="calculate" class="primary" type="submit">Calculate</button>
+          <button id="cancel" class="danger" type="button" disabled>Cancel</button>
+        </div>
+        <div class="small" style="margin-top:12px">
+          Precision means significant digits, not a fixed number of digits after the decimal point.
+          Results are rounded, not truncated. Constants are computed at the selected precision.
+        </div>
+      </form>
+
+      <section class="card">
+        <div class="result-head">
+          <h2>Result</h2>
+          <button id="copy" disabled>Copy</button>
+        </div>
+        <textarea id="result" readonly aria-label="Calculation result"
+          placeholder="Your result will appear here." spellcheck="false"></textarea>
+        <p id="error" role="alert"></p>
+        <div id="status" role="status">Ready.</div>
+      </section>
+
+      <section class="card" id="engine">
+        <div class="engine">
+          <div class="spinner" aria-hidden="true"></div>
+          <div>
+            <div id="stage">Engine idle</div>
+            <div id="detail">No background threads or external services.</div>
+          </div>
+        </div>
+        <div class="track" aria-hidden="true"><div></div></div>
+        <pre id="trace" aria-label="Calculation trace">Waiting for an expression.</pre>
+      </section>
+    </section>
+
+    <aside>
+      <section class="card">
+        <h2>Try an expression</h2>
+        <div class="examples" id="examples"></div>
+      </section>
+
+      <section class="card">
+        <h2>Syntax reference</h2>
+        <table>
+          <tr><td>+ − * /</td><td>Arithmetic; × and ÷ also work.</td></tr>
+          <tr><td>2 . 3<br>2.3 · 4</td><td>Separate dot or middle dot multiplies. Decimal points belong to numbers.</td></tr>
+          <tr><td>17 % 5</td><td>Remainder, with the dividend’s sign. For percentages use <code>percent(50)</code>.</td></tr>
+          <tr><td>20!</td><td>Factorial of a nonnegative integer.</td></tr>
+          <tr><td>x^y, x**y</td><td>Right-associative powers. <code>-2^2 = -4</code>.</td></tr>
+          <tr><td>abs(x), |x|</td><td>Absolute value.</td></tr>
+          <tr><td>sqrt(x), cbrt(x)</td><td>Square and real cube roots. √ and ∛ are accepted.</td></tr>
+          <tr><td>log2 8<br>log_2 8<br>loga b<br>log(2,8)</td><td>Logarithm with an explicit base. Parenthesize compound bases: <code>log_(1+1) 8</code>.</td></tr>
+          <tr><td>log(x), ln(x)</td><td>Base-10 and natural logarithms.</td></tr>
+          <tr><td>sin cos tan<br>cot sec csc</td><td>Trigonometric functions.</td></tr>
+          <tr><td>arcsin arccos arctan<br>arccot arcsec arccsc</td><td>Inverse trigonometric functions. Short aliases such as <code>asin</code> also work.</td></tr>
+          <tr><td>sin^-1(x)<br>cot^-1(x)</td><td>Inverse-function notation, not reciprocal. Also accepts <code>sin^(-1)(x)</code>.</td></tr>
+          <tr><td>pi, π, e, tau, τ</td><td>Arbitrary-precision constants. τ = 2π.</td></tr>
+          <tr><td>exp(x), 1e1000</td><td>Exponential function and scientific notation.</td></tr>
+          <tr><td>2pi, 3(x+1)</td><td>Implicit multiplication. It has the same precedence as explicit multiplication.</td></tr>
+        </table>
+
+        <details>
+          <summary>Numerics, domains, and execution</summary>
+          <p>
+            Arithmetic uses a BigInt decimal significand and a BigInt decimal exponent.
+            Transcendental functions use guarded numerical series and Newton iteration.
+            Extra working precision is requested automatically for large trigonometric
+            arguments and sensitive exponentiation.
+          </p>
+          <p>
+            This is finite-precision numerical arithmetic, not symbolic algebra or
+            certified interval arithmetic. Extreme cancellation can require you to
+            increase precision. Displayed digits are numerical approximations.
+          </p>
+          <p>
+            Only real results are supported. Use <code>cbrt(-8)</code> for negative
+            cube roots. Inverse cotangent uses (0, π); inverse secant and cosecant
+            use their principal real branches. <code>0^0</code> is defined as 1.
+          </p>
+          <p>
+            Iterative algorithms yield regularly so the progress display and Cancel
+            button remain usable. Native BigInt operations cannot themselves be
+            interrupted. Available memory and browser limits ultimately constrain
+            input size and precision.
+          </p>
+        </details>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // =====================================================================
+  // UI and cooperative scheduling
+  // =====================================================================
+  const $ = id => document.getElementById(id);
+  const ui = {
+    form: $("form"), expression: $("expression"), precision: $("precision"),
+    angle: $("angle"), definitions: $("definitions"), calculate: $("calculate"),
+    cancel: $("cancel"), result: $("result"), error: $("error"),
+    status: $("status"), stage: $("stage"), detail: $("detail"),
+    trace: $("trace"), engine: $("engine"), copy: $("copy")
+  };
+
+  const nextTurn = () => new Promise(resolve => setTimeout(resolve, 0));
+  let activeJob = null;
+
+  class Cancelled extends Error {}
+  class NeedPrecision extends Error {
+    constructor(digits) {
+      super("More working precision is required.");
+      this.digits = digits;
+    }
+  }
+
+  class Job {
+    constructor() {
+      this.cancelled = false;
+      this.started = performance.now();
+      this.lastYield = this.started;
+      this.stage = "";
+      this.detail = "";
+      this.steps = 0;
+      this.lines = [];
+    }
+
+    check() {
+      if (this.cancelled) throw new Cancelled("Calculation cancelled.");
+    }
+
+    log(message) {
+      const seconds = ((performance.now() - this.started) / 1000).toFixed(2);
+      this.lines.push(`${seconds}s  ${message}`);
+      if (this.lines.length > 45) this.lines.shift();
+    }
+
+    paint() {
+      ui.stage.textContent = this.stage || "Calculating";
+      ui.detail.textContent =
+        `${this.detail} · ${this.steps.toLocaleString()} checkpoints · ` +
+        `${((performance.now() - this.started) / 1000).toFixed(2)} s`;
+      ui.trace.textContent = this.lines.join("\n");
+      ui.trace.scrollTop = ui.trace.scrollHeight;
+    }
+
+    async tick(stage, detail = "", force = false) {
+      this.check();
+      this.steps++;
+      if (stage !== this.stage) {
+        this.stage = stage;
+        this.log(stage);
+      }
+      this.detail = detail;
+
+      // A macrotask yield is essential: Promise-only microtask chains do not
+      // allow paint, keyboard, or pointer events to be processed.
+      if (force || performance.now() - this.lastYield > 8) {
+        this.paint();
+        await nextTurn();
+        this.lastYield = performance.now();
+        this.check();
+      }
+    }
+  }
+
+  // =====================================================================
+  // Lexer and Pratt parser. No eval(), Function(), or executable user code.
+  // =====================================================================
+  const directTrig = new Set(["sin", "cos", "tan", "cot", "sec", "csc"]);
+  const inverseNames = {
+    sin: "arcsin", cos: "arccos", tan: "arctan",
+    cot: "arccot", sec: "arcsec", csc: "arccsc"
+  };
+  const aliases = {
+    asin: "arcsin", acos: "arccos", atan: "arctan",
+    acot: "arccot", asec: "arcsec", acsc: "arccsc"
+  };
+  const functions = new Set([
+    "abs", "sqrt", "cbrt", "ln", "exp", "percent",
+    ...directTrig, ...Object.values(inverseNames), ...Object.keys(aliases)
+  ]);
+  const constants = new Set(["pi", "e", "tau"]);
+
+  class SyntaxProblem extends Error {
+    constructor(message, position) {
+      super(`${message} (character ${position + 1})`);
+      this.position = position;
+    }
+  }
+
+  function lex(source) {
+    const tokens = [];
+    let i = 0;
+
+    while (i < source.length) {
+      const ch = source[i];
+      if (/\s/.test(ch)) { i++; continue; }
+
+      const tail = source.slice(i);
+      const number = tail.match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (number) {
+        tokens.push({ type: "number", value: number[0], pos: i });
+        i += number[0].length;
+        continue;
+      }
+
+      const word = tail.match(/^[A-Za-z]+/);
+      if (word) {
+        const value = word[0].toLowerCase();
+        // "loga b" is explicitly supported as "log a b".
+        if (value.startsWith("log") && value !== "log") {
+          tokens.push({ type: "id", value: "log", pos: i });
+          tokens.push({ type: "id", value: value.slice(3), pos: i + 3 });
+        } else {
+          tokens.push({ type: "id", value, pos: i });
+        }
+        i += word[0].length;
+        continue;
+      }
+
+      const symbols = {
+        "π": ["id", "pi"], "τ": ["id", "tau"],
+        "√": ["id", "sqrt"], "∛": ["id", "cbrt"],
+        "×": ["op", "*"], "·": ["op", "*"],
+        "÷": ["op", "/"], "−": ["op", "-"]
+      };
+      if (symbols[ch]) {
+        const [type, value] = symbols[ch];
+        tokens.push({ type, value, pos: i++ });
+        continue;
+      }
+      if (tail.startsWith("**")) {
+        tokens.push({ type: "op", value: "^", pos: i });
+        i += 2;
+        continue;
+      }
+      if ("+-*/.^%!(),|_".includes(ch)) {
+        tokens.push({ type: "op", value: ch === "." ? "*" : ch, pos: i++ });
+        continue;
+      }
+      throw new SyntaxProblem(`Unexpected character "${ch}"`, i);
+    }
+
+    tokens.push({ type: "end", value: "<end>", pos: source.length });
+    return tokens;
+  }
+
+  class Parser {
+    constructor(source) {
+      this.tokens = lex(source);
+      this.index = 0;
+      this.depth = 0;
+    }
+    peek(offset = 0) { return this.tokens[this.index + offset] || this.tokens.at(-1); }
+    take() { return this.tokens[this.index++]; }
+    is(value) { return this.peek().value === value; }
+    accept(value) {
+      if (this.is(value)) { this.take(); return true; }
+      return false;
+    }
+    expect(value) {
+      if (!this.accept(value)) {
+        throw new SyntaxProblem(`Expected "${value}", found "${this.peek().value}"`, this.peek().pos);
+      }
+    }
+    startsAtom(token) {
+      return token.type === "number" || token.type === "id" ||
+        token.value === "(" || token.value === "|";
+    }
+
+    parse() {
+      if (this.peek().type === "end") throw new SyntaxProblem("Enter an expression", 0);
+      const node = this.expression(0, false);
+      if (this.peek().type !== "end") {
+        throw new SyntaxProblem(`Unexpected "${this.peek().value}"`, this.peek().pos);
+      }
+      return node;
+    }
+
+    expression(minimum = 0, stopAtBar = false) {
+      if (++this.depth > 200) {
+        throw new SyntaxProblem("Expression nesting is too deep", this.peek().pos);
+      }
+
+      let left = this.prefix(stopAtBar);
+
+      while (true) {
+        const token = this.peek();
+        if (token.type === "end" || token.value === ")" || token.value === "," ||
+            (stopAtBar && token.value === "|")) break;
+
+        if (token.value === "!") {
+          if (50 < minimum) break;
+          this.take();
+          left = { type: "call", name: "factorial", args: [left] };
+          continue;
+        }
+
+        let op = token.value;
+        let binding = ({ "+": 10, "-": 10, "*": 20, "/": 20, "%": 20, "^": 30 })[op];
+        let implicit = false;
+
+        if (binding === undefined && this.startsAtom(token)) {
+          binding = 20;
+          op = "*";
+          implicit = true;
+        }
+        if (binding === undefined || binding < minimum) break;
+
+        if (!implicit) this.take();
+        const right = this.expression(op === "^" ? binding : binding + 1, stopAtBar);
+        left = { type: "binary", op, left, right };
+      }
+
+      this.depth--;
+      return left;
+    }
+
+    argument(stopAtBar) {
+      if (this.accept("(")) {
+        const node = this.expression(0, false);
+        this.expect(")");
+        return node;
+      }
+      return this.expression(25, stopAtBar);
+    }
+
+    prefix(stopAtBar) {
+      const token = this.take();
+
+      if (token.type === "number") return { type: "number", value: token.value };
+      if (token.value === "+" || token.value === "-") {
+        return {
+          type: "unary", op: token.value,
+          value: this.expression(25, stopAtBar)
+        };
+      }
+      if (token.value === "(") {
+        const value = this.expression(0, false);
+        this.expect(")");
+        return value;
+      }
+      if (token.value === "|") {
+        const value = this.expression(0, true);
+        this.expect("|");
+        return { type: "call", name: "abs", args: [value] };
+      }
+
+      if (token.type === "id") {
+        let name = token.value;
+
+        if (name === "log") {
+          if (this.accept("(")) {
+            const first = this.expression(0, false);
+            if (this.accept(",")) {
+              const second = this.expression(0, false);
+              this.expect(")");
+              return { type: "call", name: "logbase", args: [first, second] };
+            }
+            this.expect(")");
+            return { type: "call", name: "log10", args: [first] };
+          }
+
+          this.accept("_");
+          // A compound base must be parenthesized.
+          const base = this.expression(40, stopAtBar);
+          const argument = this.argument(stopAtBar);
+          return { type: "call", name: "logbase", args: [base, argument] };
+        }
+
+        if (functions.has(name)) {
+          if (directTrig.has(name) && this.is("^")) {
+            this.take();
+            const grouped = this.accept("(");
+            this.expect("-");
+            const exponent = this.take();
+            if (exponent.type !== "number" || Number(exponent.value) !== 1) {
+              throw new SyntaxProblem(
+                "Only ^-1 inverse-function notation is supported here; use (function(x))^n for powers",
+                exponent.pos
+              );
+            }
+            if (grouped) this.expect(")");
+            name = inverseNames[name];
+          }
+          name = aliases[name] || name;
+          return { type: "call", name, args: [this.argument(stopAtBar)] };
+        }
+        return { type: "variable", name };
+      }
+
+      throw new SyntaxProblem(`Expected a number or expression, found "${token.value}"`, token.pos);
+    }
+  }
+
+  function parseDefinitions(source) {
+    const definitions = new Map();
+    for (const raw of source.split(/[;\n]/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      const match = line.match(/^([A-Za-z]+)\s*=\s*(.+)$/);
+      if (!match) throw new Error(`Invalid definition: ${line}`);
+      const name = match[1].toLowerCase();
+      if (constants.has(name) || functions.has(name) || name.startsWith("log")) {
+        throw new Error(`"${name}" is a reserved name.`);
+      }
+      if (definitions.has(name)) throw new Error(`Duplicate definition: ${name}`);
+      definitions.set(name, new Parser(match[2]).parse());
+    }
+    return definitions;
+  }
+
+  // =====================================================================
+  // Decimal representation: value = coefficient * 10^exponent.
+  //
+  // Both fields are BigInts. A per-engine precision limits significand
+  // length, not exponent size. No user value is stored as a JS Number.
+  // Number is used only for small loop counters and Newton starting seeds.
+  // =====================================================================
+  const absBig = n => n < 0n ? -n : n;
+  const digitsBig = n => absBig(n).toString().length;
+
+  function ten(n) {
+    if (!Number.isSafeInteger(n) || n < 0) {
+      throw new RangeError("A required decimal allocation exceeds browser limits.");
+    }
+    return 10n ** BigInt(n);
+  }
+
+  function roundCoefficient(c, e, precision) {
+    if (c === 0n) return [0n, 0n];
+
+    const sign = c < 0n ? -1n : 1n;
+    let magnitude = absBig(c);
+    let length = magnitude.toString().length;
+
+    if (length > precision) {
+      const removed = length - precision;
+      const divisor = ten(removed);
+      let quotient = magnitude / divisor;
+      const remainder = magnitude % divisor;
+      const twice = remainder * 2n;
+
+      // Round to nearest, with ties to even.
+      if (twice > divisor || (twice === divisor && quotient % 2n !== 0n)) quotient++;
+      magnitude = quotient;
+      e += BigInt(removed);
+    }
+
+    let str = magnitude.toString();
+    const zeros = str.match(/0+$/);
+    if (zeros) {
+      const count = zeros[0].length;
+      str = str.slice(0, -count);
+      e += BigInt(count);
+    }
+    return [BigInt(str) * sign, e];
+  }
+
+  function decimalClass(precision) {
+    return class Decimal {
+      constructor(c, e = 0n) {
+        [this.c, this.e] = roundCoefficient(c, e, precision);
+      }
+
+      static integer(n) { return new Decimal(BigInt(n)); }
+
+      static parse(source) {
+        const match = String(source).match(
+          /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/
+        );
+        if (!match || !(match[2] || match[3])) throw new Error("Invalid decimal literal.");
+        const fraction = match[3] || "";
+        const coefficient = BigInt((match[2] || "0") + fraction);
+        const sign = match[1] === "-" ? -1n : 1n;
+        const exponent = BigInt(match[4] || "0") - BigInt(fraction.length);
+        return new Decimal(sign * coefficient, exponent);
+      }
+
+      get order() {
+        // Number of digits before the decimal point, including exponent.
+        return this.c === 0n ? 0n : this.e + BigInt(digitsBig(this.c));
+      }
+      get zero() { return this.c === 0n; }
+      get integer() { return this.zero || this.e >= 0n; }
+
+      neg() { return new Decimal(-this.c, this.e); }
+      abs() { return this.c < 0n ? this.neg() : this; }
+
+      eq(other) { return this.c === other.c && this.e === other.e; }
+
+      cmp(other) {
+        if (this.eq(other)) return 0;
+        if (this.c >= 0n && other.c < 0n) return 1;
+        if (this.c < 0n && other.c >= 0n) return -1;
+        if (this.zero) return other.c > 0n ? -1 : 1;
+        if (other.zero) return this.c > 0n ? 1 : -1;
+
+        const direction = this.c < 0n ? -1 : 1;
+        if (this.order !== other.order) return (this.order > other.order ? 1 : -1) * direction;
+
+        const la = digitsBig(this.c), lb = digitsBig(other.c);
+        const a = absBig(this.c) * ten(Math.max(0, lb - la));
+        const b = absBig(other.c) * ten(Math.max(0, la - lb));
+        return (a > b ? 1 : -1) * direction;
+      }
+
+      add(other) {
+        if (this.zero) return other;
+        if (other.zero) return this;
+        const orderDifference = this.order - other.order;
+
+        // Avoid allocating a million zeros just to add 1 to 1e1000000.
+        if (orderDifference > BigInt(precision + 2)) return this;
+        if (orderDifference < -BigInt(precision + 2)) return other;
+
+        const common = this.e < other.e ? this.e : other.e;
+        return new Decimal(
+          this.c * ten(Number(this.e - common)) +
+          other.c * ten(Number(other.e - common)),
+          common
+        );
+      }
+
+      sub(other) { return this.add(other.neg()); }
+
+      mul(other) {
+        return new Decimal(this.c * other.c, this.e + other.e);
+      }
+
+      div(other) {
+        if (other.zero) throw new Error("Division by zero.");
+        if (this.zero) return this;
+        const shift = precision + 4 + digitsBig(other.c) - digitsBig(this.c);
+        return new Decimal(
+          this.c * ten(shift) / other.c,
+          this.e - other.e - BigInt(shift)
+        );
+      }
+
+      trunc() {
+        if (this.integer) return this;
+        const places = -this.e;
+        if (places >= BigInt(digitsBig(this.c))) return new Decimal(0n);
+        return new Decimal(this.c / ten(Number(places)));
+      }
+
+      toBigInt() {
+        if (!this.integer) throw new Error("An integer is required.");
+        // A materialized integer must actually fit in the browser's memory.
+        if (this.e > 1000000n) {
+          throw new RangeError("This integer is too large to materialize for this operation.");
+        }
+        return this.c * ten(Number(this.e));
+      }
+
+      toNumber() {
+        return Number(`${this.c}e${this.e}`);
+      }
+    };
+  }
+
+  function formatDecimal(value, precision) {
+    let [c, e] = roundCoefficient(value.c, value.e, precision);
+    if (c === 0n) return "0";
+
+    const sign = c < 0n ? "-" : "";
+    const str = absBig(c).toString();
+    const point = BigInt(str.length) + e;
+    const scientificExponent = point - 1n;
+
+    // Short results use ordinary decimal notation; enormous or tiny ones
+    // remain compact instead of generating unbounded strings of zeros.
+    if (point > -6n && point <= 80n) {
+      const p = Number(point);
+      if (p <= 0) return sign + "0." + "0".repeat(-p) + str;
+      if (p >= str.length) return sign + str + "0".repeat(p - str.length);
+      return sign + str.slice(0, p) + "." + str.slice(p);
+    }
+
+    const mantissa = str[0] + (str.length > 1 ? "." + str.slice(1) : "");
+    return sign + mantissa + "e" +
+      (scientificExponent >= 0n ? "+" : "") + scientificExponent.toString();
+  }
+
+  // =====================================================================
+  // Numerical algorithms
+  // =====================================================================
+  class Engine {
+    constructor(workingPrecision, requestedPrecision, angle, job) {
+      this.work = workingPrecision;
+      this.requested = requestedPrecision;
+      this.angle = angle;
+      this.job = job;
+      this.D = decimalClass(workingPrecision);
+      this.zero = this.D.integer(0);
+      this.one = this.D.integer(1);
+      this.two = this.D.integer(2);
+      this.cache = new Map();
+      this.variables = new Map();
+      this.resolving = new Set();
+    }
+
+    int(n) { return this.D.integer(n); }
+    dec(s) { return this.D.parse(s); }
+    tick(stage, detail = "") { return this.job.tick(stage, detail); }
+
+    ensureExtra(extra) {
+      if (extra < 0n) extra = 0n;
+      const required = BigInt(this.requested) + 24n + extra;
+      if (required <= BigInt(this.work)) return;
+      if (required > BigInt(Number.MAX_SAFE_INTEGER - 100)) {
+        throw new RangeError("Argument reduction would require more precision than this browser can represent.");
+      }
+      throw new NeedPrecision(Number(required));
+    }
+
+    async constant(name) {
+      if (this.cache.has(name)) return this.cache.get(name);
+      let result;
+
+      if (name === "pi") {
+        await this.tick("Computing π", `${this.work} working digits`);
+        const a = await this.atanSeries(this.one.div(this.int(5)), "π / Machin series 1");
+        const b = await this.atanSeries(this.one.div(this.int(239)), "π / Machin series 2");
+        result = a.mul(this.int(16)).sub(b.mul(this.int(4)));
+      } else if (name === "tau") {
+        result = (await this.constant("pi")).mul(this.two);
+      } else if (name === "e") {
+        result = await this.exp(this.one);
+      } else if (name === "ln2") {
+        result = await this.logSeries(this.two, "Computing ln(2)");
+      } else if (name === "ln10") {
+        // 10 = 1.25 * 2^3; both series converge quickly.
+        result = (await this.logSeries(this.dec("1.25"), "Computing ln(10)"))
+          .add((await this.constant("ln2")).mul(this.int(3)));
+      } else {
+        throw new Error(`Unknown constant: ${name}`);
+      }
+
+      this.cache.set(name, result);
+      return result;
+    }
+
+    async atanSeries(x, label = "Arctangent series") {
+      const minusSquare = x.mul(x).neg();
+      let term = x, sum = x;
+
+      for (let n = 1; ; n++) {
+        await this.tick(label, `term ${n}`);
+        term = term.mul(minusSquare);
+        const next = sum.add(term.div(this.int(2 * n + 1)));
+        if (next.eq(sum)) return next;
+        sum = next;
+      }
+    }
+
+    async logSeries(x, label = "Logarithm series") {
+      // ln(x) = 2 * (z + z^3/3 + z^5/5 + ...), z=(x-1)/(x+1).
+      const z = x.sub(this.one).div(x.add(this.one));
+      if (z.zero) return this.zero;
+      const z2 = z.mul(z);
+      let term = z, sum = z;
+
+      for (let n = 1; ; n++) {
+        await this.tick(label, `term ${n}`);
+        term = term.mul(z2);
+        const next = sum.add(term.div(this.int(2 * n + 1)));
+        if (next.eq(sum)) return next.mul(this.two);
+        sum = next;
+      }
+    }
+
+    async ln(x) {
+      if (x.c <= 0n) throw new Error("ln requires a positive real argument.");
+      if (x.eq(this.one)) return this.zero;
+
+      await this.tick("Natural logarithm", "Separating decimal magnitude");
+      const length = digitsBig(x.c);
+      const decimalExponent = x.e + BigInt(length - 1);
+      let mantissa = new this.D(x.c, -BigInt(length - 1));
+      let halves = 0;
+
+      while (mantissa.cmp(this.dec("1.5")) > 0) {
+        mantissa = mantissa.div(this.two);
+        halves++;
+      }
+
+      let result = await this.logSeries(mantissa);
+      if (halves) result = result.add((await this.constant("ln2")).mul(this.int(halves)));
+      if (decimalExponent !== 0n) {
+        result = result.add(
+          (await this.constant("ln10")).mul(this.int(decimalExponent))
+        );
+      }
+      return result;
+    }
+
+    async root(x, n) {
+      if (x.zero) return x;
+      if (x.c < 0n && n === 2) throw new Error("sqrt requires a nonnegative real argument.");
+      const negative = x.c < 0n;
+      const value = x.abs();
+
+      // Estimate only the bounded mantissa using Number. Newton iteration
+      // subsequently computes all significant digits using Decimal.
+      const order = value.order - 1n;
+      const degree = BigInt(n);
+      let exponent = order / degree;
+      if (order < 0n && order % degree !== 0n) exponent--;
+
+      const normalized = new this.D(value.c, value.e - exponent * degree);
+      const seed = Math.pow(normalized.toNumber(), 1 / n);
+      let estimate = this.dec(seed.toString());
+      estimate = new this.D(estimate.c, estimate.e + exponent);
+
+      let previous = null;
+      const limit = Math.ceil(Math.log2(this.work + 1)) * 4 + 40;
+
+      for (let i = 0; i < limit; i++) {
+        await this.tick(n === 2 ? "Square root / Newton iteration" : "Cube root / Newton iteration",
+          `iteration ${i + 1}`);
+
+        const denominator = n === 2 ? estimate : estimate.mul(estimate);
+        const next = estimate.mul(this.int(n - 1))
+          .add(value.div(denominator)).div(this.int(n));
+
+        if (next.eq(estimate) || (previous && next.eq(previous))) {
+          return negative ? next.neg() : next;
+        }
+        previous = estimate;
+        estimate = next;
+      }
+      throw new Error("Root iteration did not converge; try higher precision.");
+    }
+
+    async exp(x) {
+      if (x.zero) return this.one;
+      this.ensureExtra(x.abs().order);
+      const negative = x.c < 0n;
+      let reduced = x.abs();
+      const threshold = this.dec("0.125");
+      let halves = 0;
+
+      while (reduced.cmp(threshold) > 0) {
+        await this.tick("Exponential / range reduction", `${halves} halvings`);
+        reduced = reduced.div(this.two);
+        halves++;
+      }
+
+      let sum = this.one, term = this.one;
+      for (let n = 1; ; n++) {
+        await this.tick("Exponential series", `term ${n}`);
+        term = term.mul(reduced).div(this.int(n));
+        const next = sum.add(term);
+        if (next.eq(sum)) break;
+        sum = next;
+      }
+
+      for (let i = 0; i < halves; i++) {
+        await this.tick("Exponential / rebuilding magnitude", `square ${i + 1} / ${halves}`);
+        sum = sum.mul(sum);
+      }
+      return negative ? this.one.div(sum) : sum;
+    }
+
+    async integerPower(base, exponent) {
+      if (exponent === 0n) return this.one;
+      if (base.zero) {
+        if (exponent < 0n) throw new Error("Zero cannot be raised to a negative power.");
+        return this.zero;
+      }
+
+      const negative = exponent < 0n;
+      let n = absBig(exponent);
+      let result = this.one;
+      let factor = base;
+      let steps = 0;
+
+      while (n > 0n) {
+        await this.tick("Integer power / exponentiation by squaring", `step ${++steps}`);
+        if (n & 1n) result = result.mul(factor);
+        n >>= 1n;
+        if (n) factor = factor.mul(factor);
+      }
+      return negative ? this.one.div(result) : result;
+    }
+
+    async power(base, exponent) {
+      if (exponent.zero) return this.one;
+      if (base.eq(this.one)) return this.one;
+      if (base.zero) {
+        if (exponent.c < 0n) throw new Error("Zero cannot be raised to a negative power.");
+        return this.zero;
+      }
+
+      if (exponent.integer) {
+        this.ensureExtra(exponent.abs().order);
+        return this.integerPower(base, exponent.toBigInt());
+      }
+      if (base.c < 0n) {
+        throw new Error("Noninteger powers of negative numbers are not supported as real powers. Use cbrt for cube roots.");
+      }
+      return this.exp(exponent.mul(await this.ln(base)));
+    }
+
+    async remainder(x, y) {
+      if (y.zero) throw new Error("Remainder by zero.");
+      if (x.zero || x.abs().cmp(y.abs()) < 0) return x;
+
+      // Modular exponentiation avoids expanding 1e1000000 into a huge
+      // integer solely to compute its remainder.
+      if (x.e >= y.e) {
+        const modulus = absBig(y.c);
+        let exponent = x.e - y.e;
+        let factor = 10n % modulus;
+        let residue = 1n % modulus;
+        let step = 0;
+
+        while (exponent > 0n) {
+          await this.tick("Remainder / modular exponentiation", `step ${++step}`);
+          if (exponent & 1n) residue = residue * factor % modulus;
+          exponent >>= 1n;
+          if (exponent) factor = factor * factor % modulus;
+        }
+
+        return new this.D((x.c % modulus) * residue % modulus, y.e);
+      }
+
+      const divisor = y.c * ten(Number(y.e - x.e));
+      return new this.D(x.c % divisor, x.e);
+    }
+
+    async factorial(x) {
+      if (x.c < 0n || !x.integer) {
+        throw new Error("Factorial requires a nonnegative integer.");
+      }
+
+      let result = this.one;
+      // Keep the target in compact Decimal form. Huge requests remain
+      // cancellable instead of allocating the entire argument as an integer.
+      for (let i = 2n; this.int(i).cmp(x) <= 0; i++) {
+        await this.tick("Factorial / product accumulation", `factor ${i}`);
+        result = result.mul(this.int(i));
+      }
+      return result;
+    }
+
+    async atan(x) {
+      if (x.zero) return x;
+      const negative = x.c < 0n;
+      let reduced = x.abs();
+      const reciprocal = reduced.cmp(this.one) > 0;
+      if (reciprocal) reduced = this.one.div(reduced);
+
+      let doubles = 0;
+      while (reduced.cmp(this.dec("0.1")) > 0) {
+        await this.tick("Arctangent / half-angle reduction", `reduction ${doubles + 1}`);
+        reduced = reduced.div(
+          this.one.add(await this.root(this.one.add(reduced.mul(reduced)), 2))
+        );
+        doubles++;
+      }
+
+      let result = await this.atanSeries(reduced);
+      result = result.mul(this.int(2n ** BigInt(doubles)));
+
+      if (reciprocal) result = (await this.constant("pi")).div(this.two).sub(result);
+      return negative ? result.neg() : result;
+    }
+
+    async sincos(input) {
+      this.ensureExtra(input.abs().order);
+      const pi = await this.constant("pi");
+      const tau = pi.mul(this.two);
+      const halfPi = pi.div(this.two);
+      let x = this.angle === "deg"
+        ? input.mul(pi).div(this.int(180))
+        : input;
+
+      await this.tick("Trigonometry / argument reduction");
+      x = x.sub(x.div(tau).trunc().mul(tau));
+      if (x.cmp(pi) > 0) x = x.sub(tau);
+      if (x.cmp(pi.neg()) < 0) x = x.add(tau);
+
+      // Preserve exact, representable axis values such as sin(pi).
+      if (x.zero) return [this.zero, this.one];
+      if (x.eq(pi) || x.eq(pi.neg())) return [this.zero, this.one.neg()];
+      if (x.eq(halfPi)) return [this.one, this.zero];
+      if (x.eq(halfPi.neg())) return [this.one.neg(), this.zero];
+
+      let cosSign = 1;
+      if (x.cmp(halfPi) > 0) { x = pi.sub(x); cosSign = -1; }
+      if (x.cmp(halfPi.neg()) < 0) { x = pi.neg().sub(x); cosSign = -1; }
+
+      const minusSquare = x.mul(x).neg();
+      let sinTerm = x, sinSum = x;
+      let cosTerm = this.one, cosSum = this.one;
+
+      for (let n = 1; ; n++) {
+        await this.tick("Sine / cosine series", `term ${n}`);
+        sinTerm = sinTerm.mul(minusSquare).div(this.int(2 * n * (2 * n + 1)));
+        cosTerm = cosTerm.mul(minusSquare).div(this.int((2 * n - 1) * 2 * n));
+        const nextSin = sinSum.add(sinTerm);
+        const nextCos = cosSum.add(cosTerm);
+        if (nextSin.eq(sinSum) && nextCos.eq(cosSum)) {
+          return [nextSin, cosSign < 0 ? nextCos.neg() : nextCos];
+        }
+        sinSum = nextSin;
+        cosSum = nextCos;
+      }
+    }
+
+    async inverse(name, x) {
+      let result;
+      if (name === "arcsec" || name === "arccsc") {
+        if (x.abs().cmp(this.one) < 0) {
+          throw new Error(`${name} requires |x| ≥ 1.`);
+        }
+        x = this.one.div(x);
+        name = name === "arcsec" ? "arccos" : "arcsin";
+      }
+
+      if (name === "arctan") {
+        result = await this.atan(x);
+      } else if (name === "arccot") {
+        if (x.zero) result = (await this.constant("pi")).div(this.two);
+        else {
+          result = await this.atan(this.one.div(x));
+          if (x.c < 0n) result = result.add(await this.constant("pi"));
+        }
+      } else {
+        if (x.abs().cmp(this.one) > 0) {
+          throw new Error(`${name} requires an argument between −1 and 1.`);
+        }
+        const pi = await this.constant("pi");
+        const halfPi = pi.div(this.two);
+
+        if (name === "arcsin") {
+          if (x.eq(this.one)) result = halfPi;
+          else if (x.eq(this.one.neg())) result = halfPi.neg();
+          else {
+            const root = await this.root(this.one.sub(x.mul(x)), 2);
+            result = await this.atan(x.div(root));
+          }
+        } else {
+          // Avoid subtracting nearly equal values for acos(x) near 1.
+          if (x.eq(this.one)) result = this.zero;
+          else if (x.eq(this.one.neg())) result = pi;
+          else if (x.zero) result = halfPi;
+          else {
+            const root = await this.root(this.one.sub(x.mul(x)), 2);
+            result = await this.atan(root.div(x));
+            if (x.c < 0n) result = result.add(pi);
+          }
+        }
+      }
+
+      return this.angle === "deg"
+        ? result.mul(this.int(180)).div(await this.constant("pi"))
+        : result;
+    }
+
+    async call(name, args) {
+      const x = args[0];
+
+      if (name === "abs") return x.abs();
+      if (name === "percent") return x.div(this.int(100));
+      if (name === "sqrt") return this.root(x, 2);
+      if (name === "cbrt") return this.root(x, 3);
+      if (name === "factorial") return this.factorial(x);
+      if (name === "ln") return this.ln(x);
+      if (name === "exp") return this.exp(x);
+      if (name === "log10") return (await this.ln(x)).div(await this.constant("ln10"));
+
+      if (name === "logbase") {
+        const base = x, value = args[1];
+        if (base.c <= 0n || base.eq(this.one)) {
+          throw new Error("A logarithm base must be positive and different from 1.");
+        }
+        return (await this.ln(value)).div(await this.ln(base));
+      }
+
+      if (directTrig.has(name)) {
+        const [sine, cosine] = await this.sincos(x);
+        if (name === "sin") return sine;
+        if (name === "cos") return cosine;
+        if ((name === "tan" || name === "sec") && cosine.zero) {
+          throw new Error(`${name} is undefined at this angle.`);
+        }
+        if ((name === "cot" || name === "csc") && sine.zero) {
+          throw new Error(`${name} is undefined at this angle.`);
+        }
+        if (name === "tan") return sine.div(cosine);
+        if (name === "cot") return cosine.div(sine);
+        if (name === "sec") return this.one.div(cosine);
+        if (name === "csc") return this.one.div(sine);
+      }
+
+      if (Object.values(inverseNames).includes(name)) return this.inverse(name, x);
+      throw new Error(`Unknown function: ${name}`);
+    }
+
+    async evaluate(node, definitions, depth = 0) {
+      if (depth > 250) throw new Error("Evaluation nesting is too deep.");
+      await this.tick("Evaluating expression", node.type);
+
+      if (node.type === "number") return this.dec(node.value);
+
+      if (node.type === "unary") {
+        const value = await this.evaluate(node.value, definitions, depth + 1);
+        return node.op === "-" ? value.neg() : value;
+      }
+
+      if (node.type === "variable") {
+        if (constants.has(node.name)) return this.constant(node.name);
+        if (this.variables.has(node.name)) return this.variables.get(node.name);
+        if (!definitions.has(node.name)) throw new Error(`Unknown variable: ${node.name}`);
+        if (this.resolving.has(node.name)) throw new Error(`Circular definition involving "${node.name}".`);
+
+        this.resolving.add(node.name);
+        try {
+          const value = await this.evaluate(definitions.get(node.name), definitions, depth + 1);
+          this.variables.set(node.name, value);
+          return value;
+        } finally {
+          this.resolving.delete(node.name);
+        }
+      }
+
+      if (node.type === "binary") {
+        const a = await this.evaluate(node.left, definitions, depth + 1);
+        const b = await this.evaluate(node.right, definitions, depth + 1);
+        await this.tick(`Applying ${node.op}`);
+
+        if (node.op === "+") return a.add(b);
+        if (node.op === "-") return a.sub(b);
+        if (node.op === "*") return a.mul(b);
+        if (node.op === "/") return a.div(b);
+        if (node.op === "%") return this.remainder(a, b);
+        if (node.op === "^") return this.power(a, b);
+      }
+
+      if (node.type === "call") {
+        const args = [];
+        for (const arg of node.args) args.push(await this.evaluate(arg, definitions, depth + 1));
+        await this.tick(`Function: ${node.name}`);
+        return this.call(node.name, args);
+      }
+
+      throw new Error("Invalid expression node.");
+    }
+  }
+
+  // =====================================================================
+  // Application lifecycle: start -> progress -> result/error/cancel -> ready
+  // =====================================================================
+  function busy(value) {
+    ui.calculate.disabled = value;
+    ui.cancel.disabled = !value;
+    ui.engine.classList.toggle("busy", value);
+    ui.form.setAttribute("aria-busy", String(value));
+  }
+
+  async function calculate() {
+    if (activeJob) return;
+
+    const source = ui.expression.value.trim();
+    const definitionSource = ui.definitions.value;
+    const requested = Number(ui.precision.value);
+    const angle = ui.angle.value;
+
+    ui.error.textContent = "";
+
+    if (!Number.isSafeInteger(requested) || requested < 1 ||
+        requested > Number.MAX_SAFE_INTEGER - 100) {
+      ui.error.textContent = "Precision must be a positive, safely representable integer.";
+      return;
+    }
+
+    // Synchronous lexing/parsing is intentionally bounded; numerical output
+    // and exponents do not share this source-length limit.
+    if (source.length + definitionSource.length > 50000) {
+      ui.error.textContent = "Expression and definitions together must be at most 50,000 characters.";
+      return;
+    }
+
+    const job = new Job();
+    activeJob = job;
+    busy(true);
+    ui.result.value = "";
+    ui.copy.disabled = true;
+    ui.status.textContent = "Calculating…";
+    job.lines = [];
+
+    try {
+      await job.tick("Parsing expression", "Checking syntax and definitions", true);
+
+      let ast, definitions;
+      try {
+        ast = new Parser(source).parse();
+      } catch (error) {
+        if (error instanceof SyntaxProblem) {
+          ui.expression.focus();
+          ui.expression.setSelectionRange(error.position, error.position + 1);
+        }
+        throw error;
+      }
+      definitions = parseDefinitions(definitionSource);
+
+      let work = requested + 32;
+      let value;
+      let passes = 0;
+
+      // If an operation needs more guard digits, restart from the original
+      // AST. Merely widening an already-rounded intermediate loses digits.
+      while (true) {
+        passes++;
+        await job.tick(
+          "Starting numerical evaluation",
+          `pass ${passes} · ${work.toLocaleString()} working digits`,
+          true
+        );
+
+        const engine = new Engine(work, requested, angle, job);
+        try {
+          value = await engine.evaluate(ast, definitions);
+          break;
+        } catch (error) {
+          if (!(error instanceof NeedPrecision)) throw error;
+          work = Math.max(work + 16, error.digits + 8);
+          job.log(`Increasing working precision to ${work.toLocaleString()} digits.`);
+        }
+      }
+
+      await job.tick("Formatting result", `Rounding to ${requested.toLocaleString()} significant digits`, true);
+      const formatted = formatDecimal(value, requested);
+      job.check();
+
+      ui.result.value = formatted;
+      ui.copy.disabled = false;
+      const seconds = ((performance.now() - job.started) / 1000).toFixed(3);
+      ui.status.textContent =
+        `Complete · ${requested.toLocaleString()} significant digits · ` +
+        `${work.toLocaleString()} working digits · ${seconds} s`;
+      job.stage = "Calculation complete";
+      job.detail = `${passes} evaluation pass${passes === 1 ? "" : "es"}`;
+      job.log(`Complete. ${formatted.length.toLocaleString()} output characters.`);
+      job.paint();
+
+    } catch (error) {
+      if (error instanceof Cancelled) {
+        ui.status.textContent = "Cancelled. You can edit the expression and calculate again.";
+        job.stage = "Calculation cancelled";
+        job.detail = "No partial result was published";
+        job.log("Cancelled by user.");
+      } else {
+        ui.status.textContent = "Calculation failed.";
+        ui.error.textContent = error instanceof RangeError
+          ? `${error.message}\nTry a smaller precision or a less demanding expression.`
+          : error.message || String(error);
+        job.stage = "Calculation stopped";
+        job.detail = "See the error above";
+        job.log(`Error: ${error.message || error}`);
+      }
+      job.paint();
+    } finally {
+      activeJob = null;
+      busy(false);
+    }
+  }
+
+  ui.form.addEventListener("submit", event => {
+    event.preventDefault();
+    calculate();
+  });
+
+  ui.cancel.addEventListener("click", () => {
+    if (!activeJob) return;
+    activeJob.cancelled = true;
+    ui.cancel.disabled = true;
+    ui.status.textContent = "Cancelling at the next checkpoint…";
+  });
+
+  document.addEventListener("keydown", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      calculate();
+    }
+    if (event.key === "Escape" && activeJob) {
+      activeJob.cancelled = true;
+      ui.status.textContent = "Cancelling…";
+    }
+  });
+
+  ui.copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(ui.result.value);
+      ui.status.textContent = "Result copied.";
+    } catch (_) {
+      ui.result.focus();
+      ui.result.select();
+      ui.status.textContent = "Result selected. Press Ctrl/⌘ + C to copy.";
+    }
+  });
+
+  const examples = [
+    ["π · 1,000 digits", "pi", 1000],
+    ["e · 1,000 digits", "e", 1000],
+    ["Large power", "2**10000", 100],
+    ["Large factorial", "10000!", 80],
+    ["Tiny numbers", "sqrt(1e-1000)", 50],
+    ["Huge exponent remainder", "1e1000000 % 97", 50],
+    ["Log notations", "log2 8 + log_2 8 + loga b + log(2,8)", 50],
+    ["Inverse trig", "sin^-1(0.5) + arccot(1)", 50],
+    ["Absolute values", "|-12 + 5| + abs(-3) + cbrt(-125)", 50],
+    ["Decimal arithmetic", "0.1 + 0.2", 50],
+    ["Large-angle reduction", "sin(1e100)", 50],
+    ["Long cancellable task", "1000000!", 100]
+  ];
+
+  for (const [label, expression, precision] of examples) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", () => {
+      ui.expression.value = expression;
+      ui.precision.value = precision;
+      ui.expression.focus();
+      if (!activeJob) ui.status.textContent = "Example loaded. Press Calculate.";
+    });
+    $("examples").appendChild(button);
+  }
+})();
+</script>
+</body>
+</html>
