@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STACK//SHIFT</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #080d1b;
+    --panel: #111b30;
+    --edge: #293b59;
+    --text: #ecf5ff;
+    --muted: #9bb0cb;
+    --cyan: #55e6ed;
+    --pink: #ff71aa;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 24px 14px;
+    background:
+      radial-gradient(circle at 50% -15%, #25416a 0, transparent 45%),
+      linear-gradient(135deg, #080d1b, #10152a);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  button { font: inherit; }
+
+  .app { max-width: 770px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(25px, 5vw, 39px);
+    line-height: 1;
+    letter-spacing: .09em;
+  }
+
+  h1 span { color: var(--cyan); }
+  .subtitle { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+  .mission { color: var(--cyan); font-weight: 800; font-size: 12px; letter-spacing: .16em; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(210px, 1fr);
+    align-items: start;
+    gap: 16px;
+  }
+
+  .board-shell, .card {
+    border: 1px solid var(--edge);
+    border-radius: 15px;
+    background: var(--panel);
+    box-shadow: 0 20px 55px #0005;
+  }
+
+  .board-shell { padding: 10px; }
+
+  .board-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 2;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #0a1120;
+  }
+
+  #board {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    text-align: center;
+    background: #071020dc;
+    backdrop-filter: blur(5px);
+  }
+
+  .overlay[hidden] { display: none; }
+
+  .overlay-content { max-width: 260px; }
+  .eyebrow { color: var(--cyan); font-size: 12px; font-weight: 900; letter-spacing: .25em; }
+  .overlay h2 { margin: 10px 0; font-size: clamp(28px, 7vw, 41px); line-height: 1.05; }
+  .overlay p { color: #c0d1e8; line-height: 1.5; font-size: 14px; }
+  .overlay .hint { font-size: 12px; color: var(--muted); }
+
+  .primary, .small-button, .touch button {
+    border: 1px solid #5fe9f2;
+    border-radius: 9px;
+    color: #061321;
+    background: var(--cyan);
+    cursor: pointer;
+    font-weight: 900;
+  }
+
+  .primary {
+    width: 100%;
+    margin-top: 14px;
+    padding: 13px;
+    letter-spacing: .08em;
+  }
+
+  button:hover { filter: brightness(1.12); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 3px solid var(--pink); outline-offset: 3px; }
+
+  .sidebar { display: grid; gap: 12px; }
+  .card { padding: 15px; }
+  .label {
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .14em;
+  }
+
+  .score {
+    margin: 3px 0 10px;
+    font-size: 31px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 900;
+    letter-spacing: .05em;
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-top: 1px solid #ffffff13;
+    font-size: 14px;
+  }
+
+  .row strong { font-variant-numeric: tabular-nums; }
+
+  .progress {
+    height: 9px;
+    margin: 10px 0 7px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: #28364e;
+  }
+
+  #progressFill {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--cyan), var(--pink));
+    transition: width .2s;
+  }
+
+  #stageNote { margin: 0; color: var(--muted); font-size: 12px; }
+
+  .previews { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .preview-card { min-width: 0; }
+  .preview-card canvas { display: block; width: 100%; height: auto; margin-top: 7px; }
+  #nextCanvas { aspect-ratio: 120 / 240; }
+  #holdCanvas { aspect-ratio: 120 / 88; }
+  .preview-tip { font-size: 11px; color: var(--muted); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .small-button {
+    flex: 1;
+    min-width: 65px;
+    padding: 9px 6px;
+    font-size: 12px;
+    background: #1c3447;
+    color: var(--text);
+    border-color: #426074;
+  }
+
+  .controls {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.75;
+  }
+  .controls p { margin: 0; }
+  kbd {
+    display: inline-block;
+    min-width: 19px;
+    padding: 0 4px;
+    border: 1px solid #43516a;
+    border-radius: 4px;
+    color: var(--text);
+    text-align: center;
+    font: inherit;
+  }
+
+  .touch {
+    display: none;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+    touch-action: manipulation;
+  }
+
+  .touch button {
+    min-height: 49px;
+    padding: 6px 1px;
+    font-size: 17px;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .touch .drop { background: var(--pink); border-color: var(--pink); }
+  .touch .hold { font-size: 11px; }
+
+  footer { margin-top: 15px; color: #879bb7; font-size: 11px; text-align: center; }
+
+  @media (max-width: 620px) {
+    body { padding: 12px 9px; }
+    .layout { grid-template-columns: minmax(0, 1fr) minmax(124px, 39%); gap: 8px; }
+    .board-shell { padding: 5px; }
+    .card { padding: 9px; border-radius: 10px; }
+    .sidebar { gap: 8px; }
+    .score { font-size: clamp(17px, 5vw, 27px); }
+    .previews { grid-template-columns: 1fr 1fr; gap: 3px; }
+    .preview-tip, .controls { display: none; }
+    .small-button { min-width: 45px; font-size: 11px; }
+    .touch { display: grid; }
+  }
+
+  @media (max-width: 370px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 118px; }
+    .previews { grid-template-columns: 1fr; }
+    .preview-card canvas { max-width: 90px; }
+    .preview-card:last-child { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>STACK<span>//</span>SHIFT</h1>
+      <p class="subtitle">A three-stage falling-block challenge</p>
+    </div>
+    <div class="mission">CLEAR 24 LINES</div>
+  </header>
+
+  <main class="layout">
+    <section class="board-shell" aria-label="Game board">
+      <div class="board-wrap">
+        <canvas id="board" width="300" height="600"></canvas>
+        <div class="overlay" id="overlay">
+          <div class="overlay-content">
+            <div class="eyebrow" id="overlayEyebrow">MISSION BRIEF</div>
+            <h2 id="overlayTitle">Stack smart.<br>Shift fast.</h2>
+            <p id="overlayMessage">Clear 24 lines across three increasingly fast stages. If the stack reaches the ceiling, the run is over.</p>
+            <button class="primary" id="overlayAction" type="button">START GAME</button>
+            <p class="hint" id="overlayHint">Move: ← → &nbsp; Rotate: ↑ / X<br>Drop: ↓ / Space &nbsp; Hold: C</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar" aria-label="Game information">
+      <section class="card">
+        <div class="label">Score</div>
+        <div class="score" id="score">000000</div>
+        <div class="row"><span>Best</span><strong id="best">000000</strong></div>
+        <div class="row"><span>Lines</span><strong id="lines">0 / 24</strong></div>
+        <div class="row"><span>Stage</span><strong id="stage">1 / 3</strong></div>
+        <div class="progress"><div id="progressFill"></div></div>
+        <p id="stageNote">8 lines to next stage</p>
+      </section>
+
+      <div class="previews">
+        <section class="card preview-card">
+          <div class="label">Next</div>
+          <canvas id="nextCanvas" width="120" height="240" aria-label="Next three pieces"></canvas>
+        </section>
+        <section class="card preview-card">
+          <div class="label">Hold</div>
+          <canvas id="holdCanvas" width="120" height="88" aria-label="Held piece"></canvas>
+          <div class="preview-tip">Once per piece · C</div>
+        </section>
+      </div>
+
+      <section class="card actions">
+        <button class="small-button" id="pauseButton" type="button">Pause</button>
+        <button class="small-button" id="restartButton" type="button">Restart</button>
+        <button class="small-button" id="soundButton" type="button">Sound: On</button>
+      </section>
+
+      <section class="card controls">
+        <p><kbd>←</kbd> <kbd>→</kbd> move &nbsp; <kbd>↓</kbd> soft drop</p>
+        <p><kbd>↑</kbd> / <kbd>X</kbd> rotate &nbsp; <kbd>Z</kbd> reverse</p>
+        <p><kbd>Space</kbd> hard drop &nbsp; <kbd>C</kbd> hold</p>
+        <p><kbd>P</kbd> / <kbd>Esc</kbd> pause &nbsp; <kbd>R</kbd> restart</p>
+      </section>
+    </aside>
+  </main>
+
+  <nav class="touch" aria-label="Touch game controls">
+    <button type="button" data-action="left" aria-label="Move left">◀</button>
+    <button type="button" data-action="right" aria-label="Move right">▶</button>
+    <button type="button" data-action="rotate" aria-label="Rotate">⟳</button>
+    <button type="button" data-action="soft" aria-label="Soft drop">▼</button>
+    <button type="button" data-action="drop" class="drop" aria-label="Hard drop">⤓</button>
+    <button type="button" data-action="hold" class="hold" aria-label="Hold piece">HOLD</button>
+  </nav>
+
+  <footer>Seven-piece bag · Ghost landing guide · Your best score is saved locally</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // The top two rows are hidden spawn space; the remaining 20 are visible.
+  const COLS = 10, ROWS = 22, HIDDEN = 2, CELL = 30, GOAL = 24;
+  const SHAPES = {
+    I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    O: [[1,1],[1,1]],
+    T: [[0,1,0],[1,1,1],[0,0,0]],
+    S: [[0,1,1],[1,1,0],[0,0,0]],
+    Z: [[1,1,0],[0,1,1],[0,0,0]],
+    J: [[1,0,0],[1,1,1],[0,0,0]],
+    L: [[0,0,1],[1,1,1],[0,0,0]]
+  };
+  const COLORS = {
+    I: "#56e6ed", O: "#ffd76a", T: "#bd90ff", S: "#79e6a0",
+    Z: "#ff798a", J: "#75a8ff", L: "#ffad73"
+  };
+  const SPEEDS = [790, 595, 410];
+  const LINE_POINTS = [0, 100, 300, 500, 800];
+
+  const $ = id => document.getElementById(id);
+  const canvas = $("board"), ctx = canvas.getContext("2d");
+  const nextCtx = $("nextCanvas").getContext("2d");
+  const holdCtx = $("holdCanvas").getContext("2d");
+
+  let state = "menu";
+  let board = emptyBoard();
+  let bag = [], queue = [], piece = null, held = null, canHold = true;
+  let score = 0, lines = 0, combo = -1;
+  let gravityClock = 0, lockClock = 0, lockResets = 0;
+  let downHeld = false, muted = false, audio = null;
+  let sparks = [], flash = 0, lastFrame = 0;
+  let best = loadBest();
+
+  function emptyBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  }
+
+  function loadBest() {
+    try { return Number(localStorage.getItem("stackShiftBest")) || 0; }
+    catch { return 0; }
+  }
+
+  function saveBest() {
+    if (score <= best) return;
+    best = score;
+    try { localStorage.setItem("stackShiftBest", String(best)); }
+    catch { /* The game still works when storage is disabled. */ }
+  }
+
+  function stage() {
+    return Math.min(3, Math.floor(lines / 8) + 1);
+  }
+
+  // Each shuffled bag contains all seven pieces, preventing long droughts.
+  function fillQueue() {
+    while (queue.length < 5) {
+      if (!bag.length) {
+        bag = Object.keys(SHAPES);
+        for (let i = bag.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [bag[i], bag[j]] = [bag[j], bag[i]];
+        }
+      }
+      queue.push(bag.pop());
+    }
+  }
+
+  function sound(frequency, duration = 0.075, wave = "sine", volume = 0.035) {
+    if (muted) return;
+    try {
+      const AudioClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioClass) return;
+      audio ||= new AudioClass();
+      if (audio.state === "suspended") audio.resume();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = wave;
+      oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
+      gain.gain.setValueAtTime(volume, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + duration);
+    } catch { /* Audio is optional. */ }
+  }
+
+  function updateUI() {
+    $("score").textContent = String(score).padStart(6, "0");
+    $("best").textContent = String(best).padStart(6, "0");
+    $("lines").textContent = `${lines} / ${GOAL}`;
+    $("stage").textContent = `${stage()} / 3`;
+    $("progressFill").style.width =
+      `${state === "won" ? 100 : (lines % 8) * 12.5}%`;
+    $("stageNote").textContent = state === "won"
+      ? "All stages complete!"
+      : stage() === 3
+        ? `${Math.max(0, GOAL - lines)} lines to victory`
+        : `${8 - lines % 8} lines to next stage`;
+    $("pauseButton").textContent = state === "paused" ? "Resume" : "Pause";
+    $("soundButton").textContent = muted ? "Sound: Off" : "Sound: On";
+    drawPreviews();
+  }
+
+  function showOverlay() {
+    const overlay = $("overlay");
+    overlay.hidden = state === "playing";
+    if (overlay.hidden) return;
+
+    const content = {
+      menu: ["MISSION BRIEF", "Stack smart.\nShift fast.",
+        "Clear 24 lines across three increasingly fast stages. If the stack reaches the ceiling, the run is over.",
+        "START GAME", "Move: ← →   Rotate: ↑ / X\nDrop: ↓ / Space   Hold: C"],
+      paused: ["SYSTEM IDLE", "Paused",
+        "Take your time. Your stack will be right here.",
+        "RESUME", "Press P or Esc to resume"],
+      lost: ["RUN ENDED", "Stack overflow",
+        `You cleared ${lines} lines and scored ${score.toLocaleString()} points. Ready for another run?`,
+        "TRY AGAIN", "Press Enter to restart"],
+      won: ["MISSION COMPLETE", "You did it!",
+        `You cleared ${lines} lines and scored ${score.toLocaleString()} points.`,
+        "PLAY AGAIN", "Press Enter to play again"]
+    }[state];
+
+    $("overlayEyebrow").textContent = content[0];
+    $("overlayTitle").textContent = content[1];
+    $("overlayTitle").style.whiteSpace = "pre-line";
+    $("overlayMessage").textContent = content[2];
+    $("overlayAction").textContent = content[3];
+    $("overlayHint").textContent = content[4];
+    $("overlayHint").style.whiteSpace = "pre-line";
+  }
+
+  function setState(next) {
+    state = next;
+    downHeld = false;
+    gravityClock = 0;
+    lastFrame = performance.now();
+    updateUI();
+    showOverlay();
+  }
+
+  function startGame() {
+    board = emptyBoard();
+    bag = [];
+    queue = [];
+    piece = null;
+    held = null;
+    canHold = true;
+    score = 0;
+    lines = 0;
+    combo = -1;
+    gravityClock = 0;
+    lockClock = 0;
+    lockResets = 0;
+    sparks = [];
+    flash = 0;
+    fillQueue();
+    state = "playing";
+    spawnNext();
+    lastFrame = performance.now();
+    updateUI();
+    showOverlay();
+    sound(440, 0.1);
+  }
+
+  function endGame(result) {
+    saveBest();
+    setState(result);
+    if (result === "won") {
+      sound(659, 0.3, "triangle");
+      setTimeout(() => sound(880, 0.35, "triangle"), 130);
+    } else {
+      sound(175, 0.35, "sawtooth", 0.022);
+    }
+  }
+
+  function spawn(type) {
+    const matrix = SHAPES[type].map(row => row.slice());
+    piece = {
+      type, matrix,
+      x: Math.floor((COLS - matrix.length) / 2),
+      y: 0
+    };
+    gravityClock = 0;
+    lockClock = 0;
+    lockResets = 0;
+    if (!fits(piece.matrix, piece.x, piece.y)) endGame("lost");
+  }
+
+  function spawnNext() {
+    fillQueue();
+    spawn(queue.shift());
+    fillQueue();
+    updateUI();
+  }
+
+  // Collision allows cells above the board, but never outside its sides/bottom.
+  function fits(matrix, x, y) {
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r].length; c++) {
+        if (!matrix[r][c]) continue;
+        const bx = x + c, by = y + r;
+        if (bx < 0 || bx >= COLS || by >= ROWS) return false;
+        if (by >= 0 && board[by][bx]) return false;
+      }
+    }
+    return true;
+  }
+
+  function grounded() {
+    return piece && !fits(piece.matrix, piece.x, piece.y + 1);
+  }
+
+  function resetLockAfterMove() {
+    if (lockResets < 12) {
+      lockClock = 0;
+      lockResets++;
+    }
+  }
+
+  function move(dx) {
+    if (state !== "playing" || !piece) return;
+    if (fits(piece.matrix, piece.x + dx, piece.y)) {
+      piece.x += dx;
+      resetLockAfterMove();
+      sound(260, 0.035, "triangle", 0.013);
+    }
+  }
+
+  function rotate(direction) {
+    if (state !== "playing" || !piece) return;
+    const old = piece.matrix;
+    const size = old.length;
+    const rotated = Array.from({ length: size }, (_, r) =>
+      Array.from({ length: size }, (_, c) =>
+        direction === 1 ? old[size - 1 - c][r] : old[c][size - 1 - r]
+      )
+    );
+    // Small wall/floor kicks make rotation usable near boundaries.
+    for (const dy of [0, -1, -2]) {
+      for (const dx of [0, -1, 1, -2, 2]) {
+        if (fits(rotated, piece.x + dx, piece.y + dy)) {
+          piece.matrix = rotated;
+          piece.x += dx;
+          piece.y += dy;
+          resetLockAfterMove();
+          sound(390, 0.055, "triangle", 0.02);
+          return;
+        }
+      }
+    }
+  }
+
+  function softStep(manual = false) {
+    if (state !== "playing" || !piece) return false;
+    if (!fits(piece.matrix, piece.x, piece.y + 1)) return false;
+    piece.y++;
+    lockClock = 0;
+    if (manual) {
+      score++;
+      saveBest();
+      updateUI();
+    }
+    return true;
+  }
+
+  function hardDrop() {
+    if (state !== "playing" || !piece) return;
+    let distance = 0;
+    while (fits(piece.matrix, piece.x, piece.y + 1)) {
+      piece.y++;
+      distance++;
+    }
+    score += distance * 2;
+    sound(120, 0.11, "square", 0.025);
+    lockPiece();
+  }
+
+  function holdPiece() {
+    if (state !== "playing" || !piece || !canHold) return;
+    const outgoing = piece.type;
+    if (held === null) {
+      held = outgoing;
+      spawnNext();
+    } else {
+      const incoming = held;
+      held = outgoing;
+      spawn(incoming);
+    }
+    canHold = false;
+    updateUI();
+    sound(520, 0.09, "triangle");
+  }
+
+  function burst(clearedRows) {
+    for (const row of clearedRows) {
+      const y = (row - HIDDEN + 0.5) * CELL;
+      if (y < 0) continue;
+      for (let i = 0; i < 19; i++) {
+        sparks.push({
+          x: Math.random() * canvas.width,
+          y,
+          vx: (Math.random() - 0.5) * 170,
+          vy: (Math.random() - 0.5) * 160,
+          life: 0.55 + Math.random() * 0.35,
+          max: 0.9,
+          color: Math.random() < 0.5 ? "#55e6ed" : "#ff71aa"
+        });
+      }
+    }
+    flash = 0.23;
+  }
+
+  function lockPiece() {
+    if (state !== "playing" || !piece) return;
+    let aboveCeiling = false;
+    piece.matrix.forEach((row, r) => row.forEach((cell, c) => {
+      if (!cell) return;
+      const y = piece.y + r;
+      if (y < HIDDEN) aboveCeiling = true;
+      if (y >= 0) board[y][piece.x + c] = piece.type;
+    }));
+
+    const clearedRows = [];
+    for (let y = ROWS - 1; y >= 0; y--) {
+      if (board[y].every(Boolean)) {
+        clearedRows.push(y);
+        board.splice(y, 1);
+        board.unshift(Array(COLS).fill(null));
+        y++; // Recheck this position after the rows above shift down.
+      }
+    }
+
+    if (clearedRows.length) {
+      const count = clearedRows.length;
+      const levelAtClear = stage();
+      combo++;
+      score += LINE_POINTS[count] * levelAtClear + combo * 50 * levelAtClear;
+      lines += count;
+      burst(clearedRows);
+      sound(count === 4 ? 720 : 560, 0.2, "triangle", 0.045);
+      if (lines >= GOAL) {
+        saveBest();
+        endGame("won");
+        return;
+      }
+    } else {
+      combo = -1;
+      sound(155, 0.045, "triangle", 0.016);
+    }
+
+    saveBest();
+    if (aboveCeiling) {
+      endGame("lost");
+      return;
+    }
+    canHold = true;
+    spawnNext();
+  }
+
+  // Canvas drawing.
+  function block(target, x, y, size, color, ghost = false) {
+    if (ghost) {
+      target.strokeStyle = color;
+      target.globalAlpha = 0.55;
+      target.lineWidth = 2;
+      target.strokeRect(x + 3, y + 3, size - 6, size - 6);
+      target.globalAlpha = 1;
+      return;
+    }
+    target.fillStyle = color;
+    target.fillRect(x + 1, y + 1, size - 2, size - 2);
+    target.fillStyle = "#ffffff42";
+    target.fillRect(x + 3, y + 3, size - 6, 3);
+    target.fillRect(x + 3, y + 3, 3, size - 6);
+    target.fillStyle = "#07132148";
+    target.fillRect(x + 3, y + size - 6, size - 6, 3);
+    target.fillRect(x + size - 6, y + 3, 3, size - 6);
+  }
+
+  function drawMatrix(matrix, type, x, y, ghost = false) {
+    matrix.forEach((row, r) => row.forEach((cell, c) => {
+      if (cell && y + r >= HIDDEN) {
+        block(ctx, (x + c) * CELL, (y + r - HIDDEN) * CELL,
+          CELL, COLORS[type], ghost);
+      }
+    }));
+  }
+
+  function drawBoard() {
+    ctx.fillStyle = "#0a1222";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "#ffffff0c";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * CELL + 0.5, 0);
+      ctx.lineTo(x * CELL + 0.5, 600);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= 20; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * CELL + 0.5);
+      ctx.lineTo(300, y * CELL + 0.5);
+      ctx.stroke();
+    }
+
+    for (let y = HIDDEN; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (board[y][x]) {
+          block(ctx, x * CELL, (y - HIDDEN) * CELL, CELL, COLORS[board[y][x]]);
+        }
+      }
+    }
+
+    if (piece && (state === "playing" || state === "paused")) {
+      let landing = piece.y;
+      while (fits(piece.matrix, piece.x, landing + 1)) landing++;
+      if (landing !== piece.y) {
+        drawMatrix(piece.matrix, piece.type, piece.x, landing, true);
+      }
+      drawMatrix(piece.matrix, piece.type, piece.x, piece.y);
+    }
+
+    for (const spark of sparks) {
+      ctx.globalAlpha = Math.max(0, spark.life / spark.max);
+      ctx.fillStyle = spark.color;
+      ctx.fillRect(spark.x, spark.y, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(225, 250, 255, ${flash * 0.37})`;
+      ctx.fillRect(0, 0, 300, 600);
+    }
+  }
+
+  function previewPiece(target, type, top, height) {
+    if (!type) return;
+    const matrix = SHAPES[type];
+    const cells = [];
+    matrix.forEach((row, r) => row.forEach((value, c) => {
+      if (value) cells.push({ r, c });
+    }));
+    const minX = Math.min(...cells.map(cell => cell.c));
+    const maxX = Math.max(...cells.map(cell => cell.c));
+    const minY = Math.min(...cells.map(cell => cell.r));
+    const maxY = Math.max(...cells.map(cell => cell.r));
+    const size = 19;
+    const left = (120 - (maxX - minX + 1) * size) / 2;
+    const startY = top + (height - (maxY - minY + 1) * size) / 2;
+    for (const cell of cells) {
+      block(target, left + (cell.c - minX) * size,
+        startY + (cell.r - minY) * size, size, COLORS[type]);
+    }
+  }
+
+  function drawPreviews() {
+    nextCtx.clearRect(0, 0, 120, 240);
+    holdCtx.clearRect(0, 0, 120, 88);
+    nextCtx.fillStyle = holdCtx.fillStyle = "#0a1222";
+    nextCtx.fillRect(0, 0, 120, 240);
+    holdCtx.fillRect(0, 0, 120, 88);
+
+    for (let i = 0; i < 3; i++) {
+      if (i) {
+        nextCtx.fillStyle = "#ffffff18";
+        nextCtx.fillRect(9, i * 80, 102, 1);
+      }
+      previewPiece(nextCtx, queue[i], i * 80, 80);
+    }
+    previewPiece(holdCtx, held, 0, 88);
+
+    if (held && !canHold && state === "playing") {
+      holdCtx.fillStyle = "#07102099";
+      holdCtx.fillRect(0, 0, 120, 88);
+    }
+  }
+
+  function tick(now) {
+    const dt = Math.min(50, Math.max(0, now - lastFrame));
+    lastFrame = now;
+
+    if (state === "playing" && piece) {
+      gravityClock += dt;
+      const interval = downHeld ? 55 : SPEEDS[stage() - 1];
+
+      while (gravityClock >= interval && state === "playing") {
+        gravityClock -= interval;
+        if (softStep(downHeld)) {
+          if (downHeld) {
+            score++;
+            saveBest();
+            updateUI();
+          }
+        } else {
+          gravityClock = 0;
+          break;
+        }
+      }
+
+      if (state === "playing" && grounded()) {
+        lockClock += dt;
+        if (lockClock >= 450) lockPiece();
+      } else {
+        lockClock = 0;
+      }
+    }
+
+    const seconds = dt / 1000;
+    sparks = sparks.filter(spark => spark.life > 0);
+    for (const spark of sparks) {
+      spark.x += spark.vx * seconds;
+      spark.y += spark.vy * seconds;
+      spark.vy += 200 * seconds;
+      spark.life -= seconds;
+    }
+    flash = Math.max(0, flash - seconds);
+
+    drawBoard();
+    requestAnimationFrame(tick);
+  }
+
+  function togglePause() {
+    if (state === "playing") setState("paused");
+    else if (state === "paused") setState("playing");
+  }
+
+  $("overlayAction").addEventListener("click", () => {
+    if (state === "paused") setState("playing");
+    else startGame();
+    $("overlayAction").blur();
+  });
+  $("pauseButton").addEventListener("click", togglePause);
+  $("restartButton").addEventListener("click", startGame);
+  $("soundButton").addEventListener("click", () => {
+    muted = !muted;
+    updateUI();
+    if (!muted) sound(620);
+  });
+
+  document.addEventListener("keydown", event => {
+    const key = event.key.toLowerCase();
+    const captured = [
+      "arrowleft", "arrowright", "arrowdown", "arrowup",
+      " ", "x", "z", "c", "p", "escape", "r", "enter"
+    ];
+    if (captured.includes(key)) event.preventDefault();
+
+    // Let focused interface buttons handle Enter/Space themselves.
+    if (event.target instanceof HTMLButtonElement &&
+        (key === "enter" || key === " ")) return;
+
+    if (key === "r" && !event.repeat) { startGame(); return; }
+    if ((key === "p" || key === "escape") && !event.repeat) {
+      togglePause();
+      return;
+    }
+    if (state === "menu" || state === "lost" || state === "won") {
+      if ((key === "enter" || key === " ") && !event.repeat) startGame();
+      return;
+    }
+    if (state !== "playing") return;
+
+    if (key === "arrowleft") move(-1);
+    else if (key === "arrowright") move(1);
+    else if (key === "arrowdown") {
+      downHeld = true;
+      if (!event.repeat) softStep(true);
+    } else if (!event.repeat) {
+      if (key === "arrowup" || key === "x") rotate(1);
+      else if (key === "z") rotate(-1);
+      else if (key === " ") hardDrop();
+      else if (key === "c") holdPiece();
+    }
+  });
+
+  document.addEventListener("keyup", event => {
+    if (event.key.toLowerCase() === "arrowdown") downHeld = false;
+  });
+
+  // Touch buttons use pointer input so soft drop can be held continuously.
+  document.querySelectorAll(".touch button").forEach(button => {
+    const action = button.dataset.action;
+    if (action === "soft") {
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        if (state === "playing") {
+          downHeld = true;
+          softStep(true);
+          button.setPointerCapture(event.pointerId);
+        }
+      });
+      const release = () => { downHeld = false; };
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("lostpointercapture", release);
+    } else {
+      button.addEventListener("click", () => {
+        if (action === "left") move(-1);
+        if (action === "right") move(1);
+        if (action === "rotate") rotate(1);
+        if (action === "drop") hardDrop();
+        if (action === "hold") holdPiece();
+      });
+    }
+  });
+
+  window.addEventListener("blur", () => {
+    downHeld = false;
+    if (state === "playing") setState("paused");
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && state === "playing") setState("paused");
+  });
+
+  updateUI();
+  showOverlay();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
