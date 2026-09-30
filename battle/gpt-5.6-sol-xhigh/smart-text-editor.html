@@ -1,0 +1,4427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fff;
+    --fg: #191919;
+    --ghost: rgba(70, 70, 70, .42);
+    --bar: rgba(248, 248, 248, .96);
+    --bar-border: rgba(0, 0, 0, .09);
+    --chip: rgba(0, 0, 0, .055);
+    --chip-hover: rgba(0, 0, 0, .09);
+    --chip-active: rgba(75, 110, 220, .14);
+    --chip-border: rgba(0, 0, 0, .09);
+    --muted: rgba(0, 0, 0, .48);
+    --accent: #315fca;
+    --selection: rgba(75, 115, 225, .25);
+    --pad-x: 16px;
+    --pad-y: 14px;
+    --bar-height: 48px;
+    --font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+            "Liberation Mono", "Courier New", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111214;
+      --fg: #e8e8e8;
+      --ghost: rgba(220, 220, 220, .34);
+      --bar: rgba(24, 25, 28, .97);
+      --bar-border: rgba(255, 255, 255, .09);
+      --chip: rgba(255, 255, 255, .07);
+      --chip-hover: rgba(255, 255, 255, .11);
+      --chip-active: rgba(105, 145, 255, .18);
+      --chip-border: rgba(255, 255, 255, .09);
+      --muted: rgba(255, 255, 255, .5);
+      --accent: #9bb5ff;
+      --selection: rgba(100, 145, 255, .28);
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #editor-shell {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+  }
+
+  #mirror,
+  #editor {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: var(--pad-y) var(--pad-x);
+    padding-bottom: calc(var(--bar-height) + var(--pad-y));
+    border: 0;
+    outline: 0;
+    resize: none;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    tab-size: 4;
+    font: 16px/1.55 var(--font);
+    letter-spacing: 0;
+  }
+
+  #mirror {
+    z-index: 1;
+    pointer-events: none;
+    color: transparent;
+    scrollbar-width: none;
+  }
+
+  #mirror::-webkit-scrollbar {
+    display: none;
+  }
+
+  #mirror .ghost {
+    color: var(--ghost);
+  }
+
+  #editor {
+    z-index: 2;
+    color: var(--fg);
+    caret-color: var(--fg);
+    background: transparent;
+  }
+
+  #editor::selection {
+    background: var(--selection);
+  }
+
+  #suggestion-bar {
+    position: fixed;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 0;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--bar);
+    border-top: 1px solid var(--bar-border);
+    scrollbar-width: thin;
+    overscroll-behavior-x: contain;
+  }
+
+  #suggestion-bar.visible {
+    display: flex;
+  }
+
+  #chips {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 7px;
+    align-items: center;
+  }
+
+  .chip {
+    min-height: 34px;
+    max-width: min(560px, 76vw);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    padding: 7px 11px;
+    border: 1px solid var(--chip-border);
+    border-radius: 999px;
+    background: var(--chip);
+    color: var(--fg);
+    font: 13px/1.2 var(--font);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .chip:hover {
+    background: var(--chip-hover);
+  }
+
+  .chip.selected {
+    border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+    background: var(--chip-active);
+  }
+
+  .chip .equation {
+    display: inline-flex;
+    min-width: 0;
+    align-items: baseline;
+  }
+
+  .chip .dim {
+    color: var(--muted);
+  }
+
+  .chip .insert {
+    color: var(--fg);
+    font-weight: 700;
+  }
+
+  .chip .tag {
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: .04em;
+    text-transform: lowercase;
+  }
+
+  #key-hint {
+    position: sticky;
+    right: 0;
+    flex: 0 0 auto;
+    margin-left: 4px;
+    padding: 4px 7px;
+    color: var(--muted);
+    background: var(--bar);
+    font: 10px/1 var(--font);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="editor-shell">
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea
+    id="editor"
+    aria-label="Scratchpad"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+  ></textarea>
+</div>
+
+<div id="suggestion-bar" aria-live="polite">
+  <div id="chips"></div>
+  <div id="key-hint">Tab/Enter accept · ←→ switch</div>
+</div>
+
+<script type="module">
+const { default: Decimal } =
+  await import("https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/+esm");
+
+Decimal.set({
+  precision: 50,
+  rounding: Decimal.ROUND_HALF_UP,
+  minE: -1000,
+  maxE: 1000
+});
+
+/* -------------------------------------------------------------------------- */
+/* Constants and utilities                                                    */
+/* -------------------------------------------------------------------------- */
+
+const editor = document.querySelector("#editor");
+const mirror = document.querySelector("#mirror");
+const bar = document.querySelector("#suggestion-bar");
+const chipsEl = document.querySelector("#chips");
+
+const STORAGE_KEY = "math-scratchpad-content-v1";
+const MAX_CHARS = 500;
+const MAX_TOKENS = 200;
+const MAX_DEPTH = 80;
+const MAX_BRANCHES = 12;
+const POLE_LIMIT = new Decimal("1e15");
+
+const ZERO_DIMS = Object.freeze([0, 0, 0, 0, 0, 0, 0]);
+const DIM = Object.freeze({
+  L: 0,
+  M: 1,
+  T: 2,
+  I: 3,
+  TEMP: 4,
+  DATA: 5,
+  ANGLE: 6
+});
+
+const cloneDims = d => d.slice();
+const dimsEqual = (a, b) => a.every((v, i) => v === b[i]);
+const dimsZero = d => d.every(v => v === 0);
+const dimsAdd = (a, b) => a.map((v, i) => v + b[i]);
+const dimsSub = (a, b) => a.map((v, i) => v - b[i]);
+const dimsScale = (a, n) => a.map(v => v * n);
+const dimsKey = d => d.join(",");
+
+const DIMS = Object.freeze({
+  dimensionless: ZERO_DIMS.slice(),
+  length:        [1, 0, 0, 0, 0, 0, 0],
+  mass:          [0, 1, 0, 0, 0, 0, 0],
+  time:          [0, 0, 1, 0, 0, 0, 0],
+  current:       [0, 0, 0, 1, 0, 0, 0],
+  temperature:   [0, 0, 0, 0, 1, 0, 0],
+  data:          [0, 0, 0, 0, 0, 1, 0],
+  angle:         [0, 0, 0, 0, 0, 0, 1],
+  area:          [2, 0, 0, 0, 0, 0, 0],
+  volume:        [3, 0, 0, 0, 0, 0, 0],
+  speed:         [1, 0, -1, 0, 0, 0, 0],
+  acceleration:  [1, 0, -2, 0, 0, 0, 0],
+  frequency:     [0, 0, -1, 0, 0, 0, 0],
+  force:         [1, 1, -2, 0, 0, 0, 0],
+  pressure:      [-1, 1, -2, 0, 0, 0, 0],
+  energy:        [2, 1, -2, 0, 0, 0, 0],
+  power:         [2, 1, -3, 0, 0, 0, 0],
+  voltage:       [2, 1, -3, -1, 0, 0, 0],
+  resistance:    [2, 1, -3, -2, 0, 0, 0],
+  dataRate:      [0, 0, -1, 0, 0, 1, 0],
+  fuelEconomy:   [-2, 0, 0, 0, 0, 0, 0]
+});
+
+const isFiniteDecimal = value =>
+  value instanceof Decimal &&
+  value.isFinite() &&
+  Math.abs(value.e || 0) <= 1000;
+
+const dec = value => value instanceof Decimal ? value : new Decimal(value);
+
+function uniqueBy(items, keyFn) {
+  const seen = new Set();
+  return items.filter(item => {
+    const key = keyFn(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function middleEllipsis(text, max = 82) {
+  if (text.length <= max) return text;
+  const left = Math.ceil((max - 1) / 2);
+  const right = Math.floor((max - 1) / 2);
+  return text.slice(0, left) + "…" + text.slice(text.length - right);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Exact rational arithmetic                                                  */
+/* -------------------------------------------------------------------------- */
+
+function bigintAbs(n) {
+  return n < 0n ? -n : n;
+}
+
+function bigintGcd(a, b) {
+  a = bigintAbs(a);
+  b = bigintAbs(b);
+  while (b) {
+    const t = a % b;
+    a = b;
+    b = t;
+  }
+  return a || 1n;
+}
+
+function rat(n, d = 1n) {
+  if (typeof n === "number") n = BigInt(n);
+  if (typeof d === "number") d = BigInt(d);
+  if (d === 0n) return null;
+  if (d < 0n) {
+    n = -n;
+    d = -d;
+  }
+  const g = bigintGcd(n, d);
+  n /= g;
+  d /= g;
+
+  if (n.toString().length + d.toString().length > 1000) return null;
+  return { n, d };
+}
+
+function ratAdd(a, b) {
+  if (!a || !b) return null;
+  return rat(a.n * b.d + b.n * a.d, a.d * b.d);
+}
+
+function ratSub(a, b) {
+  if (!a || !b) return null;
+  return rat(a.n * b.d - b.n * a.d, a.d * b.d);
+}
+
+function ratMul(a, b) {
+  if (!a || !b) return null;
+  return rat(a.n * b.n, a.d * b.d);
+}
+
+function ratDiv(a, b) {
+  if (!a || !b || b.n === 0n) return null;
+  return rat(a.n * b.d, a.d * b.n);
+}
+
+function ratNeg(a) {
+  return a ? { n: -a.n, d: a.d } : null;
+}
+
+function ratPow(a, exponent) {
+  if (!a || !Number.isInteger(exponent) || Math.abs(exponent) > 10000) {
+    return null;
+  }
+  if (exponent === 0) return rat(1n);
+  if (exponent < 0) {
+    if (a.n === 0n) return null;
+    return ratPow(rat(a.d, a.n), -exponent);
+  }
+
+  try {
+    return rat(a.n ** BigInt(exponent), a.d ** BigInt(exponent));
+  } catch {
+    return null;
+  }
+}
+
+function ratFromDecimalString(raw) {
+  let text = String(raw).trim().toLowerCase();
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/.test(text)) {
+    return null;
+  }
+
+  let sign = 1n;
+  if (text.startsWith("-")) {
+    sign = -1n;
+    text = text.slice(1);
+  } else if (text.startsWith("+")) {
+    text = text.slice(1);
+  }
+
+  let exponent = 0;
+  const eIndex = text.indexOf("e");
+  if (eIndex >= 0) {
+    exponent = Number(text.slice(eIndex + 1));
+    text = text.slice(0, eIndex);
+  }
+
+  const dot = text.indexOf(".");
+  let fractionDigits = 0;
+  if (dot >= 0) {
+    fractionDigits = text.length - dot - 1;
+    text = text.slice(0, dot) + text.slice(dot + 1);
+  }
+
+  text = text.replace(/^0+(?=\d)/, "") || "0";
+  let numerator = sign * BigInt(text);
+  let denominator = 10n ** BigInt(fractionDigits);
+
+  if (exponent > 0) {
+    numerator *= 10n ** BigInt(exponent);
+  } else if (exponent < 0) {
+    denominator *= 10n ** BigInt(-exponent);
+  }
+
+  return rat(numerator, denominator);
+}
+
+function ratToDecimal(r) {
+  return new Decimal(r.n.toString()).div(r.d.toString());
+}
+
+function integerNthRoot(value, n) {
+  if (value < 0n || n < 1) return null;
+  if (value < 2n) return value;
+
+  let low = 0n;
+  let high = 1n;
+  const nn = BigInt(n);
+
+  while (high ** nn < value) high *= 2n;
+
+  while (low + 1n < high) {
+    const mid = (low + high) / 2n;
+    const p = mid ** nn;
+    if (p === value) return mid;
+    if (p < value) low = mid;
+    else high = mid;
+  }
+
+  return low ** nn === value ? low : null;
+}
+
+function ratRoot(r, n) {
+  if (!r || n < 1) return null;
+  const negative = r.n < 0n;
+  if (negative && n % 2 === 0) return null;
+
+  const rn = integerNthRoot(bigintAbs(r.n), n);
+  const rd = integerNthRoot(r.d, n);
+  if (rn == null || rd == null) return null;
+  return rat(negative ? -rn : rn, rd);
+}
+
+function terminatingDecimalString(r) {
+  if (!r) return null;
+
+  let denominator = r.d;
+  let twos = 0;
+  let fives = 0;
+
+  while (denominator % 2n === 0n) {
+    denominator /= 2n;
+    twos++;
+  }
+  while (denominator % 5n === 0n) {
+    denominator /= 5n;
+    fives++;
+  }
+  if (denominator !== 1n) return null;
+
+  const places = Math.max(twos, fives);
+  let numerator = bigintAbs(r.n);
+  if (twos < places) numerator *= 2n ** BigInt(places - twos);
+  if (fives < places) numerator *= 5n ** BigInt(places - fives);
+
+  let digits = numerator.toString();
+  if (places > 0) {
+    digits = digits.padStart(places + 1, "0");
+    digits =
+      digits.slice(0, digits.length - places) +
+      "." +
+      digits.slice(digits.length - places);
+    digits = digits.replace(/\.?0+$/, "");
+  }
+
+  if (digits.startsWith(".")) digits = "0" + digits;
+  if (digits === "") digits = "0";
+  return (r.n < 0n ? "-" : "") + digits;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Unit engine                                                                */
+/* -------------------------------------------------------------------------- */
+
+const exactSymbols = new Map();
+const foldedSymbols = new Map();
+const unitNames = new Map();
+const unitsById = new Map();
+const allUnits = [];
+
+const PREFIXES_ALL = [
+  ["Q", "quetta", 30], ["R", "ronna", 27], ["Y", "yotta", 24],
+  ["Z", "zetta", 21], ["E", "exa", 18], ["P", "peta", 15],
+  ["T", "tera", 12], ["G", "giga", 9], ["M", "mega", 6],
+  ["k", "kilo", 3], ["h", "hecto", 2], ["da", "deca", 1],
+  ["d", "deci", -1], ["c", "centi", -2], ["m", "milli", -3],
+  ["µ", "micro", -6], ["n", "nano", -9], ["p", "pico", -12],
+  ["f", "femto", -15], ["a", "atto", -18], ["z", "zepto", -21],
+  ["y", "yocto", -24], ["r", "ronto", -27], ["q", "quecto", -30]
+];
+
+const PREFIXES_LARGE = PREFIXES_ALL.filter(([, , power]) => power >= 3);
+
+function addMapList(map, key, value) {
+  if (!map.has(key)) map.set(key, []);
+  map.get(key).push(value);
+}
+
+function normalizeUnitName(name) {
+  return name
+    .toLowerCase()
+    .replace(/[‐‑‒–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function registerUnit(spec) {
+  const factorRat =
+    spec.factorRat ||
+    (typeof spec.factor === "object" && spec.factor?.n != null
+      ? spec.factor
+      : ratFromDecimalString(spec.factor ?? "1"));
+
+  const unit = {
+    id: spec.id,
+    family: spec.family || spec.id,
+    names: spec.names || [],
+    symbols: spec.symbols || [],
+    symbol: spec.symbol || spec.symbols?.[0] || spec.id,
+    singular: spec.singular || spec.names?.[0] || spec.id,
+    plural:
+      spec.plural ||
+      (spec.names?.[0]
+        ? spec.names[0].endsWith("s")
+          ? spec.names[0]
+          : spec.names[0] + "s"
+        : spec.id),
+    dims: cloneDims(spec.dims || ZERO_DIMS),
+    factorRat,
+    factor: factorRat ? ratToDecimal(factorRat) : dec(spec.factor || 1),
+    offsetRat: spec.offsetRat || ratFromDecimalString(spec.offset || "0"),
+    offset: dec(spec.offset || 0),
+    prefixable: spec.prefixable || "none",
+    prefixDepth: spec.prefixDepth || 0,
+    prefixPower: spec.prefixPower ?? null,
+    isTemperature: !!spec.isTemperature,
+    variant: spec.variant || null,
+    powerBase: spec.powerBase || null,
+    powerExponent: spec.powerExponent || null
+  };
+
+  unitsById.set(unit.id, unit);
+  allUnits.push(unit);
+
+  for (const symbol of unit.symbols) {
+    addMapList(exactSymbols, symbol, unit);
+    addMapList(foldedSymbols, symbol.toLowerCase(), unit);
+  }
+
+  for (const name of unit.names) {
+    unitNames.set(normalizeUnitName(name), unit);
+    if (!name.endsWith("s")) {
+      unitNames.set(normalizeUnitName(name + "s"), unit);
+    }
+  }
+
+  return unit;
+}
+
+function registerPrefixedUnits(base) {
+  const prefixes =
+    base.prefixable === "large" ? PREFIXES_LARGE :
+    base.prefixable === "all" ? PREFIXES_ALL : [];
+
+  for (const [symbolPrefix, namePrefix, power] of prefixes) {
+    const factor = ratMul(base.factorRat, ratFromDecimalString(`1e${power}`));
+    if (!factor) continue;
+
+    const symbolBase = base.symbols[0];
+    const singular = namePrefix + base.singular;
+    const plural = singular + "s";
+
+    const symbolPrefixes =
+      symbolPrefix === "µ" ? ["µ", "μ", "u"] : [symbolPrefix];
+
+    for (const actualPrefix of symbolPrefixes) {
+      registerUnit({
+        id: `${base.id}@${actualPrefix}${power}`,
+        family: base.family,
+        names: actualPrefix === symbolPrefix ? [singular, plural] : [],
+        symbols: [actualPrefix + symbolBase],
+        symbol: symbolPrefix + symbolBase,
+        singular,
+        plural,
+        dims: base.dims,
+        factorRat: factor,
+        prefixable: "none",
+        prefixDepth: 1,
+        prefixPower: power,
+        isTemperature: base.isTemperature
+      });
+    }
+  }
+}
+
+function unitById(id) {
+  return unitsById.get(id);
+}
+
+function registerBaseAndPrefixes(spec) {
+  const base = registerUnit(spec);
+  registerPrefixedUnits(base);
+  return base;
+}
+
+const U = {};
+
+U.m = registerBaseAndPrefixes({
+  id: "meter",
+  family: "meter",
+  names: ["meter", "metre"],
+  symbols: ["m"],
+  symbol: "m",
+  singular: "meter",
+  plural: "meters",
+  dims: DIMS.length,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.g = registerBaseAndPrefixes({
+  id: "gram",
+  family: "gram",
+  names: ["gram"],
+  symbols: ["g"],
+  symbol: "g",
+  singular: "gram",
+  plural: "grams",
+  dims: DIMS.mass,
+  factor: "0.001",
+  prefixable: "all"
+});
+
+U.s = registerBaseAndPrefixes({
+  id: "second",
+  family: "second",
+  names: ["second", "sec"],
+  symbols: ["s"],
+  symbol: "s",
+  singular: "second",
+  plural: "seconds",
+  dims: DIMS.time,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.Hz = registerBaseAndPrefixes({
+  id: "hertz",
+  family: "hertz",
+  names: ["hertz"],
+  symbols: ["Hz"],
+  symbol: "Hz",
+  singular: "hertz",
+  plural: "hertz",
+  dims: DIMS.frequency,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.J = registerBaseAndPrefixes({
+  id: "joule",
+  family: "joule",
+  names: ["joule"],
+  symbols: ["J"],
+  symbol: "J",
+  singular: "joule",
+  plural: "joules",
+  dims: DIMS.energy,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.Wh = registerBaseAndPrefixes({
+  id: "watt-hour",
+  family: "watt-hour",
+  names: ["watt hour", "watt-hour"],
+  symbols: ["Wh"],
+  symbol: "Wh",
+  singular: "watt-hour",
+  plural: "watt-hours",
+  dims: DIMS.energy,
+  factor: "3600",
+  prefixable: "all"
+});
+
+U.cal = registerBaseAndPrefixes({
+  id: "calorie",
+  family: "calorie",
+  names: ["calorie"],
+  symbols: ["cal"],
+  symbol: "cal",
+  singular: "calorie",
+  plural: "calories",
+  dims: DIMS.energy,
+  factor: "4.184",
+  prefixable: "all"
+});
+
+U.Cal = registerUnit({
+  id: "food-calorie",
+  family: "calorie",
+  names: ["food calorie"],
+  symbols: ["Cal"],
+  symbol: "Cal",
+  singular: "Calorie",
+  plural: "Calories",
+  dims: DIMS.energy,
+  factor: "4184"
+});
+
+U.Pa = registerBaseAndPrefixes({
+  id: "pascal",
+  family: "pascal",
+  names: ["pascal"],
+  symbols: ["Pa"],
+  symbol: "Pa",
+  singular: "pascal",
+  plural: "pascals",
+  dims: DIMS.pressure,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.bar = registerBaseAndPrefixes({
+  id: "bar",
+  family: "bar",
+  names: ["bar"],
+  symbols: ["bar"],
+  symbol: "bar",
+  singular: "bar",
+  plural: "bar",
+  dims: DIMS.pressure,
+  factor: "100000",
+  prefixable: "all"
+});
+
+U.L = registerBaseAndPrefixes({
+  id: "liter",
+  family: "liter",
+  names: ["liter", "litre"],
+  symbols: ["L", "l"],
+  symbol: "L",
+  singular: "liter",
+  plural: "liters",
+  dims: DIMS.volume,
+  factor: "0.001",
+  prefixable: "all"
+});
+
+U.W = registerBaseAndPrefixes({
+  id: "watt",
+  family: "watt",
+  names: ["watt"],
+  symbols: ["W"],
+  symbol: "W",
+  singular: "watt",
+  plural: "watts",
+  dims: DIMS.power,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.A = registerBaseAndPrefixes({
+  id: "ampere",
+  family: "ampere",
+  names: ["ampere", "amp"],
+  symbols: ["A"],
+  symbol: "A",
+  singular: "ampere",
+  plural: "amperes",
+  dims: DIMS.current,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.V = registerBaseAndPrefixes({
+  id: "volt",
+  family: "volt",
+  names: ["volt"],
+  symbols: ["V"],
+  symbol: "V",
+  singular: "volt",
+  plural: "volts",
+  dims: DIMS.voltage,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.N = registerBaseAndPrefixes({
+  id: "newton",
+  family: "newton",
+  names: ["newton"],
+  symbols: ["N"],
+  symbol: "N",
+  singular: "newton",
+  plural: "newtons",
+  dims: DIMS.force,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.ohm = registerBaseAndPrefixes({
+  id: "ohm",
+  family: "ohm",
+  names: ["ohm"],
+  symbols: ["Ω", "ohm"],
+  symbol: "Ω",
+  singular: "ohm",
+  plural: "ohms",
+  dims: DIMS.resistance,
+  factor: "1",
+  prefixable: "all"
+});
+
+U.bit = registerBaseAndPrefixes({
+  id: "bit",
+  family: "bit",
+  names: ["bit"],
+  symbols: ["b"],
+  symbol: "b",
+  singular: "bit",
+  plural: "bits",
+  dims: DIMS.data,
+  factor: "1",
+  prefixable: "large"
+});
+
+U.byte = registerBaseAndPrefixes({
+  id: "byte",
+  family: "byte",
+  names: ["byte"],
+  symbols: ["B"],
+  symbol: "B",
+  singular: "byte",
+  plural: "bytes",
+  dims: DIMS.data,
+  factor: "8",
+  prefixable: "large"
+});
+
+U.K = registerBaseAndPrefixes({
+  id: "kelvin",
+  family: "kelvin",
+  names: ["kelvin"],
+  symbols: ["K"],
+  symbol: "K",
+  singular: "kelvin",
+  plural: "kelvin",
+  dims: DIMS.temperature,
+  factor: "1",
+  offset: "0",
+  prefixable: "all",
+  isTemperature: true
+});
+
+U.C = registerUnit({
+  id: "celsius",
+  family: "celsius",
+  names: ["celsius", "degree celsius"],
+  symbols: ["°C"],
+  symbol: "°C",
+  singular: "degree Celsius",
+  plural: "degrees Celsius",
+  dims: DIMS.temperature,
+  factor: "1",
+  offset: "273.15",
+  isTemperature: true
+});
+
+U.F = registerUnit({
+  id: "fahrenheit",
+  family: "fahrenheit",
+  names: ["fahrenheit", "degree fahrenheit"],
+  symbols: ["°F"],
+  symbol: "°F",
+  singular: "degree Fahrenheit",
+  plural: "degrees Fahrenheit",
+  dims: DIMS.temperature,
+  factorRat: rat(5n, 9n),
+  offsetRat: rat(45967n * 5n, 100n * 9n),
+  factor: new Decimal(5).div(9),
+  offset: new Decimal("459.67").mul(5).div(9),
+  isTemperature: true
+});
+
+U.mi = registerUnit({
+  id: "mile",
+  names: ["mile"],
+  symbols: ["mi"],
+  symbol: "mi",
+  dims: DIMS.length,
+  factor: "1609.344"
+});
+
+U.yd = registerUnit({
+  id: "yard",
+  names: ["yard"],
+  symbols: ["yd"],
+  symbol: "yd",
+  dims: DIMS.length,
+  factor: "0.9144"
+});
+
+U.ft = registerUnit({
+  id: "foot",
+  names: ["foot", "feet"],
+  symbols: ["ft"],
+  symbol: "ft",
+  singular: "foot",
+  plural: "feet",
+  dims: DIMS.length,
+  factor: "0.3048"
+});
+
+U.in = registerUnit({
+  id: "inch",
+  names: ["inch", "inches"],
+  symbols: ["in"],
+  symbol: "in",
+  dims: DIMS.length,
+  factor: "0.0254"
+});
+
+U.oz = registerUnit({
+  id: "ounce",
+  names: ["ounce"],
+  symbols: ["oz"],
+  symbol: "oz",
+  dims: DIMS.mass,
+  factor: "0.028349523125"
+});
+
+U.lb = registerUnit({
+  id: "pound",
+  names: ["pound"],
+  symbols: ["lb", "lbs"],
+  symbol: "lb",
+  dims: DIMS.mass,
+  factor: "0.45359237"
+});
+
+U.min = registerUnit({
+  id: "minute",
+  names: ["minute", "min"],
+  symbols: ["min"],
+  symbol: "min",
+  dims: DIMS.time,
+  factor: "60"
+});
+
+U.h = registerUnit({
+  id: "hour",
+  names: ["hour", "hr"],
+  symbols: ["h", "hr"],
+  symbol: "h",
+  dims: DIMS.time,
+  factor: "3600"
+});
+
+U.day = registerUnit({
+  id: "day",
+  names: ["day"],
+  symbols: ["d", "day"],
+  symbol: "day",
+  dims: DIMS.time,
+  factor: "86400"
+});
+
+U.week = registerUnit({
+  id: "week",
+  names: ["week"],
+  symbols: ["wk"],
+  symbol: "wk",
+  dims: DIMS.time,
+  factor: "604800"
+});
+
+U.month = registerUnit({
+  id: "month",
+  names: ["month"],
+  symbols: ["mo"],
+  symbol: "mo",
+  dims: DIMS.time,
+  factor: "2629800"
+});
+
+U.year = registerUnit({
+  id: "year",
+  names: ["year"],
+  symbols: ["yr"],
+  symbol: "yr",
+  dims: DIMS.time,
+  factor: "31557600"
+});
+
+U.decade = registerUnit({
+  id: "decade",
+  names: ["decade"],
+  symbols: [],
+  symbol: "decade",
+  dims: DIMS.time,
+  factor: "315576000"
+});
+
+U.century = registerUnit({
+  id: "century",
+  names: ["century", "centuries"],
+  symbols: [],
+  symbol: "century",
+  dims: DIMS.time,
+  factor: "3155760000"
+});
+
+U.deg = registerUnit({
+  id: "degree",
+  names: ["degree", "deg"],
+  symbols: ["°", "deg"],
+  symbol: "°",
+  singular: "degree",
+  plural: "degrees",
+  dims: DIMS.angle,
+  factorRat: null,
+  factor: Decimal.acos(-1).div(180)
+});
+
+U.rad = registerUnit({
+  id: "radian",
+  names: ["radian", "rad"],
+  symbols: ["rad"],
+  symbol: "rad",
+  dims: DIMS.angle,
+  factor: "1"
+});
+
+U.grad = registerUnit({
+  id: "gradian",
+  names: ["gradian", "grad"],
+  symbols: ["grad"],
+  symbol: "grad",
+  dims: DIMS.angle,
+  factorRat: null,
+  factor: Decimal.acos(-1).div(200)
+});
+
+U.atm = registerUnit({
+  id: "atmosphere",
+  names: ["atmosphere"],
+  symbols: ["atm"],
+  symbol: "atm",
+  dims: DIMS.pressure,
+  factor: "101325"
+});
+
+U.PSI = registerUnit({
+  id: "psi",
+  names: ["psi", "pounds per square inch"],
+  symbols: ["PSI", "psi"],
+  symbol: "PSI",
+  dims: DIMS.pressure,
+  factor: "6894.757293168361"
+});
+
+U.acre = registerUnit({
+  id: "acre",
+  names: ["acre"],
+  symbols: ["acre"],
+  symbol: "acre",
+  dims: DIMS.area,
+  factor: "4046.8564224"
+});
+
+U.gal = registerUnit({
+  id: "gallon-us",
+  names: ["gallon", "us gallon"],
+  symbols: ["gal"],
+  symbol: "gal",
+  dims: DIMS.volume,
+  factor: "0.003785411784"
+});
+
+U.galImp = registerUnit({
+  id: "gallon-imperial",
+  names: ["imperial gallon", "uk gallon"],
+  symbols: ["imp gal", "uk gal"],
+  symbol: "imp gal",
+  dims: DIMS.volume,
+  factor: "0.00454609"
+});
+
+U.qt = registerUnit({
+  id: "quart-us",
+  names: ["quart", "us quart"],
+  symbols: ["qt"],
+  symbol: "qt",
+  dims: DIMS.volume,
+  factor: "0.000946352946"
+});
+
+U.pt = registerUnit({
+  id: "pint-us",
+  names: ["pint", "us pint"],
+  symbols: ["pt"],
+  symbol: "pt",
+  dims: DIMS.volume,
+  factor: "0.000473176473"
+});
+
+U.cup = registerUnit({
+  id: "cup-us",
+  names: ["cup", "us cup"],
+  symbols: ["cup"],
+  symbol: "cup",
+  dims: DIMS.volume,
+  factor: "0.0002365882365"
+});
+
+U.tbsp = registerUnit({
+  id: "tablespoon-us",
+  names: ["tablespoon", "tbsp"],
+  symbols: ["tbsp"],
+  symbol: "tbsp",
+  dims: DIMS.volume,
+  factor: "0.00001478676478125"
+});
+
+U.tsp = registerUnit({
+  id: "teaspoon-us",
+  names: ["teaspoon", "tsp"],
+  symbols: ["tsp"],
+  symbol: "tsp",
+  dims: DIMS.volume,
+  factor: "0.00000492892159375"
+});
+
+U.floz = registerUnit({
+  id: "fluid-ounce-us",
+  names: ["fluid ounce", "fl oz"],
+  symbols: ["fl oz"],
+  symbol: "fl oz",
+  dims: DIMS.volume,
+  factor: "0.0000295735295625"
+});
+
+U.lbf = registerUnit({
+  id: "pound-force",
+  names: ["pound force"],
+  symbols: ["lbf"],
+  symbol: "lbf",
+  dims: DIMS.force,
+  factor: "4.4482216152605"
+});
+
+U.hp = registerUnit({
+  id: "horsepower-mechanical",
+  names: ["horsepower", "mechanical horsepower"],
+  symbols: ["HP", "hp"],
+  symbol: "HP",
+  dims: DIMS.power,
+  factor: "745.6998715822702",
+  variant: "mechanical"
+});
+
+U.hpMetric = registerUnit({
+  id: "horsepower-metric",
+  names: ["metric horsepower"],
+  symbols: ["PS"],
+  symbol: "HP",
+  dims: DIMS.power,
+  factor: "735.49875",
+  variant: "metric"
+});
+
+U.mph = registerUnit({
+  id: "mile-per-hour",
+  names: ["mile per hour", "miles per hour"],
+  symbols: ["mph"],
+  symbol: "mph",
+  dims: DIMS.speed,
+  factor: "0.44704"
+});
+
+U.kph = registerUnit({
+  id: "kilometer-per-hour",
+  names: ["kilometer per hour", "kilometers per hour"],
+  symbols: ["kph", "kmph"],
+  symbol: "kph",
+  dims: DIMS.speed,
+  factor: new Decimal(1000).div(3600).toString()
+});
+
+U.mps = registerUnit({
+  id: "meter-per-second",
+  names: ["meter per second", "meters per second"],
+  symbols: ["mps"],
+  symbol: "m/s",
+  dims: DIMS.speed,
+  factor: "1"
+});
+
+U.fts = registerUnit({
+  id: "foot-per-second",
+  names: ["foot per second", "feet per second"],
+  symbols: ["fps"],
+  symbol: "ft/s",
+  dims: DIMS.speed,
+  factor: "0.3048"
+});
+
+U.knot = registerUnit({
+  id: "knot",
+  names: ["knot"],
+  symbols: ["kn", "kt"],
+  symbol: "knot",
+  dims: DIMS.speed,
+  factor: new Decimal(1852).div(3600).toString()
+});
+
+U.mpg = registerUnit({
+  id: "mile-per-gallon",
+  names: ["mile per gallon", "miles per gallon"],
+  symbols: ["mpg"],
+  symbol: "mpg",
+  dims: DIMS.fuelEconomy,
+  factor: new Decimal("1609.344").div("0.003785411784").toString()
+});
+
+U.kmL = registerUnit({
+  id: "kilometer-per-liter",
+  names: ["kilometer per liter", "kilometers per liter"],
+  symbols: ["kmL"],
+  symbol: "km/L",
+  dims: DIMS.fuelEconomy,
+  factor: "1000000"
+});
+
+function dynamicPowerUnit(base, exponent) {
+  const id = `${base.id}^${exponent}`;
+  if (unitsById.has(id)) return unitsById.get(id);
+
+  const factorRat = ratPow(base.factorRat, exponent);
+  return registerUnit({
+    id,
+    family: `${base.family}^${exponent}`,
+    names: [
+      exponent === 2 ? `square ${base.singular}` : `cubic ${base.singular}`
+    ],
+    symbols: [],
+    symbol: `${base.symbol}^${exponent}`,
+    singular:
+      exponent === 2 ? `square ${base.singular}` : `cubic ${base.singular}`,
+    plural:
+      exponent === 2 ? `square ${base.plural}` : `cubic ${base.plural}`,
+    dims: dimsScale(base.dims, exponent),
+    factorRat,
+    factor: base.factor.pow(exponent),
+    powerBase: base,
+    powerExponent: exponent
+  });
+}
+
+U.m2 = dynamicPowerUnit(U.m, 2);
+U.km2 = dynamicPowerUnit(
+  allUnits.find(u => u.symbol === "km" && u.family === "meter"),
+  2
+);
+U.ft2 = dynamicPowerUnit(U.ft, 2);
+U.mi2 = dynamicPowerUnit(U.mi, 2);
+U.in2 = dynamicPowerUnit(U.in, 2);
+U.yd2 = dynamicPowerUnit(U.yd, 2);
+U.m3 = dynamicPowerUnit(U.m, 3);
+U.ft3 = dynamicPowerUnit(U.ft, 3);
+U.in3 = dynamicPowerUnit(U.in, 3);
+
+function resolveSimpleUnit(text) {
+  const exact = exactSymbols.get(text);
+  if (exact?.length) {
+    const bestDepth = Math.min(...exact.map(u => u.prefixDepth));
+    return {
+      candidates: uniqueBy(
+        exact.filter(u => u.prefixDepth === bestDepth),
+        u => u.id
+      ),
+      style: "symbol",
+      fallback: false
+    };
+  }
+
+  const named = unitNames.get(normalizeUnitName(text));
+  if (named) {
+    return {
+      candidates: [named],
+      style: "long",
+      fallback: false
+    };
+  }
+
+  const folded = foldedSymbols.get(text.toLowerCase()) || [];
+  const candidates = uniqueBy(folded, u => u.id)
+    .sort((a, b) => casePreservationScore(b.symbol, text) -
+                    casePreservationScore(a.symbol, text));
+
+  if (candidates.length) {
+    return {
+      candidates,
+      style: "symbol",
+      fallback: true
+    };
+  }
+
+  const powerMatch = text.match(/^(.+?)([23])$/);
+  if (powerMatch) {
+    const base = resolveSimpleUnit(powerMatch[1]);
+    if (base) {
+      return {
+        candidates: base.candidates.map(unit =>
+          dynamicPowerUnit(unit, Number(powerMatch[2]))
+        ),
+        style: base.style,
+        fallback: base.fallback
+      };
+    }
+  }
+
+  return null;
+}
+
+function casePreservationScore(canonical, typed) {
+  let score = 0;
+  const length = Math.min(canonical.length, typed.length);
+  for (let i = 0; i < length; i++) {
+    if (canonical[i] === typed[i]) score++;
+  }
+  return score;
+}
+
+function convertFromSI(value, unit) {
+  return value.minus(unit.offset).div(unit.factor);
+}
+
+function convertToSI(value, unit) {
+  return value.mul(unit.factor).plus(unit.offset);
+}
+
+function convertRatToSI(valueRat, unit) {
+  if (!valueRat || !unit.factorRat || !unit.offsetRat) return null;
+  return ratAdd(ratMul(valueRat, unit.factorRat), unit.offsetRat);
+}
+
+function convertRatFromSI(valueRat, unit) {
+  if (!valueRat || !unit.factorRat || !unit.offsetRat) return null;
+  return ratDiv(ratSub(valueRat, unit.offsetRat), unit.factorRat);
+}
+
+function sameUnit(a, b) {
+  return !!a && !!b && a.id === b.id;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tokenizer                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const SUPERSCRIPTS = Object.freeze({
+  "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
+  "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9"
+});
+
+class TokenizeError extends Error {}
+class ParseError extends Error {}
+
+function isIdentifierStart(ch) {
+  return !!ch && (
+    ch === "_" ||
+    ch === "π" ||
+    ch === "µ" ||
+    ch === "μ" ||
+    ch === "Ω" ||
+    /\p{L}/u.test(ch)
+  );
+}
+
+function isIdentifierContinue(ch) {
+  return !!ch && (
+    isIdentifierStart(ch) ||
+    /\d/u.test(ch)
+  );
+}
+
+function tokenize(input, { scientific = true } = {}) {
+  if (input.length > MAX_CHARS) throw new TokenizeError("Expression too long");
+
+  const tokens = [];
+  let i = 0;
+
+  const push = (type, value, start, end, raw = input.slice(start, end)) => {
+    tokens.push({ type, value, start, end, raw });
+    if (tokens.length > MAX_TOKENS) throw new TokenizeError("Too many tokens");
+  };
+
+  while (i < input.length) {
+    const ch = input[i];
+
+    if (/\s/u.test(ch)) {
+      i++;
+      continue;
+    }
+
+    if (input.startsWith("->", i)) {
+      push("ARROW", "->", i, i + 2);
+      i += 2;
+      continue;
+    }
+
+    if (input.startsWith("**", i)) {
+      push("OP", "^", i, i + 2);
+      i += 2;
+      continue;
+    }
+
+    if (ch === "°") {
+      const next = input[i + 1];
+      if (next === "C" || next === "F") {
+        push("IDENT", "°" + next, i, i + 2);
+        i += 2;
+      } else {
+        push("IDENT", "°", i, i + 1);
+        i++;
+      }
+      continue;
+    }
+
+    if (SUPERSCRIPTS[ch] || ch === "⁻") {
+      const start = i;
+      let negative = false;
+      if (input[i] === "⁻") {
+        negative = true;
+        i++;
+      }
+
+      let digits = "";
+      while (SUPERSCRIPTS[input[i]]) {
+        digits += SUPERSCRIPTS[input[i]];
+        i++;
+      }
+
+      if (!digits) {
+        push("BAD", input[start], start, start + 1);
+        continue;
+      }
+
+      push("OP", "^", start, start + 1, "^");
+      if (negative) push("OP", "-", start, start + 1, "-");
+      push("NUMBER", digits, start, i, digits);
+      continue;
+    }
+
+    if (
+      /\d/u.test(ch) ||
+      (ch === "." && /\d/u.test(input[i + 1] || ""))
+    ) {
+      const start = i;
+
+      if (ch === ".") i++;
+      while (/\d/u.test(input[i] || "")) i++;
+
+      if (input[i] === ".") {
+        i++;
+        while (/\d/u.test(input[i] || "")) i++;
+      }
+
+      if (
+        scientific &&
+        (input[i] === "e" || input[i] === "E")
+      ) {
+        let j = i + 1;
+        if (input[j] === "+" || input[j] === "-") j++;
+        const exponentStart = j;
+        while (/\d/u.test(input[j] || "")) j++;
+        if (j > exponentStart) i = j;
+      }
+
+      const raw = input.slice(start, i);
+      push("NUMBER", raw, start, i, raw);
+      continue;
+    }
+
+    if (ch === "π") {
+      push("IDENT", "pi", i, i + 1, ch);
+      i++;
+      continue;
+    }
+
+    if (isIdentifierStart(ch)) {
+      const start = i;
+      i++;
+      while (isIdentifierContinue(input[i])) i++;
+      const raw = input.slice(start, i);
+      push("IDENT", raw, start, i, raw);
+      continue;
+    }
+
+    const normalized =
+      ch === "×" ? "*" :
+      ch === "÷" ? "/" :
+      ch === "−" || ch === "–" ? "-" :
+      ch;
+
+    if ("+-*/%^!".includes(normalized)) {
+      push("OP", normalized, i, i + 1, ch);
+      i++;
+      continue;
+    }
+
+    if (ch === "(") {
+      push("LPAREN", ch, i, i + 1);
+      i++;
+      continue;
+    }
+
+    if (ch === ")") {
+      push("RPAREN", ch, i, i + 1);
+      i++;
+      continue;
+    }
+
+    if (ch === ",") {
+      push("COMMA", ch, i, i + 1);
+      i++;
+      continue;
+    }
+
+    push("BAD", ch, i, i + 1);
+    i++;
+  }
+
+  return tokens;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Parser                                                                     */
+/* -------------------------------------------------------------------------- */
+
+const TRIG_FUNCTIONS = new Set([
+  "sin", "cos", "tan", "csc", "sec", "cot"
+]);
+
+const INVERSE_TRIG = new Set([
+  "asin", "arcsin", "acos", "arccos", "atan", "arctan"
+]);
+
+const SIMPLE_FUNCTIONS = new Set([
+  "sqrt", "cbrt", "ln", "log", "log2", "log_2",
+  ...TRIG_FUNCTIONS,
+  ...INVERSE_TRIG
+]);
+
+function node(type, properties = {}) {
+  return { type, ...properties };
+}
+
+class Parser {
+  constructor(tokens, source, startIndex = 0) {
+    this.tokens = tokens;
+    this.source = source;
+    this.pos = startIndex;
+    this.startIndex = startIndex;
+    this.depth = 0;
+  }
+
+  peek(offset = 0) {
+    return this.tokens[this.pos + offset] || null;
+  }
+
+  previous() {
+    return this.tokens[this.pos - 1] || null;
+  }
+
+  consume(type, value = null) {
+    const token = this.peek();
+    if (!token || token.type !== type || (value != null && token.value !== value)) {
+      throw new ParseError(`Expected ${type}${value != null ? " " + value : ""}`);
+    }
+    this.pos++;
+    return token;
+  }
+
+  match(type, value = null) {
+    const token = this.peek();
+    if (!token || token.type !== type) return false;
+    if (value != null && token.value !== value) return false;
+    this.pos++;
+    return token;
+  }
+
+  enter() {
+    this.depth++;
+    if (this.depth > MAX_DEPTH) throw new ParseError("Maximum depth");
+  }
+
+  leave() {
+    this.depth--;
+  }
+
+  parse() {
+    this.enter();
+    let expression = this.parseAdditive();
+
+    if (this.isConversionMarker()) {
+      const marker = this.peek();
+      this.pos++;
+      if (!this.peek()) throw new ParseError("Missing conversion target");
+      const target = this.parseAdditive();
+      expression = node("Convert", {
+        expression,
+        target,
+        marker: marker.value,
+        start: expression.start,
+        end: target.end
+      });
+    }
+
+    this.leave();
+
+    if (this.pos !== this.tokens.length) {
+      throw new ParseError("Unconsumed input");
+    }
+    return expression;
+  }
+
+  parseAdditive() {
+    let left = this.parseMultiplicative();
+
+    while (true) {
+      const token = this.peek();
+      if (!token || token.type !== "OP" || !["+", "-"].includes(token.value)) {
+        break;
+      }
+      this.pos++;
+      const right = this.parseMultiplicative();
+      left = node("Binary", {
+        op: token.value,
+        left,
+        right,
+        start: left.start,
+        end: right.end
+      });
+    }
+
+    return left;
+  }
+
+  parseMultiplicative() {
+    let left = this.parsePermutation();
+
+    while (true) {
+      const token = this.peek();
+      if (!token || token.type !== "OP") break;
+
+      const modulo =
+        token.value === "%" &&
+        this.canStartOperand(this.peek(1));
+
+      if (!["*", "/"].includes(token.value) && !modulo) break;
+
+      this.pos++;
+      const right = this.parsePermutation();
+      left = node("Binary", {
+        op: modulo ? "%" : token.value,
+        left,
+        right,
+        start: left.start,
+        end: right.end
+      });
+    }
+
+    return left;
+  }
+
+  parsePermutation() {
+    let left = this.parseImplicit();
+
+    while (true) {
+      const token = this.peek();
+      if (
+        !token ||
+        token.type !== "IDENT" ||
+        !["npr", "ncr"].includes(token.value.toLowerCase())
+      ) {
+        break;
+      }
+
+      this.pos++;
+      const right = this.parseImplicit();
+      left = node("Binary", {
+        op: token.value.toLowerCase(),
+        left,
+        right,
+        start: left.start,
+        end: right.end
+      });
+    }
+
+    return left;
+  }
+
+  parseImplicit() {
+    let left = this.parseUnary();
+
+    while (this.canImplicitMultiply(left)) {
+      const right = this.parseUnary();
+      left = node("Binary", {
+        op: "implicit",
+        left,
+        right,
+        start: left.start,
+        end: right.end
+      });
+    }
+
+    return left;
+  }
+
+  parseUnary() {
+    const token = this.peek();
+    if (token?.type === "OP" && (token.value === "+" || token.value === "-")) {
+      this.pos++;
+      const argument = this.parseUnary();
+      return node("Unary", {
+        op: token.value,
+        argument,
+        start: token.start,
+        end: argument.end
+      });
+    }
+    return this.parsePower();
+  }
+
+  parsePower() {
+    let left = this.parsePostfix();
+    const token = this.peek();
+
+    if (token?.type === "OP" && token.value === "^") {
+      this.pos++;
+      const right = this.parseUnary();
+      left = node("Binary", {
+        op: "^",
+        left,
+        right,
+        start: left.start,
+        end: right.end
+      });
+    }
+
+    return left;
+  }
+
+  parsePostfix() {
+    let expression = this.parsePrimary();
+
+    while (true) {
+      const token = this.peek();
+
+      if (token?.type === "OP" && token.value === "!") {
+        this.pos++;
+        expression = node("Factorial", {
+          argument: expression,
+          start: expression.start,
+          end: token.end
+        });
+        continue;
+      }
+
+      if (
+        token?.type === "OP" &&
+        token.value === "%" &&
+        !this.canStartOperand(this.peek(1))
+      ) {
+        this.pos++;
+        expression = node("Percent", {
+          argument: expression,
+          start: expression.start,
+          end: token.end
+        });
+        continue;
+      }
+
+      break;
+    }
+
+    return expression;
+  }
+
+  parsePrimary() {
+    const token = this.peek();
+    if (!token) throw new ParseError("Missing operand");
+
+    if (token.type === "BAD") throw new ParseError("Unknown token");
+
+    if (token.type === "NUMBER") {
+      this.pos++;
+      return node("Number", {
+        raw: token.value,
+        start: token.start,
+        end: token.end
+      });
+    }
+
+    if (token.type === "LPAREN") {
+      this.pos++;
+      const expression = this.parseAdditive();
+      const close = this.consume("RPAREN");
+      return node("Group", {
+        expression,
+        start: token.start,
+        end: close.end
+      });
+    }
+
+    if (token.type === "IDENT") {
+      const lower = token.value.toLowerCase();
+
+      if (lower === "pi" || token.raw === "π" || lower === "e") {
+        this.pos++;
+        return node("Constant", {
+          name: lower === "e" ? "e" : "pi",
+          start: token.start,
+          end: token.end
+        });
+      }
+
+      if (
+        ["npr", "ncr", "p", "c"].includes(lower) &&
+        this.peek(1)?.type === "LPAREN"
+      ) {
+        this.pos++;
+        const name =
+          lower === "p" ? "npr" :
+          lower === "c" ? "ncr" :
+          lower;
+        const args = this.parseArgumentList();
+        if (args.length !== 2) throw new ParseError("Expected two arguments");
+        return node("Call", {
+          name,
+          args,
+          start: token.start,
+          end: args.at(-1).end
+        });
+      }
+
+      const functionNode = this.tryParseFunction();
+      if (functionNode) return functionNode;
+
+      const unitNode = this.tryParseUnit();
+      if (unitNode) return unitNode;
+    }
+
+    throw new ParseError("Unknown identifier");
+  }
+
+  tryParseFunction() {
+    const token = this.peek();
+    if (!token || token.type !== "IDENT") return null;
+
+    let rawName = token.value;
+    let lower = rawName.toLowerCase();
+    let powerFromName = null;
+
+    const gluedPower = lower.match(
+      /^(sin|cos|tan|csc|sec|cot)(\d+)$/
+    );
+
+    if (gluedPower) {
+      const baseName = gluedPower[1];
+      const exponent = gluedPower[2];
+      const hasArgument = !!this.peek(1);
+
+      this.pos++;
+
+      if (!hasArgument) {
+        return node("Call", {
+          name: baseName,
+          args: [node("Number", {
+            raw: exponent,
+            start: token.end - exponent.length,
+            end: token.end
+          })],
+          start: token.start,
+          end: token.end
+        });
+      }
+
+      lower = baseName;
+      powerFromName = exponent;
+    } else {
+      if (!SIMPLE_FUNCTIONS.has(lower) && !/^log\d+$/.test(lower)) {
+        return null;
+      }
+      this.pos++;
+    }
+
+    if (TRIG_FUNCTIONS.has(lower) && this.isInverseSuffix(token)) {
+      this.consumeInverseSuffix();
+      lower = "a" + lower;
+    }
+
+    let trigPower = powerFromName;
+
+    if (
+      TRIG_FUNCTIONS.has(lower) &&
+      this.peek()?.type === "OP" &&
+      this.peek().value === "^"
+    ) {
+      const save = this.pos;
+      this.pos++;
+
+      if (
+        this.peek()?.type === "OP" &&
+        this.peek().value === "-" &&
+        this.peek(1)?.type === "NUMBER" &&
+        this.peek(1).value === "1"
+      ) {
+        this.pos = save;
+      } else if (this.peek()?.type === "NUMBER") {
+        trigPower = this.peek().value;
+        this.pos++;
+      } else {
+        this.pos = save;
+      }
+    }
+
+    const args =
+      this.peek()?.type === "LPAREN"
+        ? this.parseArgumentList()
+        : [this.parseFunctionArgumentWithoutParentheses()];
+
+    if (args.length !== 1) throw new ParseError("Expected one argument");
+
+    let call = node("Call", {
+      name: normalizeFunctionName(lower),
+      args,
+      start: token.start,
+      end: args[0].end
+    });
+
+    if (trigPower != null) {
+      call = node("Binary", {
+        op: "^",
+        left: call,
+        right: node("Number", {
+          raw: trigPower,
+          start: token.end,
+          end: token.end
+        }),
+        start: token.start,
+        end: args[0].end
+      });
+    }
+
+    return call;
+  }
+
+  isInverseSuffix(functionToken) {
+    const a = this.peek();
+    const b = this.peek(1);
+    const c = this.peek(2);
+
+    if (
+      a?.type === "OP" &&
+      a.value === "-" &&
+      b?.type === "NUMBER" &&
+      b.value === "1" &&
+      functionToken.end === a.start &&
+      a.end === b.start
+    ) {
+      const after = c;
+      return after?.type === "LPAREN" || after?.type === "NUMBER";
+    }
+
+    if (
+      a?.type === "OP" &&
+      a.value === "^" &&
+      b?.type === "OP" &&
+      b.value === "-" &&
+      c?.type === "NUMBER" &&
+      c.value === "1"
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  consumeInverseSuffix() {
+    if (
+      this.peek()?.type === "OP" &&
+      this.peek().value === "-" &&
+      this.peek(1)?.type === "NUMBER"
+    ) {
+      this.pos += 2;
+      return;
+    }
+
+    if (
+      this.peek()?.type === "OP" &&
+      this.peek().value === "^" &&
+      this.peek(1)?.type === "OP" &&
+      this.peek(1).value === "-" &&
+      this.peek(2)?.type === "NUMBER"
+    ) {
+      this.pos += 3;
+    }
+  }
+
+  parseFunctionArgumentWithoutParentheses() {
+    let expression = this.parseUnary();
+
+    while (this.canImplicitMultiply(expression)) {
+      const right = this.parseUnary();
+      expression = node("Binary", {
+        op: "implicit",
+        left: expression,
+        right,
+        start: expression.start,
+        end: right.end
+      });
+    }
+
+    return expression;
+  }
+
+  parseArgumentList() {
+    this.consume("LPAREN");
+    const args = [];
+
+    if (this.peek()?.type === "RPAREN") {
+      throw new ParseError("Empty argument list");
+    }
+
+    while (true) {
+      args.push(this.parseAdditive());
+      if (!this.match("COMMA")) break;
+    }
+
+    this.consume("RPAREN");
+    return args;
+  }
+
+  tryParseUnit() {
+    const startPos = this.pos;
+    const first = this.peek();
+    if (!first || first.type !== "IDENT") return null;
+
+    let exponent = 1;
+    let style = "symbol";
+    let resolution = null;
+    let endToken = first;
+
+    const firstLower = first.value.toLowerCase();
+
+    if (["sq", "square", "cubic"].includes(firstLower)) {
+      exponent = firstLower === "cubic" ? 3 : 2;
+      const next = this.peek(1);
+      if (!next || next.type !== "IDENT") return null;
+
+      for (let count = 3; count >= 1; count--) {
+        const slice = this.tokens.slice(this.pos + 1, this.pos + 1 + count);
+        if (
+          slice.length !== count ||
+          slice.some(t => t.type !== "IDENT")
+        ) continue;
+
+        const text = slice.map(t => t.value).join(" ");
+        const found = resolveSimpleUnit(text);
+        if (found) {
+          resolution = found;
+          this.pos += 1 + count;
+          endToken = slice.at(-1);
+          style = "long";
+          break;
+        }
+      }
+    } else {
+      for (let count = 4; count >= 1; count--) {
+        const slice = this.tokens.slice(this.pos, this.pos + count);
+        if (
+          slice.length !== count ||
+          slice.some(t => t.type !== "IDENT")
+        ) continue;
+
+        const text = slice.map(t => t.value).join(" ");
+        const found = resolveSimpleUnit(text);
+        if (found) {
+          resolution = found;
+          this.pos += count;
+          endToken = slice.at(-1);
+          style = found.style;
+          break;
+        }
+      }
+
+      const squared = this.peek();
+      if (
+        resolution &&
+        squared?.type === "IDENT" &&
+        ["squared", "cubed"].includes(squared.value.toLowerCase())
+      ) {
+        exponent = squared.value.toLowerCase() === "squared" ? 2 : 3;
+        this.pos++;
+        endToken = squared;
+      }
+    }
+
+    if (!resolution) {
+      this.pos = startPos;
+      return null;
+    }
+
+    let candidates = resolution.candidates;
+    if (exponent !== 1) {
+      candidates = candidates.map(unit => dynamicPowerUnit(unit, exponent));
+    }
+
+    return node("Unit", {
+      candidates,
+      style,
+      fallback: resolution.fallback,
+      ambiguous: candidates.length > 1,
+      typed: this.source.slice(first.start, endToken.end),
+      start: first.start,
+      end: endToken.end
+    });
+  }
+
+  canStartOperand(token) {
+    if (!token) return false;
+    if (token.type === "NUMBER" || token.type === "LPAREN") return true;
+    if (token.type === "IDENT") return true;
+    if (
+      token.type === "OP" &&
+      (token.value === "+" || token.value === "-")
+    ) return true;
+    return false;
+  }
+
+  canImplicitMultiply(left) {
+    const next = this.peek();
+    if (!this.canStartOperand(next)) return false;
+    if (this.isConversionMarker()) return false;
+
+    if (
+      isBareNumericNode(left) &&
+      next?.type === "NUMBER"
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  isConversionMarker() {
+    const token = this.peek();
+    if (!token) return false;
+    if (token.type === "ARROW") return true;
+    if (token.type !== "IDENT") return false;
+
+    const lower = token.value.toLowerCase();
+    if (lower === "to") return true;
+
+    if (lower === "in") {
+      const next = this.peek(1);
+      const previous = this.previous();
+      const spaced =
+        previous && token.start > previous.end;
+      return !!(
+        spaced &&
+        next &&
+        next.type === "IDENT"
+      );
+    }
+
+    return false;
+  }
+}
+
+function normalizeFunctionName(name) {
+  const lower = name.toLowerCase();
+  if (lower === "arcsin") return "asin";
+  if (lower === "arccos") return "acos";
+  if (lower === "arctan") return "atan";
+  if (lower === "log_2") return "log2";
+  return lower;
+}
+
+function isBareNumericNode(ast) {
+  if (!ast) return false;
+  if (ast.type === "Number") return true;
+  if (ast.type === "Group") return isBareNumericNode(ast.expression);
+  if (ast.type === "Unary") return isBareNumericNode(ast.argument);
+  return false;
+}
+
+function isLoneLiteral(ast) {
+  return isBareNumericNode(ast);
+}
+
+function isConstantNode(ast) {
+  return ast?.type === "Constant";
+}
+
+function isUnitExpression(ast) {
+  if (!ast) return false;
+  if (ast.type === "Unit") return true;
+  if (ast.type === "Group") return isUnitExpression(ast.expression);
+  if (
+    ast.type === "Binary" &&
+    ast.op === "^" &&
+    isUnitExpression(ast.left) &&
+    isBareNumericNode(ast.right)
+  ) return true;
+  return false;
+}
+
+function isBareUnitQuantity(ast) {
+  if (!ast) return false;
+  if (ast.type === "Group") return isBareUnitQuantity(ast.expression);
+
+  if (
+    ast.type === "Binary" &&
+    ast.op === "implicit"
+  ) {
+    return (
+      (isBareNumericNode(ast.left) && isUnitExpression(ast.right)) ||
+      (isUnitExpression(ast.left) && isBareNumericNode(ast.right))
+    );
+  }
+
+  return false;
+}
+
+function isLonePercent(ast) {
+  return ast?.type === "Percent" && isBareNumericNode(ast.argument);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Quantity evaluator                                                         */
+/* -------------------------------------------------------------------------- */
+
+function quantity({
+  value,
+  dims = ZERO_DIMS,
+  rational = null,
+  preferred = null,
+  units = [],
+  readings = [],
+  ambiguous = false,
+  userLong = false,
+  absoluteTemperature = false,
+  leafUnit = null,
+  forcedUnit = null
+}) {
+  return {
+    value: dec(value),
+    dims: cloneDims(dims),
+    rational,
+    preferred,
+    units: uniqueBy(units.filter(Boolean), u => u.id),
+    readings,
+    ambiguous,
+    userLong,
+    absoluteTemperature,
+    leafUnit,
+    forcedUnit
+  };
+}
+
+function mergeReadings(a, b) {
+  return [...(a || []), ...(b || [])];
+}
+
+function copyQuantity(q, changes = {}) {
+  return quantity({ ...q, ...changes });
+}
+
+function quantityFromAmount(amount, amountRat, unit, metadata = {}) {
+  return quantity({
+    value: convertToSI(amount, unit),
+    rational: convertRatToSI(amountRat, unit),
+    dims: unit.dims,
+    preferred: unit,
+    units: [unit],
+    userLong: !!metadata.userLong,
+    readings: metadata.readings || [],
+    ambiguous: !!metadata.ambiguous,
+    absoluteTemperature: unit.isTemperature,
+    forcedUnit: metadata.forcedUnit || null
+  });
+}
+
+function branchMap(list, fn) {
+  const result = [];
+  for (const item of list) {
+    const values = fn(item) || [];
+    for (const value of values) {
+      if (value) result.push(value);
+      if (result.length >= MAX_BRANCHES) return result;
+    }
+  }
+  return result;
+}
+
+function branchPair(left, right, fn) {
+  const result = [];
+  for (const a of left) {
+    for (const b of right) {
+      const value = fn(a, b);
+      if (value) result.push(value);
+      if (result.length >= MAX_BRANCHES) return result;
+    }
+  }
+  return result;
+}
+
+function cleanDecimal(value) {
+  if (!isFiniteDecimal(value)) return null;
+
+  if (value.abs().lte("1e-14")) {
+    return { value: new Decimal(0), snapped: true };
+  }
+
+  const nearest = value.toNearest(1);
+  const tolerance = Decimal.max(1, value.abs()).mul("1e-14");
+  if (value.minus(nearest).abs().lte(tolerance)) {
+    return { value: nearest, snapped: true };
+  }
+
+  return { value, snapped: false };
+}
+
+function evaluator(mode = "neutral") {
+  const pi = Decimal.acos(-1);
+  const e = Decimal.exp(1);
+
+  function evaluate(ast, depth = 0) {
+    if (depth > MAX_DEPTH) return [];
+
+    switch (ast.type) {
+      case "Number": {
+        try {
+          return [quantity({
+            value: new Decimal(ast.raw),
+            rational: ratFromDecimalString(ast.raw)
+          })];
+        } catch {
+          return [];
+        }
+      }
+
+      case "Constant":
+        return [quantity({
+          value: ast.name === "pi" ? pi : e,
+          rational: null
+        })];
+
+      case "Group":
+        return evaluate(ast.expression, depth + 1);
+
+      case "Unary":
+        return branchMap(evaluate(ast.argument, depth + 1), q => {
+          if (ast.op === "+") return [q];
+          return [copyQuantity(q, {
+            value: q.value.neg(),
+            rational: ratNeg(q.rational)
+          })];
+        });
+
+      case "Unit": {
+        return ast.candidates.map(unit => {
+          const replacement =
+            ast.fallback || ast.ambiguous
+              ? [{
+                  start: ast.start,
+                  end: ast.end,
+                  text: unit.symbol
+                }]
+              : [];
+
+          return quantity({
+            value: unit.factor.plus(unit.offset),
+            rational: convertRatToSI(rat(1n), unit),
+            dims: unit.dims,
+            preferred: unit,
+            units: [unit],
+            readings: replacement,
+            ambiguous: ast.ambiguous,
+            userLong: ast.style === "long",
+            absoluteTemperature: unit.isTemperature,
+            leafUnit: unit
+          });
+        });
+      }
+
+      case "Percent":
+        return branchMap(evaluate(ast.argument, depth + 1), q => {
+          if (!dimsZero(q.dims)) return [];
+          return [copyQuantity(q, {
+            value: q.value.div(100),
+            rational: ratDiv(q.rational, rat(100n))
+          })];
+        });
+
+      case "Factorial":
+        return branchMap(evaluate(ast.argument, depth + 1), q => {
+          if (!dimsZero(q.dims)) return [];
+          const result = factorialValue(q.value);
+          if (!result) return [];
+          return [quantity({
+            value: result.value,
+            rational: result.rational,
+            readings: q.readings,
+            ambiguous: q.ambiguous,
+            userLong: q.userLong
+          })];
+        });
+
+      case "Binary": {
+        const left = evaluate(ast.left, depth + 1);
+        const right = evaluate(ast.right, depth + 1);
+        return branchPair(left, right, (a, b) =>
+          evaluateBinary(ast.op, a, b)
+        );
+      }
+
+      case "Call":
+        return evaluateCall(ast, depth + 1);
+
+      case "Convert": {
+        const source = evaluate(ast.expression, depth + 1);
+        const targets = evaluate(ast.target, depth + 1);
+
+        return branchPair(source, targets, (from, target) => {
+          const unit = target.preferred || target.leafUnit;
+          if (!unit || !dimsEqual(from.dims, unit.dims)) return null;
+
+          return copyQuantity(from, {
+            forcedUnit: unit,
+            readings: mergeReadings(from.readings, target.readings),
+            ambiguous: from.ambiguous || target.ambiguous,
+            userLong: from.userLong || target.userLong
+          });
+        });
+      }
+
+      default:
+        return [];
+    }
+  }
+
+  function evaluateBinary(op, a, b) {
+    const common = {
+      readings: mergeReadings(a.readings, b.readings),
+      ambiguous: a.ambiguous || b.ambiguous,
+      userLong: a.userLong || b.userLong
+    };
+
+    if (op === "+" || op === "-") {
+      if (!dimsEqual(a.dims, b.dims)) return null;
+      if (!dimsZero(a.dims) && (dimsZero(a.dims) || dimsZero(b.dims))) {
+        return null;
+      }
+
+      if (
+        dimsEqual(a.dims, DIMS.temperature) &&
+        a.absoluteTemperature &&
+        b.absoluteTemperature
+      ) {
+        const preferred = a.preferred || b.preferred;
+        if (!preferred) return null;
+
+        const av = convertFromSI(a.value, preferred);
+        const bv = convertFromSI(b.value, preferred);
+        const combined = op === "+" ? av.plus(bv) : av.minus(bv);
+        const ar = convertRatFromSI(a.rational, preferred);
+        const br = convertRatFromSI(b.rational, preferred);
+        const rr = op === "+" ? ratAdd(ar, br) : ratSub(ar, br);
+
+        return quantityFromAmount(combined, rr, preferred, {
+          ...common,
+          readings: common.readings
+        });
+      }
+
+      return quantity({
+        ...common,
+        value: op === "+" ? a.value.plus(b.value) : a.value.minus(b.value),
+        rational: op === "+"
+          ? ratAdd(a.rational, b.rational)
+          : ratSub(a.rational, b.rational),
+        dims: a.dims,
+        preferred: chooseAdditionPreference(a, b),
+        units: [...a.units, ...b.units],
+        absoluteTemperature:
+          a.absoluteTemperature || b.absoluteTemperature
+      });
+    }
+
+    if (op === "implicit" || op === "*") {
+      if (
+        op === "implicit" &&
+        dimsZero(a.dims) &&
+        b.leafUnit
+      ) {
+        return quantityFromAmount(a.value, a.rational, b.leafUnit, {
+          ...common,
+          readings: common.readings,
+          userLong: common.userLong,
+          ambiguous: common.ambiguous
+        });
+      }
+
+      if (
+        op === "implicit" &&
+        a.leafUnit &&
+        dimsZero(b.dims)
+      ) {
+        return quantityFromAmount(b.value, b.rational, a.leafUnit, {
+          ...common,
+          readings: common.readings,
+          userLong: common.userLong,
+          ambiguous: common.ambiguous
+        });
+      }
+
+      if (
+        (a.absoluteTemperature && !dimsZero(b.dims)) ||
+        (b.absoluteTemperature && !dimsZero(a.dims)) ||
+        (a.absoluteTemperature && dimsZero(b.dims)) ||
+        (b.absoluteTemperature && dimsZero(a.dims))
+      ) {
+        return null;
+      }
+
+      if (dimsZero(a.dims)) {
+        return copyQuantity(b, {
+          ...common,
+          value: a.value.mul(b.value),
+          rational: ratMul(a.rational, b.rational),
+          readings: common.readings
+        });
+      }
+
+      if (dimsZero(b.dims)) {
+        return copyQuantity(a, {
+          ...common,
+          value: a.value.mul(b.value),
+          rational: ratMul(a.rational, b.rational),
+          readings: common.readings
+        });
+      }
+
+      const preferred = derivedProductUnit(a, b, "*");
+      return quantity({
+        ...common,
+        value: a.value.mul(b.value),
+        rational: ratMul(a.rational, b.rational),
+        dims: dimsAdd(a.dims, b.dims),
+        preferred,
+        units: preferred ? [preferred] : [],
+        absoluteTemperature: false
+      });
+    }
+
+    if (op === "/") {
+      if (b.value.isZero()) return null;
+      if (a.absoluteTemperature || b.absoluteTemperature) return null;
+
+      if (dimsZero(b.dims)) {
+        return copyQuantity(a, {
+          ...common,
+          value: a.value.div(b.value),
+          rational: ratDiv(a.rational, b.rational),
+          readings: common.readings
+        });
+      }
+
+      const preferred = derivedProductUnit(a, b, "/");
+      return quantity({
+        ...common,
+        value: a.value.div(b.value),
+        rational: ratDiv(a.rational, b.rational),
+        dims: dimsSub(a.dims, b.dims),
+        preferred,
+        units: preferred ? [preferred] : [],
+        absoluteTemperature: false
+      });
+    }
+
+    if (op === "%") {
+      const compatible =
+        (dimsZero(a.dims) && dimsZero(b.dims)) ||
+        dimsEqual(a.dims, b.dims);
+
+      if (!compatible || b.value.isZero()) return null;
+
+      return quantity({
+        ...common,
+        value: a.value.mod(b.value),
+        rational: null,
+        dims: a.dims,
+        preferred: a.preferred,
+        units: a.units
+      });
+    }
+
+    if (op === "^") {
+      if (!dimsZero(b.dims)) return null;
+      if (b.value.abs().gt("1e6")) return null;
+      return powerQuantity(a, b.value, b.rational, common);
+    }
+
+    if (op === "npr" || op === "ncr") {
+      if (!dimsZero(a.dims) || !dimsZero(b.dims)) return null;
+      const result = permutationCombination(a.value, b.value, op);
+      if (!result) return null;
+      return quantity({
+        ...common,
+        value: result.value,
+        rational: result.rational
+      });
+    }
+
+    return null;
+  }
+
+  function evaluateCall(ast, depth) {
+    if (ast.name === "npr" || ast.name === "ncr") {
+      const a = evaluate(ast.args[0], depth);
+      const b = evaluate(ast.args[1], depth);
+      return branchPair(a, b, (left, right) =>
+        evaluateBinary(ast.name, left, right)
+      );
+    }
+
+    const inputs = evaluate(ast.args[0], depth);
+
+    return branchMap(inputs, q => {
+      const name = ast.name;
+
+      if (name === "sqrt") {
+        const result = rootQuantity(q, 2);
+        return result ? [result] : [];
+      }
+
+      if (name === "cbrt") {
+        const result = rootQuantity(q, 3);
+        return result ? [result] : [];
+      }
+
+      if (["ln", "log", "log2"].includes(name) || /^log\d+$/.test(name)) {
+        if (!dimsZero(q.dims) || q.value.lte(0)) return [];
+
+        let base;
+        if (name === "ln") base = null;
+        else if (name === "log") base = new Decimal(10);
+        else if (name === "log2") base = new Decimal(2);
+        else base = new Decimal(name.slice(3));
+
+        if (base && (base.lte(0) || base.eq(1))) return [];
+
+        const value = base
+          ? Decimal.ln(q.value).div(Decimal.ln(base))
+          : Decimal.ln(q.value);
+
+        if (!isFiniteDecimal(value)) return [];
+        return [quantity({
+          value,
+          readings: q.readings,
+          ambiguous: q.ambiguous,
+          userLong: q.userLong
+        })];
+      }
+
+      if (TRIG_FUNCTIONS.has(name)) {
+        let radians;
+
+        if (dimsEqual(q.dims, DIMS.angle)) {
+          radians = q.value;
+        } else if (dimsZero(q.dims)) {
+          radians = mode === "deg"
+            ? q.value.mul(pi).div(180)
+            : q.value;
+        } else {
+          return [];
+        }
+
+        let value;
+        if (name === "sin") value = Decimal.sin(radians);
+        if (name === "cos") value = Decimal.cos(radians);
+        if (name === "tan") value = Decimal.tan(radians);
+        if (name === "csc") value = new Decimal(1).div(Decimal.sin(radians));
+        if (name === "sec") value = new Decimal(1).div(Decimal.cos(radians));
+        if (name === "cot") value = new Decimal(1).div(Decimal.tan(radians));
+
+        if (!isFiniteDecimal(value) || value.abs().gt(POLE_LIMIT)) return [];
+
+        const cleaned = cleanDecimal(value);
+        if (!cleaned) return [];
+
+        return [quantity({
+          value: cleaned.value,
+          rational: cleaned.snapped ? ratFromDecimalString(cleaned.value.toString()) : null,
+          readings: q.readings,
+          ambiguous: q.ambiguous,
+          userLong: q.userLong
+        })];
+      }
+
+      if (["asin", "acos", "atan"].includes(name)) {
+        if (!dimsZero(q.dims)) return [];
+        if (
+          (name === "asin" || name === "acos") &&
+          (q.value.lt(-1) || q.value.gt(1))
+        ) return [];
+
+        let value =
+          name === "asin" ? Decimal.asin(q.value) :
+          name === "acos" ? Decimal.acos(q.value) :
+          Decimal.atan(q.value);
+
+        if (mode === "deg") value = value.mul(180).div(pi);
+        if (!isFiniteDecimal(value)) return [];
+
+        const cleaned = cleanDecimal(value);
+        if (!cleaned) return [];
+
+        return [quantity({
+          value: cleaned.value,
+          rational: cleaned.snapped ? ratFromDecimalString(cleaned.value.toString()) : null,
+          readings: q.readings,
+          ambiguous: q.ambiguous,
+          userLong: q.userLong
+        })];
+      }
+
+      return [];
+    });
+  }
+
+  return evaluate;
+}
+
+function chooseAdditionPreference(a, b) {
+  const candidates = uniqueBy(
+    [...a.units, ...b.units, a.preferred, b.preferred].filter(Boolean),
+    u => u.id
+  );
+
+  for (const unit of candidates) {
+    if (!dimsEqual(unit.dims, a.dims)) continue;
+    const amount = convertFromSI(a.value.plus(b.value), unit).abs();
+    if (amount.gte(1) && amount.lt(1000)) return unit;
+  }
+
+  return a.preferred || b.preferred || candidates[0] || null;
+}
+
+function derivedProductUnit(a, b, op) {
+  const au = a.preferred;
+  const bu = b.preferred;
+  if (!au || !bu) return null;
+
+  if (op === "*" && sameUnit(au, bu)) {
+    return dynamicPowerUnit(au, 2);
+  }
+
+  const af = au.family;
+  const bf = bu.family;
+
+  if (op === "*") {
+    if (
+      (af === "ampere" && bf === "volt") ||
+      (af === "volt" && bf === "ampere")
+    ) return U.W;
+
+    if (
+      (af === "watt" && bf === "second") ||
+      (af === "second" && bf === "watt")
+    ) return U.J;
+
+    if (
+      (af === "psi" && bu.family === "inch^2") ||
+      (bf === "psi" && au.family === "inch^2")
+    ) return U.lbf;
+  }
+
+  if (op === "/") {
+    if (af === "joule" && bf === "second") return U.W;
+    if (af === "newton" && bf === "meter^2") return U.Pa;
+    if (dimsZero(a.dims) && bf === "second") return U.Hz;
+
+    if (
+      dimsEqual(dimsSub(a.dims, b.dims), DIMS.speed)
+    ) return U.mps;
+  }
+
+  return makeCompoundUnit(au, bu, op);
+}
+
+function makeCompoundUnit(a, b, op) {
+  const dims = op === "*" ? dimsAdd(a.dims, b.dims) : dimsSub(a.dims, b.dims);
+  const factor = op === "*" ? a.factor.mul(b.factor) : a.factor.div(b.factor);
+  const factorRat = op === "*" ? ratMul(a.factorRat, b.factorRat) : ratDiv(a.factorRat, b.factorRat);
+  const symbol = op === "*" ? `${a.symbol}·${b.symbol}` : `${a.symbol}/${b.symbol}`;
+  const id = `compound:${a.id}${op}${b.id}`;
+
+  return {
+    id,
+    family: id,
+    names: [],
+    symbols: [],
+    symbol,
+    singular: symbol,
+    plural: symbol,
+    dims,
+    factor,
+    factorRat,
+    offset: new Decimal(0),
+    offsetRat: rat(0n),
+    prefixable: "none",
+    prefixDepth: 0,
+    isTemperature: false,
+    powerBase: null,
+    powerExponent: null
+  };
+}
+
+function powerQuantity(base, exponent, exponentRat, common) {
+  if (!dimsZero(base.dims) && base.absoluteTemperature) return null;
+  if (base.value.isNegative() && !exponent.isInteger()) return null;
+
+  const scaledDims = [];
+  for (const d of base.dims) {
+    const next = exponent.mul(d);
+    if (!next.isInteger()) return null;
+    scaledDims.push(next.toNumber());
+  }
+
+  let value;
+  try {
+    value = Decimal.pow(base.value, exponent);
+  } catch {
+    return null;
+  }
+  if (!isFiniteDecimal(value)) return null;
+
+  const integerExponent = exponent.isInteger() ? exponent.toNumber() : null;
+  const rational =
+    integerExponent != null
+      ? ratPow(base.rational, integerExponent)
+      : null;
+
+  let preferred = null;
+  if (base.preferred && integerExponent != null) {
+    preferred =
+      integerExponent === 1
+        ? base.preferred
+        : dynamicPowerUnit(base.preferred, integerExponent);
+  }
+
+  return quantity({
+    ...common,
+    value,
+    rational,
+    dims: scaledDims,
+    preferred,
+    units: preferred ? [preferred] : []
+  });
+}
+
+function rootQuantity(q, root) {
+  if (q.absoluteTemperature) return null;
+
+  for (const d of q.dims) {
+    if (d % root !== 0) return null;
+  }
+
+  let value;
+  if (q.value.isNegative()) {
+    if (root % 2 === 0) return null;
+    value = q.value.abs().pow(new Decimal(1).div(root)).neg();
+  } else {
+    value = q.value.pow(new Decimal(1).div(root));
+  }
+
+  if (!isFiniteDecimal(value)) return null;
+
+  let preferred = null;
+  if (
+    q.preferred?.powerBase &&
+    q.preferred.powerExponent === root
+  ) {
+    preferred = q.preferred.powerBase;
+  }
+
+  return quantity({
+    value,
+    rational: ratRoot(q.rational, root),
+    dims: q.dims.map(d => d / root),
+    preferred,
+    units: preferred ? [preferred] : [],
+    readings: q.readings,
+    ambiguous: q.ambiguous,
+    userLong: q.userLong
+  });
+}
+
+function factorialValue(value) {
+  if (!isFiniteDecimal(value)) return null;
+
+  if (value.isInteger()) {
+    const n = value.toNumber();
+    if (n < 0 || n > 170) return null;
+
+    let result = new Decimal(1);
+    let exact = 1n;
+    for (let i = 2; i <= n; i++) {
+      result = result.mul(i);
+      exact *= BigInt(i);
+    }
+
+    return { value: result, rational: rat(exact) };
+  }
+
+  const x = value.toNumber();
+  if (!Number.isFinite(x) || x <= -1 || x > 170) return null;
+  const gamma = lanczosGamma(x + 1);
+  if (!Number.isFinite(gamma)) return null;
+
+  return { value: new Decimal(gamma), rational: null };
+}
+
+function lanczosGamma(z) {
+  const coefficients = [
+    676.5203681218851, -1259.1392167224028,
+    771.32342877765313, -176.61502916214059,
+    12.507343278686905, -0.13857109526572012,
+    9.9843695780195716e-6, 1.5056327351493116e-7
+  ];
+
+  if (z < 0.5) {
+    return Math.PI / (Math.sin(Math.PI * z) * lanczosGamma(1 - z));
+  }
+
+  z -= 1;
+  let x = 0.99999999999980993;
+  for (let i = 0; i < coefficients.length; i++) {
+    x += coefficients[i] / (z + i + 1);
+  }
+
+  const t = z + coefficients.length - 0.5;
+  return Math.sqrt(2 * Math.PI) *
+    Math.pow(t, z + 0.5) *
+    Math.exp(-t) *
+    x;
+}
+
+function permutationCombination(nValue, rValue, kind) {
+  if (
+    !nValue.isInteger() ||
+    !rValue.isInteger() ||
+    nValue.lt(0) ||
+    rValue.lt(0) ||
+    rValue.gt(nValue) ||
+    nValue.gt(170)
+  ) return null;
+
+  const n = nValue.toNumber();
+  const r = rValue.toNumber();
+  let result = 1n;
+
+  if (kind === "npr") {
+    for (let i = 0; i < r; i++) {
+      result *= BigInt(n - i);
+    }
+  } else {
+    const k = Math.min(r, n - r);
+    for (let i = 1; i <= k; i++) {
+      result = result * BigInt(n - k + i) / BigInt(i);
+    }
+  }
+
+  return {
+    value: new Decimal(result.toString()),
+    rational: rat(result)
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Trigonometric ambiguity detection                                          */
+/* -------------------------------------------------------------------------- */
+
+function containsAngleUnit(ast) {
+  if (!ast) return false;
+
+  if (ast.type === "Unit") {
+    return ast.candidates.some(unit => dimsEqual(unit.dims, DIMS.angle));
+  }
+
+  if (ast.type === "Group") return containsAngleUnit(ast.expression);
+  if (ast.type === "Unary" || ast.type === "Percent" || ast.type === "Factorial") {
+    return containsAngleUnit(ast.argument);
+  }
+
+  if (ast.type === "Binary") {
+    return containsAngleUnit(ast.left) || containsAngleUnit(ast.right);
+  }
+
+  if (ast.type === "Call") {
+    return ast.args.some(containsAngleUnit);
+  }
+
+  if (ast.type === "Convert") {
+    return containsAngleUnit(ast.expression) || containsAngleUnit(ast.target);
+  }
+
+  return false;
+}
+
+function hasBareNumberTrig(ast) {
+  if (!ast) return false;
+
+  if (
+    ast.type === "Call" &&
+    (TRIG_FUNCTIONS.has(ast.name) ||
+     ["asin", "acos", "atan"].includes(ast.name))
+  ) {
+    if (!containsAngleUnit(ast.args[0])) return true;
+  }
+
+  if (ast.type === "Group") return hasBareNumberTrig(ast.expression);
+  if (ast.type === "Unary" || ast.type === "Percent" || ast.type === "Factorial") {
+    return hasBareNumberTrig(ast.argument);
+  }
+  if (ast.type === "Binary") {
+    return hasBareNumberTrig(ast.left) || hasBareNumberTrig(ast.right);
+  }
+  if (ast.type === "Call") return ast.args.some(hasBareNumberTrig);
+  if (ast.type === "Convert") {
+    return hasBareNumberTrig(ast.expression);
+  }
+
+  return false;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Formatter                                                                  */
+/* -------------------------------------------------------------------------- */
+
+function shouldUseScientific(value) {
+  if (value.isZero()) return false;
+  const abs = value.abs();
+  return abs.gte("1e15") || abs.lt("1e-6");
+}
+
+function exactInfo(value, rational, snapped = false) {
+  if (snapped) {
+    return {
+      exact: true,
+      text: value.toFixed(0)
+    };
+  }
+
+  const terminating = terminatingDecimalString(rational);
+  if (terminating == null) return { exact: false };
+
+  const significantDigits = new Decimal(terminating).sd();
+  if (significantDigits > 20) return { exact: false };
+
+  let text = terminating;
+  if (shouldUseScientific(value)) {
+    text = new Decimal(terminating).toExponential()
+      .replace("e+", "e");
+  }
+
+  return { exact: true, text };
+}
+
+function integerPart(value) {
+  return value.abs().floor().toFixed(0);
+}
+
+function trimApproxFixed(text) {
+  if (!text.includes(".")) return text + ".0";
+  text = text.replace(/0+$/, "").replace(/\.$/, "");
+  if (!text.includes(".")) text += ".0";
+  return text;
+}
+
+function inlineApprox(value) {
+  if (value.isZero()) return "0";
+
+  if (shouldUseScientific(value)) {
+    const exponent = value.e;
+    const mantissa = value.div(new Decimal(10).pow(exponent));
+    const formatted = inlineApproxRegular(mantissa);
+    return `${formatted}e${exponent}`;
+  }
+
+  return inlineApproxRegular(value);
+}
+
+function inlineApproxRegular(value) {
+  const originalInteger = integerPart(value);
+
+  for (let places = 1; places <= 24; places++) {
+    const rounded = value.toDecimalPlaces(places, Decimal.ROUND_HALF_UP);
+    if (rounded.isZero()) continue;
+    if (integerPart(rounded) !== originalInteger) continue;
+
+    const relative = rounded.minus(value).abs().div(value.abs());
+    if (relative.lte("0.05")) {
+      return trimApproxFixed(rounded.toFixed(places));
+    }
+  }
+
+  return trimApproxFixed(value.toDecimalPlaces(24).toFixed(24));
+}
+
+function significantApprox(value, figures) {
+  if (value.isZero()) return "0.0";
+
+  if (shouldUseScientific(value)) {
+    const exponent = value.e;
+    const mantissa = value.div(new Decimal(10).pow(exponent));
+    const places = Math.max(1, figures - 1);
+    const rounded = mantissa.toDecimalPlaces(places, Decimal.ROUND_HALF_UP);
+    if (integerPart(rounded) !== integerPart(mantissa)) return null;
+    return `${trimApproxFixed(rounded.toFixed(places))}e${exponent}`;
+  }
+
+  const digitsBefore = value.abs().lt(1) ? 0 : value.e + 1;
+  const places = Math.max(1, figures - digitsBefore);
+  const rounded = value.toDecimalPlaces(places, Decimal.ROUND_HALF_UP);
+
+  if (integerPart(rounded) !== integerPart(value)) return null;
+  return trimApproxFixed(rounded.toFixed(places));
+}
+
+function morePrecise(candidateText, inlineText, value) {
+  try {
+    const candidate = new Decimal(candidateText);
+    const inline = new Decimal(inlineText);
+    return candidate.minus(value).abs().lt(inline.minus(value).abs());
+  } catch {
+    return candidateText !== inlineText;
+  }
+}
+
+function formatNumber(value, rational, purpose = "primary") {
+  const cleaned = cleanDecimal(value);
+  if (!cleaned) return null;
+
+  const exact = exactInfo(cleaned.value, rational, cleaned.snapped);
+  if (exact.exact) {
+    return {
+      text: exact.text,
+      exact: true,
+      cleaned: cleaned.value,
+      ladder: []
+    };
+  }
+
+  if (purpose === "alternate") {
+    let text = null;
+    for (let sf = 3; sf <= 24 && !text; sf++) {
+      text = significantApprox(cleaned.value, sf);
+    }
+    if (!text) text = inlineApprox(cleaned.value);
+
+    return {
+      text,
+      exact: false,
+      cleaned: cleaned.value,
+      ladder: []
+    };
+  }
+
+  const text = inlineApprox(cleaned.value);
+  const ladder = [];
+
+  for (const sf of [3, 5, 8]) {
+    const candidate = significantApprox(cleaned.value, sf);
+    if (
+      candidate &&
+      candidate !== text &&
+      morePrecise(candidate, text, cleaned.value)
+    ) {
+      ladder.push(candidate);
+    }
+  }
+
+  return {
+    text,
+    exact: false,
+    cleaned: cleaned.value,
+    ladder: [...new Set(ladder)]
+  };
+}
+
+function unitAmount(q, unit) {
+  return convertFromSI(q.value, unit);
+}
+
+function unitAmountRat(q, unit) {
+  return convertRatFromSI(q.rational, unit);
+}
+
+function unitLabel(unit, amount, longStyle) {
+  if (!unit) return "";
+  if (!longStyle) return unit.symbol;
+
+  const singular = amount.abs().eq(1);
+  return singular ? unit.singular : unit.plural;
+}
+
+function formatQuantity(q, unit, context, purpose = "primary") {
+  const amount = unit ? unitAmount(q, unit) : q.value;
+  const amountRat = unit ? unitAmountRat(q, unit) : q.rational;
+  const number = formatNumber(amount, amountRat, purpose);
+  if (!number) return null;
+
+  if (!unit) return { ...number, result: number.text };
+
+  const longStyle = q.userLong || context.userLong;
+  const label = unitLabel(unit, amount, longStyle);
+  const spacing = longStyle || context.unitSpace ? " " : "";
+
+  return {
+    ...number,
+    result: number.text + spacing + label
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Primary and alternative unit selection                                     */
+/* -------------------------------------------------------------------------- */
+
+function sameFamilyUnits(unit) {
+  if (!unit) return [];
+  return allUnits.filter(candidate =>
+    candidate.family === unit.family &&
+    dimsEqual(candidate.dims, unit.dims) &&
+    candidate.offset.isZero()
+  );
+}
+
+function bestScaledUnit(q, unit) {
+  if (!unit || unit.isTemperature || unit.id.startsWith("compound:")) {
+    return unit;
+  }
+
+  const family = sameFamilyUnits(unit);
+  const inRange = family.filter(candidate => {
+    const value = unitAmount(q, candidate).abs();
+    return value.gte(1) && value.lt(1000);
+  });
+
+  if (!inRange.length) return unit;
+
+  return inRange.sort((a, b) => {
+    const av = unitAmount(q, a).abs();
+    const bv = unitAmount(q, b).abs();
+    return av.minus(1).abs().cmp(bv.minus(1).abs());
+  })[0];
+}
+
+function primaryUnit(q) {
+  if (q.forcedUnit) return q.forcedUnit;
+  if (dimsZero(q.dims)) return null;
+
+  const candidates = uniqueBy(
+    [...q.units, q.preferred].filter(unit =>
+      unit && dimsEqual(unit.dims, q.dims)
+    ),
+    unit => unit.id
+  );
+
+  for (const unit of candidates) {
+    const value = unitAmount(q, unit).abs();
+    if (value.gte(1) && value.lt(1000)) return unit;
+  }
+
+  if (q.preferred) return bestScaledUnit(q, q.preferred);
+  return candidates[0] || null;
+}
+
+function curatedAlternatives(q, primary, bare = false) {
+  const key = dimsKey(q.dims);
+  let units = [];
+
+  if (key === dimsKey(DIMS.length)) {
+    units = bare
+      ? [U.mi, U.m, U.yd, U.ft, U.in]
+      : [U.m, U.mi, U.ft, U.yd, U.in];
+  } else if (key === dimsKey(DIMS.mass)) {
+    units = [
+      allUnits.find(u => u.symbol === "kg" && u.family === "gram"),
+      U.g, U.lb, U.oz
+    ];
+  } else if (key === dimsKey(DIMS.area)) {
+    units = [U.km2, U.acre, U.ft2, U.m2, U.mi2];
+  } else if (key === dimsKey(DIMS.speed)) {
+    units = [U.mph, U.kph, U.fts, U.knot, U.mps];
+  } else if (key === dimsKey(DIMS.power)) {
+    units = [
+      U.W,
+      allUnits.find(u => u.symbol === "kW" && u.family === "watt"),
+      U.hp,
+      U.hpMetric
+    ];
+  } else if (key === dimsKey(DIMS.force)) {
+    units = [U.lbf, U.N];
+  } else if (key === dimsKey(DIMS.energy)) {
+    units = [
+      U.J,
+      allUnits.find(u => u.symbol === "kJ" && u.family === "joule"),
+      U.Wh,
+      allUnits.find(u => u.symbol === "kWh" && u.family === "watt-hour"),
+      U.cal
+    ];
+  } else if (key === dimsKey(DIMS.pressure)) {
+    units = [U.Pa, U.bar, U.atm, U.PSI];
+  } else if (key === dimsKey(DIMS.temperature)) {
+    units = [U.C, U.F, U.K];
+  } else if (key === dimsKey(DIMS.angle)) {
+    units = [U.deg, U.rad, U.grad];
+  } else if (key === dimsKey(DIMS.volume)) {
+    units = [U.L, U.gal, U.qt, U.pt, U.cup];
+  } else if (key === dimsKey(DIMS.time)) {
+    units = [U.s, U.min, U.h, U.day, U.week, U.year];
+  } else if (key === dimsKey(DIMS.data)) {
+    units = [
+      U.byte,
+      U.bit,
+      allUnits.find(u => u.symbol === "kB" && u.family === "byte"),
+      allUnits.find(u => u.symbol === "MB" && u.family === "byte")
+    ];
+  } else if (key === dimsKey(DIMS.fuelEconomy)) {
+    units = [U.mpg, U.kmL];
+  } else if (key === dimsKey(DIMS.current)) {
+    units = [U.A];
+  } else if (key === dimsKey(DIMS.voltage)) {
+    units = [U.V];
+  } else if (key === dimsKey(DIMS.resistance)) {
+    units = [U.ohm];
+  }
+
+  return uniqueBy(
+    units.filter(unit =>
+      unit &&
+      dimsEqual(unit.dims, q.dims) &&
+      (!primary || unit.id !== primary.id)
+    ),
+    unit => unit.id
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Expression analysis                                                        */
+/* -------------------------------------------------------------------------- */
+
+const PHONE_DATE_PATTERNS = [
+  /^\d{3}-\d{4}$/,
+  /^\d{3}-\d{3}-\d{4}$/,
+  /^\(?\d{3}\)?[ -]?\d{3}-\d{4}$/,
+  /^\d{4}-\d{1,2}-\d{1,2}$/,
+  /^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/
+];
+
+function parseLongestSuffix(segment, scientific = true) {
+  let tokens;
+  try {
+    tokens = tokenize(segment, { scientific });
+  } catch {
+    return null;
+  }
+
+  if (!tokens.length) return null;
+
+  for (let start = 0; start < tokens.length; start++) {
+    try {
+      const parser = new Parser(tokens, segment, start);
+      const ast = parser.parse();
+      const first = tokens[start];
+      const last = tokens.at(-1);
+
+      return {
+        ast,
+        tokens,
+        start,
+        raw: segment.slice(first.start, last.end),
+        source: segment,
+        expressionStart: first.start,
+        expressionEnd: last.end
+      };
+    } catch {
+      // Continue to the next syntactically valid suffix.
+    }
+  }
+
+  return null;
+}
+
+function stripBullet(line) {
+  const match = line.match(/^(\s*)([-*+•–])(\s+)([\s\S]*)$/);
+  if (!match) {
+    return { text: line, bullet: false, offset: 0 };
+  }
+
+  const offset = match[1].length + match[2].length + match[3].length;
+  return {
+    text: line.slice(offset),
+    bullet: true,
+    offset
+  };
+}
+
+function partialResultShape(text) {
+  const leading = text.match(/^\s*/)?.[0] || "";
+  const trailing = text.match(/\s*$/)?.[0] || "";
+  const core = text.slice(leading.length, text.length - trailing.length);
+
+  if (!core) return null;
+
+  if (
+    /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?(?:\s*[\p{L}°Ωµμ][\p{L}\d°Ωµμ/*^²³ .-]*)?$/iu
+      .test(core)
+  ) {
+    return {
+      text: core,
+      leadingLength: leading.length,
+      trailingLength: trailing.length
+    };
+  }
+
+  return null;
+}
+
+function analyzeCurrentLine() {
+  if (isComposing) return null;
+  if (editor.selectionStart !== editor.selectionEnd) return null;
+
+  const caret = editor.selectionStart;
+  const value = editor.value;
+  const lineStart = value.lastIndexOf("\n", caret - 1) + 1;
+  let lineEnd = value.indexOf("\n", caret);
+  if (lineEnd < 0) lineEnd = value.length;
+
+  const afterCaret = value.slice(caret, lineEnd);
+  if (afterCaret && !/^\s*$/.test(afterCaret)) return null;
+
+  const beforeCaret = value.slice(lineStart, caret);
+  const trailingWhitespace = beforeCaret.match(/\s*$/)?.[0] || "";
+  const coreBeforeCaret = beforeCaret.slice(
+    0,
+    beforeCaret.length - trailingWhitespace.length
+  );
+
+  const bulletInfo = stripBullet(coreBeforeCaret);
+  const analyzed = bulletInfo.text;
+  const explicitTrailingEquals = analyzed.endsWith("=");
+
+  let shape = "no-equals";
+  let expressionSegment = analyzed;
+  let typedPartial = null;
+  let typedGlobalStart = null;
+
+  if (explicitTrailingEquals) {
+    shape = "equals";
+    const finalEquals = analyzed.length - 1;
+    const priorEquals = analyzed.lastIndexOf("=", finalEquals - 1);
+    expressionSegment = analyzed.slice(priorEquals + 1, finalEquals);
+  } else {
+    const lastEquals = analyzed.lastIndexOf("=");
+
+    if (lastEquals >= 0) {
+      const previousEquals = analyzed.lastIndexOf("=", lastEquals - 1);
+      const previousSegment = analyzed.slice(previousEquals + 1, lastEquals);
+      const resultSegment = analyzed.slice(lastEquals + 1);
+      const resultShape = partialResultShape(resultSegment);
+      const previousParse = parseLongestSuffix(previousSegment);
+
+      if (resultShape && previousParse) {
+        shape = "typed-partial";
+        expressionSegment = previousSegment;
+        typedPartial = resultShape.text;
+
+        typedGlobalStart =
+          lineStart +
+          bulletInfo.offset +
+          lastEquals +
+          1 +
+          resultShape.leadingLength;
+      } else {
+        shape = "no-equals";
+        expressionSegment = resultSegment;
+      }
+    }
+  }
+
+  const trimmedSegment = expressionSegment.trim();
+  if (!trimmedSegment) {
+    return {
+      nameAutocomplete: true,
+      lineStart,
+      caret,
+      beforeCaret,
+      analyzed,
+      bulletInfo,
+      trailingWhitespace
+    };
+  }
+
+  const parsed = parseLongestSuffix(trimmedSegment);
+  if (!parsed) {
+    return {
+      nameAutocomplete: true,
+      lineStart,
+      caret,
+      beforeCaret,
+      analyzed,
+      bulletInfo,
+      trailingWhitespace
+    };
+  }
+
+  let alternateScientific = null;
+  if (/\d(?:[\d.]*)[eE]-\d+/.test(parsed.raw)) {
+    const alt = parseLongestSuffix(trimmedSegment, false);
+    if (alt && alt.expressionStart === parsed.expressionStart) {
+      alternateScientific = alt;
+    }
+  }
+
+  const rawExpression = parsed.raw.trim();
+  const phoneOrDate = PHONE_DATE_PATTERNS.some(pattern =>
+    pattern.test(rawExpression)
+  );
+
+  let classification = "inline";
+
+  if (isLoneLiteral(parsed.ast) || isLonePercent(parsed.ast)) {
+    classification = "none";
+  } else if (isBareUnitQuantity(parsed.ast)) {
+    classification = "bare-unit";
+  } else if (
+    (phoneOrDate || bulletInfo.bullet) &&
+    !explicitTrailingEquals
+  ) {
+    classification = "chip-only";
+  }
+
+  const spacedOperators =
+    /\s[+\-*/]\s|[+\-*/]\s|\s[+\-*/]/.test(rawExpression);
+
+  const beforeFinalEquals = explicitTrailingEquals
+    ? analyzed.slice(0, -1)
+    : "";
+
+  const explicitLeadingSpace =
+    explicitTrailingEquals &&
+    /\s$/.test(beforeFinalEquals) &&
+    !trailingWhitespace;
+
+  return {
+    parsed,
+    alternateScientific,
+    rawExpression,
+    classification,
+    shape,
+    explicitTrailingEquals,
+    typedPartial,
+    typedGlobalStart,
+    lineStart,
+    caret,
+    beforeCaret,
+    analyzed,
+    bulletInfo,
+    trailingWhitespace,
+    phoneOrDate,
+    context: {
+      unitSpace: /\d\s+[\p{L}°Ωµμ]/u.test(rawExpression),
+      userLong: astUsesLongUnits(parsed.ast),
+      spacedOperators,
+      explicitLeadingSpace
+    }
+  };
+}
+
+function astUsesLongUnits(ast) {
+  if (!ast) return false;
+  if (ast.type === "Unit") return ast.style === "long";
+  if (ast.type === "Group") return astUsesLongUnits(ast.expression);
+  if (ast.type === "Unary" || ast.type === "Percent" || ast.type === "Factorial") {
+    return astUsesLongUnits(ast.argument);
+  }
+  if (ast.type === "Binary") {
+    return astUsesLongUnits(ast.left) || astUsesLongUnits(ast.right);
+  }
+  if (ast.type === "Call") return ast.args.some(astUsesLongUnits);
+  if (ast.type === "Convert") {
+    return astUsesLongUnits(ast.expression) || astUsesLongUnits(ast.target);
+  }
+  return false;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Display equations                                                          */
+/* -------------------------------------------------------------------------- */
+
+function applyReadings(expression, readings, expressionOffset) {
+  let result = expression;
+  const relevant = readings
+    .map(reading => ({
+      ...reading,
+      start: reading.start - expressionOffset,
+      end: reading.end - expressionOffset
+    }))
+    .filter(reading =>
+      reading.start >= 0 &&
+      reading.end <= expression.length
+    )
+    .sort((a, b) => b.start - a.start);
+
+  for (const reading of relevant) {
+    result =
+      result.slice(0, reading.start) +
+      reading.text +
+      result.slice(reading.end);
+  }
+
+  return result;
+}
+
+function superscriptNumber(value) {
+  const map = {
+    "-": "⁻", "+": "⁺",
+    "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+    "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹"
+  };
+  return String(value).split("").map(ch => map[ch] || ch).join("");
+}
+
+function renderScientificParsing(expression) {
+  return expression.replace(
+    /(\d+(?:\.\d*)?|\.\d+)[eE]([+-]?\d+)/g,
+    (_, coefficient, exponent) =>
+      coefficient === "1"
+        ? `10${superscriptNumber(exponent)}`
+        : `${coefficient}·10${superscriptNumber(exponent)}`
+  );
+}
+
+function renderEulerParsing(expression) {
+  return expression.replace(
+    /(\d+(?:\.\d*)?|\.\d+)[eE]-([0-9]+)/g,
+    (_, coefficient, exponent) =>
+      `${coefficient}·e − ${exponent}`
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Suggestion engine                                                          */
+/* -------------------------------------------------------------------------- */
+
+function evaluateVariant(parsed, scientificKind = null) {
+  const ambiguousTrig = hasBareNumberTrig(parsed.ast);
+  const modes = ambiguousTrig ? ["rad", "deg"] : ["neutral"];
+  const output = [];
+
+  for (const mode of modes) {
+    const results = evaluator(mode)(parsed.ast);
+
+    for (const q of results) {
+      if (!isFiniteDecimal(q.value)) continue;
+      output.push({
+        q,
+        mode,
+        scientificKind,
+        parsed,
+        ambiguousTrig
+      });
+    }
+  }
+
+  return output;
+}
+
+function buildResultOptions(entry, analysis, bare = false) {
+  const { q, mode } = entry;
+  const context = analysis.context;
+  const primary = primaryUnit(q);
+
+  if (bare) {
+    const options = [];
+    for (const unit of curatedAlternatives(q, primary, true)) {
+      const formatted = formatQuantity(q, unit, context, "alternate");
+      if (!formatted) continue;
+      options.push({
+        result: formatted.result,
+        kind: "alternate",
+        tag: unit.variant || null,
+        primary: false,
+        inlineEligible: false,
+        unit
+      });
+    }
+    return options;
+  }
+
+  const formattedPrimary = formatQuantity(q, primary, context, "primary");
+  if (!formattedPrimary) return [];
+
+  const options = [{
+    result: formattedPrimary.result,
+    kind: "primary",
+    tag: mode === "neutral" ? null : mode,
+    primary: true,
+    inlineEligible: true,
+    unit: primary
+  }];
+
+  if (
+    !entry.ambiguousTrig &&
+    !q.ambiguous &&
+    !entry.scientificKind &&
+    !q.forcedUnit
+  ) {
+    for (const unit of curatedAlternatives(q, primary, false)) {
+      const formatted = formatQuantity(q, unit, context, "alternate");
+      if (!formatted) continue;
+
+      options.push({
+        result: formatted.result,
+        kind: "alternate",
+        tag: unit.variant || null,
+        primary: false,
+        inlineEligible: false,
+        unit
+      });
+    }
+  }
+
+  for (const ladderNumber of formattedPrimary.ladder) {
+    const label = primary
+      ? unitLabel(primary, unitAmount(q, primary), q.userLong || context.userLong)
+      : "";
+    const spacing =
+      primary && (q.userLong || context.userLong || context.unitSpace)
+        ? " "
+        : "";
+
+    options.push({
+      result: primary
+        ? ladderNumber + spacing + label
+        : ladderNumber,
+      kind: "ladder",
+      tag: mode === "neutral" ? null : mode,
+      primary: false,
+      inlineEligible: false,
+      unit: primary
+    });
+  }
+
+  return options;
+}
+
+function displayExpressionFor(entry, analysis) {
+  let expression = applyReadings(
+    analysis.rawExpression,
+    entry.q.readings,
+    entry.parsed.expressionStart
+  );
+
+  if (entry.scientificKind === "scientific") {
+    expression = renderScientificParsing(expression);
+  } else if (entry.scientificKind === "euler") {
+    expression = renderEulerParsing(expression);
+  }
+
+  return expression;
+}
+
+function insertionPrefix(analysis) {
+  if (analysis.shape === "equals") {
+    return analysis.context.explicitLeadingSpace ? " " : "";
+  }
+
+  if (analysis.context.spacedOperators) return " = ";
+  return "=";
+}
+
+function makeNormalChip(entry, option, analysis) {
+  const displayExpression = displayExpressionFor(entry, analysis);
+  const insertPrefix = insertionPrefix(analysis);
+  const insertText = insertPrefix + option.result;
+
+  let prefixText;
+  let insertDisplay;
+
+  if (analysis.shape === "equals") {
+    prefixText = `${displayExpression} = `;
+    insertDisplay = option.result;
+  } else {
+    prefixText = displayExpression;
+    insertDisplay = ` = ${option.result}`;
+  }
+
+  const inlineEligible =
+    option.primary &&
+    analysis.classification === "inline" &&
+    !entry.q.ambiguous &&
+    !entry.scientificKind?.includes("ambiguous") &&
+    option.inlineEligible;
+
+  return {
+    insertText,
+    result: option.result,
+    prefixText,
+    insertDisplay,
+    displayEquation: `${displayExpression} = ${option.result}`,
+    typedPrefixLen: 0,
+    tag: option.tag,
+    inlineEligible,
+    kind: option.kind
+  };
+}
+
+function orderTrigEntries(entries) {
+  const rad = entries.filter(entry => entry.mode === "rad");
+  const deg = entries.filter(entry => entry.mode === "deg");
+  const neutral = entries.filter(entry => entry.mode === "neutral");
+  return [...neutral, ...rad, ...deg];
+}
+
+function buildSuggestions(analysis) {
+  if (!analysis?.parsed) return [];
+
+  if (analysis.classification === "none") return [];
+
+  const entries = [];
+
+  const mainEntries = evaluateVariant(analysis.parsed, null);
+  entries.push(...mainEntries);
+
+  if (analysis.alternateScientific) {
+    for (const entry of mainEntries) {
+      entry.scientificKind = "scientific";
+    }
+    entries.push(
+      ...evaluateVariant(
+        analysis.alternateScientific,
+        "euler"
+      )
+    );
+  }
+
+  if (!entries.length) return [];
+
+  const ambiguousTrig = entries.some(entry => entry.ambiguousTrig);
+  let rawChips = [];
+
+  if (analysis.shape === "typed-partial") {
+    return buildTypedPartialSuggestions(entries, analysis);
+  }
+
+  if (ambiguousTrig) {
+    const radPrimaries = [];
+    const degPrimaries = [];
+    const radLadders = [];
+    const degLadders = [];
+
+    for (const entry of entries) {
+      const options = buildResultOptions(entry, analysis, false);
+      for (const option of options) {
+        const chip = makeNormalChip(entry, option, analysis);
+
+        if (entry.mode === "rad") {
+          (option.primary ? radPrimaries : radLadders).push(chip);
+        } else if (entry.mode === "deg") {
+          (option.primary ? degPrimaries : degLadders).push(chip);
+        } else {
+          rawChips.push(chip);
+        }
+      }
+    }
+
+    rawChips.push(
+      ...radPrimaries,
+      ...degPrimaries,
+      ...radLadders,
+      ...degLadders
+    );
+  } else {
+    for (const entry of orderTrigEntries(entries)) {
+      const bare = analysis.classification === "bare-unit";
+      const options = buildResultOptions(entry, analysis, bare);
+
+      if (entry.q.ambiguous || entry.scientificKind) {
+        const primaryOnly =
+          options.find(option => option.primary) ||
+          options[0];
+        if (primaryOnly) {
+          rawChips.push(makeNormalChip(entry, primaryOnly, analysis));
+        }
+      } else {
+        for (const option of options) {
+          rawChips.push(makeNormalChip(entry, option, analysis));
+        }
+      }
+    }
+  }
+
+  if (analysis.classification !== "inline") {
+    rawChips.forEach(chip => chip.inlineEligible = false);
+  }
+
+  if (entries.some(entry => entry.q.ambiguous)) {
+    rawChips.forEach(chip => chip.inlineEligible = false);
+  }
+
+  const deduped = uniqueBy(
+    rawChips,
+    chip => `${chip.result}|${chip.tag || ""}|${chip.displayEquation}`
+  );
+
+  if (
+    ambiguousTrig &&
+    deduped.filter(chip => chip.kind === "primary").length === 1
+  ) {
+    deduped[0].tag = null;
+  }
+
+  return deduped;
+}
+
+function buildTypedPartialSuggestions(entries, analysis) {
+  const typed = analysis.typedPartial;
+  const candidates = [];
+
+  for (const entry of entries) {
+    const options = buildResultOptions(entry, analysis, false);
+
+    for (const option of options) {
+      const displayExpression = displayExpressionFor(entry, analysis);
+      candidates.push({
+        entry,
+        option,
+        displayExpression
+      });
+    }
+  }
+
+  const matches = [];
+
+  for (const candidate of candidates) {
+    const { option, displayExpression, entry } = candidate;
+    if (!option.result.startsWith(typed)) continue;
+    if (option.result === typed) continue;
+
+    const remainder = option.result.slice(typed.length);
+
+    matches.push({
+      insertText: remainder,
+      result: option.result,
+      prefixText: `${displayExpression} = ${typed}`,
+      insertDisplay: remainder,
+      displayEquation: `${displayExpression} = ${option.result}`,
+      typedPrefixLen: typed.length,
+      tag: option.tag,
+      inlineEligible:
+        option.primary &&
+        analysis.classification === "inline" &&
+        !entry.q.ambiguous,
+      kind: option.kind
+    });
+  }
+
+  if (matches.length) {
+    return uniqueBy(matches, chip =>
+      `${chip.insertText}|${chip.tag || ""}|${chip.displayEquation}`
+    );
+  }
+
+  const exactMatch = candidates.some(candidate =>
+    candidate.option.result === typed
+  );
+  if (exactMatch) return [];
+
+  const primary =
+    candidates.find(candidate => candidate.option.primary) ||
+    candidates[0];
+
+  if (!primary) return [];
+
+  return [{
+    insertText: primary.option.result,
+    result: primary.option.result,
+    prefixText: `${primary.displayExpression} = `,
+    insertDisplay: primary.option.result,
+    displayEquation:
+      `${primary.displayExpression} = ${primary.option.result}`,
+    typedPrefixLen: 0,
+    tag: primary.option.tag,
+    inlineEligible: false,
+    kind: "replace",
+    replaceStart: analysis.typedGlobalStart,
+    replaceEnd: analysis.typedGlobalStart + typed.length
+  }];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Name autocomplete                                                          */
+/* -------------------------------------------------------------------------- */
+
+const FUNCTION_COMPLETIONS = [
+  "sqrt(", "cbrt(", "sin(", "cos(", "tan(", "csc(", "sec(", "cot(",
+  "asin(", "acos(", "atan(", "arcsin(", "arccos(", "arctan(",
+  "log(", "log2(", "ln(", "nPr(", "nCr("
+];
+
+function autocompleteDictionary() {
+  const units = [];
+
+  for (const unit of allUnits) {
+    for (const name of unit.names) units.push(name);
+    for (const symbol of unit.symbols) units.push(symbol);
+  }
+
+  return uniqueBy(
+    [...FUNCTION_COMPLETIONS, "pi", ...units],
+    item => item.toLowerCase()
+  );
+}
+
+const COMPLETION_DICTIONARY = autocompleteDictionary();
+
+function buildNameSuggestions() {
+  if (isComposing) return [];
+  if (editor.selectionStart !== editor.selectionEnd) return [];
+
+  const caret = editor.selectionStart;
+  const before = editor.value.slice(0, caret);
+  const lineStart = before.lastIndexOf("\n") + 1;
+  const line = before.slice(lineStart);
+
+  const conversionMatch =
+    line.match(/(?:\bto\b|\bin\b|->)\s*([\p{L}°Ωµμ]*)$/iu);
+
+  const identifierMatch =
+    line.match(/([\p{L}_°Ωµμ][\p{L}\d_°Ωµμ]*)$/u);
+
+  let prefix = "";
+  if (conversionMatch) prefix = conversionMatch[1] || "";
+  else if (identifierMatch) prefix = identifierMatch[1];
+  else return [];
+
+  const lower = prefix.toLowerCase();
+  if (!lower && !conversionMatch) return [];
+
+  const completions = COMPLETION_DICTIONARY
+    .filter(candidate =>
+      candidate.toLowerCase().startsWith(lower) &&
+      candidate.toLowerCase() !== lower
+    )
+    .sort((a, b) => {
+      const af = a.includes("(") ? 0 : 1;
+      const bf = b.includes("(") ? 0 : 1;
+      return af - bf || a.length - b.length || a.localeCompare(b);
+    })
+    .slice(0, 12);
+
+  return completions.map(completion => ({
+    insertText: completion.slice(prefix.length),
+    result: completion,
+    prefixText: prefix,
+    insertDisplay: completion.slice(prefix.length),
+    displayEquation: completion,
+    typedPrefixLen: prefix.length,
+    tag: null,
+    inlineEligible: true,
+    kind: "autocomplete"
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* UI                                                                         */
+/* -------------------------------------------------------------------------- */
+
+let suggestions = [];
+let highlightedIndex = 0;
+let explicitlyMovedHighlight = false;
+let dismissed = false;
+let isComposing = false;
+let debounceTimer = null;
+
+function selectedSuggestion() {
+  return suggestions[highlightedIndex] || null;
+}
+
+function ghostText() {
+  const selected = selectedSuggestion();
+  return selected?.inlineEligible ? selected.insertText : "";
+}
+
+function renderMirror() {
+  const before = editor.value.slice(0, editor.selectionStart);
+  const after = editor.value.slice(editor.selectionStart);
+  const ghost = ghostText();
+
+  mirror.replaceChildren(
+    document.createTextNode(before),
+    Object.assign(document.createElement("span"), {
+      className: "ghost",
+      textContent: ghost
+    }),
+    document.createTextNode(after || "\u200b")
+  );
+
+  mirror.scrollTop = editor.scrollTop;
+  mirror.scrollLeft = editor.scrollLeft;
+}
+
+function renderSuggestions() {
+  chipsEl.replaceChildren();
+
+  if (!suggestions.length || dismissed) {
+    bar.classList.remove("visible");
+    renderMirror();
+    return;
+  }
+
+  bar.classList.add("visible");
+
+  suggestions.forEach((suggestion, index) => {
+    const chip = document.createElement("div");
+    chip.className = "chip" + (index === highlightedIndex ? " selected" : "");
+    chip.setAttribute("role", "button");
+    chip.setAttribute("aria-label", suggestion.displayEquation);
+
+    const equation = document.createElement("span");
+    equation.className = "equation";
+
+    const dim = document.createElement("span");
+    dim.className = "dim";
+    dim.textContent = middleEllipsis(suggestion.prefixText, 64);
+
+    const insert = document.createElement("span");
+    insert.className = "insert";
+    insert.textContent = middleEllipsis(suggestion.insertDisplay, 30);
+
+    equation.append(dim, insert);
+    chip.append(equation);
+
+    if (suggestion.tag) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = suggestion.tag;
+      chip.append(tag);
+    }
+
+    chip.addEventListener("mousedown", event => {
+      event.preventDefault();
+    });
+
+    chip.addEventListener("click", () => {
+      highlightedIndex = index;
+      acceptSuggestion(suggestion);
+    });
+
+    chipsEl.append(chip);
+  });
+
+  const active = chipsEl.children[highlightedIndex];
+  active?.scrollIntoView({
+    block: "nearest",
+    inline: "nearest"
+  });
+
+  renderMirror();
+}
+
+function recompute() {
+  clearTimeout(debounceTimer);
+
+  debounceTimer = setTimeout(() => {
+    if (isComposing) {
+      suggestions = [];
+      renderSuggestions();
+      return;
+    }
+
+    const analysis = analyzeCurrentLine();
+
+    if (dismissed) {
+      suggestions = [];
+      renderSuggestions();
+      return;
+    }
+
+    if (analysis?.parsed) {
+      suggestions = buildSuggestions(analysis);
+    } else {
+      suggestions = buildNameSuggestions();
+    }
+
+    highlightedIndex = 0;
+    explicitlyMovedHighlight = false;
+    renderSuggestions();
+  }, 30);
+}
+
+function insertNativeText(text, replaceStart = null, replaceEnd = null) {
+  editor.focus();
+
+  if (replaceStart != null && replaceEnd != null) {
+    editor.setSelectionRange(replaceStart, replaceEnd);
+  }
+
+  const start = editor.selectionStart;
+  const end = editor.selectionEnd;
+
+  let inserted = false;
+  try {
+    inserted = document.execCommand("insertText", false, text);
+  } catch {
+    inserted = false;
+  }
+
+  if (!inserted) {
+    editor.setRangeText(text, start, end, "end");
+    editor.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      inputType: "insertText",
+      data: text
+    }));
+  }
+}
+
+function acceptSuggestion(suggestion = selectedSuggestion()) {
+  if (!suggestion) return;
+
+  insertNativeText(
+    suggestion.insertText,
+    suggestion.replaceStart ?? null,
+    suggestion.replaceEnd ?? null
+  );
+
+  dismissed = false;
+  saveContent();
+  recompute();
+}
+
+function saveContent() {
+  try {
+    localStorage.setItem(STORAGE_KEY, editor.value);
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+function restoreContent() {
+  try {
+    editor.value = localStorage.getItem(STORAGE_KEY) || "";
+  } catch {
+    editor.value = "";
+  }
+}
+
+function moveHighlight(delta, event) {
+  if (!suggestions.length || dismissed) return false;
+
+  const next = highlightedIndex + delta;
+  if (next < 0 || next >= suggestions.length) {
+    return false;
+  }
+
+  event.preventDefault();
+  highlightedIndex = next;
+  explicitlyMovedHighlight = true;
+  renderSuggestions();
+  return true;
+}
+
+editor.addEventListener("input", () => {
+  dismissed = false;
+  saveContent();
+  recompute();
+});
+
+editor.addEventListener("scroll", renderMirror);
+
+editor.addEventListener("click", recompute);
+editor.addEventListener("keyup", event => {
+  if (![
+    "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+    "Tab", "Enter", "Escape"
+  ].includes(event.key)) {
+    recompute();
+  }
+});
+
+editor.addEventListener("select", recompute);
+
+editor.addEventListener("compositionstart", () => {
+  isComposing = true;
+  suggestions = [];
+  renderSuggestions();
+});
+
+editor.addEventListener("compositionend", () => {
+  isComposing = false;
+  dismissed = false;
+  recompute();
+});
+
+editor.addEventListener("keydown", event => {
+  if (isComposing) return;
+
+  if (event.altKey && /^[1-9]$/.test(event.key)) {
+    const index = Number(event.key) - 1;
+    if (suggestions[index]) {
+      event.preventDefault();
+      acceptSuggestion(suggestions[index]);
+    }
+    return;
+  }
+
+  if (event.key === "Escape") {
+    if (suggestions.length) {
+      event.preventDefault();
+      dismissed = true;
+      suggestions = [];
+      renderSuggestions();
+    }
+    return;
+  }
+
+  if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+    if (moveHighlight(-1, event)) return;
+  }
+
+  if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+    if (moveHighlight(1, event)) return;
+  }
+
+  if (event.key === "Tab" || event.key === "Enter") {
+    const suggestion = selectedSuggestion();
+    const acceptable =
+      suggestion &&
+      !dismissed &&
+      (suggestion.inlineEligible || explicitlyMovedHighlight);
+
+    if (acceptable) {
+      event.preventDefault();
+      acceptSuggestion(suggestion);
+      return;
+    }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+      insertNativeText("\t");
+      return;
+    }
+
+    // With no acceptable suggestion, Enter falls through to a native newline.
+  }
+});
+
+window.addEventListener("resize", renderMirror);
+
+restoreContent();
+editor.focus();
+editor.setSelectionRange(editor.value.length, editor.value.length);
+renderMirror();
+recompute();
+</script>
+</body>
+</html>
