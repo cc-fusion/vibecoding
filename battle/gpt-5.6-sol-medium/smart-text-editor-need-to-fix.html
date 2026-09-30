@@ -1,0 +1,1937 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fff;
+    --fg: #171717;
+    --ghost: #9a9a9a;
+    --bar: #f5f5f5;
+    --chip: #e8e8e8;
+    --chip-hover: #dedede;
+    --chip-active: #d0d0d0;
+    --muted: #777;
+    --border: rgba(0,0,0,.09);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151515;
+      --fg: #ededed;
+      --ghost: #686868;
+      --bar: #1d1d1d;
+      --chip: #292929;
+      --chip-hover: #333;
+      --chip-active: #414141;
+      --muted: #8e8e8e;
+      --border: rgba(255,255,255,.08);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #editorShell {
+    position: fixed;
+    inset: 0 0 42px 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #editor, #mirror {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 18px;
+    border: 0;
+    outline: 0;
+    resize: none;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    tab-size: 4;
+    font: 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco,
+      Consolas, "Liberation Mono", "Courier New", monospace;
+    letter-spacing: 0;
+  }
+
+  #editor {
+    z-index: 2;
+    color: var(--fg);
+    caret-color: var(--fg);
+    background: transparent;
+  }
+
+  #mirror {
+    z-index: 1;
+    pointer-events: none;
+    color: transparent;
+    scrollbar-width: none;
+  }
+
+  #mirror::-webkit-scrollbar { display: none; }
+
+  #mirror .ghost {
+    color: var(--ghost);
+  }
+
+  #bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--bar);
+    border-top: 1px solid var(--border);
+    scrollbar-width: thin;
+  }
+
+  #bar.empty {
+    border-top-color: transparent;
+  }
+
+  #chips {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: min-content;
+  }
+
+  .chip {
+    flex: 0 0 auto;
+    max-width: min(72vw, 620px);
+    min-height: 31px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--fg);
+    background: var(--chip);
+    font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco,
+      Consolas, "Liberation Mono", "Courier New", monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .chip:hover { background: var(--chip-hover); }
+
+  .chip.selected {
+    background: var(--chip-active);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 24%, transparent);
+  }
+
+  .chip .typed { opacity: .48; }
+  .chip .insert { font-weight: 700; }
+  .chip .tag {
+    margin-left: 7px;
+    opacity: .46;
+    font-size: 11px;
+  }
+
+  #hint {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0 5px;
+    color: var(--muted);
+    opacity: .72;
+    font: 11px/1 ui-monospace, SFMono-Regular, Menlo, Monaco,
+      Consolas, "Liberation Mono", "Courier New", monospace;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+  <div id="editorShell">
+    <div id="mirror" aria-hidden="true"></div>
+    <textarea id="editor" spellcheck="false" autocapitalize="off"
+      autocomplete="off" autocorrect="off" aria-label="Editor"></textarea>
+  </div>
+
+  <div id="bar" class="empty">
+    <div id="chips"></div>
+    <div id="hint"></div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/decimal.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  Decimal.set({
+    precision: 50,
+    rounding: Decimal.ROUND_HALF_UP,
+    maxE: 300,
+    minE: -300
+  });
+
+  const editor = document.querySelector("#editor");
+  const mirror = document.querySelector("#mirror");
+  const bar = document.querySelector("#bar");
+  const chipsEl = document.querySelector("#chips");
+  const hint = document.querySelector("#hint");
+
+  const STORAGE_KEY = "math-scratchpad-content-v1";
+  editor.value = localStorage.getItem(STORAGE_KEY) || "";
+
+  const DIMS = Object.freeze({
+    NONE: [0,0,0,0,0,0,0],
+    L:    [1,0,0,0,0,0,0],
+    M:    [0,1,0,0,0,0,0],
+    T:    [0,0,1,0,0,0,0],
+    I:    [0,0,0,1,0,0,0],
+    TEMP: [0,0,0,0,1,0,0],
+    DATA: [0,0,0,0,0,1,0],
+    ANG:  [0,0,0,0,0,0,1]
+  });
+
+  const addDims = (a,b) => a.map((v,i) => v + b[i]);
+  const subDims = (a,b) => a.map((v,i) => v - b[i]);
+  const mulDims = (a,n) => a.map(v => v * n);
+  const sameDims = (a,b) => a.every((v,i) => v === b[i]);
+  const isDimensionless = d => sameDims(d, DIMS.NONE);
+  const dimsKey = d => d.join(",");
+
+  const DIM = {
+    AREA: mulDims(DIMS.L, 2),
+    VOLUME: mulDims(DIMS.L, 3),
+    SPEED: subDims(DIMS.L, DIMS.T),
+    FREQ: mulDims(DIMS.T, -1),
+    FORCE: addDims(DIMS.M, subDims(DIMS.L, mulDims(DIMS.T,2))),
+    PRESSURE: subDims(
+      addDims(DIMS.M, subDims(DIMS.L, mulDims(DIMS.T,2))),
+      mulDims(DIMS.L,2)
+    ),
+    ENERGY: addDims(DIMS.M, subDims(mulDims(DIMS.L,2), mulDims(DIMS.T,2))),
+    POWER: addDims(DIMS.M, subDims(mulDims(DIMS.L,2), mulDims(DIMS.T,3))),
+    VOLT: subDims(
+      addDims(DIMS.M, subDims(mulDims(DIMS.L,2), mulDims(DIMS.T,3))),
+      DIMS.I
+    ),
+    OHM: subDims(
+      addDims(DIMS.M, subDims(mulDims(DIMS.L,2), mulDims(DIMS.T,3))),
+      mulDims(DIMS.I,2)
+    )
+  };
+
+  const units = [];
+  const U = (symbols, names, dims, factor, options={}) => {
+    const u = {
+      symbols,
+      names,
+      dims,
+      factor: new Decimal(factor),
+      offset: options.offset == null ? null : new Decimal(options.offset),
+      prefixable: options.prefixable || "none",
+      canonical: options.canonical || symbols[0],
+      family: options.family || null,
+      absoluteTemperature: !!options.absoluteTemperature
+    };
+    units.push(u);
+    return u;
+  };
+
+  const m = U(["m"], ["meter","meters","metre","metres"], DIMS.L, 1,
+    {prefixable:"all"});
+  U(["mi"], ["mile","miles"], DIMS.L, "1609.344");
+  U(["yd"], ["yard","yards"], DIMS.L, "0.9144");
+  U(["ft"], ["foot","feet"], DIMS.L, "0.3048");
+  U(["in"], ["inch","inches"], DIMS.L, "0.0254");
+
+  const g = U(["g"], ["gram","grams"], DIMS.M, "0.001",
+    {prefixable:"all"});
+  U(["oz"], ["ounce","ounces"], DIMS.M, "0.028349523125");
+  U(["lb"], ["pound","pounds"], DIMS.M, "0.45359237");
+
+  const sec = U(["s"], ["second","seconds","sec"], DIMS.T, 1,
+    {prefixable:"all"});
+  U(["min"], ["minute","minutes"], DIMS.T, 60);
+  U(["h","hr"], ["hour","hours"], DIMS.T, 3600);
+  U(["day","d"], ["day","days"], DIMS.T, 86400);
+  U(["wk"], ["week","weeks"], DIMS.T, 604800);
+  U(["mo"], ["month","months"], DIMS.T, 2629800);
+  U(["yr"], ["year","years"], DIMS.T, 31557600);
+  U(["decade"], ["decade","decades"], DIMS.T, 315576000);
+  U(["century"], ["century","centuries"], DIMS.T, 3155760000);
+
+  U(["rad"], ["radian","radians"], DIMS.ANG, 1);
+  U(["°","deg"], ["degree","degrees"], DIMS.ANG, String(Math.PI/180));
+  U(["grad"], ["gradian","gradians"], DIMS.ANG, String(Math.PI/200));
+
+  U(["Hz"], ["hertz"], DIM.FREQ, 1, {prefixable:"all"});
+  U(["N"], ["newton","newtons"], DIM.FORCE, 1, {prefixable:"all"});
+  U(["lbf"], ["pound-force","pounds-force"], DIM.FORCE, "4.4482216152605");
+
+  U(["Pa"], ["pascal","pascals"], DIM.PRESSURE, 1, {prefixable:"all"});
+  U(["bar"], ["bar","bars"], DIM.PRESSURE, 100000, {prefixable:"all"});
+  U(["atm"], ["atmosphere","atmospheres"], DIM.PRESSURE, 101325);
+  U(["PSI","psi"], ["psi"], DIM.PRESSURE, "6894.757293168");
+
+  U(["J"], ["joule","joules"], DIM.ENERGY, 1, {prefixable:"all"});
+  U(["cal"], ["calorie","calories"], DIM.ENERGY, "4.184",
+    {prefixable:"all"});
+  U(["Wh"], ["watt-hour","watt-hours"], DIM.ENERGY, 3600,
+    {prefixable:"all"});
+
+  U(["W"], ["watt","watts"], DIM.POWER, 1, {prefixable:"all"});
+  U(["HP"], ["horsepower"], DIM.POWER, "745.6998715822702");
+  U(["hp"], ["metric horsepower"], DIM.POWER, "735.49875");
+
+  U(["A"], ["ampere","amperes","amp","amps"], DIMS.I, 1,
+    {prefixable:"all"});
+  U(["V"], ["volt","volts"], DIM.VOLT, 1, {prefixable:"all"});
+  U(["Ω","ohm"], ["ohm","ohms"], DIM.OHM, 1, {prefixable:"all"});
+
+  U(["L","l"], ["liter","liters","litre","litres"], DIM.VOLUME, "0.001",
+    {prefixable:"all"});
+  U(["gal"], ["gallon","gallons"], DIM.VOLUME, "0.003785411784");
+  U(["qt"], ["quart","quarts"], DIM.VOLUME, "0.000946352946");
+  U(["pt"], ["pint","pints"], DIM.VOLUME, "0.000473176473");
+  U(["cup"], ["cup","cups"], DIM.VOLUME, "0.0002365882365");
+  U(["tbsp"], ["tablespoon","tablespoons"], DIM.VOLUME, "0.00001478676478125");
+  U(["tsp"], ["teaspoon","teaspoons"], DIM.VOLUME, "0.00000492892159375");
+  U(["fl oz"], ["fluid ounce","fluid ounces"], DIM.VOLUME, "0.0000295735295625");
+
+  U(["mph"], ["miles per hour"], DIM.SPEED, "0.44704");
+  U(["kph","km/h"], ["kilometers per hour","kilometres per hour"],
+    DIM.SPEED, String(1000/3600));
+  U(["m/s"], ["meters per second","metres per second"], DIM.SPEED, 1);
+  U(["ft/s"], ["feet per second"], DIM.SPEED, "0.3048");
+  U(["knot","kn"], ["knot","knots"], DIM.SPEED, String(1852/3600));
+
+  U(["mpg"], ["miles per gallon"], subDims(DIMS.L, DIM.VOLUME),
+    String(1609.344 / 0.003785411784));
+  U(["km/L"], ["kilometers per liter"], subDims(DIMS.L, DIM.VOLUME),
+    1000000);
+
+  U(["b"], ["bit","bits"], DIMS.DATA, 1, {prefixable:"large"});
+  U(["B"], ["byte","bytes"], DIMS.DATA, 8, {prefixable:"large"});
+
+  U(["K"], ["kelvin","kelvins"], DIMS.TEMP, 1,
+    {prefixable:"all", absoluteTemperature:true});
+  U(["°C","C"], ["celsius"], DIMS.TEMP, 1,
+    {offset:"273.15", absoluteTemperature:true});
+  U(["°F","F"], ["fahrenheit"], DIMS.TEMP, new Decimal(5).div(9),
+    {offset:new Decimal("459.67").times(5).div(9), absoluteTemperature:true});
+
+  const prefixList = [
+    ["Q","1e30"],["R","1e27"],["Y","1e24"],["Z","1e21"],["E","1e18"],
+    ["P","1e15"],["T","1e12"],["G","1e9"],["M","1e6"],["k","1e3"],
+    ["h","1e2"],["da","1e1"],["d","1e-1"],["c","1e-2"],["m","1e-3"],
+    ["µ","1e-6"],["μ","1e-6"],["u","1e-6"],["n","1e-9"],
+    ["p","1e-12"],["f","1e-15"]
+  ];
+
+  const largePrefixes = new Set(["Q","R","Y","Z","E","P","T","G","M","k"]);
+
+  function unitCandidate(unit, prefix="", multiplier="1", typed="", exponent=1) {
+    return {
+      unit,
+      symbol: prefix + unit.canonical,
+      typed,
+      factor: unit.factor.times(multiplier).pow(exponent),
+      dims: mulDims(unit.dims, exponent),
+      exponent,
+      offset: exponent === 1 ? unit.offset : null
+    };
+  }
+
+  function normalizeUnitWords(s) {
+    return s
+      .replace(/μ/g,"µ")
+      .replace(/\b(square|sq)\s+/i, "")
+      .replace(/\b(cubic)\s+/i, "")
+      .replace(/\s+squared\b/i, "")
+      .replace(/\s+cubed\b/i, "");
+  }
+
+  function resolveUnit(raw) {
+    let text = normalizeUnitWords(raw.trim());
+    let exponent = 1;
+
+    if (/^(square|sq)\s+/i.test(raw) || /\s+squared$/i.test(raw)) exponent = 2;
+    if (/^cubic\s+/i.test(raw) || /\s+cubed$/i.test(raw)) exponent = 3;
+
+    const expMatch = text.match(/(?:\^|\*\*)?([23])$/);
+    if (expMatch) {
+      exponent = Number(expMatch[1]);
+      text = text.slice(0, expMatch.index);
+    } else if (/[²³]$/.test(text)) {
+      exponent = text.endsWith("²") ? 2 : 3;
+      text = text.slice(0,-1);
+    }
+
+    const exact = [];
+    for (const u of units) {
+      if (u.symbols.includes(text)) exact.push(unitCandidate(u,"","1",raw,exponent));
+      if (u.names.some(n => n.toLowerCase() === text.toLowerCase()))
+        exact.push(unitCandidate(u,"","1",raw,exponent));
+    }
+    if (exact.length) return {candidates:[exact[0]], ambiguous:false};
+
+    const prefixed = [];
+    for (const [prefix,mul] of prefixList) {
+      if (!text.startsWith(prefix)) continue;
+      const rest = text.slice(prefix.length);
+      for (const u of units) {
+        if (u.prefixable === "none") continue;
+        if (u.prefixable === "large" && !largePrefixes.has(prefix)) continue;
+        if (u.symbols.includes(rest) ||
+            u.names.some(n => n.toLowerCase() === rest.toLowerCase())) {
+          prefixed.push(unitCandidate(u,prefix,mul,raw,exponent));
+        }
+      }
+    }
+    if (prefixed.length) return {candidates:[prefixed[0]], ambiguous:false};
+
+    const folded = [];
+    const foldedText = text.toLowerCase();
+
+    for (const u of units) {
+      for (const symbol of u.symbols) {
+        if (symbol.toLowerCase() === foldedText)
+          folded.push(unitCandidate(u,"","1",raw,exponent));
+      }
+
+      for (const [prefix,mul] of prefixList) {
+        if (u.prefixable === "none") continue;
+        if (u.prefixable === "large" && !largePrefixes.has(prefix)) continue;
+
+        for (const symbol of u.symbols) {
+          if ((prefix + symbol).toLowerCase() === foldedText)
+            folded.push(unitCandidate(u,prefix,mul,raw,exponent));
+        }
+      }
+    }
+
+    const unique = [];
+    const keys = new Set();
+    for (const c of folded) {
+      const key = c.symbol + "|" + dimsKey(c.dims) + "|" + c.factor;
+      if (!keys.has(key)) {
+        keys.add(key);
+        unique.push(c);
+      }
+    }
+
+    if (!unique.length) return null;
+
+    unique.sort((a,b) => {
+      const ap = a.symbol === text ? -1 : 0;
+      const bp = b.symbol === text ? -1 : 0;
+      return ap - bp;
+    });
+
+    return {
+      candidates: unique,
+      ambiguous: unique.length > 1
+    };
+  }
+
+  function unitBySymbol(symbol) {
+    const result = resolveUnit(symbol);
+    return result && result.candidates[0];
+  }
+
+  const curated = {
+    [dimsKey(DIMS.L)]: ["km","mi","m","ft","in"],
+    [dimsKey(DIMS.M)]: ["kg","g","lb","oz"],
+    [dimsKey(DIMS.T)]: ["s","min","h","day"],
+    [dimsKey(DIM.AREA)]: ["km^2","acre","ft^2","m^2"],
+    [dimsKey(DIM.VOLUME)]: ["L","gal","m^3","ft^3"],
+    [dimsKey(DIM.SPEED)]: ["mph","kph","ft/s","knot","m/s"],
+    [dimsKey(DIM.FORCE)]: ["N","lbf"],
+    [dimsKey(DIM.PRESSURE)]: ["Pa","bar","atm","PSI"],
+    [dimsKey(DIM.ENERGY)]: ["J","kJ","Wh","kWh","cal","kcal"],
+    [dimsKey(DIM.POWER)]: ["W","kW","HP","hp"],
+    [dimsKey(DIM.FREQ)]: ["Hz","kHz","MHz"],
+    [dimsKey(DIMS.ANG)]: ["deg","rad","grad"],
+    [dimsKey(DIMS.DATA)]: ["b","B","kb","kB","Mb","MB"],
+    [dimsKey(DIMS.TEMP)]: ["°C","°F","K"]
+  };
+
+  function specialUnit(symbol) {
+    const area = symbol.match(/^(.+?)(?:\^2|²)$/);
+    const volume = symbol.match(/^(.+?)(?:\^3|³)$/);
+    if (area) {
+      const base = unitBySymbol(area[1]);
+      if (base && sameDims(base.dims,DIMS.L)) {
+        return {
+          ...base,
+          symbol: base.symbol + "^2",
+          factor: base.factor.pow(2),
+          dims: DIM.AREA,
+          exponent: 2,
+          offset: null
+        };
+      }
+    }
+    if (volume) {
+      const base = unitBySymbol(volume[1]);
+      if (base && sameDims(base.dims,DIMS.L)) {
+        return {
+          ...base,
+          symbol: base.symbol + "^3",
+          factor: base.factor.pow(3),
+          dims: DIM.VOLUME,
+          exponent: 3,
+          offset: null
+        };
+      }
+    }
+    if (symbol.toLowerCase() === "acre") {
+      return {
+        symbol:"acre", factor:new Decimal("4046.8564224"),
+        dims:DIM.AREA, offset:null
+      };
+    }
+    return unitBySymbol(symbol);
+  }
+
+  class Rational {
+    constructor(n,d=1n) {
+      if (d === 0n) throw new Error("zero denominator");
+      if (d < 0n) { n = -n; d = -d; }
+      const g = Rational.gcd(n < 0n ? -n : n,d);
+      this.n = n/g;
+      this.d = d/g;
+    }
+    static gcd(a,b) {
+      while (b) [a,b] = [b,a%b];
+      return a || 1n;
+    }
+    add(r) { return new Rational(this.n*r.d+r.n*this.d,this.d*r.d); }
+    sub(r) { return new Rational(this.n*r.d-r.n*this.d,this.d*r.d); }
+    mul(r) { return new Rational(this.n*r.n,this.d*r.d); }
+    div(r) {
+      if (r.n === 0n) throw new Error("division by zero");
+      return new Rational(this.n*r.d,this.d*r.n);
+    }
+    pow(n) {
+      if (!Number.isInteger(n) || Math.abs(n)>1000) return null;
+      if (n < 0) return new Rational(this.d**BigInt(-n),this.n**BigInt(-n));
+      return new Rational(this.n**BigInt(n),this.d**BigInt(n));
+    }
+  }
+
+  function rationalFromLiteral(s) {
+    const lower = s.toLowerCase();
+    const [mantissa, exponentText] = lower.split("e");
+    const exp = exponentText == null ? 0 : Number(exponentText);
+    const parts = mantissa.split(".");
+    const digits = (parts[0] || "0") + (parts[1] || "");
+    const decimals = (parts[1] || "").length;
+    let n = BigInt(digits || "0");
+    let d = 10n ** BigInt(decimals);
+    if (exp > 0) n *= 10n ** BigInt(exp);
+    if (exp < 0) d *= 10n ** BigInt(-exp);
+    return new Rational(n,d);
+  }
+
+  class Quantity {
+    constructor(value, dims=DIMS.NONE, options={}) {
+      this.value = new Decimal(value);
+      this.dims = dims.slice();
+      this.unit = options.unit || null;
+      this.rational = options.rational || null;
+      this.approx = !!options.approx;
+      this.absoluteTemperature = !!options.absoluteTemperature;
+      this.bare = options.bare !== false;
+    }
+    clone() {
+      return new Quantity(this.value,this.dims,{
+        unit:this.unit,
+        rational:this.rational,
+        approx:this.approx,
+        absoluteTemperature:this.absoluteTemperature,
+        bare:this.bare
+      });
+    }
+  }
+
+  function tokenize(source) {
+    const tokens = [];
+    let i = 0;
+
+    while (i < source.length && tokens.length < 200) {
+      const c = source[i];
+
+      if (/\s/.test(c)) { i++; continue; }
+
+      const rest = source.slice(i);
+
+      const number = rest.match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (number) {
+        tokens.push({type:"number", value:number[0], start:i, end:i+number[0].length});
+        i += number[0].length;
+        continue;
+      }
+
+      if (rest.startsWith("->")) {
+        tokens.push({type:"convert",value:"->",start:i,end:i+2});
+        i += 2; continue;
+      }
+
+      if (rest.startsWith("**")) {
+        tokens.push({type:"op",value:"^",start:i,end:i+2});
+        i += 2; continue;
+      }
+
+      const superscript = rest.match(/^[²³]/);
+      if (superscript) {
+        tokens.push({
+          type:"sup",
+          value:superscript[0] === "²" ? 2 : 3,
+          start:i,end:i+1
+        });
+        i++; continue;
+      }
+
+      if ("+-*/%^!(),".includes(c) || "×÷−".includes(c)) {
+        const map = {"×":"*","÷":"/","−":"-"};
+        const value = map[c] || c;
+        const type = c === "(" || c === ")" || c === "," ? c : "op";
+        tokens.push({type,value,start:i,end:i+1});
+        i++; continue;
+      }
+
+      if (c === "π") {
+        tokens.push({type:"id",value:"pi",raw:"π",start:i,end:i+1});
+        i++; continue;
+      }
+
+      if (c === "°") {
+        tokens.push({type:"id",value:"°",raw:"°",start:i,end:i+1});
+        i++; continue;
+      }
+
+      const ident = rest.match(/^[A-Za-zµμΩ_][A-Za-z0-9µμΩ_]*(?:\/[A-Za-z]+)?/);
+      if (ident) {
+        const raw = ident[0];
+        const lower = raw.toLowerCase();
+        let type = "id";
+        if (lower === "to" || lower === "in") type = "convert";
+        if (lower === "npr" || lower === "ncr") type = "op";
+        tokens.push({type,value:lower,raw,start:i,end:i+raw.length});
+        i += raw.length;
+        continue;
+      }
+
+      throw new Error("unknown token");
+    }
+
+    if (tokens.length >= 200) throw new Error("token cap");
+    return tokens;
+  }
+
+  const functions = new Set([
+    "sin","cos","tan","csc","sec","cot",
+    "asin","acos","atan","arcsin","arccos","arctan",
+    "sqrt","cbrt","ln","log","log2","log_2",
+    "abs","floor","ceil","round","npr","ncr","p","c"
+  ]);
+
+  class Parser {
+    constructor(tokens) {
+      this.t = tokens;
+      this.i = 0;
+      this.depth = 0;
+    }
+
+    peek(n=0) { return this.t[this.i+n]; }
+    take() { return this.t[this.i++]; }
+    done() { return this.i >= this.t.length; }
+
+    parse() {
+      const node = this.expr(0);
+      if (!this.done()) throw new Error("trailing token");
+      return node;
+    }
+
+    expr(minBP) {
+      if (++this.depth > 80) throw new Error("depth");
+      let left = this.prefix();
+
+      while (!this.done()) {
+        const tok = this.peek();
+
+        if (tok.type === "op" && tok.value === "!") {
+          if (90 <= minBP) break;
+          this.take();
+          left = {type:"postfix",op:"!",arg:left};
+          continue;
+        }
+
+        if (tok.type === "op" && tok.value === "%") {
+          const next = this.peek(1);
+          if (!canStartOperand(next)) {
+            if (88 <= minBP) break;
+            this.take();
+            left = {type:"postfix",op:"%",arg:left};
+            continue;
+          }
+        }
+
+        if (tok.type === "sup") {
+          if (80 <= minBP) break;
+          this.take();
+          left = {
+            type:"binary",op:"^",left,
+            right:{type:"number",value:String(tok.value)}
+          };
+          continue;
+        }
+
+        let op = null;
+        let lbp = 0;
+        let rbp = 0;
+        let implicit = false;
+
+        if (tok.type === "op") {
+          op = tok.value;
+          if (op === "^") [lbp,rbp] = [70,69];
+          else if (op === "npr" || op === "ncr") [lbp,rbp] = [45,46];
+          else if (op === "*" || op === "/" || op === "%") [lbp,rbp] = [40,41];
+          else if (op === "+" || op === "-") [lbp,rbp] = [30,31];
+          else break;
+        } else if (canStartOperand(tok)) {
+          op = "*";
+          implicit = true;
+          [lbp,rbp] = [50,51];
+        } else break;
+
+        if (lbp <= minBP) break;
+        if (!implicit) this.take();
+
+        const right = this.expr(rbp);
+        left = {type:"binary",op,left,right,implicit};
+      }
+
+      this.depth--;
+      return left;
+    }
+
+    prefix() {
+      const tok = this.take();
+      if (!tok) throw new Error("missing operand");
+
+      if (tok.type === "op" && (tok.value === "+" || tok.value === "-")) {
+        return {type:"unary",op:tok.value,arg:this.expr(59)};
+      }
+
+      if (tok.type === "number")
+        return {type:"number",value:tok.value};
+
+      if (tok.type === "(") {
+        const node = this.expr(0);
+        if (!this.peek() || this.take().type !== ")")
+          throw new Error("missing parenthesis");
+        return node;
+      }
+
+      if (tok.type === "id") {
+        const name = tok.value;
+
+        const functionPower =
+          /^(sin|cos|tan|csc|sec|cot)(\d+)$/.exec(name);
+
+        if (functionPower) {
+          const base = functionPower[1];
+          const power = Number(functionPower[2]);
+          if (canStartOperand(this.peek())) {
+            const arg = this.parseFunctionArgument(base);
+            return {
+              type:"binary",op:"^",
+              left:{type:"call",name:base,args:[arg]},
+              right:{type:"number",value:String(power)}
+            };
+          }
+          return {type:"call",name:base,args:[
+            {type:"number",value:String(power)}
+          ]};
+        }
+
+        if (functions.has(name) || /^log\d+$/.test(name)) {
+          let power = null;
+          if (this.peek()?.type === "op" && this.peek().value === "^") {
+            this.take();
+            const p = this.take();
+            if (!p || p.type !== "number") throw new Error("bad trig power");
+            power = Number(p.value);
+          } else if (this.peek()?.type === "sup") {
+            power = this.take().value;
+          }
+
+          const argNode = this.parseFunctionArgument(name);
+          const call = Array.isArray(argNode)
+            ? {type:"call",name,args:argNode}
+            : {type:"call",name,args:[argNode]};
+
+          return power == null ? call : {
+            type:"binary",op:"^",left:call,
+            right:{type:"number",value:String(power)}
+          };
+        }
+
+        if (name === "pi" || name === "e")
+          return {type:"constant",name};
+
+        const resolution = resolveUnit(tok.raw || tok.value);
+        if (!resolution) throw new Error("unknown identifier");
+
+        return {
+          type:"unit",
+          raw:tok.raw || tok.value,
+          resolution
+        };
+      }
+
+      throw new Error("bad expression");
+    }
+
+    parseFunctionArgument(name) {
+      if (this.peek()?.type === "(") {
+        this.take();
+        const args = [];
+        if (this.peek()?.type !== ")") {
+          for (;;) {
+            args.push(this.expr(0));
+            if (this.peek()?.type !== ",") break;
+            this.take();
+          }
+        }
+        if (this.take()?.type !== ")") throw new Error("missing )");
+        return args.length === 1 ? args[0] : args;
+      }
+
+      if (!canStartOperand(this.peek()))
+        throw new Error("missing function argument");
+
+      return this.expr(49);
+    }
+  }
+
+  function canStartOperand(t) {
+    return !!t && (
+      t.type === "number" ||
+      t.type === "id" ||
+      t.type === "(" ||
+      (t.type === "op" && (t.value === "+" || t.value === "-"))
+    );
+  }
+
+  function collectAmbiguities(node, out=[]) {
+    if (!node || typeof node !== "object") return out;
+    if (node.type === "unit" && node.resolution.ambiguous) out.push(node);
+    if (node.left) collectAmbiguities(node.left,out);
+    if (node.right) collectAmbiguities(node.right,out);
+    if (node.arg) collectAmbiguities(node.arg,out);
+    if (node.args) node.args.forEach(x => collectAmbiguities(x,out));
+    return out;
+  }
+
+  function containsBareTrig(node) {
+    if (!node) return false;
+    if (node.type === "call" &&
+        ["sin","cos","tan","csc","sec","cot",
+         "asin","acos","atan","arcsin","arccos","arctan"].includes(node.name)) {
+      return !containsAngleUnit(node.args[0]);
+    }
+    return !!(
+      containsBareTrig(node.left) ||
+      containsBareTrig(node.right) ||
+      containsBareTrig(node.arg) ||
+      node.args?.some(containsBareTrig)
+    );
+  }
+
+  function containsAngleUnit(node) {
+    if (!node) return false;
+    if (node.type === "unit") {
+      return node.resolution.candidates.some(c => sameDims(c.dims,DIMS.ANG));
+    }
+    return !!(
+      containsAngleUnit(node.left) ||
+      containsAngleUnit(node.right) ||
+      containsAngleUnit(node.arg) ||
+      node.args?.some(containsAngleUnit)
+    );
+  }
+
+  function cleanDecimal(v) {
+    if (!v.isFinite() || v.abs().gt("1e300")) throw new Error("overflow");
+    if (v.abs().lt("1e-14")) return new Decimal(0);
+    const nearest = v.toNearest(1);
+    if (v.minus(nearest).abs().lt("1e-14")) return nearest;
+    return v;
+  }
+
+  function gamma(z) {
+    const x = z.toNumber();
+    if (!Number.isFinite(x) || x <= -170 || x > 171) throw new Error("gamma");
+
+    const p = [
+      676.5203681218851,-1259.1392167224028,771.32342877765313,
+      -176.61502916214059,12.507343278686905,-0.13857109526572012,
+      9.9843695780195716e-6,1.5056327351493116e-7
+    ];
+
+    function g(n) {
+      if (n < .5) return Math.PI / (Math.sin(Math.PI*n) * g(1-n));
+      n -= 1;
+      let a = .99999999999980993;
+      for (let i=0;i<p.length;i++) a += p[i]/(n+i+1);
+      const t = n+p.length-.5;
+      return Math.sqrt(2*Math.PI)*Math.pow(t,n+.5)*Math.exp(-t)*a;
+    }
+
+    return new Decimal(g(x));
+  }
+
+  function factorial(v) {
+    if (v.isInteger()) {
+      const n = v.toNumber();
+      if (n < 0 || n > 170) throw new Error("factorial");
+      let r = new Decimal(1);
+      for (let i=2;i<=n;i++) r = r.times(i);
+      return r;
+    }
+    return gamma(v.plus(1));
+  }
+
+  function evaluate(node, context) {
+    switch (node.type) {
+      case "number":
+        return new Quantity(node.value,DIMS.NONE,{
+          rational:rationalFromLiteral(node.value),
+          bare:true
+        });
+
+      case "constant":
+        return new Quantity(
+          node.name === "pi" ? Decimal.acos(-1) : Decimal.exp(1),
+          DIMS.NONE,{approx:true,bare:true}
+        );
+
+      case "unit": {
+        const index = context.choices.get(node) || 0;
+        const c = node.resolution.candidates[index];
+        return new Quantity(c.factor,c.dims,{
+          unit:c,
+          rational:null,
+          bare:false,
+          absoluteTemperature:!!c.unit.absoluteTemperature
+        });
+      }
+
+      case "unary": {
+        const q = evaluate(node.arg,context);
+        if (node.op === "-") {
+          q.value = q.value.neg();
+          if (q.rational) q.rational = new Rational(-q.rational.n,q.rational.d);
+        }
+        return q;
+      }
+
+      case "postfix": {
+        const q = evaluate(node.arg,context);
+        if (node.op === "%") {
+          if (!isDimensionless(q.dims)) throw new Error("percent units");
+          q.value = q.value.div(100);
+          q.rational = q.rational?.div(new Rational(100n)) || null;
+          return q;
+        }
+        if (node.op === "!") {
+          if (!isDimensionless(q.dims)) throw new Error("factorial units");
+          q.value = factorial(q.value);
+          q.rational = q.value.isInteger()
+            ? new Rational(BigInt(q.value.toFixed(0)))
+            : null;
+          q.approx = !q.rational;
+          return q;
+        }
+        throw new Error("postfix");
+      }
+
+      case "binary": {
+        const a = evaluate(node.left,context);
+        const b = evaluate(node.right,context);
+        return binary(node.op,a,b,node);
+      }
+
+      case "call":
+        return callFunction(node.name,node.args.map(a => evaluate(a,context)),context);
+    }
+
+    throw new Error("node");
+  }
+
+  function binary(op,a,b,node) {
+    if (op === "+" || op === "-") {
+      if (!sameDims(a.dims,b.dims)) throw new Error("dimension mismatch");
+      const value = op === "+" ? a.value.plus(b.value) : a.value.minus(b.value);
+      const rat = a.rational && b.rational
+        ? (op === "+" ? a.rational.add(b.rational) : a.rational.sub(b.rational))
+        : null;
+      return new Quantity(value,a.dims,{
+        unit:chooseMixedUnit(a,b,value),
+        rational:rat,
+        approx:a.approx||b.approx,
+        bare:a.bare&&b.bare,
+        absoluteTemperature:a.absoluteTemperature||b.absoluteTemperature
+      });
+    }
+
+    if (op === "*" || op === "/") {
+      if ((a.absoluteTemperature && !isDimensionless(b.dims)) ||
+          (b.absoluteTemperature && !isDimensionless(a.dims)))
+        throw new Error("absolute temperature arithmetic");
+
+      if (op === "/" && b.value.eq(0)) throw new Error("division by zero");
+
+      const value = op === "*" ? a.value.times(b.value) : a.value.div(b.value);
+      const dims = op === "*" ? addDims(a.dims,b.dims) : subDims(a.dims,b.dims);
+      let rat = null;
+
+      if (a.rational && b.rational) {
+        rat = op === "*" ? a.rational.mul(b.rational) : a.rational.div(b.rational);
+      }
+
+      return new Quantity(value,dims,{
+        unit:derivedUnit(dims,a,b),
+        rational:rat,
+        approx:a.approx||b.approx,
+        bare:a.bare&&b.bare
+      });
+    }
+
+    if (op === "%") {
+      if (!(isDimensionless(a.dims) && isDimensionless(b.dims)) &&
+          !sameDims(a.dims,b.dims))
+        throw new Error("modulo units");
+      if (b.value.eq(0)) throw new Error("modulo zero");
+      return new Quantity(a.value.mod(b.value),a.dims,{
+        approx:a.approx||b.approx,
+        bare:a.bare&&b.bare
+      });
+    }
+
+    if (op === "^") {
+      if (!isDimensionless(b.dims)) throw new Error("unit exponent");
+      if (b.value.abs().gt(1000)) throw new Error("exponent cap");
+
+      const exponent = b.value.toNumber();
+      if (a.value.lt(0) && !Number.isInteger(exponent))
+        throw new Error("complex result");
+
+      const newDims = mulDims(a.dims,exponent);
+      if (newDims.some(x => !Number.isInteger(x)))
+        throw new Error("fractional dimensions");
+
+      let value;
+      if (a.value.lt(0)) value = a.value.abs().pow(exponent).times(
+        Number.isInteger(exponent) && Math.abs(exponent)%2 ? -1 : 1
+      );
+      else value = a.value.pow(exponent);
+
+      if (!value.isFinite()) throw new Error("power overflow");
+
+      return new Quantity(value,newDims,{
+        rational:a.rational && Number.isInteger(exponent)
+          ? a.rational.pow(exponent) : null,
+        approx:a.approx||b.approx||!Number.isInteger(exponent),
+        bare:a.bare
+      });
+    }
+
+    if (op === "npr" || op === "ncr") {
+      if (!isDimensionless(a.dims) || !isDimensionless(b.dims))
+        throw new Error("combinatorics units");
+
+      const n = a.value.toNumber();
+      const r = b.value.toNumber();
+      if (!Number.isInteger(n)||!Number.isInteger(r)||n<0||r<0||r>n||n>170)
+        throw new Error("combinatorics");
+
+      let result = new Decimal(1);
+      if (op === "npr") {
+        for (let i=0;i<r;i++) result = result.times(n-i);
+      } else {
+        const k = Math.min(r,n-r);
+        for (let i=1;i<=k;i++)
+          result = result.times(n-k+i).div(i);
+      }
+
+      return new Quantity(result,DIMS.NONE,{
+        rational:new Rational(BigInt(result.toFixed(0)))
+      });
+    }
+
+    throw new Error("operator");
+  }
+
+  function chooseMixedUnit(a,b,siValue) {
+    const options = [a.unit,b.unit].filter(Boolean);
+    let best = options[0] || null;
+    for (const u of options) {
+      const display = fromSI(siValue,u);
+      if (display.abs().gte(1) && display.abs().lt(1000)) return u;
+    }
+    return best;
+  }
+
+  function derivedUnit(dims,a,b) {
+    const key = dimsKey(dims);
+    const symbol = {
+      [dimsKey(DIM.POWER)]:"W",
+      [dimsKey(DIM.ENERGY)]:"J",
+      [dimsKey(DIM.FORCE)]:"N",
+      [dimsKey(DIM.PRESSURE)]:"Pa",
+      [dimsKey(DIM.FREQ)]:"Hz",
+      [dimsKey(DIM.SPEED)]:"m/s"
+    }[key];
+
+    if (symbol) return specialUnit(symbol);
+
+    if (sameDims(dims,DIM.AREA) && a.unit && b.unit &&
+        a.unit.symbol === b.unit.symbol) {
+      return specialUnit(a.unit.symbol + "^2");
+    }
+
+    if (sameDims(dims,DIM.VOLUME) && a.unit && b.unit &&
+        a.unit.symbol === b.unit.symbol) {
+      return specialUnit(a.unit.symbol + "^3");
+    }
+
+    return null;
+  }
+
+  function callFunction(name,args,context) {
+    if (name === "p") name = "npr";
+    if (name === "c") name = "ncr";
+    if (name === "arcsin") name = "asin";
+    if (name === "arccos") name = "acos";
+    if (name === "arctan") name = "atan";
+
+    if (name === "npr" || name === "ncr") {
+      if (args.length !== 2) throw new Error("arity");
+      return binary(name,args[0],args[1]);
+    }
+
+    if (args.length !== 1) throw new Error("arity");
+    const q = args[0];
+    const trig = ["sin","cos","tan","csc","sec","cot"];
+    const inverse = ["asin","acos","atan"];
+
+    if (trig.includes(name)) {
+      let radians;
+      if (sameDims(q.dims,DIMS.ANG)) radians = q.value.toNumber();
+      else if (isDimensionless(q.dims)) {
+        radians = context.mode === "deg"
+          ? q.value.toNumber()*Math.PI/180
+          : q.value.toNumber();
+      } else throw new Error("trig units");
+
+      let value;
+      if (name === "sin") value = Math.sin(radians);
+      if (name === "cos") value = Math.cos(radians);
+      if (name === "tan") value = Math.tan(radians);
+      if (name === "csc") value = 1/Math.sin(radians);
+      if (name === "sec") value = 1/Math.cos(radians);
+      if (name === "cot") value = 1/Math.tan(radians);
+
+      if (!Number.isFinite(value) || Math.abs(value)>1e15)
+        throw new Error("trig pole");
+
+      return new Quantity(value,DIMS.NONE,{approx:true,bare:true});
+    }
+
+    if (inverse.includes(name)) {
+      if (!isDimensionless(q.dims)) throw new Error("inverse trig units");
+      const x = q.value.toNumber();
+      if ((name === "asin" || name === "acos") && Math.abs(x)>1)
+        throw new Error("domain");
+
+      let value = name === "asin" ? Math.asin(x)
+        : name === "acos" ? Math.acos(x) : Math.atan(x);
+
+      if (context.mode === "deg") value *= 180/Math.PI;
+      return new Quantity(value,DIMS.NONE,{approx:true,bare:true});
+    }
+
+    if (!isDimensionless(q.dims) &&
+        !["sqrt","cbrt","abs"].includes(name))
+      throw new Error("function units");
+
+    if (name === "sqrt" || name === "cbrt") {
+      const power = name === "sqrt" ? .5 : 1/3;
+      if (q.value.lt(0)) throw new Error("complex root");
+      const dims = mulDims(q.dims,power);
+      if (dims.some(x => !Number.isInteger(x))) throw new Error("root units");
+      return new Quantity(q.value.pow(power),dims,{
+        approx:q.approx || !q.value.sqrt().isInteger(),
+        unit:null
+      });
+    }
+
+    if (name === "ln" || name === "log" || name === "log2" ||
+        name === "log_2" || /^log\d+$/.test(name)) {
+      if (q.value.lte(0)) throw new Error("log domain");
+      let base = Math.E;
+      if (name === "log") base = 10;
+      if (name === "log2" || name === "log_2") base = 2;
+      const match = /^log(\d+)$/.exec(name);
+      if (match) base = Number(match[1]);
+      return new Quantity(
+        Math.log(q.value.toNumber())/Math.log(base),
+        DIMS.NONE,{approx:true}
+      );
+    }
+
+    if (name === "abs")
+      return new Quantity(q.value.abs(),q.dims,{
+        unit:q.unit,rational:q.rational,approx:q.approx,bare:q.bare
+      });
+
+    if (name === "floor" || name === "ceil" || name === "round") {
+      const value = name === "floor" ? q.value.floor()
+        : name === "ceil" ? q.value.ceil() : q.value.round();
+      return new Quantity(value,q.dims,{
+        unit:q.unit,
+        rational:new Rational(BigInt(value.toFixed(0))),
+        bare:q.bare
+      });
+    }
+
+    throw new Error("function");
+  }
+
+  function toSI(displayValue, unit) {
+    let v = new Decimal(displayValue);
+    if (unit.offset) v = v.plus(unit.offset);
+    return v.times(unit.factor);
+  }
+
+  function fromSI(siValue, unit) {
+    let v = new Decimal(siValue).div(unit.factor);
+    if (unit.offset) v = v.minus(unit.offset);
+    return v;
+  }
+
+  function rationalTerminates(r) {
+    if (!r) return false;
+    let d = r.d;
+    while (d % 2n === 0n) d /= 2n;
+    while (d % 5n === 0n) d /= 5n;
+    if (d !== 1n) return false;
+
+    const significant = (r.n < 0n ? -r.n : r.n).toString()
+      .replace(/^0+/,"").length;
+    return significant <= 20;
+  }
+
+  function plainDecimal(v) {
+    if (v.eq(0)) return "0";
+    const abs = v.abs();
+    if (abs.gte("1e15") || abs.lt("1e-6"))
+      return v.toExponential().replace(/\.?0+e/,"e").replace("e+","e");
+    return v.toFixed().replace(/\.?0+$/,"");
+  }
+
+  function inlineApprox(v) {
+    v = cleanDecimal(v);
+    if (v.eq(0)) return "0";
+
+    const abs = v.abs();
+    if (abs.gte("1e15") || abs.lt("1e-6")) {
+      for (let sf=2;sf<=16;sf++) {
+        const rounded = v.toSignificantDigits(sf);
+        const rel = rounded.minus(v).abs().div(abs);
+        if (!rounded.eq(0) && rel.lte(".05"))
+          return rounded.toExponential(sf-1)
+            .replace(/\.?0+e/,"e").replace("e+","e");
+      }
+    }
+
+    const originalInteger = abs.floor().toFixed(0);
+    for (let d=1;d<=20;d++) {
+      const rounded = v.toDecimalPlaces(d);
+      if (rounded.eq(0)) continue;
+      const rel = rounded.minus(v).abs().div(abs);
+      if (rel.gt(".05")) continue;
+      if (rounded.abs().floor().toFixed(0) !== originalInteger) continue;
+      return rounded.toFixed(d).replace(/0+$/,"").replace(/\.$/,".0");
+    }
+    return v.toSignificantDigits(20).toString();
+  }
+
+  function significantFormat(v,sf) {
+    v = cleanDecimal(v);
+    if (v.eq(0)) return "0";
+
+    const rounded = v.toSignificantDigits(sf);
+    if (rounded.abs().floor().toFixed(0) !== v.abs().floor().toFixed(0))
+      return null;
+
+    if (v.abs().gte("1e15") || v.abs().lt("1e-6")) {
+      return rounded.toExponential(Math.max(1,sf-1))
+        .replace(/\.?0+e/,"e").replace("e+","e");
+    }
+    return rounded.toFixed().replace(/\.?0+$/,"");
+  }
+
+  function formatQuantity(q, preferredUnit=null, alternate=false) {
+    const unit = preferredUnit || q.unit;
+    const displayed = unit ? fromSI(q.value,unit) : q.value;
+    const exact = !!q.rational && rationalTerminates(q.rational) && !q.approx;
+
+    let number;
+    if (exact) number = plainDecimal(cleanDecimal(displayed));
+    else number = alternate
+      ? significantFormat(displayed,3) || inlineApprox(displayed)
+      : inlineApprox(displayed);
+
+    return {
+      number,
+      text:number + (unit ? unit.symbol : ""),
+      exact,
+      value:displayed,
+      unit
+    };
+  }
+
+  function primaryLadder(q, primaryFormat) {
+    if (primaryFormat.exact) return [];
+    const result = [];
+    for (const sf of [3,5,8]) {
+      const number = significantFormat(primaryFormat.value,sf);
+      if (!number) continue;
+      const text = number + (primaryFormat.unit ? primaryFormat.unit.symbol : "");
+      if (text === primaryFormat.text || result.includes(text)) continue;
+      result.push(text);
+    }
+    return result;
+  }
+
+  function isLoneLiteral(node) {
+    if (!node) return false;
+    if (node.type === "number") return true;
+    if (node.type === "unary" && (node.op === "+" || node.op === "-"))
+      return isLoneLiteral(node.arg);
+    return false;
+  }
+
+  function isBareUnitQuantity(node) {
+    return node?.type === "binary" &&
+      node.op === "*" &&
+      node.implicit &&
+      (
+        (isLoneLiteral(node.left) && node.right.type === "unit") ||
+        (node.left.type === "unit" && isLoneLiteral(node.right))
+      );
+  }
+
+  function validPhoneOrDate(text) {
+    const s = text.trim();
+    return [
+      /^\d{3}-\d{4}$/,
+      /^\d{3}-\d{3}-\d{4}$/,
+      /^\(?\d{3}\)?[ -]?\d{3}-\d{4}$/,
+      /^\d{4}-\d{1,2}-\d{1,2}$/,
+      /^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/
+    ].some(r => r.test(s));
+  }
+
+  function canonicalExpression(text) {
+    return text.trim()
+      .replace(/\s*([+\-*/%^=])\s*/g," $1 ")
+      .replace(/\s+/g," ")
+      .trim();
+  }
+
+  function parseLongestSuffix(segment) {
+    if (segment.length > 500) return null;
+
+    for (let start=0; start<segment.length; start++) {
+      if (start && /[A-Za-z0-9_.]/.test(segment[start-1]) &&
+          /[A-Za-z0-9_.]/.test(segment[start])) continue;
+
+      const candidate = segment.slice(start).trim();
+      if (!candidate) continue;
+
+      try {
+        const tokens = tokenize(candidate);
+        if (!tokens.length) continue;
+        const parser = new Parser(tokens);
+        const ast = parser.parse();
+        return {ast,text:candidate,start};
+      } catch {}
+    }
+    return null;
+  }
+
+  function splitConversion(text) {
+    const match = text.match(/^(.*?)(?:\s+(?:to|in)\s+|\s*->\s*)([^=]+)$/i);
+    if (!match) return null;
+    const target = specialUnit(match[2].trim());
+    if (!target) return null;
+    return {expression:match[1].trim(),target};
+  }
+
+  function analyseLine() {
+    if (composing || editor.selectionStart !== editor.selectionEnd) return null;
+
+    const caret = editor.selectionStart;
+    const value = editor.value;
+    const lineStart = value.lastIndexOf("\n",caret-1)+1;
+    const lineEndIndex = value.indexOf("\n",caret);
+    const lineEnd = lineEndIndex < 0 ? value.length : lineEndIndex;
+    const afterCaret = value.slice(caret,lineEnd);
+
+    if (/\S/.test(afterCaret)) return null;
+
+    let before = value.slice(lineStart,caret);
+    const trailing = before.match(/\s*$/)[0];
+    before = before.slice(0,before.length-trailing.length);
+
+    let bullet = false;
+    let bulletPrefix = "";
+    const bulletMatch = before.match(/^(\s*[-*+•–]\s+)(.*)$/s);
+    if (bulletMatch) {
+      bullet = true;
+      bulletPrefix = bulletMatch[1];
+      before = bulletMatch[2];
+    }
+
+    const nameSuggestions = autocomplete(before);
+    if (nameSuggestions.length) {
+      return {
+        lineStart,caret,trailing,
+        suggestions:nameSuggestions,
+        ghostPrefix:"",
+        className:"inline",
+        typedResult:"",
+        expression:before
+      };
+    }
+
+    const conversion = splitConversion(before);
+    if (conversion) {
+      const parsed = parseLongestSuffix(conversion.expression);
+      if (!parsed) return null;
+      return buildAnalysis({
+        parsed,
+        explicit:true,
+        typedResult:"",
+        expressionText:conversion.expression,
+        target:conversion.target,
+        bullet:false,
+        lineStart,caret,trailing,
+        insertionPrefix:"",
+        resultStart:caret
+      });
+    }
+
+    const parts = before.split("=");
+    let explicit = false;
+    let expressionSegment = "";
+    let typedResult = "";
+    let resultStart = caret;
+
+    if (before.endsWith("=")) {
+      explicit = true;
+      expressionSegment = parts.length >= 2 ? parts[parts.length-2] : "";
+      resultStart = caret;
+    } else if (parts.length > 1) {
+      const last = parts[parts.length-1].trim();
+      const previous = parts[parts.length-2];
+      const previousParsed = parseLongestSuffix(previous);
+
+      if (previousParsed && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?(?:\s*[A-Za-z°µμΩ/]+)?$/i.test(last)) {
+        explicit = true;
+        expressionSegment = previous;
+        typedResult = last;
+        resultStart = before.lastIndexOf("=")+1;
+        while (/\s/.test(editor.value[resultStart] || "")) resultStart++;
+      } else {
+        expressionSegment = parts[parts.length-1];
+      }
+    } else {
+      expressionSegment = before;
+    }
+
+    const parsed = parseLongestSuffix(expressionSegment);
+    if (!parsed) return null;
+
+    return buildAnalysis({
+      parsed,explicit,typedResult,
+      expressionText:parsed.text,
+      target:null,bullet,
+      lineStart,caret,trailing,
+      insertionPrefix:explicit ? "" : spacingPrefix(parsed.text),
+      resultStart
+    });
+  }
+
+  function spacingPrefix(expression) {
+    return /\s[+\-*/]\s/.test(expression) ? " = " : "=";
+  }
+
+  function buildAnalysis(info) {
+    const {
+      parsed,explicit,typedResult,expressionText,target,bullet,
+      lineStart,caret,trailing,insertionPrefix,resultStart
+    } = info;
+
+    if (isLoneLiteral(parsed.ast)) return null;
+    if (/^[+-]?50%$/.test(expressionText.trim())) return null;
+
+    const phoneDate = validPhoneOrDate(expressionText);
+    const ambiguousNodes = collectAmbiguities(parsed.ast);
+    const bareUnit = isBareUnitQuantity(parsed.ast);
+
+    let className = "inline";
+    if (!explicit && (phoneDate || bullet || bareUnit || ambiguousNodes.length))
+      className = "chip";
+
+    const modes = containsBareTrig(parsed.ast) ? ["rad","deg"] : ["rad"];
+    const variants = [];
+
+    if (ambiguousNodes.length) {
+      const first = ambiguousNodes[0];
+      for (let i=0;i<first.resolution.candidates.length;i++) {
+        variants.push(new Map([[first,i]]));
+      }
+    } else variants.push(new Map());
+
+    const evaluated = [];
+
+    for (const choices of variants) {
+      for (const mode of modes) {
+        try {
+          const q = evaluate(parsed.ast,{mode,choices});
+          q.value = cleanDecimal(q.value);
+          if (target && !sameDims(q.dims,target.dims))
+            throw new Error("conversion mismatch");
+          evaluated.push({q,mode,choices});
+        } catch {}
+      }
+    }
+
+    if (!evaluated.length) return null;
+
+    const suggestions = buildSuggestions({
+      evaluated,
+      expressionText,
+      target,
+      explicit,
+      typedResult,
+      className,
+      insertionPrefix,
+      ambiguous:ambiguousNodes.length>0,
+      resultStart,
+      caret
+    });
+
+    if (!suggestions.length) return null;
+
+    return {
+      lineStart,caret,trailing,
+      suggestions,
+      ghostPrefix:"",
+      className,
+      typedResult,
+      expression:expressionText,
+      resultStart
+    };
+  }
+
+  function buildSuggestions(options) {
+    const {
+      evaluated,expressionText,target,explicit,typedResult,
+      className,insertionPrefix,ambiguous,resultStart,caret
+    } = options;
+
+    const raw = [];
+    const trig = evaluated.length>1 &&
+      new Set(evaluated.map(x=>x.mode)).size>1;
+
+    for (const item of evaluated) {
+      const q = item.q;
+      const primaryUnit = target || q.unit;
+      const primary = formatQuantity(q,primaryUnit,false);
+      const tag = trig ? item.mode : null;
+
+      raw.push(makeRaw(primary.text,"primary",tag,q,primaryUnit,item));
+
+      if (!target && !ambiguous) {
+        const alternatives = curated[dimsKey(q.dims)] || [];
+        for (const symbol of alternatives) {
+          const unit = specialUnit(symbol);
+          if (!unit || !sameDims(unit.dims,q.dims)) continue;
+          if (primaryUnit && unit.symbol === primaryUnit.symbol) continue;
+          const alt = formatQuantity(q,unit,true);
+          raw.push(makeRaw(alt.text,"alternate",tag,q,unit,item));
+        }
+      }
+
+      for (const ladderText of primaryLadder(q,primary)) {
+        raw.push(makeRaw(ladderText,"ladder",tag,q,primaryUnit,item));
+      }
+    }
+
+    const ordered = trig
+      ? [
+          ...raw.filter(x=>x.kind==="primary"&&x.tag==="rad"),
+          ...raw.filter(x=>x.kind==="primary"&&x.tag==="deg"),
+          ...raw.filter(x=>x.kind==="ladder"&&x.tag==="rad"),
+          ...raw.filter(x=>x.kind==="ladder"&&x.tag==="deg")
+        ]
+      : raw;
+
+    const deduped = [];
+    const seen = new Set();
+
+    for (const r of ordered) {
+      const key = r.result+"|"+(r.tag||"")+"|"+r.kind;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(r);
+    }
+
+    const expected = deduped[0]?.result;
+    if (!expected) return [];
+
+    if (typedResult) {
+      const matches = deduped.filter(x => x.result.startsWith(typedResult));
+
+      if (!matches.length) {
+        return [{
+          insertText:expected,
+          displayEquation:canonicalExpression(expressionText)+" = "+expected,
+          typedPrefixLen:0,
+          tag:null,
+          inlineEligible:false,
+          kind:"replace",
+          replaceStart:resultStart,
+          replaceEnd:caret
+        }];
+      }
+
+      const incomplete = matches.filter(x => x.result !== typedResult);
+      if (!incomplete.length) return [];
+
+      return incomplete.map(x => {
+        const remainder = x.result.slice(typedResult.length);
+        return {
+          insertText:remainder,
+          displayEquation:canonicalExpression(expressionText)+" = "+x.result,
+          typedPrefixLen:typedResult.length,
+          tag:x.tag,
+          inlineEligible:
+            x.kind==="primary" &&
+            className==="inline" &&
+            !ambiguous,
+          kind:x.kind,
+          replaceStart:caret,
+          replaceEnd:caret
+        };
+      });
+    }
+
+    return deduped.map(x => {
+      const insertText = insertionPrefix + x.result;
+      return {
+        insertText,
+        displayEquation:
+          canonicalExpression(expressionText)+" = "+x.result,
+        typedPrefixLen:0,
+        tag:x.tag,
+        inlineEligible:
+          x.kind==="primary" &&
+          className==="inline" &&
+          !ambiguous,
+        kind:x.kind,
+        replaceStart:caret,
+        replaceEnd:caret
+      };
+    });
+  }
+
+  function makeRaw(result,kind,tag,q,unit,item) {
+    return {result,kind,tag,q,unit,item};
+  }
+
+  function autocomplete(text) {
+    const conversion = text.match(/(?:\bto\b|\bin\b|->)\s*([A-Za-zµμΩ]*)$/i);
+    const partial = conversion
+      ? conversion[1]
+      : text.match(/([A-Za-zµμΩ_]{2,})$/)?.[1];
+
+    if (!partial) return [];
+
+    const lower = partial.toLowerCase();
+    const names = [
+      "sqrt(","cbrt(","sin(","cos(","tan(","asin(","acos(","atan(",
+      "log(","log2(","ln(","pi",
+      ...units.flatMap(u => [...u.symbols,...u.names])
+    ];
+
+    const unique = [...new Set(names)]
+      .filter(n => n.toLowerCase().startsWith(lower) && n.length>partial.length)
+      .slice(0,12);
+
+    return unique.map(n => ({
+      insertText:n.slice(partial.length),
+      displayEquation:n,
+      typedPrefixLen:partial.length,
+      tag:null,
+      inlineEligible:true,
+      kind:"autocomplete",
+      replaceStart:editor.selectionStart,
+      replaceEnd:editor.selectionStart
+    }));
+  }
+
+  let suggestions = [];
+  let selected = 0;
+  let explicitlyMoved = false;
+  let dismissed = false;
+  let composing = false;
+  let timer = null;
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(run,30);
+  }
+
+  function run() {
+    if (composing || dismissed) {
+      clearSuggestions();
+      syncMirror();
+      return;
+    }
+
+    const analysis = analyseLine();
+    suggestions = analysis?.suggestions || [];
+    selected = 0;
+    explicitlyMoved = false;
+    render();
+  }
+
+  function render() {
+    chipsEl.textContent = "";
+    bar.classList.toggle("empty",!suggestions.length);
+    hint.textContent = suggestions.length
+      ? "Tab/Enter accept · ←→ switch"
+      : "";
+
+    suggestions.forEach((s,i) => {
+      const button = document.createElement("button");
+      button.className = "chip" + (i===selected ? " selected" : "");
+      button.type = "button";
+      button.dataset.index = i;
+
+      const typed = document.createElement("span");
+      typed.className = "typed";
+
+      const strong = document.createElement("span");
+      strong.className = "insert";
+
+      if (s.typedPrefixLen > 0) {
+        const split = Math.max(0,s.displayEquation.length-s.insertText.length);
+        typed.textContent = s.displayEquation.slice(0,split);
+        strong.textContent = s.displayEquation.slice(split);
+      } else {
+        const eq = s.displayEquation.lastIndexOf("=");
+        typed.textContent = eq >= 0 ? s.displayEquation.slice(0,eq+1)+" " : "";
+        strong.textContent = eq >= 0
+          ? s.displayEquation.slice(eq+1).trim()
+          : s.displayEquation;
+      }
+
+      button.append(typed,strong);
+
+      if (s.tag) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = s.tag;
+        button.append(tag);
+      }
+
+      button.addEventListener("mousedown",e => e.preventDefault());
+      button.addEventListener("click",() => accept(i));
+      chipsEl.append(button);
+    });
+
+    syncMirror();
+    chipsEl.children[selected]?.scrollIntoView({
+      block:"nearest",inline:"nearest"
+    });
+  }
+
+  function syncMirror() {
+    const value = editor.value;
+    const caret = editor.selectionStart;
+    const selectedSuggestion = suggestions[selected];
+    const ghost = selectedSuggestion?.inlineEligible
+      ? selectedSuggestion.insertText
+      : "";
+
+    mirror.textContent = "";
+    mirror.append(document.createTextNode(value.slice(0,caret)));
+
+    if (ghost) {
+      const span = document.createElement("span");
+      span.className = "ghost";
+      span.textContent = ghost;
+      mirror.append(span);
+    }
+
+    mirror.append(document.createTextNode(value.slice(caret) || "\u200b"));
+    mirror.scrollTop = editor.scrollTop;
+    mirror.scrollLeft = editor.scrollLeft;
+  }
+
+  function clearSuggestions() {
+    suggestions = [];
+    selected = 0;
+    explicitlyMoved = false;
+    render();
+  }
+
+  function insertText(text,start=editor.selectionStart,end=editor.selectionEnd) {
+    editor.focus();
+    editor.setSelectionRange(start,end);
+
+    let inserted = false;
+    try {
+      inserted = document.execCommand("insertText",false,text);
+    } catch {}
+
+    if (!inserted) {
+      editor.setRangeText(text,start,end,"end");
+      editor.dispatchEvent(new InputEvent("input",{
+        bubbles:true,
+        inputType:"insertText",
+        data:text
+      }));
+    }
+  }
+
+  function accept(index=selected) {
+    const s = suggestions[index];
+    if (!s) return;
+
+    dismissed = false;
+    insertText(s.insertText,s.replaceStart,s.replaceEnd);
+    localStorage.setItem(STORAGE_KEY,editor.value);
+    schedule();
+  }
+
+  editor.addEventListener("input",() => {
+    dismissed = false;
+    localStorage.setItem(STORAGE_KEY,editor.value);
+    schedule();
+    syncMirror();
+  });
+
+  editor.addEventListener("scroll",syncMirror);
+  editor.addEventListener("click",schedule);
+  editor.addEventListener("select",schedule);
+
+  editor.addEventListener("compositionstart",() => {
+    composing = true;
+    clearSuggestions();
+  });
+
+  editor.addEventListener("compositionend",() => {
+    composing = false;
+    schedule();
+  });
+
+  editor.addEventListener("keydown",e => {
+    if (e.key === "Escape") {
+      dismissed = true;
+      clearSuggestions();
+      return;
+    }
+
+    if (e.altKey && /^[1-9]$/.test(e.key)) {
+      const i = Number(e.key)-1;
+      if (suggestions[i]) {
+        e.preventDefault();
+        accept(i);
+      }
+      return;
+    }
+
+    const forward = e.key === "ArrowRight" || e.key === "ArrowDown";
+    const backward = e.key === "ArrowLeft" || e.key === "ArrowUp";
+
+    if (suggestions.length && (forward || backward)) {
+      const next = selected + (forward ? 1 : -1);
+      if (next >= 0 && next < suggestions.length) {
+        e.preventDefault();
+        selected = next;
+        explicitlyMoved = true;
+        render();
+      } else {
+        clearSuggestions();
+      }
+      return;
+    }
+
+    if (e.key === "Tab" || e.key === "Enter") {
+      const s = suggestions[selected];
+      const acceptable = !!s && (s.inlineEligible || explicitlyMoved);
+
+      if (acceptable) {
+        e.preventDefault();
+        accept(selected);
+        return;
+      }
+
+      if (e.key === "Tab") {
+        e.preventDefault();
+        insertText("\t");
+        return;
+      }
+
+      // Enter falls through and inserts a native newline.
+      clearSuggestions();
+      return;
+    }
+
+    if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+      dismissed = false;
+    }
+  });
+
+  syncMirror();
+  schedule();
+  editor.focus();
+})();
+</script>
+</body>
+</html>
