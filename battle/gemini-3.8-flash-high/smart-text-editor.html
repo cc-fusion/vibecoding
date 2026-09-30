@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scratchpad Calculator</title>
+  <!-- High-precision arithmetic via Decimal.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/decimal.js/10.4.3/decimal.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #1a1a1a;
+      --ghost-color: #8c8c8c;
+      --bar-bg: #f8f9fa;
+      --bar-border: #e2e8f0;
+      --chip-bg: #edf2f7;
+      --chip-text: #2d3748;
+      --chip-border: #cbd5e0;
+      --chip-active-bg: #3182ce;
+      --chip-active-text: #ffffff;
+      --chip-active-border: #2b6cb0;
+      --hint-color: #a0aec0;
+      --dim-text: #718096;
+      --tag-bg: rgba(0, 0, 0, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-color: #121316;
+        --text-color: #e2e8f0;
+        --ghost-color: #64748b;
+        --bar-bg: #181a1f;
+        --bar-border: #262930;
+        --chip-bg: #22262e;
+        --chip-text: #cbd5e1;
+        --chip-border: #333842;
+        --chip-active-bg: #3182ce;
+        --chip-active-text: #ffffff;
+        --chip-active-border: #4299e1;
+        --hint-color: #4b5563;
+        --dim-text: #94a3b8;
+        --tag-bg: rgba(255, 255, 255, 0.12);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, monospace;
+    }
+
+    #shell {
+      position: relative;
+      width: 100vw;
+      height: calc(100vh - 42px);
+    }
+
+    #mirror, #editor {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 28px;
+      margin: 0;
+      font-family: inherit;
+      font-size: 16px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      tab-size: 4;
+      border: none;
+      outline: none;
+    }
+
+    #mirror {
+      pointer-events: none;
+      color: transparent;
+      user-select: none;
+      overflow-y: hidden;
+      z-index: 1;
+    }
+
+    .ghost-text {
+      color: var(--ghost-color);
+      opacity: 0.95;
+    }
+
+    #editor {
+      background: transparent;
+      color: var(--text-color);
+      resize: none;
+      z-index: 2;
+      overflow-y: auto;
+    }
+
+    /* Thin bottom strip */
+    #bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      height: 42px;
+      background: var(--bar-bg);
+      border-top: 1px solid var(--bar-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 10;
+      font-size: 13px;
+    }
+
+    #chips-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      height: 100%;
+      padding: 0 4px;
+    }
+
+    #chips-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chip {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: var(--chip-bg);
+      color: var(--chip-text);
+      border: 1px solid var(--chip-border);
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.1s ease;
+      font-size: 12.5px;
+    }
+
+    .chip:hover {
+      border-color: var(--chip-active-border);
+    }
+
+    .chip.active {
+      background: var(--chip-active-bg);
+      color: var(--chip-active-text);
+      border-color: var(--chip-active-border);
+    }
+
+    .chip .dim {
+      opacity: 0.55;
+    }
+
+    .chip.active .dim {
+      opacity: 0.8;
+    }
+
+    .chip .highlight {
+      font-weight: 600;
+    }
+
+    .chip .tag {
+      font-size: 10px;
+      text-transform: uppercase;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: var(--tag-bg);
+      letter-spacing: 0.5px;
+    }
+
+    #key-hint {
+      flex-shrink: 0;
+      color: var(--hint-color);
+      font-size: 11.5px;
+      margin-left: 16px;
+      white-space: nowrap;
+      user-select: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    #key-hint.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+<div id="shell">
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Start typing calculations... (e.g. 1+1, 1/97, 5km to mi, 3kw * 2s)"></textarea>
+</div>
+
+<div id="bottom-bar">
+  <div id="chips-strip"></div>
+  <div id="key-hint">Tab/Enter accept · ←→ switch</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // Configure Decimal precision
+  Decimal.set({ precision: 50, rounding: Decimal.ROUND_HALF_UP });
+
+  /* ==========================================================================
+     1. UNITS DEFINITIONS & KNOWLEDGE BASE
+     ========================================================================== */
+  // Dimension vector indices: [Length, Mass, Time, Current, Temp, Data, Angle]
+  const DIMS = { L: 0, M: 1, T: 2, I: 3, TH: 4, D: 5, A: 6 };
+
+  const SI_PREFIXES = {
+    'Y': new Decimal('1e24'), 'Z': new Decimal('1e21'), 'E': new Decimal('1e18'),
+    'P': new Decimal('1e15'), 'T': new Decimal('1e12'), 'G': new Decimal('1e9'),
+    'M': new Decimal('1e6'),  'k': new Decimal('1e3'),  'h': new Decimal('1e2'),
+    'da': new Decimal('10'),  'd': new Decimal('1e-1'), 'c': new Decimal('1e-2'),
+    'm': new Decimal('1e-3'), 'µ': new Decimal('1e-6'), 'μ': new Decimal('1e-6'),
+    'u': new Decimal('1e-6'), 'n': new Decimal('1e-9'), 'p': new Decimal('1e-12'),
+    'f': new Decimal('1e-15'),'a': new Decimal('1e-18'),'z': new Decimal('1e-21'),
+    'y': new Decimal('1e-24')
+  };
+
+  const DATA_PREFIXES = {
+    'k': new Decimal('1000'), 'M': new Decimal('1e6'),  'G': new Decimal('1e9'),
+    'T': new Decimal('1e12'), 'P': new Decimal('1e15'), 'E': new Decimal('1e18'),
+    'Z': new Decimal('1e21'), 'Y': new Decimal('1e24')
+  };
+
+  // Base raw units
+  const RAW_UNITS = [
+    // Mass (SI base: kg, but standard prefixable unit is g)
+    { names: ['gram', 'grams'], symbols: ['g'], dims: [0,1,0,0,0,0,0], factor: '1e-3', prefixable: 'all' },
+    { names: ['ounce', 'ounces'], symbols: ['oz'], dims: [0,1,0,0,0,0,0], factor: '0.028349523125', prefixable: 'none' },
+    { names: ['pound', 'pounds'], symbols: ['lb', 'lbs'], dims: [0,1,0,0,0,0,0], factor: '0.45359237', prefixable: 'none' },
+
+    // Length
+    { names: ['meter', 'meters', 'metre', 'metres'], symbols: ['m'], dims: [1,0,0,0,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['inch', 'inches'], symbols: ['in'], dims: [1,0,0,0,0,0,0], factor: '0.0254', prefixable: 'none' },
+    { names: ['foot', 'feet'], symbols: ['ft'], dims: [1,0,0,0,0,0,0], factor: '0.3048', prefixable: 'none' },
+    { names: ['yard', 'yards'], symbols: ['yd'], dims: [1,0,0,0,0,0,0], factor: '0.9144', prefixable: 'none' },
+    { names: ['mile', 'miles'], symbols: ['mi'], dims: [1,0,0,0,0,0,0], factor: '1609.344', prefixable: 'none' },
+
+    // Area
+    { names: ['acre', 'acres'], symbols: ['acre'], dims: [2,0,0,0,0,0,0], factor: '4046.8564224', prefixable: 'none' },
+
+    // Time
+    { names: ['second', 'seconds'], symbols: ['s', 'sec'], dims: [0,0,1,0,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['minute', 'minutes'], symbols: ['min'], dims: [0,0,1,0,0,0,0], factor: '60', prefixable: 'none' },
+    { names: ['hour', 'hours'], symbols: ['h', 'hr'], dims: [0,0,1,0,0,0,0], factor: '3600', prefixable: 'none' },
+    { names: ['day', 'days'], symbols: ['day', 'd'], dims: [0,0,1,0,0,0,0], factor: '86400', prefixable: 'none' },
+    { names: ['week', 'weeks'], symbols: ['week', 'wk'], dims: [0,0,1,0,0,0,0], factor: '604800', prefixable: 'none' },
+    { names: ['month', 'months'], symbols: ['month', 'mo'], dims: [0,0,1,0,0,0,0], factor: '2629800', prefixable: 'none' }, // 365.25/12 days
+    { names: ['year', 'years'], symbols: ['year', 'yr'], dims: [0,0,1,0,0,0,0], factor: '31557600', prefixable: 'none' }, // 365.25 days
+    { names: ['decade', 'decades'], symbols: ['decade'], dims: [0,0,1,0,0,0,0], factor: '315576000', prefixable: 'none' },
+    { names: ['century', 'centuries'], symbols: ['century'], dims: [0,0,1,0,0,0,0], factor: '3155760000', prefixable: 'none' },
+
+    // Data
+    { names: ['bit', 'bits'], symbols: ['b'], dims: [0,0,0,0,0,1,0], factor: '1', prefixable: 'large' },
+    { names: ['byte', 'bytes'], symbols: ['B'], dims: [0,0,0,0,0,1,0], factor: '8', prefixable: 'large' },
+
+    // Energy
+    { names: ['joule', 'joules'], symbols: ['J'], dims: [2,1,-2,0,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['calorie', 'calories'], symbols: ['cal'], dims: [2,1,-2,0,0,0,0], factor: '4.184', prefixable: 'all' },
+    { names: ['Calorie', 'Calories'], symbols: ['Cal', 'kcal'], dims: [2,1,-2,0,0,0,0], factor: '4184', prefixable: 'none' },
+    { names: ['watthour', 'watt-hour'], symbols: ['Wh'], dims: [2,1,-2,0,0,0,0], factor: '3600', prefixable: 'all' },
+
+    // Power
+    { names: ['watt', 'watts'], symbols: ['W'], dims: [2,1,-3,0,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['horsepower'], symbols: ['hp', 'HP'], dims: [2,1,-3,0,0,0,0], factor: '745.69987158227022', prefixable: 'none' },
+
+    // Force
+    { names: ['newton', 'newtons'], symbols: ['N'], dims: [1,1,-2,0,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['lbf', 'pound-force'], symbols: ['lbf'], dims: [1,1,-2,0,0,0,0], factor: '4.4482216152605', prefixable: 'none' },
+
+    // Pressure
+    { names: ['pascal', 'pascals'], symbols: ['Pa'], dims: [-1,1,-2,0,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['bar', 'bars'], symbols: ['bar'], dims: [-1,1,-2,0,0,0,0], factor: '1e5', prefixable: 'all' },
+    { names: ['atm', 'atmosphere'], symbols: ['atm'], dims: [-1,1,-2,0,0,0,0], factor: '101325', prefixable: 'none' },
+    { names: ['psi'], symbols: ['psi', 'PSI'], dims: [-1,1,-2,0,0,0,0], factor: '6894.757293168', prefixable: 'none' },
+
+    // Frequency
+    { names: ['hertz'], symbols: ['Hz'], dims: [0,0,-1,0,0,0,0], factor: '1', prefixable: 'all' },
+
+    // Current, Voltage, Resistance
+    { names: ['ampere', 'amperes', 'amp', 'amps'], symbols: ['A'], dims: [0,0,0,1,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['volt', 'volts'], symbols: ['V'], dims: [2,1,-3,-1,0,0,0], factor: '1', prefixable: 'all' },
+    { names: ['ohm', 'ohms'], symbols: ['Ω', 'ohm'], dims: [2,1,-3,-2,0,0,0], factor: '1', prefixable: 'all' },
+
+    // Angles
+    { names: ['radian', 'radians'], symbols: ['rad'], dims: [0,0,0,0,0,0,1], factor: '1', prefixable: 'none' },
+    { names: ['degree', 'degrees'], symbols: ['deg', '°'], dims: [0,0,0,0,0,0,1], factor: new Decimal(Math.PI).dividedBy(180).toString(), prefixable: 'none' },
+    { names: ['gradian', 'gradians'], symbols: ['grad'], dims: [0,0,0,0,0,0,1], factor: new Decimal(Math.PI).dividedBy(200).toString(), prefixable: 'none' },
+
+    // Volume
+    { names: ['liter', 'liters', 'litre', 'litres'], symbols: ['L', 'l'], dims: [3,0,0,0,0,0,0], factor: '1e-3', prefixable: 'all' },
+    { names: ['gallon', 'gallons'], symbols: ['gal'], dims: [3,0,0,0,0,0,0], factor: '0.003785411784', prefixable: 'none' },
+    { names: ['quart', 'quarts'], symbols: ['qt'], dims: [3,0,0,0,0,0,0], factor: '0.000946352946', prefixable: 'none' },
+    { names: ['pint', 'pints'], symbols: ['pt'], dims: [3,0,0,0,0,0,0], factor: '0.000473176473', prefixable: 'none' },
+    { names: ['cup', 'cups'], symbols: ['cup'], dims: [3,0,0,0,0,0,0], factor: '0.0002365882365', prefixable: 'none' },
+    { names: ['floz', 'fluid ounce'], symbols: ['floz', 'fl oz'], dims: [3,0,0,0,0,0,0], factor: '0.0000295735295625', prefixable: 'none' },
+    { names: ['tbsp'], symbols: ['tbsp'], dims: [3,0,0,0,0,0,0], factor: '0.00001478676478125', prefixable: 'none' },
+    { names: ['tsp'], symbols: ['tsp'], dims: [3,0,0,0,0,0,0], factor: '0.00000492892159375', prefixable: 'none' },
+
+    // Speed
+    { names: ['mph'], symbols: ['mph'], dims: [1,0,-1,0,0,0,0], factor: '0.44704', prefixable: 'none' },
+    { names: ['kph'], symbols: ['kph'], dims: [1,0,-1,0,0,0,0], factor: new Decimal('1000').dividedBy(3600).toString(), prefixable: 'none' },
+    { names: ['knot', 'knots'], symbols: ['knot'], dims: [1,0,-1,0,0,0,0], factor: new Decimal('1852').dividedBy(3600).toString(), prefixable: 'none' },
+
+    // Temperature (delta factor is 1 for K and °C, 5/9 for °F)
+    { names: ['kelvin'], symbols: ['K'], dims: [0,0,0,0,1,0,0], factor: '1', prefixable: 'all', isTemp: true, tempType: 'K' },
+    { names: ['celsius'], symbols: ['°C', 'degC', 'C'], dims: [0,0,0,0,1,0,0], factor: '1', prefixable: 'none', isTemp: true, tempType: 'C' },
+    { names: ['fahrenheit'], symbols: ['°F', 'degF', 'F'], dims: [0,0,0,0,1,0,0], factor: '0.5555555555555556', prefixable: 'none', isTemp: true, tempType: 'F' },
+
+    // Fuel economy
+    { names: ['mpg'], symbols: ['mpg'], dims: [-2,0,0,0,0,0,0], factor: '425143.707', prefixable: 'none' }
+  ];
+
+  // Derived Unit Naming table
+  const DERIVED_NAMING = [
+    { dims: [2, 1, -3, 0, 0, 0, 0], symbol: 'W', factor: new Decimal(1) },
+    { dims: [2, 1, -2, 0, 0, 0, 0], symbol: 'J', factor: new Decimal(1) },
+    { dims: [-1, 1, -2, 0, 0, 0, 0], symbol: 'Pa', factor: new Decimal(1) },
+    { dims: [0, 0, -1, 0, 0, 0, 0], symbol: 'Hz', factor: new Decimal(1) }
+  ];
+
+  // Curated alternate conversions per dimension
+  const CURATED_ALTERNATIVES = [
+    { key: 'length', dims: [1,0,0,0,0,0,0], units: ['km', 'm', 'mi', 'ft', 'yd', 'in', 'cm', 'mm'] },
+    { key: 'area', dims: [2,0,0,0,0,0,0], units: ['km^2', 'acre', 'ft^2', 'm^2', 'mi^2', 'yd^2'] },
+    { key: 'volume', dims: [3,0,0,0,0,0,0], units: ['L', 'm^3', 'gal', 'qt', 'pt', 'cup', 'fl oz', 'mL'] },
+    { key: 'mass', dims: [0,1,0,0,0,0,0], units: ['kg', 'g', 'lb', 'oz', 'mg'] },
+    { key: 'time', dims: [0,0,1,0,0,0,0], units: ['s', 'min', 'h', 'day', 'week', 'year'] },
+    { key: 'speed', dims: [1,0,-1,0,0,0,0], units: ['mph', 'kph', 'm/s', 'ft/s', 'knot'] },
+    { key: 'power', dims: [2,1,-3,0,0,0,0], units: ['W', 'kW', 'MW', 'hp', 'HP'] },
+    { key: 'energy', dims: [2,1,-2,0,0,0,0], units: ['J', 'kJ', 'Wh', 'kWh', 'cal', 'kcal'] },
+    { key: 'pressure', dims: [-1,1,-2,0,0,0,0], units: ['Pa', 'kPa', 'bar', 'PSI', 'atm'] },
+    { key: 'force', dims: [1,1,-2,0,0,0,0], units: ['N', 'kN', 'lbf'] },
+    { key: 'temp', dims: [0,0,0,0,1,0,0], units: ['°C', '°F', 'K'] },
+    { key: 'data', dims: [0,0,0,0,0,1,0], units: ['MB', 'GB', 'kB', 'B', 'Mbps', 'MB/s'] }
+  ];
+
+  /* Resolve unit token with §7 symbol resolution order and lowercase leniency */
+  function resolveUnitSymbol(rawStr) {
+    if (!rawStr) return null;
+
+    // Check exact case-sensitive matches first
+    const exactMatches = [];
+    for (const u of RAW_UNITS) {
+      for (const sym of u.symbols) {
+        if (rawStr === sym) {
+          exactMatches.push({
+            unit: u, prefix: '', factor: new Decimal(u.factor),
+            symbol: sym, canonical: sym, exactMatch: true
+          });
+        }
+        if (u.prefixable === 'all' || u.prefixable === 'large') {
+          const pTable = (u.prefixable === 'large') ? DATA_PREFIXES : SI_PREFIXES;
+          for (const [pKey, pVal] of Object.entries(pTable)) {
+            if (rawStr === pKey + sym) {
+              exactMatches.push({
+                unit: u, prefix: pKey, factor: new Decimal(u.factor).times(pVal),
+                symbol: rawStr, canonical: pKey + sym, exactMatch: true
+              });
+            }
+          }
+        }
+      }
+      for (const name of u.names) {
+        if (rawStr.toLowerCase() === name.toLowerCase()) {
+          exactMatches.push({
+            unit: u, prefix: '', factor: new Decimal(u.factor),
+            symbol: u.symbols[0], canonical: u.symbols[0], exactMatch: true
+          });
+        }
+      }
+    }
+
+    if (exactMatches.length > 0) {
+      return { matches: exactMatches, ambiguous: false };
+    }
+
+    // Step 2: Case-folded fallback
+    const lowerInput = rawStr.toLowerCase();
+    const candidateMap = new Map();
+
+    for (const u of RAW_UNITS) {
+      for (const sym of u.symbols) {
+        if (lowerInput === sym.toLowerCase()) {
+          const key = sym;
+          candidateMap.set(key, {
+            unit: u, prefix: '', factor: new Decimal(u.factor),
+            symbol: sym, canonical: sym, exactMatch: false
+          });
+        }
+        if (u.prefixable === 'all' || u.prefixable === 'large') {
+          const pTable = (u.prefixable === 'large') ? DATA_PREFIXES : SI_PREFIXES;
+          for (const [pKey, pVal] of Object.entries(pTable)) {
+            if (lowerInput === (pKey + sym).toLowerCase()) {
+              const fullSym = pKey + sym;
+              candidateMap.set(fullSym, {
+                unit: u, prefix: pKey, factor: new Decimal(u.factor).times(pVal),
+                symbol: fullSym, canonical: fullSym, exactMatch: false
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const candidates = Array.from(candidateMap.values());
+    if (candidates.length === 1) {
+      return { matches: candidates, ambiguous: false };
+    } else if (candidates.length > 1) {
+      // Sort candidates: preserve typed prefix case first
+      candidates.sort((a, b) => {
+        const aMatchesCase = rawStr.startsWith(a.prefix);
+        const bMatchesCase = rawStr.startsWith(b.prefix);
+        if (aMatchesCase && !bMatchesCase) return -1;
+        if (!aMatchesCase && bMatchesCase) return 1;
+        return 0;
+      });
+      return { matches: candidates, ambiguous: true };
+    }
+
+    return null;
+  }
+
+  /* ==========================================================================
+     2. QUANTITY CLASS & DIMENSIONAL ARITHMETIC
+     ========================================================================== */
+  class Quantity {
+    constructor(val, dims = [0,0,0,0,0,0,0], unitInfo = null, exact = false) {
+      this.val = val instanceof Decimal ? val : new Decimal(val);
+      this.dims = [...dims];
+      this.unitInfo = unitInfo; // { symbol, derived: bool, isTemp: bool, ... }
+      this.exact = exact;
+    }
+
+    isDimensionless() {
+      return this.dims.every(d => d === 0);
+    }
+
+    hasEqualDimensions(other) {
+      return this.dims.every((d, i) => d === other.dims[i]);
+    }
+
+    add(other) {
+      if (!this.hasEqualDimensions(other)) {
+        throw new Error('Dimension mismatch in addition');
+      }
+      return new Quantity(this.val.plus(other.val), this.dims, this.unitInfo || other.unitInfo, this.exact && other.exact);
+    }
+
+    sub(other) {
+      if (!this.hasEqualDimensions(other)) {
+        throw new Error('Dimension mismatch in subtraction');
+      }
+      return new Quantity(this.val.minus(other.val), this.dims, this.unitInfo || other.unitInfo, this.exact && other.exact);
+    }
+
+    mul(other) {
+      const newDims = this.dims.map((d, i) => d + other.dims[i]);
+      const exact = this.exact && other.exact;
+      const newVal = this.val.times(other.val);
+      let info = null;
+
+      // Special derived combinations (Section 7)
+      // PSI * in^2 -> lbf
+      if (this.unitInfo?.symbol === 'PSI' && other.unitInfo?.symbol === 'in^2' ||
+          this.unitInfo?.symbol === 'in^2' && other.unitInfo?.symbol === 'PSI') {
+        info = { symbol: 'lbf', derived: true };
+      } else if (this.unitInfo && other.unitInfo && this.unitInfo.symbol !== other.unitInfo.symbol) {
+        for (const dn of DERIVED_NAMING) {
+          if (newDims.every((d, i) => d === dn.dims[i])) {
+            info = { symbol: dn.symbol, derived: true };
+            break;
+          }
+        }
+      }
+
+      if (!info) {
+        if (this.isDimensionless()) info = other.unitInfo;
+        else if (other.isDimensionless()) info = this.unitInfo;
+        else if (this.unitInfo && other.unitInfo && this.unitInfo.symbol === other.unitInfo.symbol) {
+          info = { symbol: `${this.unitInfo.symbol}^2`, derived: false };
+        }
+      }
+
+      return new Quantity(newVal, newDims, info, exact);
+    }
+
+    div(other) {
+      if (other.val.isZero()) throw new Error('Division by zero');
+      const newDims = this.dims.map((d, i) => d - other.dims[i]);
+      const newVal = this.val.dividedBy(other.val);
+      let info = null;
+
+      if (this.unitInfo && other.unitInfo) {
+        for (const dn of DERIVED_NAMING) {
+          if (newDims.every((d, i) => d === dn.dims[i])) {
+            info = { symbol: dn.symbol, derived: true };
+            break;
+          }
+        }
+      }
+
+      if (!info) {
+        if (other.isDimensionless()) info = this.unitInfo;
+      }
+
+      // Check if rational division terminates
+      const exact = this.exact && other.exact && isTerminatingDivision(this.val, other.val);
+      return new Quantity(newVal, newDims, info, exact);
+    }
+
+    pow(p) {
+      if (!p.isDimensionless()) throw new Error('Exponent must be dimensionless');
+      const expNum = p.val.toNumber();
+      if (!isFinite(expNum)) throw new Error('Invalid exponent');
+      const newDims = this.dims.map(d => {
+        const product = d * expNum;
+        if (!Number.isInteger(product)) throw new Error('Fractional dimension');
+        return product;
+      });
+      const newVal = this.val.pow(p.val);
+      let symbol = this.unitInfo ? `${this.unitInfo.symbol}^${expNum}` : null;
+      return new Quantity(newVal, newDims, symbol ? { symbol } : null, this.exact && Number.isInteger(expNum));
+    }
+  }
+
+  function isTerminatingDivision(num, den) {
+    try {
+      let d = den.abs();
+      // Reduce by factors of 2 and 5
+      while (d.mod(2).isZero()) d = d.dividedBy(2);
+      while (d.mod(5).isZero()) d = d.dividedBy(5);
+      return d.equals(1);
+    } catch {
+      return false;
+    }
+  }
+
+  /* ==========================================================================
+     3. TOKENIZER
+     ========================================================================== */
+  const TOKENS = {
+    NUMBER: 'NUMBER',
+    IDENT: 'IDENT',
+    OP: 'OP',
+    LPAREN: 'LPAREN',
+    RPAREN: 'RPAREN',
+    COMMA: 'COMMA',
+    CONVERT: 'CONVERT'
+  };
+
+  function tokenize(str) {
+    let s = str.normalize('NFKC')
+      .replace(/×/g, '*')
+      .replace(/÷/g, '/')
+      .replace(/−/g, '-')
+      .replace(/π/g, 'pi')
+      .replace(/µ/g, 'u')
+      .replace(/μ/g, 'u')
+      .replace(/\*\*/g, '^');
+
+    const tokens = [];
+    let i = 0;
+    let taggedAmbiguityNeN = false;
+
+    while (i < s.length) {
+      const c = s[i];
+
+      if (/\s/.test(c)) {
+        i++;
+        continue;
+      }
+
+      // Explicit conversions
+      if (s.slice(i, i+2) === '->') {
+        tokens.push({ type: TOKENS.CONVERT, value: '->', pos: i });
+        i += 2;
+        continue;
+      }
+
+      if (c === '(') { tokens.push({ type: TOKENS.LPAREN, value: '(', pos: i++ }); continue; }
+      if (c === ')') { tokens.push({ type: TOKENS.RPAREN, value: ')', pos: i++ }); continue; }
+      if (c === ',') { tokens.push({ type: TOKENS.COMMA, value: ',', pos: i++ }); continue; }
+
+      // Numbers (with Ne-N tagging)
+      if (/\d/.test(c) || (c === '.' && i + 1 < s.length && /\d/.test(s[i+1]))) {
+        let start = i;
+        while (i < s.length && /[\d.]/.test(s[i])) i++;
+        if (i < s.length && (s[i] === 'e' || s[i] === 'E')) {
+          const next = s[i+1];
+          if (next === '+' || next === '-' || /\d/.test(next)) {
+            // Check Ne-N ambiguity
+            if (next === '-' && /\d/.test(s[i+2])) {
+              taggedAmbiguityNeN = true;
+            }
+            i++;
+            if (s[i] === '+' || s[i] === '-') i++;
+            while (i < s.length && /\d/.test(s[i])) i++;
+          }
+        }
+        tokens.push({ type: TOKENS.NUMBER, value: s.slice(start, i), pos: start });
+        continue;
+      }
+
+      // Operators
+      if (['+', '-', '*', '/', '%', '^', '!'].includes(c)) {
+        tokens.push({ type: TOKENS.OP, value: c, pos: i++ });
+        continue;
+      }
+
+      // Identifiers / Units / Functions
+      if (/[a-zA-Z_°Ω⁻¹²³]/.test(c)) {
+        let start = i;
+        while (i < s.length && /[a-zA-Z0-9_°Ω⁻¹²³^/-]/.test(s[i])) {
+          // Special case: sin-1 inverse
+          if (s[i] === '-' && !s.slice(start, i).match(/^(sin|cos|tan|asin|acos|atan)$/)) {
+            break;
+          }
+          i++;
+        }
+        let word = s.slice(start, i);
+
+        // Normalize superscripts
+        word = word.replace(/²/g, '^2').replace(/³/g, '^3').replace(/⁻¹/g, '^-1');
+
+        if (word === 'to' || word === 'in') {
+          tokens.push({ type: TOKENS.CONVERT, value: word, pos: start });
+        } else {
+          tokens.push({ type: TOKENS.IDENT, value: word, pos: start });
+        }
+        continue;
+      }
+
+      // Unknown character
+      return null;
+    }
+
+    return { tokens, taggedAmbiguityNeN };
+  }
+
+  /* ==========================================================================
+     4. PRECEDENCE-CLIMBING PARSER
+     ========================================================================== */
+  const TRIG_FUNCS = ['sin', 'cos', 'tan', 'csc', 'sec', 'cot'];
+  const INV_TRIG_FUNCS = ['arcsin', 'asin', 'sin-1', 'sin^-1', 'arccos', 'acos', 'cos-1', 'cos^-1', 'arctan', 'atan', 'tan-1', 'tan^-1'];
+
+  class Parser {
+    constructor(tokens) {
+      this.tokens = tokens;
+      this.pos = 0;
+    }
+
+    peek() { return this.tokens[this.pos]; }
+    next() { return this.tokens[this.pos++]; }
+
+    parse() {
+      const node = this.parseConversion();
+      if (this.pos < this.tokens.length) throw new Error('Trailing tokens');
+      return node;
+    }
+
+    parseConversion() {
+      let node = this.parseBinary(0);
+      if (this.peek()?.type === TOKENS.CONVERT) {
+        this.next(); // consume 'to', 'in', '->'
+        const target = this.next();
+        if (!target || target.type !== TOKENS.IDENT) throw new Error('Expected target unit');
+        node = { type: 'CONVERT_TO', expr: node, target: target.value };
+      }
+      return node;
+    }
+
+    parseBinary(minPrec) {
+      let left = this.parseUnary();
+
+      while (this.pos < this.tokens.length) {
+        const tok = this.peek();
+        if (!tok) break;
+
+        // Check postfix percent (%)
+        if (tok.type === TOKENS.OP && tok.value === '%') {
+          // Infix modulo vs postfix percent
+          const nextTok = this.tokens[this.pos + 1];
+          const isOperandStart = nextTok && (
+            nextTok.type === TOKENS.NUMBER ||
+            nextTok.type === TOKENS.IDENT ||
+            nextTok.type === TOKENS.LPAREN
+          );
+
+          if (!isOperandStart) {
+            this.next(); // consume %
+            left = { type: 'POSTFIX', op: '%', expr: left };
+            continue;
+          }
+        }
+
+        // Implicit multiplication insertion
+        if (this.canStartOperand(tok)) {
+          const prec = 4; // Tight implicit mult precedence
+          if (prec < minPrec) break;
+          const right = this.parseBinary(prec + 1);
+          left = { type: 'BINARY', op: '*', left, right, implicit: true };
+          continue;
+        }
+
+        if (tok.type !== TOKENS.OP && !(tok.type === TOKENS.IDENT && (tok.value === 'nPr' || tok.value === 'nCr'))) {
+          break;
+        }
+
+        const op = tok.value;
+        const prec = this.getPrecedence(op);
+        if (prec < minPrec) break;
+
+        this.next(); // consume op
+
+        // Right-associative exponent
+        const nextMinPrec = (op === '^') ? prec : prec + 1;
+        const right = this.parseBinary(nextMinPrec);
+        left = { type: 'BINARY', op, left, right };
+      }
+
+      return left;
+    }
+
+    getPrecedence(op) {
+      if (op === '+' || op === '-') return 1;
+      if (op === '*' || op === '/' || op === '%') return 3;
+      if (op === 'nPr' || op === 'nCr') return 4;
+      if (op === '^') return 7;
+      return 0;
+    }
+
+    canStartOperand(tok) {
+      if (!tok) return false;
+      return tok.type === TOKENS.NUMBER ||
+             tok.type === TOKENS.IDENT ||
+             tok.type === TOKENS.LPAREN;
+    }
+
+    parseUnary() {
+      const tok = this.peek();
+      if (!tok) throw new Error('Unexpected EOF');
+
+      // Unary minus
+      if (tok.type === TOKENS.OP && tok.value === '-') {
+        this.next();
+        const expr = this.parseUnary();
+        return { type: 'UNARY', op: '-', expr };
+      }
+      if (tok.type === TOKENS.OP && tok.value === '+') {
+        this.next();
+        return this.parseUnary();
+      }
+
+      return this.parsePrimary();
+    }
+
+    parsePrimary() {
+      let tok = this.peek();
+      if (!tok) throw new Error('Unexpected EOF');
+
+      let node;
+
+      if (tok.type === TOKENS.NUMBER) {
+        node = { type: 'NUMBER', value: this.next().value };
+      } else if (tok.type === TOKENS.LPAREN) {
+        this.next(); // consume (
+        node = this.parseConversion();
+        if (this.peek()?.type !== TOKENS.RPAREN) throw new Error('Missing )');
+        this.next(); // consume )
+      } else if (tok.type === TOKENS.IDENT) {
+        const id = this.next().value;
+
+        // Check function call
+        let funcMatch = this.detectFunction(id);
+        if (funcMatch) {
+          node = this.parseFunctionCall(funcMatch);
+        } else {
+          node = { type: 'IDENT', value: id };
+        }
+      } else {
+        throw new Error(`Unexpected token ${tok.value}`);
+      }
+
+      // Postfix factorial (!)
+      while (this.peek()?.type === TOKENS.OP && this.peek().value === '!') {
+        this.next();
+        node = { type: 'POSTFIX', op: '!', expr: node };
+      }
+
+      return node;
+    }
+
+    detectFunction(id) {
+      // Direct known names
+      const allFuncs = [
+        'sqrt', 'cbrt', 'ln', 'log', 'log2', 'log10', 'nPr', 'nCr', 'P', 'C',
+        ...TRIG_FUNCS, ...INV_TRIG_FUNCS
+      ];
+      for (const f of allFuncs) {
+        if (id === f) return { name: f, power: 1 };
+      }
+
+      // Trig powers e.g. sin^2, sin², cos^2, sin2
+      const trigPowerMatch = id.match(/^(sin|cos|tan|csc|sec|cot)(\^?(\d+))$/);
+      if (trigPowerMatch) {
+        // Section 12 rule: bare sin2 with nothing after it means sin(2)
+        const funcName = trigPowerMatch[1];
+        const powerVal = parseInt(trigPowerMatch[3], 10);
+        if (this.pos >= this.tokens.length) {
+          return { name: funcName, argValue: powerVal };
+        }
+        return { name: funcName, power: powerVal };
+      }
+
+      // log5(3) form
+      const logBaseMatch = id.match(/^log_?(\d+)$/);
+      if (logBaseMatch) {
+        return { name: 'logBase', base: parseInt(logBaseMatch[1], 10), power: 1 };
+      }
+
+      return null;
+    }
+
+    parseFunctionCall(funcMeta) {
+      let args = [];
+
+      if (funcMeta.argValue !== undefined) {
+        // Bare sin2 -> sin(2)
+        return { type: 'CALL', func: funcMeta.name, args: [{ type: 'NUMBER', value: funcMeta.argValue.toString() }], power: 1 };
+      }
+
+      if (this.peek()?.type === TOKENS.LPAREN) {
+        this.next(); // consume (
+        while (this.peek() && this.peek().type !== TOKENS.RPAREN) {
+          args.push(this.parseConversion());
+          if (this.peek()?.type === TOKENS.COMMA) this.next();
+        }
+        if (this.peek()?.type !== TOKENS.RPAREN) throw new Error('Unclosed call');
+        this.next(); // consume )
+      } else {
+        // Function application without parentheses: consumes next implicit-multiplication run
+        const argExpr = this.parseBinary(4);
+        args = [argExpr];
+      }
+
+      return {
+        type: 'CALL',
+        func: funcMeta.name,
+        args,
+        power: funcMeta.power || 1,
+        base: funcMeta.base
+      };
+    }
+  }
+
+  /* ==========================================================================
+     5. EVALUATOR (Dual-mode Trig & Decimal.js)
+     ========================================================================== */
+  class Evaluator {
+    constructor(mode = 'rad') {
+      this.mode = mode; // 'rad' | 'deg'
+      this.hasBareTrigArg = false;
+    }
+
+    eval(node) {
+      if (!node) return null;
+
+      switch (node.type) {
+        case 'NUMBER':
+          return new Quantity(new Decimal(node.value), [0,0,0,0,0,0,0], null, true);
+
+        case 'IDENT':
+          return this.evalIdent(node.value);
+
+        case 'UNARY': {
+          const res = this.eval(node.expr);
+          return new Quantity(res.val.neg(), res.dims, res.unitInfo, res.exact);
+        }
+
+        case 'POSTFIX': {
+          const res = this.eval(node.expr);
+          if (node.op === '%') {
+            return new Quantity(res.val.dividedBy(100), res.dims, res.unitInfo, res.exact);
+          }
+          if (node.op === '!') {
+            if (!res.isDimensionless()) throw new Error('Factorial requires dimensionless input');
+            const n = res.val.toNumber();
+            if (n < 0 || n > 170) throw new Error('Factorial out of range');
+            if (Number.isInteger(n)) {
+              let f = new Decimal(1);
+              for (let i = 2; i <= n; i++) f = f.times(i);
+              return new Quantity(f, [0,0,0,0,0,0,0], null, true);
+            } else {
+              // Lanczos approximation
+              return new Quantity(new Decimal(lanczosGamma(n + 1)), [0,0,0,0,0,0,0], null, false);
+            }
+          }
+          throw new Error('Unknown postfix');
+        }
+
+        case 'BINARY': {
+          if (node.op === '+') return this.eval(node.left).add(this.eval(node.right));
+          if (node.op === '-') return this.eval(node.left).sub(this.eval(node.right));
+          if (node.op === '*') return this.eval(node.left).mul(this.eval(node.right));
+          if (node.op === '/') return this.eval(node.left).div(this.eval(node.right));
+          if (node.op === '%') {
+            const l = this.eval(node.left);
+            const r = this.eval(node.right);
+            if (!l.hasEqualDimensions(r)) throw new Error('Modulo dimension mismatch');
+            return new Quantity(l.val.mod(r.val), l.dims, l.unitInfo, l.exact && r.exact);
+          }
+          if (node.op === '^') {
+            return this.eval(node.left).pow(this.eval(node.right));
+          }
+          if (node.op === 'nPr' || node.op === 'nCr') {
+            return this.evalCombinatorics(node.op, this.eval(node.left), this.eval(node.right));
+          }
+          throw new Error(`Unknown operator ${node.op}`);
+        }
+
+        case 'CALL':
+          return this.evalCall(node);
+
+        case 'CONVERT_TO': {
+          const val = this.eval(node.expr);
+          const targetUnit = resolveUnitSymbol(node.target);
+          if (!targetUnit || targetUnit.matches.length === 0) throw new Error('Unknown target unit');
+          const t = targetUnit.matches[0];
+          if (!val.dims.every((d, i) => d === t.unit.dims[i])) throw new Error('Incompatible conversion target');
+          const convertedVal = val.val.dividedBy(t.factor);
+          return new Quantity(convertedVal, t.unit.dims, { symbol: t.canonical }, val.exact);
+        }
+
+        default:
+          throw new Error('Unknown node type');
+      }
+    }
+
+    evalIdent(name) {
+      if (name === 'pi' || name === 'π') {
+        return new Quantity(new Decimal(Math.PI), [0,0,0,0,0,0,0], null, false);
+      }
+      if (name === 'e') {
+        return new Quantity(new Decimal(Math.E), [0,0,0,0,0,0,0], null, false);
+      }
+
+      const resolved = resolveUnitSymbol(name);
+      if (resolved && resolved.matches.length > 0) {
+        const u = resolved.matches[0];
+        return new Quantity(u.factor, u.unit.dims, { symbol: u.canonical, ambiguous: resolved.ambiguous }, true);
+      }
+
+      throw new Error(`Unknown identifier: ${name}`);
+    }
+
+    evalCall(node) {
+      const args = node.args.map(a => this.eval(a));
+
+      if (['nPr', 'P'].includes(node.func)) return this.evalCombinatorics('nPr', args[0], args[1]);
+      if (['nCr', 'C'].includes(node.func)) return this.evalCombinatorics('nCr', args[0], args[1]);
+
+      if (node.func === 'logBase') {
+        const arg = args[0];
+        if (!arg.isDimensionless() || arg.val.lessThanOrEqualTo(0)) throw new Error('Invalid log arg');
+        const res = Decimal.ln(arg.val).dividedBy(Decimal.ln(node.base));
+        return new Quantity(res, [0,0,0,0,0,0,0], null, false);
+      }
+
+      const x = args[0];
+
+      // Standard non-trig functions
+      if (node.func === 'sqrt') {
+        if (!x.isDimensionless() || x.val.isNegative()) throw new Error('Invalid sqrt');
+        return new Quantity(x.val.sqrt(), [0,0,0,0,0,0,0], null, false);
+      }
+      if (node.func === 'cbrt') {
+        if (!x.isDimensionless()) throw new Error('Invalid cbrt');
+        return new Quantity(x.val.cbrt(), [0,0,0,0,0,0,0], null, false);
+      }
+      if (node.func === 'ln') {
+        if (!x.isDimensionless() || x.val.lessThanOrEqualTo(0)) throw new Error('Invalid ln');
+        return new Quantity(Decimal.ln(x.val), [0,0,0,0,0,0,0], null, false);
+      }
+      if (node.func === 'log' || node.func === 'log10') {
+        if (!x.isDimensionless() || x.val.lessThanOrEqualTo(0)) throw new Error('Invalid log');
+        return new Quantity(Decimal.log10(x.val), [0,0,0,0,0,0,0], null, false);
+      }
+      if (node.func === 'log2') {
+        if (!x.isDimensionless() || x.val.lessThanOrEqualTo(0)) throw new Error('Invalid log2');
+        return new Quantity(Decimal.log2(x.val), [0,0,0,0,0,0,0], null, false);
+      }
+
+      // Trig & Inverse Trig
+      return this.evalTrig(node.func, x, node.power || 1);
+    }
+
+    evalTrig(name, q, power = 1) {
+      let angleRad;
+      const isAngleUnit = q.dims[DIMS.A] === 1;
+
+      if (isAngleUnit) {
+        // Explicit angle unit provided (rad or deg)
+        angleRad = q.val;
+      } else if (q.isDimensionless()) {
+        this.hasBareTrigArg = true;
+        if (this.mode === 'deg') {
+          angleRad = q.val.times(Math.PI).dividedBy(180);
+        } else {
+          angleRad = q.val;
+        }
+      } else {
+        throw new Error('Trig argument must be angle or dimensionless');
+      }
+
+      let resVal;
+      const cleanAngle = cleanValue(angleRad);
+
+      switch (name) {
+        case 'sin': resVal = Decimal.sin(cleanAngle); break;
+        case 'cos': resVal = Decimal.cos(cleanAngle); break;
+        case 'tan': {
+          resVal = Decimal.tan(cleanAngle);
+          if (resVal.abs().greaterThan(1e15)) throw new Error('Pole encountered');
+          break;
+        }
+        case 'csc': resVal = new Decimal(1).dividedBy(Decimal.sin(cleanAngle)); break;
+        case 'sec': resVal = new Decimal(1).dividedBy(Decimal.cos(cleanAngle)); break;
+        case 'cot': resVal = new Decimal(1).dividedBy(Decimal.tan(cleanAngle)); break;
+
+        case 'asin': case 'arcsin': case 'sin-1': case 'sin^-1': {
+          if (!q.isDimensionless() || q.val.abs().greaterThan(1)) throw new Error('Invalid asin domain');
+          this.hasBareTrigArg = true;
+          const r = Decimal.asin(q.val);
+          resVal = (this.mode === 'deg') ? r.times(180).dividedBy(Math.PI) : r;
+          break;
+        }
+        case 'acos': case 'arccos': case 'cos-1': case 'cos^-1': {
+          if (!q.isDimensionless() || q.val.abs().greaterThan(1)) throw new Error('Invalid acos domain');
+          this.hasBareTrigArg = true;
+          const r = Decimal.acos(q.val);
+          resVal = (this.mode === 'deg') ? r.times(180).dividedBy(Math.PI) : r;
+          break;
+        }
+        case 'atan': case 'arctan': case 'tan-1': case 'tan^-1': {
+          if (!q.isDimensionless()) throw new Error('Invalid atan domain');
+          this.hasBareTrigArg = true;
+          const r = Decimal.atan(q.val);
+          resVal = (this.mode === 'deg') ? r.times(180).dividedBy(Math.PI) : r;
+          break;
+        }
+
+        default:
+          throw new Error(`Unknown trig function ${name}`);
+      }
+
+      resVal = cleanValue(resVal);
+      if (power !== 1) resVal = resVal.pow(power);
+
+      return new Quantity(resVal, [0,0,0,0,0,0,0], null, false);
+    }
+
+    evalCombinatorics(type, nQ, rQ) {
+      if (!nQ.isDimensionless() || !rQ.isDimensionless()) throw new Error('Must be dimensionless');
+      const n = nQ.val.toNumber();
+      const r = rQ.val.toNumber();
+      if (n < 0 || r < 0 || r > n || !Number.isInteger(n) || !Number.isInteger(r)) {
+        throw new Error('Invalid combinatorics args');
+      }
+      let num = new Decimal(1);
+      for (let i = 0; i < r; i++) num = num.times(n - i);
+      if (type === 'nPr') return new Quantity(num, [0,0,0,0,0,0,0], null, true);
+
+      let den = new Decimal(1);
+      for (let i = 2; i <= r; i++) den = den.times(i);
+      return new Quantity(num.dividedBy(den), [0,0,0,0,0,0,0], null, true);
+    }
+  }
+
+  function lanczosGamma(z) {
+    const C = [
+      0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+      771.32342877765313, -176.61502916214059, 12.507343278686905,
+      -0.138571095836526, 9.9843695780195716e-6, 1.5056327351493116e-7
+    ];
+    if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * lanczosGamma(1 - z));
+    z -= 1;
+    let x = C[0];
+    for (let i = 1; i < 9; i++) x += C[i] / (z + i);
+    const t = z + 7 + 0.5;
+    return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+  }
+
+  /* ==========================================================================
+     6. FORMATTER & APPROXIMATION LADDER (§6)
+     ========================================================================== */
+  function cleanValue(dec) {
+    const r = dec.round();
+    if (dec.minus(r).abs().lessThan(1e-14)) return r;
+    return dec;
+  }
+
+  function isExactValue(dec, isExactFlag) {
+    if (!isExactFlag) return false;
+    const s = dec.abs().toString();
+    const sigDigits = s.replace('.', '').replace(/^0+/, '').length;
+    return sigDigits <= 20;
+  }
+
+  function getInlineApproximation(valDec) {
+    const absVal = valDec.abs();
+    const origIntPart = absVal.floor();
+    const sign = valDec.isNegative() ? '-' : '';
+
+    // Fewest decimals d >= 1 satisfying relative error <= 5% and unchanged integer part
+    for (let d = 1; d <= 20; d++) {
+      const rounded = absVal.toDecimalPlaces(d, Decimal.ROUND_HALF_UP);
+      if (rounded.isZero()) continue;
+      if (!rounded.floor().equals(origIntPart)) continue;
+      const relErr = rounded.minus(absVal).abs().dividedBy(absVal);
+      if (relErr.lessThanOrEqualTo(0.05)) {
+        return sign + rounded.toFixed(d);
+      }
+    }
+    return sign + absVal.toPrecision(3);
+  }
+
+  function getDecimalLadder(valDec, inlineStr) {
+    const absVal = valDec.abs();
+    const origIntPart = absVal.floor();
+    const sign = valDec.isNegative() ? '-' : '';
+    const figures = [3, 5, 8];
+    const ladder = [];
+
+    for (const sf of figures) {
+      const str = absVal.toPrecision(sf);
+      const dec = new Decimal(str);
+      // Skip if integer digits were altered
+      if (!dec.floor().equals(origIntPart)) continue;
+
+      const formatted = sign + str;
+      if (formatted !== inlineStr && !ladder.includes(formatted)) {
+        ladder.push(formatted);
+      }
+    }
+    return ladder;
+  }
+
+  function formatQuantity(q, approxMethod = 'inline') {
+    let numDec = cleanValue(q.val);
+    let strVal;
+
+    // Scientific notation for values >= 1e15 or < 1e-6 (non-zero)
+    const isScientific = !numDec.isZero() && (numDec.abs().greaterThanOrEqualTo(1e15) || numDec.abs().lessThan(1e-6));
+
+    if (isScientific) {
+      strVal = numDec.toExponential(4);
+    } else if (isExactValue(numDec, q.exact)) {
+      strVal = numDec.toString();
+    } else {
+      strVal = (approxMethod === 'ladder3') ? numDec.toPrecision(3) : getInlineApproximation(numDec);
+    }
+
+    if (q.unitInfo && q.unitInfo.symbol) {
+      return `${strVal}${q.unitInfo.symbol}`;
+    }
+    return strVal;
+  }
+
+  /* ==========================================================================
+     7. LINE ANALYZER & CLASSIFIER (§3)
+     ========================================================================== */
+  const PHONE_DATE_PATTERNS = [
+    /^\d{3}-\d{4}$/,
+    /^\d{3}-\d{3}-\d{4}$/,
+    /^(\(?\d{3}\)?[ -]?\d{3}-\d{4})$/,
+    /^\d{4}-\d{1,2}-\d{1,2}$/,
+    /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/
+  ];
+
+  function analyzeLine(fullTextBeforeCaret) {
+    let line = fullTextBeforeCaret;
+    let isBullet = false;
+
+    // Bullet stripping (§3.2 Step 2)
+    const bulletMatch = line.match(/^(\s*)([-*+•–])\s+(.*)$/);
+    if (bulletMatch) {
+      isBullet = true;
+      line = bulletMatch[1] + bulletMatch[3];
+    }
+
+    // Segment on '='
+    const segments = line.split('=');
+    let exprSegment = '';
+    let typedEquals = false;
+    let isPartialResult = false;
+    let partialResultText = '';
+
+    if (segments.length > 1) {
+      typedEquals = true;
+      const lastSeg = segments[segments.length - 1];
+      const prevSeg = segments[segments.length - 2];
+
+      if (lastSeg.trim() === '') {
+        // Line ends with '='
+        exprSegment = prevSeg;
+      } else {
+        // Check partial typed result
+        const testLast = lastSeg.trim();
+        if (/^[\d.\s\w]+$/.test(testLast)) {
+          exprSegment = prevSeg;
+          isPartialResult = true;
+          partialResultText = testLast;
+        } else {
+          exprSegment = lastSeg;
+          typedEquals = false;
+        }
+      }
+    } else {
+      exprSegment = segments[0];
+    }
+
+    // Cap expression scan (max 500 chars)
+    if (exprSegment.length > 500) {
+      exprSegment = exprSegment.slice(-500);
+    }
+
+    // Find longest syntactically valid suffix (§3.2 Step 4)
+    const tokenized = tokenize(exprSegment);
+    if (!tokenized || tokenized.tokens.length === 0 || tokenized.tokens.length > 200) {
+      return null;
+    }
+
+    const { tokens, taggedAmbiguityNeN } = tokenized;
+    let chosenAST = null;
+    let chosenTokens = null;
+
+    for (let i = 0; i < tokens.length; i++) {
+      const slice = tokens.slice(i);
+      const parser = new Parser(slice);
+      try {
+        const ast = parser.parse();
+        chosenAST = ast;
+        chosenTokens = slice;
+        break; // First token run leftmost-to-rightmost that parses completely
+      } catch {
+        // continue search
+      }
+    }
+
+    if (!chosenAST) return null;
+
+    // Classify expression (§3.2 Step 5)
+    let exprClass = 'inline';
+    const firstTok = chosenTokens[0];
+
+    // Lone literal rule
+    if (chosenTokens.length === 1 && firstTok.type === TOKENS.NUMBER) {
+      return null; // Lone literal shows nothing
+    }
+
+    // Lone percentage exception (Section 12: lone 50% should not fire)
+    if (chosenAST.type === 'POSTFIX' && chosenAST.op === '%' && chosenAST.expr?.type === 'NUMBER') {
+      return null;
+    }
+
+    // Bare unit quantity (e.g. 5km)
+    if (chosenTokens.length === 2 && chosenTokens[0].type === TOKENS.NUMBER && chosenTokens[1].type === TOKENS.IDENT) {
+      exprClass = 'bare_unit';
+    } else if (chosenTokens.length === 1 && chosenTokens[0].type === TOKENS.IDENT && !['pi', 'e'].includes(chosenTokens[0].value)) {
+      exprClass = 'bare_unit';
+    }
+
+    // Phone / date check
+    const rawExprStr = exprSegment.trim();
+    if (PHONE_DATE_PATTERNS.some(p => p.test(rawExprStr))) {
+      exprClass = 'phone_date';
+    }
+
+    if (isBullet) exprClass = 'bullet';
+
+    // Typed explicit '=' lifts phone/date/bullet suppression
+    if (typedEquals && (exprClass === 'phone_date' || exprClass === 'bullet')) {
+      exprClass = 'inline';
+    }
+
+    return {
+      ast: chosenAST,
+      tokens: chosenTokens,
+      rawExpr: rawExprStr,
+      exprClass,
+      typedEquals,
+      isPartialResult,
+      partialResultText,
+      taggedAmbiguityNeN,
+      hasSpaces: /\s/.test(exprSegment)
+    };
+  }
+
+  /* ==========================================================================
+     8. SUGGESTION ENGINE & CHIP BUILDER (§8)
+     ========================================================================== */
+  function buildSuggestions(analysis) {
+    if (!analysis) return [];
+
+    const { ast, rawExpr, exprClass, typedEquals, isPartialResult, partialResultText, taggedAmbiguityNeN, hasSpaces } = analysis;
+    const chips = [];
+
+    // Evaluate in Radian and Degree modes
+    const radEval = new Evaluator('rad');
+    const degEval = new Evaluator('deg');
+
+    let radRes = null;
+    let degRes = null;
+
+    try { radRes = radEval.eval(ast); } catch {}
+    try { degRes = degEval.eval(ast); } catch {}
+
+    if (!radRes && !degRes) return [];
+
+    const dualMode = radRes && degRes && (radEval.hasBareTrigArg || degEval.hasBareTrigArg);
+    const spacing = hasSpaces ? ' ' : '';
+    const equalsPrefix = typedEquals ? '' : `${spacing}=${spacing}`;
+
+    // Helper: compute insertText & display equation
+    function makeChip({ valQ, tag = null, isPrimary = false, inlineEligible = true, readingLabel = null }) {
+      const formatted = formatQuantity(valQ, 'inline');
+      let insertText = equalsPrefix + formatted;
+      let displayEq = readingLabel ? `${readingLabel} = ${formatted}` : `${rawExpr}${spacing}=${spacing}${formatted}`;
+      let replaceLen = 0;
+
+      // Typed partial result handling (§3.4)
+      if (isPartialResult) {
+        if (formatted.startsWith(partialResultText)) {
+          insertText = formatted.slice(partialResultText.length);
+          if (insertText === '') return null; // complete match produces nothing
+          inlineEligible = false;
+        } else {
+          // Replace chip
+          insertText = formatted;
+          replaceLen = partialResultText.length;
+          inlineEligible = false;
+        }
+      }
+
+      if (exprClass === 'bare_unit' || exprClass === 'phone_date' || exprClass === 'bullet') {
+        inlineEligible = false;
+      }
+
+      return {
+        insertText,
+        displayEq,
+        typedPrefix: isPartialResult ? partialResultText : (typedEquals ? '' : rawExpr + spacing + '=' + spacing),
+        highlightText: isPartialResult ? (replaceLen > 0 ? formatted : insertText) : formatted,
+        tag,
+        inlineEligible: inlineEligible && isPrimary && exprClass === 'inline',
+        replaceLen
+      };
+    }
+
+    // 1. Primary chips
+    if (radRes) {
+      const c = makeChip({ valQ: radRes, tag: dualMode ? 'rad' : null, isPrimary: true, inlineEligible: true });
+      if (c) chips.push(c);
+    }
+    if (dualMode && degRes) {
+      const c = makeChip({ valQ: degRes, tag: 'deg', isPrimary: !radRes, inlineEligible: !radRes });
+      if (c) chips.push(c);
+    }
+
+    // 2. Ambiguity chip for Ne-N if tagged (§12)
+    if (taggedAmbiguityNeN) {
+      // Add alternative reading: N * e - N
+      chips.push({
+        insertText: '=alternative',
+        displayEq: `${rawExpr} (alt) = ${formatQuantity(radRes || degRes)}`,
+        typedPrefix: rawExpr,
+        highlightText: 'alt',
+        tag: 'alt',
+        inlineEligible: false,
+        replaceLen: 0
+      });
+    }
+
+    // 3. Mixed Units & Alternate Unit Chips (§8)
+    const primaryQ = radRes || degRes;
+    if (primaryQ && !primaryQ.isDimensionless()) {
+      for (const cur of CURATED_ALTERNATIVES) {
+        if (primaryQ.dims.every((d, i) => d === cur.dims[i])) {
+          for (const uSym of cur.units) {
+            if (primaryQ.unitInfo?.symbol === uSym) continue;
+            try {
+              const target = resolveUnitSymbol(uSym);
+              if (target && target.matches.length > 0) {
+                const tu = target.matches[0];
+                const converted = primaryQ.val.dividedBy(tu.factor);
+                const cq = new Quantity(converted, primaryQ.dims, { symbol: tu.canonical }, primaryQ.exact);
+                const altChip = makeChip({ valQ: cq, isPrimary: false, inlineEligible: false });
+                if (altChip) chips.push(altChip);
+              }
+            } catch {}
+          }
+          break;
+        }
+      }
+    }
+
+    // 4. Decimal Ladder chips (§6)
+    if (primaryQ && !isExactValue(primaryQ.val, primaryQ.exact)) {
+      const inlineStr = formatQuantity(primaryQ, 'inline');
+      const ladder = getDecimalLadder(primaryQ.val, inlineStr);
+      for (const step of ladder) {
+        let stepText = step;
+        if (primaryQ.unitInfo?.symbol) stepText += primaryQ.unitInfo.symbol;
+        chips.push({
+          insertText: equalsPrefix + stepText,
+          displayEq: `${rawExpr}${spacing}=${spacing}${stepText}`,
+          typedPrefix: typedEquals ? '' : rawExpr + spacing + '=' + spacing,
+          highlightText: stepText,
+          tag: null,
+          inlineEligible: false,
+          replaceLen: 0
+        });
+      }
+    }
+
+    return chips;
+  }
+
+  /* ==========================================================================
+     9. UI, GHOST TEXT & INTERACTION ENGINE
+     ========================================================================== */
+  const editor = document.getElementById('editor');
+  const mirror = document.getElementById('mirror');
+  const chipsStrip = document.getElementById('chips-strip');
+  const keyHint = document.getElementById('key-hint');
+
+  let currentChips = [];
+  let selectedChipIndex = 0;
+  let userMovedHighlight = false;
+  let isComposing = false;
+  let dismissedUntilKeystroke = false;
+
+  // Autosave restore
+  const saved = localStorage.getItem('scratchpad_content');
+  if (saved !== null) editor.value = saved;
+
+  function syncScroll() {
+    mirror.scrollTop = editor.scrollTop;
+    mirror.scrollLeft = editor.scrollLeft;
+  }
+
+  editor.addEventListener('scroll', syncScroll);
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function clearSuggestions() {
+    currentChips = [];
+    selectedChipIndex = 0;
+    userMovedHighlight = false;
+    renderUI();
+  }
+
+  function updateSuggestions() {
+    if (isComposing || dismissedUntilKeystroke) {
+      clearSuggestions();
+      return;
+    }
+
+    const selStart = editor.selectionStart;
+    const selEnd = editor.selectionEnd;
+
+    // Must be a collapsed caret
+    if (selStart !== selEnd) {
+      clearSuggestions();
+      return;
+    }
+
+    const text = editor.value;
+
+    // Must be at end of line or followed only by whitespace (§3.1)
+    const afterCaret = text.slice(selStart);
+    const nextNewline = afterCaret.indexOf('\n');
+    const restOfLine = nextNewline === -1 ? afterCaret : afterCaret.slice(0, nextNewline);
+    if (!/^\s*$/.test(restOfLine)) {
+      clearSuggestions();
+      return;
+    }
+
+    // Line text up to caret
+    const prevNewline = text.lastIndexOf('\n', selStart - 1);
+    const lineBeforeCaret = text.slice(prevNewline + 1, selStart);
+
+    const analysis = analyzeLine(lineBeforeCaret);
+    currentChips = buildSuggestions(analysis);
+    selectedChipIndex = 0;
+    userMovedHighlight = false;
+
+    renderUI();
+  }
+
+  function renderUI() {
+    // 1. Render Ghost Text
+    const activeChip = currentChips[selectedChipIndex];
+    const canShowGhost = activeChip && (activeChip.inlineEligible || (userMovedHighlight && activeChip.insertText));
+
+    if (canShowGhost && !dismissedUntilKeystroke) {
+      const caret = editor.selectionStart;
+      const textBefore = editor.value.slice(0, caret);
+      mirror.innerHTML = `<span style="visibility:hidden">${escapeHtml(textBefore)}</span><span class="ghost-text">${escapeHtml(activeChip.insertText)}</span>`;
+    } else {
+      mirror.innerHTML = '';
+    }
+
+    // 2. Render Suggestion Chips Strip
+    chipsStrip.innerHTML = '';
+    if (currentChips.length > 0 && !dismissedUntilKeystroke) {
+      keyHint.classList.add('visible');
+
+      currentChips.forEach((chip, idx) => {
+        const el = document.createElement('div');
+        el.className = `chip ${idx === selectedChipIndex ? 'active' : ''}`;
+
+        let html = '';
+        if (chip.typedPrefix) {
+          html += `<span class="dim">${escapeHtml(chip.typedPrefix)}</span>`;
+        }
+        html += `<span class="highlight">${escapeHtml(chip.highlightText)}</span>`;
+        if (chip.tag) {
+          html += `<span class="tag">${escapeHtml(chip.tag)}</span>`;
+        }
+        el.innerHTML = html;
+
+        // Prevent textarea blur on click & accept chip
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          acceptChip(idx);
+        });
+
+        chipsStrip.appendChild(el);
+      });
+
+      // Scroll active chip into view
+      const activeEl = chipsStrip.children[selectedChipIndex];
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      }
+    } else {
+      keyHint.classList.remove('visible');
+    }
+
+    syncScroll();
+  }
+
+  function acceptChip(index) {
+    const chip = currentChips[index];
+    if (!chip) return;
+
+    editor.focus();
+
+    if (chip.replaceLen > 0) {
+      const caret = editor.selectionStart;
+      editor.setSelectionRange(caret - chip.replaceLen, caret);
+    }
+
+    // Native undo/redo insertion
+    let success = false;
+    try {
+      success = document.execCommand('insertText', false, chip.insertText);
+    } catch {}
+
+    if (!success) {
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      editor.setRangeText(chip.insertText, start, end, 'end');
+    }
+
+    // Re-evaluate for chaining suggestions
+    updateSuggestions();
+  }
+
+  // IME handling
+  editor.addEventListener('compositionstart', () => { isComposing = true; });
+  editor.addEventListener('compositionend', () => {
+    isComposing = false;
+    updateSuggestions();
+  });
+
+  // Debounced typing handler (~30ms)
+  let debounceTimer = null;
+  editor.addEventListener('input', () => {
+    localStorage.setItem('scratchpad_content', editor.value);
+    dismissedUntilKeystroke = false;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(updateSuggestions, 30);
+  });
+
+  editor.addEventListener('keydown', (e) => {
+    // Dismiss on Escape
+    if (e.key === 'Escape') {
+      dismissedUntilKeystroke = true;
+      renderUI();
+      return;
+    }
+
+    // Alt+1...9 direct acceptance
+    if (e.altKey && e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx < currentChips.length) {
+        e.preventDefault();
+        acceptChip(idx);
+        return;
+      }
+    }
+
+    const hasChips = currentChips.length > 0 && !dismissedUntilKeystroke;
+    const isAcceptable = hasChips && ((mirror.innerHTML !== '' && selectedChipIndex === 0) || userMovedHighlight);
+
+    // Tab / Enter acceptance (§9)
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      if (isAcceptable) {
+        e.preventDefault();
+        acceptChip(selectedChipIndex);
+        return;
+      }
+      // Non-acceptable Tab inserts real tab
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        try {
+          document.execCommand('insertText', false, '\t');
+        } catch {
+          const s = editor.selectionStart;
+          editor.setRangeText('\t', s, editor.selectionEnd, 'end');
+        }
+        return;
+      }
+      // Enter falls through to normal newline
+    }
+
+    // Arrow keys switch chips
+    if (hasChips) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        if (selectedChipIndex > 0) {
+          e.preventDefault();
+          selectedChipIndex--;
+          userMovedHighlight = true;
+          renderUI();
+          return;
+        }
+        // At left end: fall through to caret movement & dismiss
+      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        if (selectedChipIndex < currentChips.length - 1) {
+          e.preventDefault();
+          selectedChipIndex++;
+          userMovedHighlight = true;
+          renderUI();
+          return;
+        }
+        // At right end: fall through to caret movement & dismiss
+      }
+    }
+  });
+
+  // Selection change dismissal
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement === editor) {
+      updateSuggestions();
+    }
+  });
+
+  // Initial trigger
+  updateSuggestions();
+})();
+</script>
+</body>
+</html>
