@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#fbfaf7">
+  <title>Plainline</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/decimal.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --paper: #fbfaf7;
+      --ink: #252522;
+      --muted: #77766f;
+      --ghost: #aaa9a2;
+      --rule: rgba(37, 37, 34, .13);
+      --chip: rgba(37, 37, 34, .055);
+      --chip-hover: rgba(37, 37, 34, .11);
+      --chip-active: rgba(37, 37, 34, .12);
+      --accent: #252522;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #171715;
+        --ink: #e8e7e1;
+        --muted: #93928b;
+        --ghost: #72716b;
+        --rule: rgba(232, 231, 225, .15);
+        --chip: rgba(232, 231, 225, .08);
+        --chip-hover: rgba(232, 231, 225, .14);
+        --chip-active: rgba(232, 231, 225, .15);
+        --accent: #e8e7e1;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--paper); }
+    body { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    #editor-shell { position: fixed; inset: 0; overflow: hidden; background: var(--paper); }
+    #mirror, #editor {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 28px 34px 82px;
+      border: 0;
+      outline: 0;
+      font: 400 16px/1.72 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      letter-spacing: 0;
+      tab-size: 4;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      text-align: left;
+    }
+    #mirror { z-index: 0; overflow: hidden; color: var(--ink); pointer-events: none; }
+    #editor {
+      z-index: 1;
+      resize: none;
+      overflow: auto;
+      background: transparent;
+      color: transparent;
+      caret-color: var(--ink);
+      -webkit-text-fill-color: transparent;
+      -webkit-tap-highlight-color: transparent;
+      appearance: none;
+      scrollbar-width: thin;
+      scrollbar-color: var(--rule) transparent;
+    }
+    #editor::selection { background: rgba(128, 143, 161, .34); color: transparent; }
+    .ghost-text { color: var(--ghost); }
+    #suggestion-bar {
+      position: fixed;
+      z-index: 5;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 1px;
+      padding: 0 12px;
+      border-top: 1px solid var(--rule);
+      background: var(--paper);
+      opacity: 0;
+      transform: translateY(4px);
+      transition: height 180ms ease, opacity 180ms ease, transform 180ms ease;
+    }
+    #suggestion-bar.has-suggestions {
+      height: 48px;
+      padding-top: 5px;
+      padding-bottom: 5px;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #chip-list {
+      display: flex;
+      min-width: 0;
+      flex: 1 1 auto;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    #chip-list::-webkit-scrollbar { display: none; }
+    .suggestion-chip {
+      flex: 0 0 auto;
+      max-width: min(520px, 72vw);
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 5px;
+      background: var(--chip);
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      line-height: 1;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 140ms ease, transform 140ms ease, opacity 140ms ease;
+      animation: chip-in 180ms ease both;
+    }
+    .suggestion-chip:hover { background: var(--chip-hover); }
+    .suggestion-chip.is-highlighted { background: var(--chip-active); box-shadow: inset 0 -1px 0 var(--accent); }
+    .suggestion-chip:active { transform: translateY(1px); }
+    .chip-equation { min-width: 0; overflow: hidden; white-space: nowrap; }
+    .chip-dim { color: var(--muted); }
+    .chip-strong { color: var(--ink); font-weight: 600; }
+    .chip-tag { flex: 0 0 auto; color: var(--muted); font-size: 10px; letter-spacing: .02em; }
+    #key-hint {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      white-space: nowrap;
+      opacity: .72;
+    }
+    @keyframes chip-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 640px) {
+      #mirror, #editor { padding: 22px 18px 76px; font-size: 15px; line-height: 1.68; }
+      #suggestion-bar.has-suggestions { height: 50px; gap: 6px; padding-left: 8px; padding-right: 8px; }
+      .suggestion-chip { height: 36px; padding: 0 10px; max-width: 74vw; }
+      #key-hint { font-size: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main id="editor-shell" aria-label="Plainline expression editor">
+    <div id="mirror" aria-hidden="true"></div>
+    <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" aria-label="Write notes and expressions"></textarea>
+  </main>
+  <footer id="suggestion-bar" aria-label="Suggestions">
+    <div id="chip-list" role="listbox" aria-label="Calculation suggestions"></div>
+    <span id="key-hint">Tab/Enter accept · ←→ switch</span>
+  </footer>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const editor = document.getElementById('editor');
+      const mirror = document.getElementById('mirror');
+      const chipList = document.getElementById('chip-list');
+      const bar = document.getElementById('suggestion-bar');
+      const keyHint = document.getElementById('key-hint');
+      const STORAGE_KEY = 'plainline-notes-v1';
+      const Decimal = window.Decimal;
+
+      if (!Decimal) return;
+      Decimal.set({ precision: 50, rounding: Decimal.ROUND_HALF_UP, maxE: 1000, minE: -1000 });
+      const d = value => new Decimal(value);
+      const PI = d(-1).acos();
+      const E = d(1).exp();
+      const DIM_ZERO = [0, 0, 0, 0, 0, 0, 0];
+      const DIM_NAMES = ['length', 'mass', 'time', 'current', 'temperature', 'data', 'angle'];
+      const DIMS = {
+        length: [1, 0, 0, 0, 0, 0, 0],
+        mass: [0, 1, 0, 0, 0, 0, 0],
+        time: [0, 0, 1, 0, 0, 0, 0],
+        current: [0, 0, 0, 1, 0, 0, 0],
+        temperature: [0, 0, 0, 0, 1, 0, 0],
+        data: [0, 0, 0, 0, 0, 1, 0],
+        angle: [0, 0, 0, 0, 0, 0, 1]
+      };
+
+      const PREFIXES = [
+        { name: 'quetta', symbol: 'Q', factor: '1e30', large: true },
+        { name: 'ronna', symbol: 'R', factor: '1e27', large: true },
+        { name: 'yotta', symbol: 'Y', factor: '1e24', large: true },
+        { name: 'zetta', symbol: 'Z', factor: '1e21', large: true },
+        { name: 'exa', symbol: 'E', factor: '1e18', large: true },
+        { name: 'peta', symbol: 'P', factor: '1e15', large: true },
+        { name: 'tera', symbol: 'T', factor: '1e12', large: true },
+        { name: 'giga', symbol: 'G', factor: '1e9', large: true },
+        { name: 'mega', symbol: 'M', factor: '1e6', large: true },
+        { name: 'kilo', symbol: 'k', factor: '1e3', large: true },
+        { name: 'hecto', symbol: 'h', factor: '1e2' },
+        { name: 'deca', symbol: 'da', factor: '1e1' },
+        { name: 'deci', symbol: 'd', factor: '1e-1' },
+        { name: 'centi', symbol: 'c', factor: '1e-2' },
+        { name: 'milli', symbol: 'm', factor: '1e-3' },
+        { name: 'micro', symbol: 'µ', aliases: ['μ', 'u'], factor: '1e-6' },
+        { name: 'nano', symbol: 'n', factor: '1e-9' },
+        { name: 'pico', symbol: 'p', factor: '1e-12' },
+        { name: 'femto', symbol: 'f', factor: '1e-15' },
+        { name: 'atto', symbol: 'a', factor: '1e-18' },
+        { name: 'zepto', symbol: 'z', factor: '1e-21' },
+        { name: 'yocto', symbol: 'y', factor: '1e-24' },
+        { name: 'ronto', symbol: 'r', factor: '1e-27' },
+        { name: 'quecto', symbol: 'q', factor: '1e-30' }
+      ].map(prefix => ({ ...prefix, value: d(prefix.factor) }));
+      const LARGE_PREFIXES = PREFIXES.filter(prefix => prefix.large);
+
+      const UNIT_DEFS = [];
+      function addUnit(id, names, symbols, dims, factor, options = {}) {
+        const def = {
+          id, names: Array.isArray(names) ? names : [names], symbols: Array.isArray(symbols) ? symbols : [symbols],
+          dims: dims.slice(), factor: d(factor || '1'), offset: d(options.offset || '0'),
+          prefixable: options.prefixable || 'none', prefixPower: options.prefixPower || 1,
+          temp: !!options.temp, longName: options.longName || (Array.isArray(names) ? names[0] : names),
+          plural: options.plural || null, family: options.family || id
+        };
+        UNIT_DEFS.push(def);
+        return def;
+      }
+
+      const U = {};
+      U.g = addUnit('gram', ['gram', 'grams'], 'g', DIMS.mass, '0.001', { prefixable: 'all', longName: 'gram', plural: 'grams' });
+      U.m = addUnit('meter', ['meter', 'meters', 'metre', 'metres'], 'm', DIMS.length, '1', { prefixable: 'all', longName: 'meter', plural: 'meters' });
+      U.s = addUnit('second', ['second', 'seconds', 'sec', 'secs'], 's', DIMS.time, '1', { prefixable: 'all', longName: 'second', plural: 'seconds' });
+      U.A = addUnit('ampere', ['ampere', 'amperes', 'amp', 'amps'], 'A', DIMS.current, '1', { prefixable: 'all', longName: 'ampere', plural: 'amperes' });
+      U.K = addUnit('kelvin', ['kelvin', 'kelvins'], 'K', DIMS.temperature, '1', { prefixable: 'all', temp: true, longName: 'kelvin', plural: 'kelvins' });
+      U.b = addUnit('bit', ['bit', 'bits'], 'b', DIMS.data, '1', { prefixable: 'large', longName: 'bit', plural: 'bits' });
+      U.B = addUnit('byte', ['byte', 'bytes'], 'B', DIMS.data, '8', { prefixable: 'large', longName: 'byte', plural: 'bytes' });
+      U.Hz = addUnit('hertz', ['hertz', 'hz'], 'Hz', [0, 0, -1, 0, 0, 0, 0], '1', { prefixable: 'all', longName: 'hertz', plural: 'hertz' });
+      U.J = addUnit('joule', ['joule', 'joules'], 'J', [2, 1, -2, 0, 0, 0, 0], '1', { prefixable: 'all', longName: 'joule', plural: 'joules' });
+      U.cal = addUnit('calorie', ['calorie', 'calories'], 'cal', [2, 1, -2, 0, 0, 0, 0], '4.184', { prefixable: 'all', longName: 'calorie', plural: 'calories' });
+      U.Cal = addUnit('food-calorie', ['kilocalorie', 'kilocalories', 'large calorie', 'large calories'], 'Cal', [2, 1, -2, 0, 0, 0, 0], '4184', { longName: 'kilocalorie', plural: 'kilocalories' });
+      U.Wh = addUnit('watt-hour', ['watt hour', 'watt hours', 'watt-hour', 'watt-hours'], 'Wh', [2, 1, -2, 0, 0, 0, 0], '3600', { prefixable: 'all', longName: 'watt-hour', plural: 'watt-hours' });
+      U.W = addUnit('watt', ['watt', 'watts'], 'W', [2, 1, -3, 0, 0, 0, 0], '1', { prefixable: 'all', longName: 'watt', plural: 'watts' });
+      U.N = addUnit('newton', ['newton', 'newtons'], 'N', [1, 1, -2, 0, 0, 0, 0], '1', { prefixable: 'all', longName: 'newton', plural: 'newtons' });
+      U.Pa = addUnit('pascal', ['pascal', 'pascals'], 'Pa', [-1, 1, -2, 0, 0, 0, 0], '1', { prefixable: 'all', longName: 'pascal', plural: 'pascals' });
+      U.bar = addUnit('bar', ['bar', 'bars'], 'bar', [-1, 1, -2, 0, 0, 0, 0], '100000', { prefixable: 'all', longName: 'bar', plural: 'bar' });
+      U.V = addUnit('volt', ['volt', 'volts'], 'V', [2, 1, -3, -1, 0, 0, 0], '1', { prefixable: 'all', longName: 'volt', plural: 'volts' });
+      U.ohm = addUnit('ohm', ['ohm', 'ohms', 'ohm resistance'], 'Ω', [2, 1, -3, -2, 0, 0, 0], '1', { prefixable: 'all', longName: 'ohm', plural: 'ohms' });
+
+      U.mile = addUnit('mile', ['mile', 'miles', 'mi'], 'mi', DIMS.length, '1609.344', { longName: 'mile', plural: 'miles' });
+      U.yard = addUnit('yard', ['yard', 'yards'], 'yd', DIMS.length, '0.9144', { longName: 'yard', plural: 'yards' });
+      U.foot = addUnit('foot', ['foot', 'feet', 'ft'], 'ft', DIMS.length, '0.3048', { longName: 'foot', plural: 'feet' });
+      U.inch = addUnit('inch', ['inch', 'inches', 'in'], 'in', DIMS.length, '0.0254', { longName: 'inch', plural: 'inches' });
+      U.ounce = addUnit('ounce', ['ounce', 'ounces', 'oz'], 'oz', DIMS.mass, '0.028349523125', { longName: 'ounce', plural: 'ounces' });
+      U.pound = addUnit('pound', ['pound', 'pounds', 'lb', 'lbs'], 'lb', DIMS.mass, '0.45359237', { longName: 'pound', plural: 'pounds' });
+
+      const areaDims = [2, 0, 0, 0, 0, 0, 0];
+      U.m2 = addUnit('square-meter', ['square meter', 'square meters', 'square metre', 'square metres', 'sq m', 'sq meter', 'sq meters'], 'm^2', areaDims, '1', { prefixable: 'all', prefixPower: 2, longName: 'square meter', plural: 'square meters' });
+      U.km2 = addUnit('square-kilometer', ['square kilometer', 'square kilometers', 'square kilometre', 'square kilometres', 'sq km'], 'km^2', areaDims, '1e6', { longName: 'square kilometer', plural: 'square kilometers' });
+      U.mi2 = addUnit('square-mile', ['square mile', 'square miles', 'sq mi'], 'mi^2', areaDims, '2589988.110336', { longName: 'square mile', plural: 'square miles' });
+      U.ft2 = addUnit('square-foot', ['square foot', 'square feet', 'sq ft'], 'ft^2', areaDims, '0.09290304', { longName: 'square foot', plural: 'square feet' });
+      U.yd2 = addUnit('square-yard', ['square yard', 'square yards', 'sq yd'], 'yd^2', areaDims, '0.83612736', { longName: 'square yard', plural: 'square yards' });
+      U.in2 = addUnit('square-inch', ['square inch', 'square inches', 'sq in'], 'in^2', areaDims, '0.00064516', { longName: 'square inch', plural: 'square inches' });
+      U.acre = addUnit('acre', ['acre', 'acres'], 'acre', areaDims, '4046.8564224', { longName: 'acre', plural: 'acres' });
+
+      U.m3 = addUnit('cubic-meter', ['cubic meter', 'cubic meters', 'cubic metre', 'cubic metres'], 'm^3', [3, 0, 0, 0, 0, 0, 0], '1', { prefixable: 'all', prefixPower: 3, longName: 'cubic meter', plural: 'cubic meters' });
+      U.liter = addUnit('liter', ['liter', 'liters', 'litre', 'litres', 'L', 'l'], 'L', [3, 0, 0, 0, 0, 0, 0], '0.001', { prefixable: 'all', longName: 'liter', plural: 'liters' });
+      U.ft3 = addUnit('cubic-foot', ['cubic foot', 'cubic feet'], 'ft^3', [3, 0, 0, 0, 0, 0, 0], '0.028316846592', { longName: 'cubic foot', plural: 'cubic feet' });
+      U.in3 = addUnit('cubic-inch', ['cubic inch', 'cubic inches'], 'in^3', [3, 0, 0, 0, 0, 0, 0], '0.000016387064', { longName: 'cubic inch', plural: 'cubic inches' });
+
+      U.gal = addUnit('us-gallon', ['gallon', 'gallons', 'us gallon', 'us gallons', 'gal'], 'gal', [3, 0, 0, 0, 0, 0, 0], '0.003785411784', { longName: 'gallon', plural: 'gallons' });
+      U.galImp = addUnit('imperial-gallon', ['imperial gallon', 'imperial gallons', 'imp gallon', 'imp gallons', 'uk gallon', 'uk gallons', 'imp gal', 'uk gal'], 'imp gal', [3, 0, 0, 0, 0, 0, 0], '0.00454609', { longName: 'imperial gallon', plural: 'imperial gallons' });
+      U.qt = addUnit('us-quart', ['quart', 'quarts', 'qt'], 'qt', [3, 0, 0, 0, 0, 0, 0], '0.000946352946', { longName: 'quart', plural: 'quarts' });
+      U.pt = addUnit('us-pint', ['pint', 'pints', 'pt'], 'pt', [3, 0, 0, 0, 0, 0, 0], '0.000473176473', { longName: 'pint', plural: 'pints' });
+      U.cup = addUnit('us-cup', ['cup', 'cups'], 'cup', [3, 0, 0, 0, 0, 0, 0], '0.0002365882365', { longName: 'cup', plural: 'cups' });
+      U.tbsp = addUnit('tablespoon', ['tablespoon', 'tablespoons', 'tbsp'], 'tbsp', [3, 0, 0, 0, 0, 0, 0], '0.00001478676478125', { longName: 'tablespoon', plural: 'tablespoons' });
+      U.tsp = addUnit('teaspoon', ['teaspoon', 'teaspoons', 'tsp'], 'tsp', [3, 0, 0, 0, 0, 0, 0], '0.00000492892159375', { longName: 'teaspoon', plural: 'teaspoons' });
+      U.floz = addUnit('us-fluid-ounce', ['fluid ounce', 'fluid ounces', 'fl oz', 'floz'], 'fl oz', [3, 0, 0, 0, 0, 0, 0], '0.0000295735295625', { longName: 'fluid ounce', plural: 'fluid ounces' });
+      U.flozImp = addUnit('imperial-fluid-ounce', ['imperial fluid ounce', 'imperial fluid ounces', 'imp fl oz', 'uk fl oz'], 'imp fl oz', [3, 0, 0, 0, 0, 0, 0], '0.0000284130625', { longName: 'imperial fluid ounce', plural: 'imperial fluid ounces' });
+
+      U.mpg = addUnit('mile-per-gallon', ['mile per gallon', 'miles per gallon', 'mpg'], 'mpg', [-2, 0, 0, 0, 0, 0, 0], d('1609.344').div('0.003785411784').toString(), { longName: 'mile per gallon', plural: 'miles per gallon' });
+      U.kmL = addUnit('kilometer-per-liter', ['kilometer per liter', 'kilometers per liter', 'kilometre per litre', 'km/l', 'km per liter'], 'km/L', [-2, 0, 0, 0, 0, 0, 0], '1e6', { longName: 'kilometer per liter', plural: 'kilometers per liter' });
+      U.mph = addUnit('mile-per-hour', ['mile per hour', 'miles per hour', 'mph'], 'mph', [1, 0, -1, 0, 0, 0, 0], d('1609.344').div(3600).toString(), { longName: 'mile per hour', plural: 'miles per hour' });
+      U.kph = addUnit('kilometer-per-hour', ['kilometer per hour', 'kilometers per hour', 'kilometre per hour', 'kph', 'km/h', 'kmh'], 'km/h', [1, 0, -1, 0, 0, 0, 0], d(1000).div(3600).toString(), { longName: 'kilometer per hour', plural: 'kilometers per hour' });
+      U.knot = addUnit('knot', ['knot', 'knots', 'kt', 'kn'], 'knot', [1, 0, -1, 0, 0, 0, 0], d('1.852').div(3.6).toString(), { longName: 'knot', plural: 'knots' });
+      U.ms = addUnit('meter-per-second', ['meter per second', 'meters per second', 'metre per second', 'm/s', 'mps'], 'm/s', [1, 0, -1, 0, 0, 0, 0], '1', { longName: 'meter per second', plural: 'meters per second' });
+      U.fts = addUnit('foot-per-second', ['foot per second', 'feet per second', 'ft/s', 'fps'], 'ft/s', [1, 0, -1, 0, 0, 0, 0], '0.3048', { longName: 'foot per second', plural: 'feet per second' });
+
+      U.atm = addUnit('atmosphere', ['atmosphere', 'atmospheres', 'atm'], 'atm', [-1, 1, -2, 0, 0, 0, 0], '101325', { longName: 'atmosphere', plural: 'atmospheres' });
+      U.psi = addUnit('psi', ['psi', 'pounds per square inch'], 'PSI', [-1, 1, -2, 0, 0, 0, 0], '6894.757293168', { longName: 'psi', plural: 'psi' });
+      U.lbf = addUnit('pound-force', ['pound-force', 'pounds-force', 'lbf'], 'lbf', [1, 1, -2, 0, 0, 0, 0], '4.4482216152605', { longName: 'pound-force', plural: 'pounds-force' });
+      U.hp = addUnit('horsepower-mechanical', ['horsepower', 'mechanical horsepower', 'hp'], 'hp', [2, 1, -3, 0, 0, 0, 0], '745.6998715822702', { longName: 'horsepower', plural: 'horsepower' });
+      U.ps = addUnit('horsepower-metric', ['metric horsepower', 'pferdestarke', 'ps'], 'PS', [2, 1, -3, 0, 0, 0, 0], '735.49875', { longName: 'metric horsepower', plural: 'metric horsepower' });
+
+      U.celsius = addUnit('celsius', ['celsius', 'degree celsius', 'degrees celsius', 'degc'], '°C', DIMS.temperature, '1', { offset: '273.15', temp: true, longName: 'degree Celsius', plural: 'degrees Celsius' });
+      U.fahrenheit = addUnit('fahrenheit', ['fahrenheit', 'degree fahrenheit', 'degrees fahrenheit', 'degf'], '°F', DIMS.temperature, d(5).div(9).toString(), { offset: d('459.67').times(d(5).div(9)).toString(), temp: true, longName: 'degree Fahrenheit', plural: 'degrees Fahrenheit' });
+      U.degree = addUnit('degree-angle', ['degree', 'degrees', 'deg'], '°', DIMS.angle, PI.div(180).toString(), { longName: 'degree', plural: 'degrees' });
+      U.radian = addUnit('radian', ['radian', 'radians', 'rad'], 'rad', DIMS.angle, '1', { longName: 'radian', plural: 'radians' });
+      U.gradian = addUnit('gradian', ['gradian', 'gradians', 'grad'], 'grad', DIMS.angle, PI.div(200).toString(), { longName: 'gradian', plural: 'gradians' });
+
+      U.minute = addUnit('minute', ['minute', 'minutes', 'min', 'mins'], 'min', DIMS.time, '60', { longName: 'minute', plural: 'minutes' });
+      U.hour = addUnit('hour', ['hour', 'hours', 'hr', 'hrs'], 'h', DIMS.time, '3600', { longName: 'hour', plural: 'hours' });
+      U.day = addUnit('day', ['day', 'days'], 'd', DIMS.time, '86400', { longName: 'day', plural: 'days' });
+      U.week = addUnit('week', ['week', 'weeks', 'wk', 'wks'], 'week', DIMS.time, '604800', { longName: 'week', plural: 'weeks' });
+      U.month = addUnit('month', ['month', 'months'], 'month', DIMS.time, '2629800', { longName: 'month', plural: 'months' });
+      U.year = addUnit('year', ['year', 'years', 'yr', 'yrs'], 'year', DIMS.time, '31557600', { longName: 'year', plural: 'years' });
+      U.decade = addUnit('decade', ['decade', 'decades'], 'decade', DIMS.time, '315576000', { longName: 'decade', plural: 'decades' });
+      U.century = addUnit('century', ['century', 'centuries'], 'century', DIMS.time, '3155760000', { longName: 'century', plural: 'centuries' });
+
+      const ALIAS_MULTIPLE = [
+        ['square foot', 'square feet', 'sq ft'], ['square inch', 'square inches', 'sq in'],
+        ['square mile', 'square miles', 'sq mi'], ['square yard', 'square yards', 'sq yd'],
+        ['cubic foot', 'cubic feet'], ['cubic inch', 'cubic inches'],
+        ['watt hour', 'watt-hour'], ['fluid ounce', 'fl oz'], ['meter per second', 'm/s'],
+        ['foot per second', 'ft/s'], ['kilometer per hour', 'km/h'], ['mile per hour', 'mph'],
+        ['mile per gallon', 'mpg'], ['kilometer per liter', 'km/L']
+      ];
+
+      function makeUnit(def, prefix = null) {
+        const power = def.prefixPower || 1;
+        const factor = prefix ? def.factor.times(prefix.value.pow(power)) : def.factor;
+        const prefixName = prefix ? prefix.name : '';
+        const prefixSymbol = prefix ? prefix.symbol : '';
+        const baseSymbol = def.symbols[0];
+        let symbol = prefixSymbol + baseSymbol;
+        let longName = prefixName + def.longName;
+        let plural = prefix ? `${prefixName}${def.plural || def.longName + 's'}` : def.plural;
+        if (def.prefixPower > 1 && prefix) {
+          const rootSymbol = baseSymbol.replace(/\^\d+$/, '');
+          symbol = prefixSymbol + rootSymbol + '^' + def.prefixPower;
+          const rootName = def.longName.replace(/^(square|cubic) /, '');
+          longName = (def.prefixPower === 2 ? 'square ' : 'cubic ') + prefixName + rootName;
+          plural = `${longName}s`;
+        }
+        return {
+          id: prefix ? `${prefix.symbol}${def.id}` : def.id,
+          baseId: def.id, family: def.family, symbol, longName,
+          plural, dims: def.dims.slice(), factor, offset: def.offset,
+          temp: def.temp, prefixable: def.prefixable, prefix: prefix || null,
+          prefixPower: def.prefixPower || 1, def, isLongName: false
+        };
+      }
+
+      function poweredUnit(unit, power) {
+        const dims = unit.dims.map(value => value * power);
+        const factor = unit.factor.pow(power);
+        const symbol = power === 1 ? unit.symbol : `${unit.symbol.replace(/\^\d+$/, '')}^${power}`;
+        const nameBase = unit.longName;
+        return {
+          id: `${unit.id}^${power}`, baseId: null, family: null, symbol, longName: `${nameBase} to the power ${power}`,
+          plural: null, dims, factor, offset: d(0), temp: false, prefixable: 'none', prefix: null,
+          prefixPower: 1, def: null, isLongName: false
+        };
+      }
+
+      const ALL_UNITS = [];
+      const SYMBOL_UNITS = [];
+      const DIRECT_SYMBOLS = new Map();
+      const DIRECT_NAMES = new Map();
+      const MULTI_NAMES = [];
+      const PREFIXED_NAME_TERMS = [];
+      const PREFIXED_BASES = new Map();
+      const PREFIX_NAME_UNITS = new Map();
+      const BASIC_UNITS = UNIT_DEFS.map(def => makeUnit(def));
+      for (const unit of BASIC_UNITS) ALL_UNITS.push(unit);
+
+      function registerSymbol(symbol, unit) {
+        if (!symbol) return;
+        const list = DIRECT_SYMBOLS.get(symbol) || [];
+        if (!list.some(existing => existing.id === unit.id)) list.push(unit);
+        DIRECT_SYMBOLS.set(symbol, list);
+        SYMBOL_UNITS.push(unit);
+      }
+      function registerName(name, unit) {
+        const key = name.trim().toLowerCase();
+        if (!key) return;
+        const current = DIRECT_NAMES.get(key) || [];
+        if (!current.some(existing => existing.id === unit.id)) current.push(unit);
+        DIRECT_NAMES.set(key, current);
+        if (key.includes(' ')) MULTI_NAMES.push(key);
+      }
+
+      for (const def of UNIT_DEFS) {
+        const unit = makeUnit(def);
+        def.symbols.forEach(symbol => registerSymbol(symbol, unit));
+        def.names.forEach(name => registerName(name, unit));
+      }
+      for (const def of UNIT_DEFS) {
+        if (def.prefixable === 'none') continue;
+        const prefixes = def.prefixable === 'large' ? LARGE_PREFIXES : PREFIXES;
+        for (const prefix of prefixes) {
+          const unit = makeUnit(def, prefix);
+          ALL_UNITS.push(unit);
+          registerSymbol(unit.symbol, unit);
+          registerName(unit.longName, unit);
+          if (unit.plural) {
+            const pluralName = unit.longName.endsWith('y') ? unit.longName.slice(0, -1) + 'ies' :
+              unit.longName.endsWith('s') ? unit.longName : unit.longName + 's';
+            registerName(pluralName, unit);
+          }
+          const byBase = PREFIXED_BASES.get(def.id) || [];
+          byBase.push(unit);
+          PREFIXED_BASES.set(def.id, byBase);
+          PREFIX_NAME_UNITS.set(`${prefix.name}${def.longName}`.toLowerCase(), unit);
+          PREFIXED_NAME_TERMS.push(unit.longName.toLowerCase());
+          const aliasPrefixSymbols = [prefix.symbol, ...(prefix.aliases || [])];
+          for (const alias of aliasPrefixSymbols) {
+            registerSymbol(alias + def.symbols[0], unit);
+          }
+          if (def.names.length) {
+            for (const baseName of def.names) {
+              if (baseName.includes(' ')) continue;
+              registerName(prefix.name + baseName, unit);
+              if (baseName.endsWith('s')) registerName(prefix.name + baseName, unit);
+            }
+          }
+        }
+      }
+
+      // Prefixable square and cubic names use the scaled root unit, then square/cube its factor.
+      for (const def of UNIT_DEFS.filter(item => item.prefixPower > 1)) {
+        const rootDef = def.prefixPower === 2 ? U.m : U.m;
+        const prefixes = def.prefixable === 'large' ? LARGE_PREFIXES : PREFIXES;
+        for (const prefix of prefixes) {
+          const root = makeUnit(rootDef, prefix);
+          const unit = poweredUnit(root, def.prefixPower);
+          unit.id = `${prefix.symbol}${def.id}`;
+          unit.baseId = def.id;
+          unit.family = def.family;
+          unit.longName = `${def.prefixPower === 2 ? 'square' : 'cubic'} ${prefix.name}${rootDef.longName}`;
+          unit.plural = `${unit.longName}s`;
+          ALL_UNITS.push(unit);
+          registerSymbol(unit.symbol, unit);
+          registerSymbol(prefix.symbol + rootDef.symbols[0] + (def.prefixPower === 2 ? '2' : '3'), unit);
+          registerSymbol(prefix.symbol + rootDef.symbols[0] + (def.prefixPower === 2 ? (def.prefixPower === 2 ? '²' : '') : '³'), unit);
+          registerName(unit.longName, unit);
+          registerName(unit.plural, unit);
+          registerName(`sq ${prefix.name}${rootDef.longName}`, unit);
+        }
+      }
+
+      const aliasUnits = [
+        ['km/L', U.kmL], ['km per liter', U.kmL], ['km per litre', U.kmL],
+        ['km/h', U.kph], ['m/s', U.ms], ['ft/s', U.fts], ['fl oz', U.floz],
+        ['imp gal', U.galImp], ['uk gal', U.galImp], ['imp fl oz', U.flozImp], ['uk fl oz', U.flozImp],
+        ['sq ft', U.ft2], ['sq mi', U.mi2], ['sq yd', U.yd2], ['sq in', U.in2], ['sq m', U.m2], ['sq km', U.km2]
+      ];
+      aliasUnits.forEach(([alias, unit]) => registerName(alias, unit));
+
+      function caseScore(raw, canonical) {
+        let score = 0;
+        for (let i = 0; i < Math.min(raw.length, canonical.length); i++) if (raw[i] === canonical[i]) score++;
+        return score;
+      }
+      function uniqueUnits(list) {
+        const seen = new Set();
+        return list.filter(unit => {
+          if (!unit || seen.has(unit.id)) return false;
+          seen.add(unit.id);
+          return true;
+        });
+      }
+
+      function resolveUnit(raw, allowFallback = true) {
+        if (!raw) return [];
+        const cleaned = raw.replace(/[μ]/g, 'µ');
+        const exactSymbol = DIRECT_SYMBOLS.get(cleaned);
+        if (exactSymbol && exactSymbol.length) return uniqueUnits(exactSymbol);
+        const directName = DIRECT_NAMES.get(cleaned.toLowerCase());
+        if (directName && directName.length) return uniqueUnits(directName);
+
+        const suffixMatch = cleaned.match(/^(.+?)(2|3|²|³)$/);
+        if (suffixMatch) {
+          const rootUnits = resolveUnit(suffixMatch[1], allowFallback);
+          const power = /3|³/.test(suffixMatch[2]) ? 3 : 2;
+          if (rootUnits.length) return uniqueUnits(rootUnits.map(unit => poweredUnit(unit, power)));
+        }
+
+        // Exact prefix + exact base symbol comes before case-folded recovery.
+        const exactPrefixed = [];
+        for (const def of UNIT_DEFS) {
+          if (def.prefixable === 'none') continue;
+          const prefixes = def.prefixable === 'large' ? LARGE_PREFIXES : PREFIXES;
+          for (const prefix of prefixes) {
+            for (const prefixSymbol of [prefix.symbol, ...(prefix.aliases || [])]) {
+              for (const baseSymbol of def.symbols) {
+                if (cleaned === prefixSymbol + baseSymbol) exactPrefixed.push(makeUnit(def, prefix));
+              }
+            }
+          }
+        }
+        if (exactPrefixed.length) return uniqueUnits(exactPrefixed);
+        if (!allowFallback) return [];
+
+        const lower = cleaned.toLowerCase();
+        const folded = [];
+        for (const unit of SYMBOL_UNITS) {
+          if (unit.symbol.toLowerCase() === lower) folded.push(unit);
+        }
+        const powers = cleaned.match(/^(.+?)(2|3|²|³)$/);
+        if (powers) {
+          const rootLower = powers[1].toLowerCase();
+          const power = /3|³/.test(powers[2]) ? 3 : 2;
+          for (const unit of SYMBOL_UNITS) if (unit.symbol.toLowerCase() === rootLower) folded.push(poweredUnit(unit, power));
+        }
+        const candidates = uniqueUnits(folded);
+        candidates.sort((a, b) => caseScore(raw, b.symbol) - caseScore(raw, a.symbol) || a.symbol.localeCompare(b.symbol));
+        return candidates;
+      }
+
+      function matchMultiUnit(text, index) {
+        const rest = text.slice(index).toLowerCase().replace(/[μ]/g, 'µ');
+        const phrases = [...DIRECT_NAMES.keys()].filter(name => name.includes(' ')).sort((a, b) => b.length - a.length);
+        for (const phrase of phrases) {
+          if (!rest.startsWith(phrase)) continue;
+          const end = index + phrase.length;
+          const next = text[end] || '';
+          if (/[A-Za-z0-9]/.test(next)) continue;
+          const options = DIRECT_NAMES.get(phrase) || [];
+          return { raw: text.slice(index, end), end, options: uniqueUnits(options), named: true };
+        }
+        return null;
+      }
+
+      function matchUnitAt(text, index) {
+        const multi = matchMultiUnit(text, index);
+        if (multi) return multi;
+        const match = text.slice(index).match(/^[A-Za-zµμΩ°]+(?:[23]|²|³)?/);
+        if (!match) return null;
+        const raw = match[0];
+        const end = index + raw.length;
+        if (/[A-Za-z0-9]/.test(text[end] || '')) return null;
+        const options = resolveUnit(raw);
+        if (!options.length) return null;
+        const exactName = DIRECT_NAMES.has(raw.toLowerCase());
+        return { raw, end, options, named: exactName };
+      }
+
+      function unitFromSymbol(symbol) {
+        const matches = resolveUnit(symbol, true);
+        return matches[0] || null;
+      }
+
+      function unitToSI(number, unit) {
+        return unit.temp ? number.times(unit.factor).plus(unit.offset) : number.times(unit.factor);
+      }
+      function unitFromSI(value, unit, tempKind = 'absolute') {
+        if (unit.temp && tempKind === 'absolute') return value.minus(unit.offset).div(unit.factor);
+        return value.div(unit.factor);
+      }
+      function dimsKey(dims) { return dims.join(','); }
+      function dimsEqual(a, b) { return a.length === b.length && a.every((value, index) => value === b[index]); }
+      function isDimensionless(dims) { return dims.every(value => value === 0); }
+
+      const AREA_KEY = dimsKey(areaDims);
+      const VOLUME_KEY = dimsKey([3, 0, 0, 0, 0, 0, 0]);
+      const SPEED_KEY = dimsKey([1, 0, -1, 0, 0, 0, 0]);
+      const ENERGY_KEY = dimsKey([2, 1, -2, 0, 0, 0, 0]);
+      const POWER_KEY = dimsKey([2, 1, -3, 0, 0, 0, 0]);
+      const FORCE_KEY = dimsKey([1, 1, -2, 0, 0, 0, 0]);
+      const PRESSURE_KEY = dimsKey([-1, 1, -2, 0, 0, 0, 0]);
+      const FUEL_KEY = dimsKey([-2, 0, 0, 0, 0, 0, 0]);
+
+      const FUNCTION_ALIASES = {
+        log: { name: 'log', base: 10 }, ln: { name: 'ln' }, log2: { name: 'log', base: 2 },
+        log_2: { name: 'log', base: 2 }, log5: { name: 'log', base: 5 }, sqrt: { name: 'sqrt' },
+        cbrt: { name: 'cbrt' }, sin: { name: 'sin' }, cos: { name: 'cos' }, tan: { name: 'tan' },
+        csc: { name: 'csc' }, sec: { name: 'sec' }, cot: { name: 'cot' },
+        arcsin: { name: 'asin' }, asin: { name: 'asin' }, arccos: { name: 'acos' }, acos: { name: 'acos' },
+        arctan: { name: 'atan' }, atan: { name: 'atan' },
+        'sin-1': { name: 'asin' }, 'cos-1': { name: 'acos' }, 'tan-1': { name: 'atan' },
+        'csc-1': { name: 'acsc' }, 'sec-1': { name: 'asec' }, 'cot-1': { name: 'acot' }
+      };
+      const TRIG_NAMES = new Set(['sin', 'cos', 'tan', 'csc', 'sec', 'cot']);
+
+      function token(type, raw, start, end, extra = {}) {
+        return { type, raw, start, end, ...extra };
+      }
+
+      function isWordChar(char) { return !!char && /[A-Za-z0-9_µμΩ°]/.test(char); }
+
+      function tokenize(source) {
+        const tokens = [];
+        let index = 0;
+        while (index < source.length) {
+          const char = source[index];
+          if (/\s/.test(char)) { index++; continue; }
+          const rest = source.slice(index);
+
+          const inverse = rest.match(/^(sin|cos|tan|csc|sec|cot)(?:\^-1|⁻¹|-1(?=\s*(?:\(|\d|\.)))/i);
+          if (inverse) {
+            const raw = inverse[0];
+            const base = inverse[1].toLowerCase();
+            const mapped = { sin: 'asin', cos: 'acos', tan: 'atan', csc: 'acsc', sec: 'asec', cot: 'acot' }[base];
+            tokens.push(token('FUNC', raw, index, index + raw.length, { name: mapped, inverse: true }));
+            index += raw.length;
+            continue;
+          }
+
+          const poweredFunction = rest.match(/^(sin|cos|tan|csc|sec|cot)([²³])/i);
+          if (poweredFunction) {
+            const raw = poweredFunction[0];
+            tokens.push(token('FUNC', raw, index, index + raw.length, { name: poweredFunction[1].toLowerCase(), funcPower: raw.endsWith('³') ? 3 : 2 }));
+            index += raw.length;
+            continue;
+          }
+
+          const gluedPower = rest.match(/^(sin|cos|tan|csc|sec|cot)(\d+)/i);
+          if (gluedPower) {
+            const raw = gluedPower[0];
+            const remainder = rest.slice(raw.length);
+            const hasArgument = remainder.startsWith('(') || (/^\s+/.test(remainder) && /^\s+(?:[\d.(]|[A-Za-zµμπΩ°])/.test(remainder));
+            if (hasArgument) {
+              tokens.push(token('FUNC', raw, index, index + raw.length, { name: gluedPower[1].toLowerCase(), funcPower: Number(gluedPower[2]) }));
+            } else {
+              const nameEnd = index + gluedPower[1].length;
+              tokens.push(token('FUNC', gluedPower[1], index, nameEnd, { name: gluedPower[1].toLowerCase() }));
+              const numberStart = nameEnd;
+              tokens.push(token('NUMBER', gluedPower[2], numberStart, numberStart + gluedPower[2].length, { value: d(gluedPower[2]) }));
+            }
+            index += raw.length;
+            continue;
+          }
+
+          const number = rest.match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+          if (number) {
+            const raw = number[0];
+            let sci = null;
+            const ambiguity = raw.match(/^((?:\d+(?:\.\d*)?|\.\d+))[eE]-(\d+)$/);
+            if (ambiguity) sci = { base: ambiguity[1], exponent: ambiguity[2] };
+            tokens.push(token('NUMBER', raw, index, index + raw.length, { value: d(raw), scientific: !!sci, sci }));
+            index += raw.length;
+            continue;
+          }
+
+          const unitMatch = matchUnitAt(source, index);
+          if (unitMatch) {
+            tokens.push(token('UNIT', unitMatch.raw, index, unitMatch.end, {
+              options: unitMatch.options,
+              selectedUnit: unitMatch.options[0],
+              named: unitMatch.named,
+              ambiguous: unitMatch.options.length > 1
+            }));
+            index = unitMatch.end;
+            continue;
+          }
+
+          if (char === 'π') {
+            tokens.push(token('CONST', char, index, index + 1, { name: 'pi' })); index++; continue;
+          }
+          if (char === '×' || char === '·') { tokens.push(token('OP', char, index, index + 1, { op: '*' })); index++; continue; }
+          if (char === '÷') { tokens.push(token('OP', char, index, index + 1, { op: '/' })); index++; continue; }
+          if (char === '−') { tokens.push(token('OP', char, index, index + 1, { op: '-' })); index++; continue; }
+          if (char === '(') { tokens.push(token('LPAREN', char, index, index + 1)); index++; continue; }
+          if (char === ')') { tokens.push(token('RPAREN', char, index, index + 1)); index++; continue; }
+          if (char === ',') { tokens.push(token('COMMA', char, index, index + 1)); index++; continue; }
+          if (source.slice(index, index + 2) === '**') { tokens.push(token('OP', '**', index, index + 2, { op: '^' })); index += 2; continue; }
+          if ('+-*/%^!'.includes(char)) { tokens.push(token('OP', char, index, index + 1, { op: char })); index++; continue; }
+
+          const word = rest.match(/^[A-Za-z_][A-Za-z_0-9]*/);
+          if (word) {
+            const raw = word[0];
+            const lower = raw.toLowerCase();
+            if (lower === 'npr' || lower === 'ncr') {
+              tokens.push(token(lower === 'npr' ? 'NPR' : 'NCR', raw, index, index + raw.length));
+            } else if ((lower === 'p' || lower === 'c') && source[index + raw.length] === '(') {
+              tokens.push(token('COMB_FUNC', raw, index, index + raw.length, { name: lower === 'p' ? 'npr' : 'ncr' }));
+            } else if (FUNCTION_ALIASES[lower]) {
+              tokens.push(token('FUNC', raw, index, index + raw.length, { ...FUNCTION_ALIASES[lower] }));
+            } else if (lower === 'e' || lower === 'pi') {
+              tokens.push(token('CONST', raw, index, index + raw.length, { name: lower }));
+            } else {
+              tokens.push(token('UNKNOWN', raw, index, index + raw.length));
+            }
+            index += raw.length;
+            continue;
+          }
+
+          tokens.push(token('UNKNOWN', char, index, index + 1));
+          index++;
+          if (tokens.length > 200) return null;
+        }
+        return tokens.length > 200 ? null : tokens;
+      }
+
+      function startsOperand(tok) {
+        return !!tok && ['NUMBER', 'CONST', 'UNIT', 'LPAREN', 'FUNC', 'COMB_FUNC', 'NPR', 'NCR'].includes(tok.type);
+      }
+
+      class Parser {
+        constructor(tokens) { this.tokens = tokens; this.index = 0; this.depth = 0; }
+        peek(offset = 0) { return this.tokens[this.index + offset] || null; }
+        take() { return this.tokens[this.index++] || null; }
+        parse() {
+          const node = this.expression(0);
+          if (!node || this.index !== this.tokens.length) throw new Error('incomplete expression');
+          return node;
+        }
+        expression(minBindingPower = 0) {
+          if (++this.depth > 80) throw new Error('expression too deep');
+          let left = this.prefix();
+          while (true) {
+            const next = this.peek();
+            if (!next) break;
+
+            if (next.type === 'OP' && (next.op === '!' || next.op === '%')) {
+              const isPostfixPercent = next.op === '%' && !startsOperand(this.peek(1));
+              if (next.op === '!' || isPostfixPercent) {
+                if (90 < minBindingPower) break;
+                this.take();
+                left = { type: next.op === '!' ? 'factorial' : 'percent', value: left };
+                continue;
+              }
+            }
+
+            if (next.type === 'OP' && next.op === '^') {
+              const binding = 80;
+              if (binding < minBindingPower) break;
+              this.take();
+              const right = this.expression(70);
+              left = { type: 'binary', op: '^', left, right };
+              continue;
+            }
+
+            if (next.type === 'NPR' || next.type === 'NCR') {
+              const binding = 55;
+              if (binding < minBindingPower) break;
+              this.take();
+              const right = this.expression(56);
+              left = { type: 'binary', op: next.type === 'NPR' ? 'npr' : 'ncr', left, right };
+              continue;
+            }
+
+            if (next.type === 'OP' && ['*', '/', '%'].includes(next.op)) {
+              const binding = 50;
+              if (binding < minBindingPower) break;
+              this.take();
+              const right = this.expression(51);
+              left = { type: 'binary', op: next.op, left, right };
+              continue;
+            }
+
+            if (next.type === 'OP' && (next.op === '+' || next.op === '-')) {
+              const binding = 40;
+              if (binding < minBindingPower) break;
+              this.take();
+              const right = this.expression(41);
+              left = { type: 'binary', op: next.op, left, right };
+              continue;
+            }
+
+            if (startsOperand(next)) {
+              const previousToken = this.tokens[this.index - 1];
+              if (left.type === 'number' && next.type === 'NUMBER') break;
+              if (previousToken && previousToken.type === 'UNIT' && next.type === 'NUMBER') break;
+              const binding = 60;
+              if (binding < minBindingPower) break;
+              const right = this.expression(61);
+              left = { type: 'binary', op: 'implicit', left, right };
+              continue;
+            }
+            break;
+          }
+          this.depth--;
+          return left;
+        }
+        prefix() {
+          const tok = this.take();
+          if (!tok) throw new Error('missing operand');
+          if (tok.type === 'NUMBER') return { type: 'number', value: tok.value, raw: tok.raw, scientific: tok.scientific, sci: tok.sci };
+          if (tok.type === 'CONST') return { type: 'constant', name: tok.name };
+          if (tok.type === 'UNIT') return { type: 'unit', unit: tok.selectedUnit || tok.options[0], token: tok };
+          if (tok.type === 'OP' && (tok.op === '+' || tok.op === '-')) return { type: 'unary', op: tok.op, value: this.expression(70) };
+          if (tok.type === 'LPAREN') {
+            const inner = this.expression(0);
+            if (!this.peek() || this.take().type !== 'RPAREN') throw new Error('unclosed parenthesis');
+            return { type: 'group', value: inner };
+          }
+          if (tok.type === 'FUNC') {
+            let funcPower = tok.funcPower || 1;
+            if (!tok.inverse && this.peek()?.type === 'OP' && this.peek().op === '^' && this.peek(1)?.type === 'NUMBER') {
+              const power = this.peek(1).value;
+              const afterPower = this.peek(2);
+              if (power.isInteger() && power.gte(1) && power.lte(9) && startsOperand(afterPower)) {
+                this.take(); this.take(); funcPower = power.toNumber();
+              }
+            }
+            let args;
+            if (this.peek()?.type === 'LPAREN') {
+              this.take();
+              args = [this.expression(0)];
+              while (this.peek()?.type === 'COMMA') { this.take(); args.push(this.expression(0)); }
+              if (!this.peek() || this.take().type !== 'RPAREN') throw new Error('unclosed function');
+            } else {
+              args = [this.expression(60)];
+            }
+            return { type: 'call', name: tok.name, base: tok.base || null, args, funcPower };
+          }
+          if (tok.type === 'COMB_FUNC' || tok.type === 'NPR' || tok.type === 'NCR') {
+            if (this.peek()?.type !== 'LPAREN') throw new Error('function needs arguments');
+            this.take();
+            const args = [this.expression(0)];
+            while (this.peek()?.type === 'COMMA') { this.take(); args.push(this.expression(0)); }
+            if (!this.peek() || this.take().type !== 'RPAREN' || args.length !== 2) throw new Error('two arguments required');
+            const name = tok.type === 'COMB_FUNC' ? tok.name : (tok.type === 'NPR' ? 'npr' : 'ncr');
+            return { type: 'call', name, args, funcPower: 1 };
+          }
+          throw new Error('unknown token');
+        }
+      }
+
+      function cloneTokens(tokens) {
+        return tokens.map(tok => ({ ...tok, options: tok.options ? tok.options.slice() : undefined }));
+      }
+
+      function parseTokens(tokens) { return new Parser(tokens).parse(); }
+
+      function findLongestValid(source) {
+        if (!source || source.length > 500) return null;
+        const allTokens = tokenize(source);
+        if (!allTokens || !allTokens.length || allTokens.length > 200) return null;
+        for (let start = 0; start < allTokens.length; start++) {
+          const run = cloneTokens(allTokens.slice(start));
+          try {
+            const ast = parseTokens(run);
+            return { ast, tokens: run, allTokens, tokenStart: start, start: run[0].start, end: run[run.length - 1].end };
+          } catch (_) { /* Keep looking for a longer valid suffix. */ }
+        }
+        return null;
+      }
+
+      function expandUnitReadings(tokens, cap = 12) {
+        let variants = [cloneTokens(tokens)];
+        for (let index = 0; index < tokens.length; index++) {
+          const tokenAt = tokens[index];
+          if (tokenAt.type !== 'UNIT' || !tokenAt.options || tokenAt.options.length < 2) continue;
+          const next = [];
+          for (const variant of variants) {
+            for (const option of tokenAt.options) {
+              const copy = cloneTokens(variant);
+              copy[index].selectedUnit = option;
+              next.push(copy);
+              if (next.length >= cap) break;
+            }
+            if (next.length >= cap) break;
+          }
+          variants = next;
+        }
+        return variants;
+      }
+
+      function scientificAlternative(tokens) {
+        const index = tokens.findIndex(item => item.type === 'NUMBER' && item.sci);
+        if (index < 0) return null;
+        const original = tokens[index];
+        const before = original.sci.base;
+        const exponent = original.sci.exponent;
+        const alt = cloneTokens(tokens);
+        const replacement = [
+          token('NUMBER', before, original.start, original.start + before.length, {
+            value: d(before), sciOrigin: { start: original.start, end: original.end, base: before, exponent }
+          }),
+          token('CONST', 'e', original.start + before.length, original.start + before.length + 1, { name: 'e' }),
+          token('OP', '-', original.start + before.length + 1, original.start + before.length + 2, { op: '-' }),
+          token('NUMBER', exponent, original.end - exponent.length, original.end, { value: d(exponent) })
+        ];
+        alt.splice(index, 1, ...replacement);
+        return alt;
+      }
+
+      function trimDecimal(value) {
+        let text = value.toFixed();
+        if (text.includes('.')) text = text.replace(/0+$/, '').replace(/\.$/, '');
+        if (text === '-0') text = '0';
+        return text;
+      }
+
+      function cleanDecimal(value) {
+        let result = new Decimal(value);
+        if (!result.isFinite()) throw new Error('non-finite');
+        if (result.abs().lt('1e-14')) return d(0);
+        const nearest = result.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+        if (result.minus(nearest).abs().lt('1e-14')) result = nearest;
+        return result;
+      }
+
+      function significantDigits(value) {
+        if (value.isZero()) return 1;
+        return value.precision();
+      }
+
+      function isExactDecimal(value) {
+        return significantDigits(value) <= 20;
+      }
+
+      function atScientificRange(value) { return value.abs().gte('1e15') || value.abs().lt('1e-6'); }
+
+      function scientificParts(value) {
+        const exponent = value.abs().e;
+        const mantissa = value.div(d(10).pow(exponent));
+        return { mantissa, exponent };
+      }
+
+      function formatScientific(value, mode) {
+        const sign = value.isNegative() ? '-' : '';
+        const { mantissa, exponent } = scientificParts(value);
+        let mantissaText;
+        if (mode === 'exact') mantissaText = trimDecimal(mantissa);
+        else if (mode === 'alternate') mantissaText = formatSignificant(mantissa, 3);
+        else mantissaText = inlineApproximation(mantissa).text;
+        return `${sign}${mantissaText}e${exponent}`;
+      }
+
+      function sameIntegerPart(a, b) { return a.abs().floor().eq(b.abs().floor()); }
+
+      function inlineApproximation(value) {
+        const sign = value.isNegative() ? '-' : '';
+        const magnitude = value.abs();
+        for (let places = 1; places <= 40; places++) {
+          const rounded = value.toDecimalPlaces(places, Decimal.ROUND_HALF_UP);
+          if (rounded.isZero() || !sameIntegerPart(value, rounded)) continue;
+          const error = rounded.minus(value).abs().div(magnitude);
+          if (error.lte('0.05')) return { value: rounded, text: trimDecimal(rounded), places };
+        }
+        const rounded = value.toSignificantDigits(18, Decimal.ROUND_HALF_UP);
+        return { value: rounded, text: trimDecimal(rounded), places: 40 };
+      }
+
+      function formatSignificant(value, figures) {
+        const rounded = value.toSignificantDigits(figures, Decimal.ROUND_HALF_UP);
+        return trimDecimal(rounded);
+      }
+
+      function numberVariants(input, alternateMode = false) {
+        const value = cleanDecimal(input);
+        const exact = isExactDecimal(value);
+        if (exact) {
+          const formatted = atScientificRange(value) ? formatScientific(value, 'exact') : trimDecimal(value);
+          return { value, exact: true, primary: formatted, ladder: [] };
+        }
+        let primary;
+        let inlineDecimal;
+        if (atScientificRange(value)) {
+          const { mantissa, exponent } = scientificParts(value);
+          const approx = inlineApproximation(mantissa);
+          inlineDecimal = value.isNegative() ? approx.value.negated().times(d(10).pow(exponent)) : approx.value.times(d(10).pow(exponent));
+          primary = `${value.isNegative() ? '-' : ''}${approx.text}e${exponent}`;
+        } else {
+          const approx = inlineApproximation(value);
+          inlineDecimal = approx.value;
+          primary = approx.text;
+        }
+        const ladder = [];
+        for (const figures of [3, 5, 8]) {
+          let candidate;
+          let text;
+          if (atScientificRange(value)) {
+            const { mantissa, exponent } = scientificParts(value);
+            const roundedMantissa = mantissa.toSignificantDigits(figures, Decimal.ROUND_HALF_UP);
+            const expanded = value.isNegative() ? roundedMantissa.negated().times(d(10).pow(exponent)) : roundedMantissa.times(d(10).pow(exponent));
+            candidate = expanded;
+            text = `${value.isNegative() ? '-' : ''}${formatSignificant(mantissa, figures)}e${exponent}`;
+          } else {
+            candidate = value.toSignificantDigits(figures, Decimal.ROUND_HALF_UP);
+            text = trimDecimal(candidate);
+          }
+          if (!sameIntegerPart(value, candidate)) continue;
+          if (candidate.minus(value).abs().gte(inlineDecimal.minus(value).abs())) continue;
+          if (text === primary || ladder.some(item => item.text === text)) continue;
+          ladder.push({ value: candidate, text, figures });
+        }
+        return { value, exact: false, primary, primaryValue: inlineDecimal, ladder };
+      }
+
+      function qty(value, dims = DIM_ZERO, options = {}) {
+        return {
+          value: new Decimal(value), dims: dims.slice(), unit: options.unit || null,
+          tempKind: options.tempKind || null, unitAtom: !!options.unitAtom,
+          literalScalar: !!options.literalScalar
+        };
+      }
+
+      function checkMagnitude(value) {
+        if (!value.isFinite() || value.abs().gt('1e1000')) throw new Error('overflow');
+        return value;
+      }
+
+      function combineDims(a, b, sign = 1) { return a.map((value, index) => value + sign * b[index]); }
+      function scaleDims(dims, power) { return dims.map(value => value * power); }
+      function roundDimension(value) {
+        const nearest = Math.round(value);
+        if (!Number.isFinite(value) || Math.abs(value - nearest) > 1e-10) throw new Error('fractional dimension');
+        return nearest;
+      }
+
+      function findEquivalentUnit(dims, factor, temp = false) {
+        const match = ALL_UNITS.find(unit => dimsEqual(unit.dims, dims) && unit.temp === temp && unit.factor.minus(factor).abs().lt('1e-40'));
+        return match || null;
+      }
+
+      function composeUnit(left, right, operator, resultDims) {
+        if (operator === '/' && !left && right?.baseId === 'second') return unitFromSymbol('Hz');
+        if (!left && !right) return null;
+        if (!left) return operator === '*' ? right : null;
+        if (!right) return operator === '*' ? left : null;
+        if (operator === '*') {
+          const pair = [left.baseId, right.baseId].sort().join('*');
+          if (pair === ['ampere', 'volt'].sort().join('*')) return unitFromSymbol('W');
+          if (pair === ['watt', 'second'].sort().join('*')) return unitFromSymbol('J');
+          if ((left.baseId === 'psi' && (right.baseId === 'square-inch' || right.symbol === 'in^2')) || (right.baseId === 'psi' && (left.baseId === 'square-inch' || left.symbol === 'in^2'))) return unitFromSymbol('lbf');
+          if (left.id === right.id) return findEquivalentUnit(resultDims, left.factor.times(right.factor)) || poweredUnit(left, 2);
+        } else {
+          if (left.baseId === 'joule' && right.baseId === 'second') return unitFromSymbol('W');
+          if ((right.baseId === 'square-meter' || right.symbol === 'm^2') && left.baseId === 'newton') return unitFromSymbol('Pa');
+          if (left.dims.every(value => value === 0) && right.baseId === 'second') return unitFromSymbol('Hz');
+        }
+        const factor = operator === '*' ? left.factor.times(right.factor) : left.factor.div(right.factor);
+        const equivalent = findEquivalentUnit(resultDims, factor);
+        if (equivalent) return equivalent;
+        let symbol;
+        if (operator === '*') symbol = `${left.symbol}·${right.symbol}`;
+        else symbol = `${left.symbol}/${right.symbol}`;
+        return {
+          id: `compound:${left.id}${operator}${right.id}`, baseId: null, family: null, symbol,
+          longName: symbol, plural: null, dims: resultDims.slice(), factor, offset: d(0),
+          temp: false, prefixable: 'none', prefix: null, prefixPower: 1, def: null
+        };
+      }
+
+      function chooseSizedUnit(unit, baseValue, dims) {
+        if (!unit || !unit.def || unit.temp || unit.prefixable === 'none') return unit;
+        const currentMagnitude = baseValue.div(unit.factor).abs();
+        if (currentMagnitude.gte(1) && currentMagnitude.lt(1000)) return unit;
+        const candidates = PREFIXED_BASES.get(unit.baseId) || [];
+        for (const candidate of candidates) {
+          if (!dimsEqual(candidate.dims, dims)) continue;
+          const magnitude = baseValue.div(candidate.factor).abs();
+          if (magnitude.gte(1) && magnitude.lt(1000)) return candidate;
+        }
+        return unit;
+      }
+
+      function chooseAddUnit(left, right, baseValue, dims) {
+        const candidates = [left.unit, right.unit].filter(unit => unit && dimsEqual(unit.dims, dims));
+        for (const candidate of candidates) {
+          const value = unitFromSI(baseValue, candidate, 'delta').abs();
+          if (value.gte(1) && value.lt(1000)) return candidate;
+        }
+        return candidates[0] || left.unit || right.unit || null;
+      }
+
+      function gammaApprox(number) {
+        const coefficients = [
+          676.5203681218851, -1259.1392167224028, 771.3234287776531,
+          -176.6150291621406, 12.507343278686905, -0.13857109526572012,
+          9.984369578019572e-6, 1.5056327351493116e-7
+        ];
+        if (number < 0.5) return Math.PI / (Math.sin(Math.PI * number) * gammaApprox(1 - number));
+        let z = number - 1;
+        let x = 0.99999999999980993;
+        for (let i = 0; i < coefficients.length; i++) x += coefficients[i] / (z + i + 1);
+        const t = z + coefficients.length - 0.5;
+        return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+      }
+
+      function factorialValue(value) {
+        if (!value.isFinite() || value.lt(0) || value.gt(170)) throw new Error('factorial range');
+        if (value.isInteger()) {
+          let result = d(1);
+          for (let i = 2; i <= value.toNumber(); i++) result = result.times(i);
+          return result;
+        }
+        const gamma = gammaApprox(value.toNumber() + 1);
+        if (!Number.isFinite(gamma)) throw new Error('gamma range');
+        return d(gamma.toPrecision(16));
+      }
+
+      function combinatoric(a, b, mode) {
+        if (!isDimensionless(a.dims) || !isDimensionless(b.dims) || !a.value.isInteger() || !b.value.isInteger()) throw new Error('integer arguments required');
+        const n = a.value.toNumber();
+        const r = b.value.toNumber();
+        if (n < 0 || r < 0 || n > 170 || r > n) throw new Error('combination range');
+        let result = d(1);
+        if (mode === 'npr') {
+          for (let i = 0; i < r; i++) result = result.times(n - i);
+        } else {
+          const count = Math.min(r, n - r);
+          for (let i = 1; i <= count; i++) result = result.times(n - count + i).div(i);
+        }
+        return qty(result, DIM_ZERO, { literalScalar: false });
+      }
+
+      function evalFunction(node, context, depth) {
+        const args = node.args.map(arg => evaluate(arg, context, depth + 1));
+        const name = node.name;
+        if (name === 'npr' || name === 'ncr') {
+          if (args.length !== 2) throw new Error('two arguments required');
+          return combinatoric(args[0], args[1], name);
+        }
+        if (args.length !== 1) throw new Error('one argument required');
+        const input = args[0];
+        let result;
+        if (name === 'sqrt' || name === 'cbrt') {
+          if (name === 'sqrt' && input.value.lt(0)) throw new Error('complex result');
+          const power = name === 'sqrt' ? 0.5 : 1 / 3;
+          if (name === 'cbrt') result = input.value.abs().cbrt().times(input.value.isNegative() ? -1 : 1);
+          else result = input.value.sqrt();
+          const newDims = input.dims.map(value => roundDimension(value * power));
+          const newFactor = input.unit ? input.unit.factor.pow(power) : null;
+          const unit = input.unit ? (findEquivalentUnit(newDims, newFactor) || poweredUnit(input.unit, power)) : null;
+          return qty(checkMagnitude(result), newDims, { unit, tempKind: input.tempKind === 'absolute' ? 'absolute' : null });
+        }
+        if (name === 'log' || name === 'ln') {
+          if (!isDimensionless(input.dims) || input.value.lte(0)) throw new Error('log domain');
+          const natural = input.value.ln();
+          if (name === 'ln') result = natural;
+          else {
+            const base = d(node.base || 10);
+            if (base.lte(0) || base.eq(1)) throw new Error('log base');
+            result = natural.div(base.ln());
+          }
+          return qty(checkMagnitude(result), DIM_ZERO);
+        }
+
+        const inverse = ['asin', 'acos', 'atan', 'acsc', 'asec', 'acot'].includes(name);
+        const trig = TRIG_NAMES.has(name);
+        if (!trig && !inverse) throw new Error('unknown function');
+        if (inverse) {
+          if (!isDimensionless(input.dims)) throw new Error('inverse trig needs scalar');
+          if (['asin', 'acos'].includes(name) && input.value.abs().gt(1)) throw new Error('inverse trig domain');
+          if (['acsc', 'asec'].includes(name) && input.value.abs().lt(1)) throw new Error('inverse trig domain');
+          context.hasBareTrig = true;
+          if (name === 'asin') result = input.value.asin();
+          else if (name === 'acos') result = input.value.acos();
+          else if (name === 'atan') result = input.value.atan();
+          else if (name === 'acsc') result = d(1).div(input.value).asin();
+          else if (name === 'asec') result = d(1).div(input.value).acos();
+          else result = input.value.eq(0) ? PI.div(2) : d(1).div(input.value).atan();
+          const angleUnit = context.mode === 'deg' ? unitFromSymbol('°') : unitFromSymbol('rad');
+          let output = qty(result, DIMS.angle, { unit: angleUnit });
+          if (node.funcPower !== 1) output = powerQuantity(output, d(node.funcPower));
+          return output;
+        }
+
+        let radians;
+        if (dimsEqual(input.dims, DIMS.angle)) radians = input.value;
+        else if (isDimensionless(input.dims)) {
+          context.hasBareTrig = true;
+          radians = context.mode === 'deg' ? input.value.times(PI).div(180) : input.value;
+        } else throw new Error('trig needs an angle or scalar');
+        if (name === 'sin') result = radians.sin();
+        else if (name === 'cos') result = radians.cos();
+        else if (name === 'tan') result = radians.tan();
+        else if (name === 'csc') result = d(1).div(radians.sin());
+        else if (name === 'sec') result = d(1).div(radians.cos());
+        else result = d(1).div(radians.tan());
+        if (!result.isFinite() || result.abs().gt('1e15')) throw new Error('trig pole');
+        let output = qty(result, DIM_ZERO);
+        if (node.funcPower !== 1) output = powerQuantity(output, d(node.funcPower));
+        return output;
+      }
+
+      function powerQuantity(base, exponent) {
+        if (!isDimensionless(exponent.dims)) throw new Error('unit exponent');
+        if (base.tempKind === 'absolute') throw new Error('absolute temperature power');
+        if (exponent.value.abs().gt(1000)) throw new Error('exponent cap');
+        const powerNumber = exponent.value.toNumber();
+        const resultDims = base.dims.map(value => roundDimension(value * powerNumber));
+        let result;
+        if (base.value.lt(0) && !exponent.value.isInteger()) throw new Error('complex result');
+        result = base.value.pow(exponent.value);
+        if (!result.isFinite()) throw new Error('power overflow');
+        let unit = null;
+        if (base.unit) {
+          const factor = base.unit.factor.pow(exponent.value);
+          unit = findEquivalentUnit(resultDims, factor) || {
+            ...poweredUnit(base.unit, powerNumber), dims: resultDims, factor,
+            symbol: powerNumber === 1 ? base.unit.symbol : `${base.unit.symbol}^${trimDecimal(exponent.value)}`
+          };
+        }
+        return qty(checkMagnitude(result), resultDims, { unit });
+      }
+
+      function addOrSubtract(a, b, op) {
+        if (!dimsEqual(a.dims, b.dims)) throw new Error('dimension mismatch');
+        const isTemp = dimsEqual(a.dims, DIMS.temperature);
+        let value;
+        let tempKind = null;
+        let unit;
+        if (isTemp) {
+          if (op === '+' && a.tempKind === 'absolute' && b.tempKind === 'absolute') {
+            value = a.value.plus(b.value.minus(b.unit?.offset || 0));
+            tempKind = 'absolute'; unit = a.unit || b.unit;
+          } else if (op === '-' && a.tempKind === 'absolute' && b.tempKind === 'absolute') {
+            value = a.value.minus(b.value);
+            tempKind = 'delta'; unit = a.unit || b.unit;
+          } else if (a.tempKind === 'absolute' && b.tempKind !== 'absolute') {
+            value = op === '+' ? a.value.plus(b.value) : a.value.minus(b.value);
+            tempKind = 'absolute'; unit = a.unit || b.unit;
+          } else if (op === '+' && a.tempKind !== 'absolute' && b.tempKind === 'absolute') {
+            value = a.value.plus(b.value); tempKind = 'absolute'; unit = b.unit || a.unit;
+          } else if (a.tempKind !== 'absolute' && b.tempKind !== 'absolute') {
+            value = op === '+' ? a.value.plus(b.value) : a.value.minus(b.value);
+            tempKind = 'delta'; unit = a.unit || b.unit;
+          } else throw new Error('temperature operation');
+        } else {
+          value = op === '+' ? a.value.plus(b.value) : a.value.minus(b.value);
+          unit = chooseAddUnit(a, b, value, a.dims);
+        }
+        return qty(checkMagnitude(value), a.dims, { unit, tempKind });
+      }
+
+      function multiplyOrDivide(a, b, op, implicit = false) {
+        if (a.tempKind === 'absolute' || b.tempKind === 'absolute') {
+          if (op === '*' && a.unitAtom && b.literalScalar && a.unit?.temp) {
+            return qty(unitToSI(b.value, a.unit), a.dims, { unit: a.unit, tempKind: 'absolute' });
+          }
+          if (op === '*' && b.unitAtom && a.literalScalar && b.unit?.temp) {
+            return qty(unitToSI(a.value, b.unit), b.dims, { unit: b.unit, tempKind: 'absolute' });
+          }
+          throw new Error('temperature product');
+        }
+        if (op === '%' ) {
+          if (!(isDimensionless(a.dims) && isDimensionless(b.dims)) && !dimsEqual(a.dims, b.dims)) throw new Error('modulo dimensions');
+          if (b.value.isZero()) throw new Error('modulo by zero');
+          const value = a.value.mod(b.value);
+          return qty(checkMagnitude(value), a.dims, { unit: isDimensionless(a.dims) ? null : a.unit || b.unit });
+        }
+        if (op === '*' && (a.unitAtom || b.unitAtom)) {
+          const unitSide = a.unitAtom ? a : b;
+          const scalarSide = a.unitAtom ? b : a;
+          if (unitSide.unit?.temp) {
+            if (!scalarSide.literalScalar || !isDimensionless(scalarSide.dims)) throw new Error('temperature literal');
+            return qty(unitToSI(scalarSide.value, unitSide.unit), unitSide.dims, { unit: unitSide.unit, tempKind: 'absolute' });
+          }
+        }
+        const value = op === '*' ? a.value.times(b.value) : a.value.div(b.value);
+        if (op === '/' && b.value.isZero()) throw new Error('divide by zero');
+        const dims = combineDims(a.dims, b.dims, op === '*' ? 1 : -1);
+        const unit = composeUnit(a.unit, b.unit, op, dims);
+        return qty(checkMagnitude(value), dims, { unit: chooseSizedUnit(unit, value, dims) });
+      }
+
+      function evaluate(node, context, depth = 0) {
+        if (depth > 80) throw new Error('recursion cap');
+        switch (node.type) {
+          case 'number': return qty(node.value, DIM_ZERO, { literalScalar: true });
+          case 'constant': return qty(node.name === 'pi' ? PI : E, DIM_ZERO);
+          case 'unit': return qty(node.unit.factor, node.unit.dims, { unit: node.unit, unitAtom: true });
+          case 'group': return evaluate(node.value, context, depth + 1);
+          case 'unary': {
+            const value = evaluate(node.value, context, depth + 1);
+            if (node.op === '+') return value;
+            return qty(value.value.negated(), value.dims, { unit: value.unit, tempKind: value.tempKind, unitAtom: value.unitAtom, literalScalar: value.literalScalar });
+          }
+          case 'factorial': {
+            const value = evaluate(node.value, context, depth + 1);
+            if (!isDimensionless(value.dims)) throw new Error('factorial needs scalar');
+            return qty(factorialValue(value.value), DIM_ZERO);
+          }
+          case 'percent': {
+            const value = evaluate(node.value, context, depth + 1);
+            if (!isDimensionless(value.dims)) throw new Error('percent needs scalar');
+            return qty(value.value.div(100), DIM_ZERO);
+          }
+          case 'call': return evalFunction(node, context, depth);
+          case 'binary': {
+            const left = evaluate(node.left, context, depth + 1);
+            const right = evaluate(node.right, context, depth + 1);
+            if (node.op === '+' || node.op === '-') return addOrSubtract(left, right, node.op);
+            if (node.op === '*' || node.op === '/' || node.op === '%' || node.op === 'implicit') {
+              return multiplyOrDivide(left, right, node.op === 'implicit' ? '*' : node.op, node.op === 'implicit');
+            }
+            if (node.op === '^') return powerQuantity(left, right);
+            if (node.op === 'npr' || node.op === 'ncr') return combinatoric(left, right, node.op);
+            throw new Error('unknown operator');
+          }
+          default: throw new Error('unknown expression');
+        }
+      }
+
+      const UNIT_TARGETS = {
+        [dimsKey(DIMS.length)]: ['mi', 'km', 'm', 'ft', 'in', 'yd'],
+        [dimsKey(DIMS.mass)]: ['kg', 'g', 'lb', 'oz'],
+        [AREA_KEY]: ['km^2', 'acre', 'ft^2', 'm^2', 'mi^2', 'yd^2', 'in^2'],
+        [SPEED_KEY]: ['mph', 'km/h', 'ft/s', 'knot', 'm/s'],
+        [ENERGY_KEY]: ['kJ', 'J', 'kWh', 'Wh', 'cal', 'kcal'],
+        [POWER_KEY]: ['kW', 'W', 'hp', 'PS'],
+        [FORCE_KEY]: ['lbf', 'N'],
+        [PRESSURE_KEY]: ['PSI', 'bar', 'atm', 'Pa'],
+        [FUEL_KEY]: ['mpg', 'km/L'],
+        [VOLUME_KEY]: ['gal', 'L', 'qt', 'pt', 'cup', 'tbsp', 'tsp', 'ft^3', 'in^3', 'fl oz'],
+        [dimsKey(DIMS.temperature)]: ['°F', '°C', 'K'],
+        [dimsKey(DIMS.time)]: ['s', 'min', 'h', 'day', 'week', 'month', 'year'],
+        [dimsKey(DIMS.angle)]: ['°', 'rad', 'grad'],
+        [dimsKey(DIMS.data)]: ['MB', 'Mb', 'GB', 'Gb', 'B', 'b'],
+        [dimsKey([0, 0, -1, 0, 0, 0, 0])]: ['Hz', 'kHz'],
+        [dimsKey(DIMS.current)]: ['A', 'mA'],
+        [dimsKey([2, 1, -3, -1, 0, 0, 0])]: ['V', 'mV'],
+        [dimsKey([2, 1, -3, -2, 0, 0, 0])]: ['Ω', 'kΩ']
+      };
+
+      function targetUnitsFor(quantity) {
+        const entries = UNIT_TARGETS[dimsKey(quantity.dims)] || [];
+        const units = [];
+        for (const symbol of entries) {
+          const unit = unitFromSymbol(symbol);
+          if (unit && dimsEqual(unit.dims, quantity.dims) && !units.some(current => current.id === unit.id)) units.push(unit);
+        }
+        return units;
+      }
+
+      function quantityInUnit(quantity, unit) {
+        return unitFromSI(quantity.value, unit, quantity.tempKind || 'absolute');
+      }
+
+      function alternateNumber(value) {
+        const clean = cleanDecimal(value);
+        if (isExactDecimal(clean)) return atScientificRange(clean) ? formatScientific(clean, 'exact') : trimDecimal(clean);
+        if (atScientificRange(clean)) return formatScientific(clean, 'alternate');
+        for (const figures of [3, 4, 5, 6, 8, 10, 12]) {
+          const rounded = clean.toSignificantDigits(figures, Decimal.ROUND_HALF_UP);
+          if (sameIntegerPart(clean, rounded)) return trimDecimal(rounded);
+        }
+        return formatSignificant(clean, 12);
+      }
+
+      function unitSuffix(unit, magnitude, style = {}) {
+        if (!unit) return '';
+        if (style.longNames && unit.longName && !unit.symbol.includes('·') && !unit.symbol.includes('/')) {
+          const abs = magnitude.abs();
+          const name = abs.eq(1) || !unit.plural ? unit.longName : unit.plural;
+          return ` ${name}`;
+        }
+        return `${style.unitSpace ? ' ' : ''}${unit.symbol}`;
+      }
+
+      function formatQuantityText(quantity, unit, style = {}, mode = 'primary') {
+        const magnitude = unit ? cleanDecimal(quantityInUnit(quantity, unit)) : cleanDecimal(quantity.value);
+        const suffix = unitSuffix(unit, magnitude, style);
+        if (mode === 'alternate') return { primary: `${alternateNumber(magnitude)}${suffix}`, ladder: [], magnitude };
+        const variants = numberVariants(magnitude);
+        return {
+          primary: `${variants.primary}${suffix}`,
+          ladder: variants.ladder.map(item => ({ ...item, text: `${item.text}${suffix}` })),
+          magnitude,
+          exact: variants.exact
+        };
+      }
+
+      function sameResultText(a, b) {
+        return a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
+      }
+
+      function isLoneNumber(node) {
+        if (!node) return false;
+        if (node.type === 'group') return isLoneNumber(node.value);
+        if (node.type === 'unary') return isLoneNumber(node.value);
+        return node.type === 'number';
+      }
+
+      function isLonePercent(node) {
+        if (!node || node.type !== 'percent') return false;
+        return isLoneNumber(node.value);
+      }
+
+      function isQuantityLiteral(node) {
+        if (!node) return false;
+        if (node.type === 'group' || node.type === 'unary') return isQuantityLiteral(node.value);
+        if (node.type === 'unit') return true;
+        if (node.type === 'number') return false;
+        if (node.type === 'binary' && (node.op === 'implicit' || node.op === '*' || node.op === '/')) {
+          return isQuantityLiteral(node.left) || isQuantityLiteral(node.right);
+        }
+        if (node.type === 'binary' && node.op === '^') return isQuantityLiteral(node.left) && node.right.type === 'number';
+        return false;
+      }
+
+      function hasUnitAmbiguity(tokens) {
+        return tokens.some(item => item.type === 'UNIT' && item.options?.length > 1);
+      }
+
+      function unitStyleFor(text, tokens) {
+        const longNames = tokens.some(item => item.type === 'UNIT' && (item.named || item.raw.length > 3) && item.raw.length > item.selectedUnit.symbol.length + 1);
+        let spacedUnits = 0;
+        let compactUnits = 0;
+        for (const item of tokens) {
+          if (item.type !== 'UNIT') continue;
+          const before = text.slice(0, item.start);
+          const trimmed = before.replace(/\s+$/, '');
+          const previous = trimmed[trimmed.length - 1] || '';
+          if (!/[\d.)]/.test(previous)) continue;
+          if (trimmed.length !== before.length) spacedUnits++;
+          else compactUnits++;
+        }
+        const unitSpace = spacedUnits > 0 && compactUnits === 0;
+        return { longNames, unitSpace };
+      }
+
+      function canonicalExpression(source, found, variantTokens, options = {}) {
+        let text = source.slice(found.start, found.end);
+        const replacements = [];
+        for (const item of variantTokens) {
+          if (item.type === 'UNIT') {
+            const localStart = item.start - found.start;
+            const localEnd = item.end - found.start;
+            if (localStart < 0 || localEnd > text.length) continue;
+            const long = item.named && item.raw.length > item.selectedUnit.symbol.length + 1;
+            if (!long && item.raw !== item.selectedUnit.symbol) replacements.push({ start: localStart, end: localEnd, text: item.selectedUnit.symbol });
+          }
+          if (item.type === 'NUMBER' && item.sci && options.scientificNotation) {
+            const exponent = item.sci.exponent.replace(/\d/g, digit => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(digit)]).replace('-', '⁻');
+            const coefficient = item.sci.base === '1' ? '' : `${item.sci.base}·`;
+            replacements.push({ start: item.start - found.start, end: item.end - found.start, text: `${coefficient}10${exponent}` });
+          }
+          if (item.type === 'NUMBER' && item.sciOrigin && options.scientific) {
+            const sci = item.sciOrigin;
+            replacements.push({
+              start: sci.start - found.start,
+              end: sci.end - found.start,
+              text: `${sci.base}·e − ${sci.exponent}`
+            });
+          }
+        }
+        replacements.sort((a, b) => b.start - a.start).forEach(item => {
+          text = text.slice(0, item.start) + item.text + text.slice(item.end);
+        });
+        return text.trim();
+      }
+
+      function spacedEquationExpression(text) {
+        return text
+          .replace(/\s*([+*/])\s*/g, ' $1 ')
+          .replace(/\s*-\s*/g, ' − ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      function makeEquation(expression, result) { return `${expression} = ${result}`; }
+
+      function prefixForInsertion(analysis) {
+        if (analysis.shape === 'explicit' || analysis.shape === 'partial') return '';
+        return /\s/.test(analysis.segmentSource) ? ' = ' : '=';
+      }
+
+      function makeChip({ insertText, equation, resultText, kind = 'primary', tag = '', inlineEligible = false, typedPrefixLen = 0, replaceRange = null, altReading = false }) {
+        return { insertText, displayEquation: equation, resultText, kind, tag, inlineEligible, typedPrefixLen, replaceRange, altReading };
+      }
+
+      function buildGroups(analysis, found, selectedVariants, readingOptions = {}) {
+        const groups = [];
+        for (const variantTokens of selectedVariants) {
+          let ast;
+          try { ast = parseTokens(variantTokens); } catch (_) { continue; }
+          const display = canonicalExpression(analysis.expression, found, variantTokens, {
+            scientific: !!readingOptions.scientific,
+            scientificNotation: !!readingOptions.scientificNotation
+          });
+          const ambigUnits = hasUnitAmbiguity(found.tokens) || (analysis.conversionTargetUnits?.length > 1);
+          let radContext = { mode: 'rad', hasBareTrig: false };
+          let radValue = null;
+          try { radValue = evaluate(ast, radContext); } catch (_) { /* Continue in degrees if a bare trig input was seen. */ }
+          const hasBareTrig = radContext.hasBareTrig;
+          const modes = radValue ? [{ mode: 'rad', value: radValue, context: radContext }] : [];
+          if (hasBareTrig) {
+            const degContext = { mode: 'deg', hasBareTrig: false };
+            try { modes.push({ mode: 'deg', value: evaluate(ast, degContext), context: degContext }); } catch (_) { /* A failed angle interpretation is omitted. */ }
+          }
+          if (!modes.length) continue;
+          const style = unitStyleFor(analysis.segmentSource, variantTokens);
+          for (const mode of modes) {
+            const conversions = analysis.conversionTargetUnits || [null];
+            for (const conversionTarget of conversions) {
+              if (conversionTarget && !dimsEqual(conversionTarget.dims, mode.value.dims)) continue;
+              const selectedUnit = conversionTarget || (mode.value.unit ? chooseSizedUnit(mode.value.unit, mode.value.value, mode.value.dims) : null);
+              const primary = formatQuantityText(mode.value, selectedUnit, style, 'primary');
+              const targets = conversionTarget ? [] : targetUnitsFor(mode.value).filter(unit => !selectedUnit || unit.id !== selectedUnit.id);
+              const conversionDisplay = conversionTarget ? `${display} ${analysis.conversionPhrase || 'to'} ${conversionTarget.symbol}` : display;
+              groups.push({
+                quantity: mode.value,
+                mode: mode.mode,
+                hasBareTrig,
+                selectedUnit,
+                primary,
+                displayExpr: ambigUnits ? spacedEquationExpression(conversionDisplay) : conversionDisplay,
+                style,
+                targets,
+                ambiguousUnits: ambigUnits,
+                scientific: !!readingOptions.scientific,
+                scientificNotation: !!readingOptions.scientificNotation
+              });
+            }
+          }
+        }
+        return groups;
+      }
+
+      function addUniqueChip(chips, chip) {
+        if (!chip || !chip.insertText) return;
+        const duplicate = chips.some(current => sameResultText(current.resultText || '', chip.resultText || '') && current.kind === chip.kind);
+        if (!duplicate) chips.push(chip);
+      }
+
+      function primaryChipFor(group, analysis, lineClass, options = {}) {
+        const result = group.primary.primary;
+        const prefix = options.insertPrefix === undefined ? prefixForInsertion(analysis) : options.insertPrefix;
+        const tag = group.hasBareTrig ? group.mode : '';
+        return makeChip({
+          insertText: `${prefix}${result}`,
+          equation: makeEquation(group.displayExpr, result),
+          resultText: result,
+          kind: options.kind || 'primary',
+          tag,
+          inlineEligible: lineClass === 'inline' && !group.ambiguousUnits && !options.forceBar,
+          typedPrefixLen: options.typedPrefixLen || 0,
+          replaceRange: options.replaceRange || null,
+          altReading: group.scientific
+        });
+      }
+
+      function buildStandardChips(groups, analysis, lineClass, options = {}) {
+        const chips = [];
+        const hasMultipleModes = groups.some(group => group.hasBareTrig);
+        const trigGroups = hasMultipleModes && !groups.some(group => group.ambiguousUnits || group.scientific);
+        const primaryGroups = groups.filter(group => !group.ambiguousUnits && !group.scientific);
+
+        if (groups.some(group => group.ambiguousUnits)) {
+          for (const group of groups) {
+            addUniqueChip(chips, primaryChipFor(group, analysis, 'chip-only', { forceBar: true, kind: 'ambiguous-reading' }));
+          }
+          return chips;
+        }
+
+        if (groups.some(group => group.scientific)) {
+          for (const group of groups.filter(item => !item.scientific)) {
+            addUniqueChip(chips, primaryChipFor(group, analysis, lineClass, { kind: 'primary' }));
+          }
+          for (const group of groups.filter(item => item.scientific)) {
+            addUniqueChip(chips, primaryChipFor(group, analysis, 'chip-only', { forceBar: true, kind: 'reading' }));
+          }
+          return chips;
+        }
+
+        if (trigGroups) {
+          const rad = primaryGroups.find(group => group.mode === 'rad');
+          const deg = primaryGroups.find(group => group.mode === 'deg');
+          if (rad) addUniqueChip(chips, primaryChipFor(rad, analysis, lineClass));
+          if (deg) addUniqueChip(chips, primaryChipFor(deg, analysis, lineClass));
+          for (const group of [rad, deg]) {
+            if (!group) continue;
+            for (const ladder of group.primary.ladder) {
+              const tag = group.hasBareTrig ? group.mode : '';
+              addUniqueChip(chips, makeChip({
+                insertText: `${prefixForInsertion(analysis)}${ladder.text}`,
+                equation: makeEquation(group.displayExpr, ladder.text), resultText: ladder.text,
+                kind: 'ladder', tag, inlineEligible: false
+              }));
+            }
+          }
+          return chips;
+        }
+
+        const group = primaryGroups[0];
+        if (!group) return chips;
+        if (!options.omitPrimary) addUniqueChip(chips, primaryChipFor(group, analysis, lineClass, { forceBar: options.forceBar }));
+
+        if (options.bareUnit) {
+          chips.length = 0;
+          const prefix = prefixForInsertion(analysis);
+          for (const target of group.targets) {
+            const formatted = formatQuantityText(group.quantity, target, group.style, 'alternate');
+            const result = formatted.primary;
+            addUniqueChip(chips, makeChip({
+              insertText: `${prefix}${result}`,
+              equation: makeEquation(group.displayExpr, result), resultText: result,
+              kind: 'alternate', inlineEligible: false
+            }));
+          }
+          return chips;
+        }
+
+        for (const target of group.targets) {
+          const formatted = formatQuantityText(group.quantity, target, group.style, 'alternate');
+          const result = formatted.primary;
+          addUniqueChip(chips, makeChip({
+            insertText: `${prefixForInsertion(analysis)}${result}`,
+            equation: makeEquation(group.displayExpr, result), resultText: result,
+            kind: 'alternate', inlineEligible: false
+          }));
+        }
+        for (const ladder of group.primary.ladder) {
+          const result = ladder.text;
+          addUniqueChip(chips, makeChip({
+            insertText: `${prefixForInsertion(analysis)}${result}`,
+            equation: makeEquation(group.displayExpr, result), resultText: result,
+            kind: 'ladder', inlineEligible: false
+          }));
+        }
+        return chips;
+      }
+
+      const PHONE_DATE_PATTERNS = [
+        /^\d{3}-\d{4}$/,
+        /^\d{3}-\d{3}-\d{4}$/,
+        /^\(?\d{3}\)?[ -]?\d{3}-\d{4}$/,
+        /^\d{4}-\d{1,2}-\d{1,2}$/,
+        /^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}$/
+      ];
+
+      function isPartialResultText(text) {
+        return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*(?:[A-Za-zµμΩ°]+(?:\^?-?\d+)?|°[CF]|%))?$/.test(text.trim());
+      }
+
+      function hasSyntacticExpression(text) { return !!findLongestValid(text.trim()); }
+
+      function splitConversion(source) {
+        const arrow = source.match(/^(.*?)\s*->\s*([A-Za-zµμΩ°][A-Za-zµμΩ°A-Za-z0-9 ^²³-]*)\s*$/);
+        if (arrow) return { expression: arrow[1], target: arrow[2].trim(), phrase: '->' };
+        const named = source.match(/^(.*?)\s+(to|in)\s+([A-Za-zµμΩ°][A-Za-zµμΩ°A-Za-z0-9 ^²³-]*)\s*$/i);
+        if (named) return { expression: named[1], target: named[3].trim(), phrase: named[2].toLowerCase() };
+        return null;
+      }
+
+      function findLineAnalysis() {
+        const value = editor.value;
+        const caret = editor.selectionStart;
+        if (editor.selectionStart !== editor.selectionEnd || composing) return null;
+        const lineStart = value.lastIndexOf('\n', Math.max(0, caret - 1)) + 1;
+        const nextBreak = value.indexOf('\n', caret);
+        const lineEnd = nextBreak < 0 ? value.length : nextBreak;
+        const afterCaret = value.slice(caret, lineEnd);
+        if (afterCaret.trim() !== '') return null;
+        const line = value.slice(lineStart, lineEnd);
+        const beforeCaret = line.slice(0, caret - lineStart);
+        const trailingWhitespace = (beforeCaret.match(/\s*$/) || [''])[0];
+        const core = beforeCaret.slice(0, beforeCaret.length - trailingWhitespace.length);
+        if (!core.trim()) return null;
+
+        const bulletMatch = core.match(/^(\s*)([-*+•–])\s+/);
+        const bullet = !!bulletMatch;
+        const bulletLength = bulletMatch ? bulletMatch[0].length : 0;
+        const content = core.slice(bulletLength);
+        if (!content.trim()) return null;
+        const hasEquals = content.includes('=');
+        const endsWithEquals = content.trimEnd().endsWith('=');
+        let shape = 'noEquals';
+        let expression = content;
+        let partialText = '';
+        let replaceRange = null;
+
+        if (endsWithEquals) {
+          shape = 'explicit';
+          const end = content.lastIndexOf('=');
+          const previous = content.lastIndexOf('=', end - 1);
+          expression = content.slice(previous + 1, end);
+        } else if (hasEquals) {
+          const lastEquals = content.lastIndexOf('=');
+          const candidateResult = content.slice(lastEquals + 1).trim();
+          const earlier = content.slice(0, lastEquals);
+          if (isPartialResultText(candidateResult) && hasSyntacticExpression(earlier)) {
+            shape = 'partial';
+            expression = earlier;
+            partialText = candidateResult;
+            const resultRaw = content.slice(lastEquals + 1);
+            const leadSpace = (resultRaw.match(/^\s*/) || [''])[0].length;
+            replaceRange = {
+              start: lineStart + bulletLength + lastEquals + 1 + leadSpace,
+              end: lineStart + bulletLength + content.length
+            };
+          } else {
+            expression = content.slice(lastEquals + 1);
+          }
+        }
+
+        const segmentSource = expression;
+        const conversion = splitConversion(expression);
+        let expressionForEval = expression;
+        let conversionTargetUnits = null;
+        if (conversion) {
+          const target = resolveUnit(conversion.target);
+          if (target.length) {
+            expressionForEval = conversion.expression;
+            conversionTargetUnits = target;
+          }
+        }
+
+        const found = findLongestValid(expressionForEval);
+        if (!found) return null;
+        const chosenText = expressionForEval.slice(found.start, found.end).trim();
+        if (!chosenText) return null;
+        const loneLiteral = isLoneNumber(found.ast);
+        const lonePercent = isLonePercent(found.ast);
+        const bareUnit = isQuantityLiteral(found.ast);
+        const phoneOrDate = PHONE_DATE_PATTERNS.some(pattern => pattern.test(chosenText));
+        const ambiguousUnit = hasUnitAmbiguity(found.tokens);
+        let lineClass = 'inline';
+        if (bareUnit && !conversionTargetUnits) lineClass = 'bare-unit';
+        else if (ambiguousUnit || (bullet && !hasEquals) || (phoneOrDate && !hasEquals)) lineClass = 'chip-only';
+
+        return {
+          lineStart, lineEnd, caret, line, content, bullet, bulletLength,
+          shape, hasEquals, lineHasExplicitEquals: hasEquals, partialText, replaceRange,
+          segmentSource, expression: expressionForEval, found, chosenText,
+          loneLiteral, lonePercent, bareUnit: bareUnit && !conversionTargetUnits,
+          phoneOrDate, ambiguousUnit, lineClass, conversionTargetUnits,
+          expressionForDisplay: conversionTargetUnits ? `${chosenText} ${conversion.phrase} ${conversion.target}` : chosenText,
+          trailingWhitespace
+        };
+      }
+
+      function partialResultChips(groups, analysis, lineClass) {
+        if (!groups.length) return [];
+        const typed = analysis.partialText.trim();
+        const hasTrig = groups.some(group => group.hasBareTrig);
+        const ordered = [];
+        if (hasTrig) {
+          for (const group of groups) ordered.push({ group, text: group.primary.primary, kind: 'primary' });
+          for (const group of groups) for (const ladder of group.primary.ladder) ordered.push({ group, text: ladder.text, kind: 'ladder' });
+        } else {
+          for (const group of groups) {
+            ordered.push({ group, text: group.primary.primary, kind: 'primary' });
+            for (const ladder of group.primary.ladder) ordered.push({ group, text: ladder.text, kind: 'ladder' });
+          }
+        }
+        const matching = ordered.filter(item => item.text.toLowerCase().startsWith(typed.toLowerCase()));
+        if (!matching.length) {
+          const group = groups[0];
+          const result = group.primary.primary;
+          return [makeChip({
+            insertText: result,
+            equation: makeEquation(group.displayExpr, result), resultText: result,
+            kind: 'replace', tag: group.hasBareTrig ? group.mode : '',
+            inlineEligible: false, replaceRange: analysis.replaceRange
+          })];
+        }
+
+        const chips = [];
+        for (const item of matching) {
+          if (item.text.length <= typed.length) continue;
+          const remainder = item.text.slice(typed.length);
+          const group = item.group;
+          const eligible = item.kind === 'primary' && lineClass === 'inline' && !group.ambiguousUnits;
+          addUniqueChip(chips, makeChip({
+            insertText: remainder,
+            equation: makeEquation(group.displayExpr, item.text), resultText: item.text,
+            kind: item.kind === 'primary' ? 'partial' : 'ladder',
+            tag: group.hasBareTrig ? group.mode : '',
+            inlineEligible: eligible,
+            typedPrefixLen: typed.length
+          }));
+        }
+        return chips;
+      }
+
+      function createEvaluationGroups(analysis) {
+        const variants = expandUnitReadings(analysis.found.tokens);
+        const readings = [];
+        for (const tokens of variants) {
+          const alternative = scientificAlternative(tokens);
+          readings.push({ tokens, scientific: false, scientificNotation: !!alternative });
+          if (alternative) readings.push({ tokens: alternative, scientific: true, scientificNotation: false });
+        }
+        const groups = [];
+        for (const reading of readings) {
+          groups.push(...buildGroups(analysis, analysis.found, [reading.tokens], reading));
+        }
+        return groups;
+      }
+
+      const FUNCTION_COMPLETIONS = ['sqrt', 'cbrt', 'sin', 'cos', 'tan', 'csc', 'sec', 'cot', 'arcsin', 'asin', 'arccos', 'acos', 'arctan', 'atan', 'log', 'log2', 'log5', 'log_2', 'ln'];
+      const CONSTANT_COMPLETIONS = ['pi', 'e'];
+      const UNIT_COMPLETIONS = [...new Set([
+        ...ALL_UNITS.map(unit => unit.longName),
+        ...SYMBOL_UNITS.map(unit => unit.symbol),
+        'mile', 'foot', 'inch', 'yard', 'ounce', 'pound', 'square meter', 'square kilometer', 'acre', 'gallon', 'pint', 'quart', 'liter', 'watt-hour', 'fluid ounce'
+      ])].filter(Boolean);
+
+      function linePrefixForCompletion() {
+        const value = editor.value;
+        const caret = editor.selectionStart;
+        if (editor.selectionStart !== editor.selectionEnd || composing) return null;
+        const lineStart = value.lastIndexOf('\n', Math.max(0, caret - 1)) + 1;
+        const lineEndIndex = value.indexOf('\n', caret);
+        const lineEnd = lineEndIndex < 0 ? value.length : lineEndIndex;
+        const after = value.slice(caret, lineEnd);
+        if (after.trim()) return null;
+        return value.slice(lineStart, caret).replace(/\s+$/, '');
+      }
+
+      function autocompleteChips() {
+        const line = linePrefixForCompletion();
+        if (!line) return [];
+        const conversion = line.match(/^(.*?)(?:\s+(?:to|in)\s+|\s*->\s*)([A-Za-zµμΩ°][A-Za-zµμΩ°0-9]*)$/i);
+        let partial;
+        let kind;
+        let context;
+        if (conversion) {
+          partial = conversion[2];
+          kind = 'conversion';
+          context = 'unit';
+        } else {
+          const word = line.match(/([A-Za-zµμΩ°]+)$/);
+          if (!word) return [];
+          partial = word[1];
+          const before = line.slice(0, line.length - partial.length);
+          const lower = partial.toLowerCase();
+          const functionContext = !before.trim() || /(?:[+*/^(-]|\b(?:sin|cos|tan|sqrt|cbrt|log|ln)\s*)\s*$/i.test(before);
+          const unitContext = /\d\s*$/.test(before) || /[+*/(-]\s*$/.test(before) || /\b(?:sin|cos|tan|sqrt|cbrt|log|ln)\s+$/i.test(before);
+          if (FUNCTION_COMPLETIONS.some(name => name.startsWith(lower)) && functionContext) {
+            kind = 'function'; context = 'function';
+          } else if (CONSTANT_COMPLETIONS.some(name => name.startsWith(lower)) && functionContext && lower !== 'pi' && lower !== 'e') {
+            kind = 'constant'; context = 'constant';
+          } else if (UNIT_COMPLETIONS.some(name => name.toLowerCase().startsWith(lower)) && unitContext) {
+            kind = 'unit'; context = 'unit';
+          } else return [];
+          if (kind === 'unit' && resolveUnit(partial).length) return [];
+          if (kind === 'constant' && CONSTANT_COMPLETIONS.includes(lower)) return [];
+        }
+        const lowerPartial = partial.toLowerCase();
+        let candidates;
+        if (context === 'function') {
+          candidates = FUNCTION_COMPLETIONS.filter(name => name.toLowerCase().startsWith(lowerPartial)).map(name => ({ target: `${name}(`, full: name, kind: 'function' }));
+          if (FUNCTION_COMPLETIONS.includes(lowerPartial)) candidates = candidates.map(item => ({ ...item, target: `${item.full}(` }));
+        } else if (context === 'constant') {
+          candidates = CONSTANT_COMPLETIONS.filter(name => name.toLowerCase().startsWith(lowerPartial)).map(name => ({ target: name, full: name, kind: 'constant' }));
+        } else {
+          candidates = UNIT_COMPLETIONS.filter(name => name.toLowerCase().startsWith(lowerPartial)).map(name => ({ target: name, full: name, kind: 'unit' }));
+        }
+        const unique = [];
+        const seen = new Set();
+        for (const item of candidates) {
+          const key = item.target.toLowerCase();
+          if (seen.has(key) || item.target.length <= partial.length) continue;
+          seen.add(key); unique.push(item);
+        }
+        return unique.slice(0, 16).map(item => {
+          const suffix = item.target.slice(partial.length);
+          const chip = makeChip({
+            insertText: suffix,
+            equation: item.target,
+            resultText: item.target,
+            kind: 'completion',
+            inlineEligible: true
+          });
+          chip.completionPrefix = partial;
+          chip.completionFull = item.target;
+          return chip;
+        });
+      }
+
+      let composing = false;
+      let suggestions = [];
+      let highlighted = 0;
+      let explicitlyMoved = false;
+      let ghostText = '';
+      let dismissed = false;
+      let debounceTimer = 0;
+
+      function setMirror() {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        mirror.replaceChildren();
+        if (ghostText && start === end && !composing) {
+          mirror.append(document.createTextNode(editor.value.slice(0, start)));
+          const ghost = document.createElement('span');
+          ghost.className = 'ghost-text';
+          ghost.textContent = ghostText;
+          mirror.append(ghost, document.createTextNode(editor.value.slice(end)));
+        } else {
+          mirror.textContent = editor.value;
+        }
+        mirror.scrollTop = editor.scrollTop;
+        mirror.scrollLeft = editor.scrollLeft;
+      }
+
+      function middleEllipsis(runs, maxLength = 82) {
+        const chars = [];
+        for (const run of runs) for (const char of Array.from(run.text)) chars.push({ char, style: run.style });
+        if (chars.length <= maxLength) return chars;
+        const leftCount = Math.floor((maxLength - 3) / 2);
+        const rightCount = maxLength - 3 - leftCount;
+        return [...chars.slice(0, leftCount), { char: '...', style: 'dim' }, ...chars.slice(-rightCount)];
+      }
+
+      function renderChipLabel(button, chip) {
+        const label = document.createElement('span');
+        label.className = 'chip-equation';
+        let runs;
+        if (chip.kind === 'completion') {
+          runs = [
+            { text: chip.completionPrefix || '', style: 'dim' },
+            { text: (chip.completionFull || '').slice((chip.completionPrefix || '').length), style: 'strong' }
+          ];
+        } else {
+          const equation = chip.displayEquation || '';
+          const split = equation.lastIndexOf(' = ');
+          if (split >= 0) {
+            const lhs = equation.slice(0, split + 3);
+            const result = equation.slice(split + 3);
+            const typedLength = Math.min(chip.typedPrefixLen || 0, result.length);
+            runs = [
+              { text: lhs, style: 'dim' },
+              { text: result.slice(0, typedLength), style: 'dim' },
+              { text: result.slice(typedLength), style: 'strong' }
+            ];
+          } else {
+            runs = [{ text: equation, style: 'strong' }];
+          }
+        }
+        for (const item of middleEllipsis(runs)) {
+          const span = document.createElement('span');
+          span.className = item.style === 'strong' ? 'chip-strong' : 'chip-dim';
+          span.textContent = item.char;
+          label.append(span);
+        }
+        button.append(label);
+        if (chip.tag) {
+          const tag = document.createElement('span');
+          tag.className = 'chip-tag';
+          tag.textContent = chip.tag;
+          button.append(tag);
+        }
+      }
+
+      function updateGhost() {
+        const chip = suggestions[highlighted];
+        ghostText = chip && chip.inlineEligible ? chip.insertText : '';
+        setMirror();
+      }
+
+      function renderSuggestions() {
+        chipList.replaceChildren();
+        const hasSuggestions = suggestions.length > 0;
+        bar.classList.toggle('has-suggestions', hasSuggestions);
+        keyHint.hidden = !hasSuggestions;
+        if (!hasSuggestions) {
+          ghostText = '';
+          setMirror();
+          return;
+        }
+        suggestions.forEach((chip, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = `suggestion-chip${index === highlighted ? ' is-highlighted' : ''}`;
+          button.setAttribute('role', 'option');
+          button.setAttribute('aria-selected', index === highlighted ? 'true' : 'false');
+          button.setAttribute('aria-label', chip.displayEquation || chip.completionFull || chip.insertText);
+          button.title = chip.displayEquation || chip.completionFull || chip.insertText;
+          button.addEventListener('mousedown', event => event.preventDefault());
+          button.addEventListener('click', () => acceptChip(index));
+          renderChipLabel(button, chip);
+          chipList.append(button);
+        });
+        updateGhost();
+      }
+
+      function setSuggestions(next, resetMovement = true) {
+        suggestions = next || [];
+        if (resetMovement) {
+          highlighted = 0;
+          explicitlyMoved = false;
+          chipList.scrollLeft = 0;
+        } else if (highlighted >= suggestions.length) highlighted = Math.max(0, suggestions.length - 1);
+        renderSuggestions();
+      }
+
+      function clearSuggestions() {
+        suggestions = [];
+        highlighted = 0;
+        explicitlyMoved = false;
+        ghostText = '';
+        renderSuggestions();
+      }
+
+      function analyzeNow() {
+        if (dismissed || composing || editor.selectionStart !== editor.selectionEnd) {
+          clearSuggestions();
+          return;
+        }
+        const completions = autocompleteChips();
+        if (completions.length) {
+          setSuggestions(completions);
+          return;
+        }
+        const analysis = findLineAnalysis();
+        if (!analysis || analysis.loneLiteral || analysis.lonePercent) {
+          clearSuggestions();
+          return;
+        }
+        const groups = createEvaluationGroups(analysis);
+        if (!groups.length) {
+          clearSuggestions();
+          return;
+        }
+        let chips;
+        if (analysis.shape === 'partial') chips = partialResultChips(groups, analysis, analysis.lineClass);
+        else chips = buildStandardChips(groups, analysis, analysis.lineClass, { bareUnit: analysis.bareUnit });
+        setSuggestions(chips);
+      }
+
+      function scheduleAnalysis() {
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(analyzeNow, 30);
+      }
+
+      function saveContent() {
+        try { localStorage.setItem(STORAGE_KEY, editor.value); } catch (_) { /* Storage can be disabled in private browsing. */ }
+      }
+
+      function insertText(text, range = null) {
+        const start = range ? range.start : editor.selectionStart;
+        const end = range ? range.end : editor.selectionEnd;
+        editor.focus({ preventScroll: true });
+        editor.setSelectionRange(start, end);
+        const before = editor.value;
+        let usedCommand = false;
+        try { usedCommand = document.execCommand('insertText', false, text); } catch (_) { usedCommand = false; }
+        if (!usedCommand || editor.value === before) {
+          editor.setRangeText(text, start, end, 'end');
+          editor.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        editor.scrollTop = editor.scrollTop;
+        setMirror();
+      }
+
+      function acceptChip(index) {
+        const chip = suggestions[index];
+        if (!chip) return;
+        const insertion = chip.insertText;
+        const range = chip.replaceRange;
+        clearSuggestions();
+        insertText(insertion, range);
+        dismissed = false;
+        saveContent();
+        scheduleAnalysis();
+      }
+
+      function moveHighlight(delta) {
+        const next = highlighted + delta;
+        if (next < 0 || next >= suggestions.length) return false;
+        highlighted = next;
+        explicitlyMoved = true;
+        renderSuggestions();
+        const selected = chipList.children[highlighted];
+        if (selected) selected.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        return true;
+      }
+
+      editor.addEventListener('keydown', event => {
+        if (composing || event.isComposing) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          dismissed = true;
+          clearSuggestions();
+          return;
+        }
+        if (dismissed) dismissed = false;
+
+        if (event.altKey && /^[1-9]$/.test(event.key)) {
+          const index = Number(event.key) - 1;
+          if (suggestions[index]) {
+            event.preventDefault();
+            acceptChip(index);
+          }
+          return;
+        }
+
+        if (suggestions.length && ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.key)) {
+          const backward = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+          if (moveHighlight(backward ? -1 : 1)) {
+            event.preventDefault();
+            return;
+          }
+          clearSuggestions();
+          dismissed = true;
+          return;
+        }
+
+        if (event.key === 'Tab' || event.key === 'Enter') {
+          const active = suggestions[highlighted];
+          const acceptable = !!active && ((ghostText && active.inlineEligible) || explicitlyMoved);
+          if (acceptable) {
+            event.preventDefault();
+            acceptChip(highlighted);
+          } else {
+            event.preventDefault();
+            insertText(event.key === 'Tab' ? '\t' : '\n');
+          }
+        }
+      });
+
+      editor.addEventListener('input', () => {
+        dismissed = false;
+        saveContent();
+        setMirror();
+        scheduleAnalysis();
+      });
+      editor.addEventListener('keyup', () => { setMirror(); scheduleAnalysis(); });
+      editor.addEventListener('click', () => { setMirror(); scheduleAnalysis(); });
+      editor.addEventListener('select', () => { setMirror(); scheduleAnalysis(); });
+      editor.addEventListener('scroll', setMirror, { passive: true });
+      editor.addEventListener('compositionstart', () => {
+        composing = true;
+        clearSuggestions();
+      });
+      editor.addEventListener('compositionend', () => {
+        composing = false;
+        scheduleAnalysis();
+      });
+      window.addEventListener('resize', setMirror, { passive: true });
+
+      try { editor.value = localStorage.getItem(STORAGE_KEY) || ''; } catch (_) { editor.value = ''; }
+      setMirror();
+      scheduleAnalysis();
+    })();
+  </script>
+</body>
+</html>
+
+
