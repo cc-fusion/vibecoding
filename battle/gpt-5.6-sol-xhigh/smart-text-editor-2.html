@@ -1,0 +1,3929 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fff;
+    --fg: #171717;
+    --muted: #8a8a8a;
+    --ghost: #9a9a9a;
+    --bar: rgba(248, 248, 248, .94);
+    --chip: #ececec;
+    --chip-hover: #e2e2e2;
+    --chip-active: #d9e6ff;
+    --border: rgba(0, 0, 0, .1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111;
+      --fg: #eee;
+      --muted: #858585;
+      --ghost: #707070;
+      --bar: rgba(24, 24, 24, .95);
+      --chip: #292929;
+      --chip-hover: #333;
+      --chip-active: #263b61;
+      --border: rgba(255, 255, 255, .11);
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #editor {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  #mirror,
+  #text {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 18px 18px 64px;
+    border: 0;
+    outline: 0;
+    resize: none;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    font: 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+  }
+
+  #mirror {
+    z-index: 0;
+    overflow: hidden;
+    color: transparent;
+    pointer-events: none;
+  }
+
+  #mirror .ghost {
+    color: var(--ghost);
+    opacity: .78;
+  }
+
+  #text {
+    z-index: 1;
+    display: block;
+    color: var(--fg);
+    background: transparent;
+    caret-color: var(--fg);
+    scrollbar-color: var(--muted) transparent;
+  }
+
+  #bar {
+    position: fixed;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: 3px;
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--bar);
+    border-top: 1px solid transparent;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  #bar.has-items {
+    border-top-color: var(--border);
+  }
+
+  #strip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 6px 9px;
+    touch-action: pan-x;
+  }
+
+  #strip:empty {
+    display: none;
+  }
+
+  #strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    flex: 0 0 auto;
+    min-height: 34px;
+    max-width: min(520px, 78vw);
+    padding: 7px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg);
+    background: var(--chip);
+    font: 13px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .chip:hover {
+    background: var(--chip-hover);
+  }
+
+  .chip.selected {
+    background: var(--chip-active);
+  }
+
+  .chip-inner {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .chip-equation {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .chip .typed {
+    color: var(--muted);
+  }
+
+  .chip .inserted {
+    color: var(--fg);
+    font-weight: 700;
+  }
+
+  .chip .tag {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: .03em;
+  }
+
+  #hint {
+    flex: 0 0 auto;
+    margin-left: 4px;
+    padding: 0 9px 0 3px;
+    color: var(--muted);
+    font: 10px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+    white-space: nowrap;
+    opacity: .7;
+  }
+
+  @media (pointer: coarse) {
+    .chip {
+      min-height: 42px;
+      padding: 10px 14px;
+    }
+
+    #strip {
+      padding-block: 8px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="editor">
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea id="text" aria-label="Notes" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+</div>
+<div id="bar">
+  <div id="strip"></div>
+</div>
+
+<script type="module">
+import Decimal from "https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/+esm";
+
+Decimal.set({
+  precision: 60,
+  rounding: Decimal.ROUND_HALF_UP,
+  maxE: 1000000,
+  minE: -1000000
+});
+
+const D = Decimal;
+const ZERO_DIMS = Object.freeze([0, 0, 0, 0, 0, 0, 0]);
+const PI = new D(-1).acos();
+const DIM = {
+  LENGTH: 0,
+  MASS: 1,
+  TIME: 2,
+  CURRENT: 3,
+  TEMPERATURE: 4,
+  DATA: 5,
+  ANGLE: 6
+};
+
+const cloneDims = d => d.slice();
+const dimsEqual = (a, b) => a.every((v, i) => v === b[i]);
+const dimsZero = d => dimsEqual(d, ZERO_DIMS);
+const addDims = (a, b, sign = 1) => a.map((v, i) => v + sign * b[i]);
+const scaleDims = (a, n) => a.map(v => v * n);
+const dimsKey = d => d.join(",");
+
+function bigintAbs(n) {
+  return n < 0n ? -n : n;
+}
+
+function bigintGcd(a, b) {
+  a = bigintAbs(a);
+  b = bigintAbs(b);
+  while (b) [a, b] = [b, a % b];
+  return a || 1n;
+}
+
+class Fraction {
+  constructor(n, d = 1n) {
+    if (d === 0n) throw new Error("division by zero");
+    if (d < 0n) {
+      n = -n;
+      d = -d;
+    }
+    const g = bigintGcd(n, d);
+    this.n = n / g;
+    this.d = d / g;
+  }
+
+  static from(value) {
+    if (value instanceof Fraction) return value;
+    let s = String(value).trim();
+    if (!s) return null;
+
+    let sign = 1n;
+    if (s[0] === "-") {
+      sign = -1n;
+      s = s.slice(1);
+    } else if (s[0] === "+") {
+      s = s.slice(1);
+    }
+
+    const m = s.match(/^(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+    if (!m) return null;
+
+    const a = m[1] || "0";
+    const b = m[2] || "";
+    const exp = Number(m[3] || 0);
+    let n = BigInt((a + b) || "0") * sign;
+    let scale = b.length - exp;
+
+    if (scale >= 0) return new Fraction(n, 10n ** BigInt(scale));
+    return new Fraction(n * 10n ** BigInt(-scale), 1n);
+  }
+
+  add(x) {
+    x = Fraction.from(x);
+    return x ? new Fraction(this.n * x.d + x.n * this.d, this.d * x.d) : null;
+  }
+
+  sub(x) {
+    x = Fraction.from(x);
+    return x ? new Fraction(this.n * x.d - x.n * this.d, this.d * x.d) : null;
+  }
+
+  mul(x) {
+    x = Fraction.from(x);
+    if (!x) return null;
+    if (
+      bigintAbs(this.n).toString().length +
+      bigintAbs(x.n).toString().length > 240
+    ) return null;
+    return new Fraction(this.n * x.n, this.d * x.d);
+  }
+
+  div(x) {
+    x = Fraction.from(x);
+    if (!x || x.n === 0n) return null;
+    return new Fraction(this.n * x.d, this.d * x.n);
+  }
+
+  neg() {
+    return new Fraction(-this.n, this.d);
+  }
+
+  pow(n) {
+    if (!Number.isInteger(n) || Math.abs(n) > 10000) return null;
+    if (n === 0) return new Fraction(1n);
+    if (n < 0) {
+      if (this.n === 0n) return null;
+      return new Fraction(this.d, this.n).pow(-n);
+    }
+    if (
+      bigintAbs(this.n).toString().length * n > 240 ||
+      this.d.toString().length * n > 240
+    ) return null;
+    return new Fraction(this.n ** BigInt(n), this.d ** BigInt(n));
+  }
+
+  mod(x) {
+    x = Fraction.from(x);
+    if (!x || x.n === 0n) return null;
+    const left = this.n * x.d;
+    const right = x.n * this.d;
+    return new Fraction(left % right, this.d * x.d);
+  }
+
+  toDecimal() {
+    return new D(this.n.toString()).div(this.d.toString());
+  }
+
+  terminatingString() {
+    let d = this.d;
+    let twos = 0;
+    let fives = 0;
+
+    while (d % 2n === 0n) {
+      d /= 2n;
+      twos++;
+    }
+    while (d % 5n === 0n) {
+      d /= 5n;
+      fives++;
+    }
+    if (d !== 1n) return null;
+
+    const scale = Math.max(twos, fives);
+    if (scale > 200) return null;
+
+    let n = this.n;
+    if (twos < scale) n *= 2n ** BigInt(scale - twos);
+    if (fives < scale) n *= 5n ** BigInt(scale - fives);
+
+    const negative = n < 0n;
+    let digits = bigintAbs(n).toString();
+
+    if (scale) {
+      digits = digits.padStart(scale + 1, "0");
+      digits =
+        digits.slice(0, -scale) + "." + digits.slice(-scale);
+      digits = digits.replace(/\.?0+$/, "");
+    }
+
+    if (!digits || digits === "-0") digits = "0";
+    return (negative && digits !== "0" ? "-" : "") + digits;
+  }
+}
+
+function safeFracOp(fn) {
+  try {
+    return fn();
+  } catch {
+    return null;
+  }
+}
+
+function decimalFactor(value) {
+  const decimal = value instanceof D ? value : new D(value);
+  return { decimal, fraction: Fraction.from(decimal.toString()) };
+}
+
+class UnitEngine {
+  constructor() {
+    this.units = [];
+    this.symbolMap = new Map();
+    this.nameMap = new Map();
+    this.generated = [];
+    this.phrases = [];
+    this.curated = new Map();
+
+    this.prefixesAll = [
+      ["q", "quecto", "1e-30"],
+      ["r", "ronto", "1e-27"],
+      ["y", "yocto", "1e-24"],
+      ["z", "zepto", "1e-21"],
+      ["a", "atto", "1e-18"],
+      ["f", "femto", "1e-15"],
+      ["p", "pico", "1e-12"],
+      ["n", "nano", "1e-9"],
+      ["µ", "micro", "1e-6"],
+      ["m", "milli", "1e-3"],
+      ["c", "centi", "1e-2"],
+      ["d", "deci", "1e-1"],
+      ["da", "deca", "1e1"],
+      ["h", "hecto", "1e2"],
+      ["k", "kilo", "1e3"],
+      ["M", "mega", "1e6"],
+      ["G", "giga", "1e9"],
+      ["T", "tera", "1e12"],
+      ["P", "peta", "1e15"],
+      ["E", "exa", "1e18"],
+      ["Z", "zetta", "1e21"],
+      ["Y", "yotta", "1e24"],
+      ["R", "ronna", "1e27"],
+      ["Q", "quetta", "1e30"]
+    ];
+
+    this.prefixesLarge = this.prefixesAll.filter(
+      p => ["k", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"].includes(p[0])
+    );
+
+    this.build();
+  }
+
+  addUnit({
+    key,
+    names = [],
+    symbols = [],
+    dims = ZERO_DIMS,
+    factor = "1",
+    factorFraction = null,
+    offset = "0",
+    offsetFraction = null,
+    prefixable = "none",
+    temperature = false,
+    longName = null,
+    aliases = []
+  }) {
+    const factorD = factor instanceof D ? factor : new D(factor);
+    const offsetD = offset instanceof D ? offset : new D(offset);
+
+    const unit = {
+      key,
+      names,
+      symbols,
+      aliases,
+      dims: cloneDims(dims),
+      factor: factorD,
+      factorFraction:
+        factorFraction ?? Fraction.from(factorD.toString()),
+      offset: offsetD,
+      offsetFraction:
+        offsetFraction ?? Fraction.from(offsetD.toString()),
+      prefixable,
+      temperature,
+      symbol: symbols[0] || key,
+      name: longName || names[0] || symbols[0] || key,
+      styleLong: false,
+      generated: false
+    };
+
+    this.units.push(unit);
+
+    for (const s of symbols) {
+      if (!this.symbolMap.has(s)) this.symbolMap.set(s, []);
+      this.symbolMap.get(s).push(unit);
+    }
+
+    for (const n of [...names, ...aliases]) {
+      this.addName(n, unit);
+    }
+
+    return unit;
+  }
+
+  addName(name, unit) {
+    const normalized = this.normalizeName(name);
+    if (!this.nameMap.has(normalized)) this.nameMap.set(normalized, []);
+    this.nameMap.get(normalized).push(unit);
+
+    if (/\s/.test(name)) {
+      this.phrases.push({
+        text: name,
+        lower: name.toLowerCase(),
+        unit
+      });
+    }
+  }
+
+  normalizeName(name) {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/metres/g, "meters")
+      .replace(/litres/g, "liters")
+      .replace(/feet/g, "foot")
+      .replace(/inches/g, "inch")
+      .replace(/ounces/g, "ounce")
+      .replace(/(\w)ies$/g, "$1y")
+      .replace(/s$/g, "");
+  }
+
+  cloneUnit(unit, changes = {}) {
+    return {
+      ...unit,
+      dims: cloneDims(unit.dims),
+      ...changes
+    };
+  }
+
+  build() {
+    const L = [1, 0, 0, 0, 0, 0, 0];
+    const M = [0, 1, 0, 0, 0, 0, 0];
+    const T = [0, 0, 1, 0, 0, 0, 0];
+    const I = [0, 0, 0, 1, 0, 0, 0];
+    const TEMP = [0, 0, 0, 0, 1, 0, 0];
+    const DATA = [0, 0, 0, 0, 0, 1, 0];
+    const ANGLE = [0, 0, 0, 0, 0, 0, 1];
+
+    const AREA = [2, 0, 0, 0, 0, 0, 0];
+    const VOLUME = [3, 0, 0, 0, 0, 0, 0];
+    const SPEED = [1, 0, -1, 0, 0, 0, 0];
+    const FREQ = [0, 0, -1, 0, 0, 0, 0];
+    const FORCE = [1, 1, -2, 0, 0, 0, 0];
+    const PRESSURE = [-1, 1, -2, 0, 0, 0, 0];
+    const ENERGY = [2, 1, -2, 0, 0, 0, 0];
+    const POWER = [2, 1, -3, 0, 0, 0, 0];
+    const VOLT = [2, 1, -3, -1, 0, 0, 0];
+    const OHM = [2, 1, -3, -2, 0, 0, 0];
+    const DATA_RATE = [0, 0, -1, 0, 0, 1, 0];
+    const FUEL = [-2, 0, 0, 0, 0, 0, 0];
+
+    const m = this.addUnit({
+      key: "meter",
+      names: ["meter", "metre"],
+      symbols: ["m"],
+      dims: L,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const inch = this.addUnit({
+      key: "inch",
+      names: ["inch"],
+      symbols: ["in"],
+      dims: L,
+      factor: "0.0254"
+    });
+
+    const foot = this.addUnit({
+      key: "foot",
+      names: ["foot", "feet"],
+      symbols: ["ft"],
+      dims: L,
+      factor: "0.3048"
+    });
+
+    const yard = this.addUnit({
+      key: "yard",
+      names: ["yard"],
+      symbols: ["yd"],
+      dims: L,
+      factor: "0.9144"
+    });
+
+    const mile = this.addUnit({
+      key: "mile",
+      names: ["mile"],
+      symbols: ["mi"],
+      dims: L,
+      factor: "1609.344"
+    });
+
+    const gram = this.addUnit({
+      key: "gram",
+      names: ["gram"],
+      symbols: ["g"],
+      dims: M,
+      factor: "0.001",
+      prefixable: "all"
+    });
+
+    const ounce = this.addUnit({
+      key: "ounce",
+      names: ["ounce"],
+      symbols: ["oz"],
+      dims: M,
+      factor: "0.028349523125"
+    });
+
+    const pound = this.addUnit({
+      key: "pound",
+      names: ["pound"],
+      symbols: ["lb"],
+      dims: M,
+      factor: "0.45359237"
+    });
+
+    const second = this.addUnit({
+      key: "second",
+      names: ["second"],
+      symbols: ["s"],
+      dims: T,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const minute = this.addUnit({
+      key: "minute",
+      names: ["minute"],
+      symbols: ["min"],
+      dims: T,
+      factor: "60"
+    });
+
+    const hour = this.addUnit({
+      key: "hour",
+      names: ["hour"],
+      symbols: ["h", "hr"],
+      dims: T,
+      factor: "3600"
+    });
+
+    const day = this.addUnit({
+      key: "day",
+      names: ["day"],
+      symbols: ["d"],
+      dims: T,
+      factor: "86400"
+    });
+
+    this.addUnit({
+      key: "week",
+      names: ["week"],
+      symbols: ["wk"],
+      dims: T,
+      factor: "604800"
+    });
+
+    this.addUnit({
+      key: "month",
+      names: ["month"],
+      symbols: ["mo"],
+      dims: T,
+      factor: "2629800"
+    });
+
+    this.addUnit({
+      key: "year",
+      names: ["year"],
+      symbols: ["yr"],
+      dims: T,
+      factor: "31557600"
+    });
+
+    this.addUnit({
+      key: "decade",
+      names: ["decade"],
+      symbols: [],
+      dims: T,
+      factor: "315576000"
+    });
+
+    this.addUnit({
+      key: "century",
+      names: ["century"],
+      symbols: [],
+      dims: T,
+      factor: "3155760000"
+    });
+
+    const amp = this.addUnit({
+      key: "ampere",
+      names: ["ampere", "amp"],
+      symbols: ["A"],
+      dims: I,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const kelvin = this.addUnit({
+      key: "kelvin",
+      names: ["kelvin"],
+      symbols: ["K"],
+      dims: TEMP,
+      factor: "1",
+      prefixable: "all",
+      temperature: true
+    });
+
+    const celsius = this.addUnit({
+      key: "celsius",
+      names: ["celsius", "degree celsius"],
+      symbols: ["°C"],
+      dims: TEMP,
+      factor: "1",
+      offset: "273.15",
+      temperature: true
+    });
+
+    const fahrenheitFactor = new D(5).div(9);
+    const fahrenheitOffset = new D("273.15").sub(new D(32).mul(fahrenheitFactor));
+    const fahrenheit = this.addUnit({
+      key: "fahrenheit",
+      names: ["fahrenheit", "degree fahrenheit"],
+      symbols: ["°F"],
+      dims: TEMP,
+      factor: fahrenheitFactor,
+      factorFraction: new Fraction(5n, 9n),
+      offset: fahrenheitOffset,
+      offsetFraction: new Fraction(45967n, 180n),
+      temperature: true
+    });
+
+    const rad = this.addUnit({
+      key: "radian",
+      names: ["radian"],
+      symbols: ["rad"],
+      dims: ANGLE,
+      factor: "1"
+    });
+
+    const deg = this.addUnit({
+      key: "degree",
+      names: ["degree"],
+      symbols: ["deg", "°"],
+      dims: ANGLE,
+      factor: PI.div(180),
+      factorFraction: null
+    });
+
+    const grad = this.addUnit({
+      key: "gradian",
+      names: ["gradian", "gon"],
+      symbols: ["grad"],
+      dims: ANGLE,
+      factor: PI.div(200),
+      factorFraction: null
+    });
+
+    const hz = this.addUnit({
+      key: "hertz",
+      names: ["hertz"],
+      symbols: ["Hz"],
+      dims: FREQ,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const joule = this.addUnit({
+      key: "joule",
+      names: ["joule"],
+      symbols: ["J"],
+      dims: ENERGY,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const calorie = this.addUnit({
+      key: "calorie",
+      names: ["calorie"],
+      symbols: ["cal"],
+      dims: ENERGY,
+      factor: "4.184",
+      prefixable: "all"
+    });
+
+    const foodCalorie = this.addUnit({
+      key: "food-calorie",
+      names: ["food calorie"],
+      symbols: ["Cal"],
+      dims: ENERGY,
+      factor: "4184"
+    });
+
+    const wattHour = this.addUnit({
+      key: "watt-hour",
+      names: ["watt-hour", "watt hour"],
+      symbols: ["Wh"],
+      dims: ENERGY,
+      factor: "3600",
+      prefixable: "all"
+    });
+
+    const watt = this.addUnit({
+      key: "watt",
+      names: ["watt"],
+      symbols: ["W"],
+      dims: POWER,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const newton = this.addUnit({
+      key: "newton",
+      names: ["newton"],
+      symbols: ["N"],
+      dims: FORCE,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const lbf = this.addUnit({
+      key: "pound-force",
+      names: ["pound-force", "pound force"],
+      symbols: ["lbf"],
+      dims: FORCE,
+      factor: "4.4482216152605"
+    });
+
+    const pascal = this.addUnit({
+      key: "pascal",
+      names: ["pascal"],
+      symbols: ["Pa"],
+      dims: PRESSURE,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const bar = this.addUnit({
+      key: "bar",
+      names: ["bar"],
+      symbols: ["bar"],
+      dims: PRESSURE,
+      factor: "100000",
+      prefixable: "all"
+    });
+
+    const atm = this.addUnit({
+      key: "atmosphere",
+      names: ["atmosphere"],
+      symbols: ["atm"],
+      dims: PRESSURE,
+      factor: "101325"
+    });
+
+    const psiFactor = lbf.factor.div(inch.factor.pow(2));
+    const psiFrac = safeFracOp(() =>
+      lbf.factorFraction.div(inch.factorFraction.pow(2))
+    );
+
+    const psi = this.addUnit({
+      key: "psi",
+      names: ["psi", "pounds per square inch"],
+      symbols: ["PSI", "psi"],
+      dims: PRESSURE,
+      factor: psiFactor,
+      factorFraction: psiFrac
+    });
+
+    const volt = this.addUnit({
+      key: "volt",
+      names: ["volt"],
+      symbols: ["V"],
+      dims: VOLT,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const ohm = this.addUnit({
+      key: "ohm",
+      names: ["ohm"],
+      symbols: ["Ω"],
+      dims: OHM,
+      factor: "1",
+      prefixable: "all"
+    });
+
+    const bit = this.addUnit({
+      key: "bit",
+      names: ["bit"],
+      symbols: ["b"],
+      dims: DATA,
+      factor: "1",
+      prefixable: "large"
+    });
+
+    const byte = this.addUnit({
+      key: "byte",
+      names: ["byte"],
+      symbols: ["B"],
+      dims: DATA,
+      factor: "8",
+      prefixable: "large"
+    });
+
+    const bps = this.addUnit({
+      key: "bit-per-second",
+      names: ["bit per second"],
+      symbols: ["bps"],
+      dims: DATA_RATE,
+      factor: "1",
+      prefixable: "large"
+    });
+
+    const Bps = this.addUnit({
+      key: "byte-per-second",
+      names: ["byte per second"],
+      symbols: ["Bps"],
+      dims: DATA_RATE,
+      factor: "8",
+      prefixable: "large"
+    });
+
+    const liter = this.addUnit({
+      key: "liter",
+      names: ["liter", "litre"],
+      symbols: ["L", "l"],
+      dims: VOLUME,
+      factor: "0.001",
+      prefixable: "all"
+    });
+
+    const gallonUS = this.addUnit({
+      key: "gallon-us",
+      names: ["gallon", "us gallon"],
+      symbols: ["gal"],
+      dims: VOLUME,
+      factor: "0.003785411784"
+    });
+
+    const gallonImp = this.addUnit({
+      key: "gallon-imperial",
+      names: ["imperial gallon", "uk gallon"],
+      symbols: ["imp gal", "uk gal"],
+      dims: VOLUME,
+      factor: "0.00454609"
+    });
+
+    this.addUnit({
+      key: "quart-us",
+      names: ["quart", "us quart"],
+      symbols: ["qt"],
+      dims: VOLUME,
+      factor: new D("0.003785411784").div(4)
+    });
+
+    this.addUnit({
+      key: "pint-us",
+      names: ["pint", "us pint"],
+      symbols: ["pt"],
+      dims: VOLUME,
+      factor: new D("0.003785411784").div(8)
+    });
+
+    this.addUnit({
+      key: "cup-us",
+      names: ["cup", "us cup"],
+      symbols: ["cup"],
+      dims: VOLUME,
+      factor: new D("0.003785411784").div(16)
+    });
+
+    this.addUnit({
+      key: "tablespoon",
+      names: ["tablespoon"],
+      symbols: ["tbsp"],
+      dims: VOLUME,
+      factor: "0.00001478676478125"
+    });
+
+    this.addUnit({
+      key: "teaspoon",
+      names: ["teaspoon"],
+      symbols: ["tsp"],
+      dims: VOLUME,
+      factor: "0.00000492892159375"
+    });
+
+    this.addUnit({
+      key: "fluid-ounce-us",
+      names: ["fluid ounce", "us fluid ounce"],
+      symbols: ["fl oz"],
+      dims: VOLUME,
+      factor: "0.0000295735295625"
+    });
+
+    this.addUnit({
+      key: "acre",
+      names: ["acre"],
+      symbols: ["acre"],
+      dims: AREA,
+      factor: "4046.8564224"
+    });
+
+    const mph = this.addUnit({
+      key: "mph",
+      names: ["mile per hour", "miles per hour"],
+      symbols: ["mph"],
+      dims: SPEED,
+      factor: mile.factor.div(hour.factor),
+      factorFraction: safeFracOp(() =>
+        mile.factorFraction.div(hour.factorFraction)
+      )
+    });
+
+    const kph = this.addUnit({
+      key: "kph",
+      names: ["kilometer per hour", "kilometers per hour"],
+      symbols: ["kph", "km/h"],
+      dims: SPEED,
+      factor: new D(1000).div(3600),
+      factorFraction: new Fraction(5n, 18n)
+    });
+
+    const knot = this.addUnit({
+      key: "knot",
+      names: ["knot"],
+      symbols: ["kn"],
+      dims: SPEED,
+      factor: new D("1852").div(3600),
+      factorFraction: new Fraction(463n, 900n)
+    });
+
+    this.addUnit({
+      key: "mpg-us",
+      names: ["mile per gallon", "miles per gallon"],
+      symbols: ["mpg"],
+      dims: FUEL,
+      factor: mile.factor.div(gallonUS.factor),
+      factorFraction: safeFracOp(() =>
+        mile.factorFraction.div(gallonUS.factorFraction)
+      )
+    });
+
+    this.addUnit({
+      key: "km-per-liter",
+      names: ["kilometer per liter"],
+      symbols: ["km/L"],
+      dims: FUEL,
+      factor: new D(1000).div("0.001"),
+      factorFraction: new Fraction(1000000n)
+    });
+
+    this.addUnit({
+      key: "horsepower-mechanical",
+      names: ["horsepower", "mechanical horsepower"],
+      symbols: ["HP", "hp"],
+      dims: POWER,
+      factor: "745.69987158227022"
+    });
+
+    this.addUnit({
+      key: "horsepower-metric",
+      names: ["metric horsepower"],
+      symbols: ["HP"],
+      dims: POWER,
+      factor: "735.49875"
+    });
+
+    this.generatePrefixedUnits();
+
+    const square = (base, symbol, name) => this.syntheticUnit({
+      key: `${base.key}^2`,
+      symbol,
+      name,
+      dims: scaleDims(base.dims, 2),
+      factor: base.factor.pow(2),
+      factorFraction: base.factorFraction?.pow(2) || null
+    });
+
+    const cube = (base, symbol, name) => this.syntheticUnit({
+      key: `${base.key}^3`,
+      symbol,
+      name,
+      dims: scaleDims(base.dims, 3),
+      factor: base.factor.pow(3),
+      factorFraction: base.factorFraction?.pow(3) || null
+    });
+
+    const sqM = square(m, "m^2", "square meter");
+    const sqKm = this.syntheticUnit({
+      key: "kilometer^2",
+      symbol: "km^2",
+      name: "square kilometer",
+      dims: AREA,
+      factor: "1000000",
+      factorFraction: new Fraction(1000000n)
+    });
+    const sqFt = square(foot, "ft^2", "square foot");
+    const sqIn = square(inch, "in^2", "square inch");
+    const sqYd = square(yard, "yd^2", "square yard");
+    const sqMi = square(mile, "mi^2", "square mile");
+
+    const cubicM = cube(m, "m^3", "cubic meter");
+    const cubicFt = cube(foot, "ft^3", "cubic foot");
+    const cubicIn = cube(inch, "in^3", "cubic inch");
+
+    for (const [aliases, unit] of [
+      [["square meter", "square metre", "sq m", "meters squared", "metres squared"], sqM],
+      [["square kilometer", "square kilometre", "sq km", "kilometers squared"], sqKm],
+      [["square foot", "sq ft", "feet squared"], sqFt],
+      [["square inch", "sq in", "inches squared"], sqIn],
+      [["square yard", "sq yd", "yards squared"], sqYd],
+      [["square mile", "sq mi", "miles squared"], sqMi],
+      [["cubic meter", "cubic metre", "meters cubed"], cubicM],
+      [["cubic foot", "feet cubed"], cubicFt],
+      [["cubic inch", "inches cubed"], cubicIn]
+    ]) {
+      for (const alias of aliases) this.addName(alias, unit);
+    }
+
+    const mps = this.syntheticUnit({
+      key: "meter-per-second",
+      symbol: "m/s",
+      name: "meter per second",
+      dims: SPEED,
+      factor: "1",
+      factorFraction: new Fraction(1n)
+    });
+
+    const fps = this.syntheticUnit({
+      key: "foot-per-second",
+      symbol: "ft/s",
+      name: "foot per second",
+      dims: SPEED,
+      factor: foot.factor,
+      factorFraction: foot.factorFraction
+    });
+
+    this.curated.set(dimsKey(L), [
+      mile,
+      this.findCanonical("km"),
+      m,
+      foot,
+      inch,
+      yard
+    ]);
+
+    this.curated.set(dimsKey(M), [
+      this.findCanonical("kg"),
+      gram,
+      pound,
+      ounce
+    ]);
+
+    this.curated.set(dimsKey(T), [
+      second,
+      minute,
+      hour,
+      day
+    ]);
+
+    this.curated.set(dimsKey(ANGLE), [deg, rad, grad]);
+    this.curated.set(dimsKey(TEMP), [celsius, fahrenheit, kelvin]);
+    this.curated.set(dimsKey(SPEED), [mph, kph, fps, knot, mps]);
+    this.curated.set(dimsKey(AREA), [
+      sqKm,
+      this.findByKey("acre"),
+      sqFt,
+      sqM,
+      sqMi
+    ]);
+    this.curated.set(dimsKey(VOLUME), [
+      liter,
+      gallonUS,
+      gallonImp,
+      cubicM,
+      cubicFt
+    ]);
+    this.curated.set(dimsKey(FREQ), [
+      hz,
+      this.findCanonical("kHz"),
+      this.findCanonical("MHz")
+    ]);
+    this.curated.set(dimsKey(ENERGY), [
+      joule,
+      this.findCanonical("kJ"),
+      calorie,
+      this.findCanonical("kWh"),
+      wattHour
+    ]);
+    this.curated.set(dimsKey(POWER), [
+      watt,
+      this.findCanonical("kW"),
+      ...this.findAllBySymbol("HP")
+    ]);
+    this.curated.set(dimsKey(FORCE), [lbf, newton]);
+    this.curated.set(dimsKey(PRESSURE), [pascal, bar, atm, psi]);
+    this.curated.set(dimsKey(DATA), [
+      byte,
+      bit,
+      this.findCanonical("kB"),
+      this.findCanonical("MB"),
+      this.findCanonical("Mb")
+    ]);
+    this.curated.set(dimsKey(DATA_RATE), [
+      bps,
+      Bps,
+      this.findCanonical("Mbps"),
+      this.findCanonical("MBps")
+    ]);
+
+    this.phrases.sort((a, b) => b.text.length - a.text.length);
+  }
+
+  generatePrefixedUnits() {
+    for (const base of this.units.slice()) {
+      if (base.prefixable === "none") continue;
+
+      const prefixes =
+        base.prefixable === "large" ? this.prefixesLarge : this.prefixesAll;
+
+      for (const [symbol, name, factor] of prefixes) {
+        for (const baseSymbol of base.symbols) {
+          const canonicalPrefix = symbol === "µ" ? "µ" : symbol;
+          const generated = this.cloneUnit(base, {
+            key: `${canonicalPrefix}${base.key}`,
+            symbol: canonicalPrefix + baseSymbol,
+            symbols: [canonicalPrefix + baseSymbol],
+            name: name + base.name,
+            names: [name + base.name],
+            factor: new D(factor).mul(base.factor),
+            factorFraction: safeFracOp(() =>
+              Fraction.from(factor).mul(base.factorFraction)
+            ),
+            offset: new D(0),
+            offsetFraction: new Fraction(0n),
+            temperature: base.temperature,
+            generated: true,
+            prefixSymbol: canonicalPrefix,
+            prefixName: name,
+            baseUnit: base
+          });
+
+          this.generated.push(generated);
+        }
+      }
+    }
+
+    for (const unit of this.generated) {
+      for (const s of unit.symbols) {
+        if (!this.symbolMap.has(s)) this.symbolMap.set(s, []);
+        this.symbolMap.get(s).push(unit);
+      }
+      for (const n of unit.names) this.addName(n, unit);
+    }
+  }
+
+  syntheticUnit({
+    key,
+    symbol,
+    name,
+    dims,
+    factor,
+    factorFraction = null,
+    prefixable = "none"
+  }) {
+    return {
+      key,
+      names: [name],
+      symbols: [symbol],
+      aliases: [],
+      dims: cloneDims(dims),
+      factor: factor instanceof D ? factor : new D(factor),
+      factorFraction:
+        factorFraction ??
+        Fraction.from((factor instanceof D ? factor : new D(factor)).toString()),
+      offset: new D(0),
+      offsetFraction: new Fraction(0n),
+      prefixable,
+      temperature: false,
+      symbol,
+      name,
+      styleLong: false,
+      generated: false,
+      synthetic: true
+    };
+  }
+
+  findByKey(key) {
+    return [...this.units, ...this.generated].find(u => u.key === key) || null;
+  }
+
+  findAllBySymbol(symbol) {
+    return (this.symbolMap.get(symbol) || []).slice();
+  }
+
+  findCanonical(symbol) {
+    return (this.symbolMap.get(symbol) || [])[0] || null;
+  }
+
+  matchPhrase(source, position) {
+    const rest = source.slice(position);
+    const lower = rest.toLowerCase();
+
+    for (const phrase of this.phrases) {
+      if (!lower.startsWith(phrase.lower)) continue;
+      const next = rest[phrase.text.length] || "";
+      if (next && /[A-Za-z0-9_]/.test(next)) continue;
+      return {
+        length: phrase.text.length,
+        raw: rest.slice(0, phrase.text.length)
+      };
+    }
+
+    return null;
+  }
+
+  resolve(raw) {
+    if (!raw) return [];
+
+    let exponent = 1;
+    let baseRaw = raw;
+
+    const superscript = raw.match(/^(.*?)(²|³)$/);
+    const digitPower = raw.match(/^(.+?)([23])$/);
+
+    if (superscript) {
+      baseRaw = superscript[1];
+      exponent = superscript[2] === "²" ? 2 : 3;
+    } else if (digitPower && !/^(log|sin|cos|tan|sec|csc|cot)\d$/i.test(raw)) {
+      const attempt = this.resolveBase(digitPower[1]);
+      if (attempt.length) {
+        baseRaw = digitPower[1];
+        exponent = Number(digitPower[2]);
+      }
+    }
+
+    const candidates = this.resolveBase(baseRaw);
+
+    if (exponent === 1) return candidates;
+
+    return candidates.map(unit => this.syntheticUnit({
+      key: `${unit.key}^${exponent}`,
+      symbol: `${unit.symbol}^${exponent}`,
+      name: exponent === 2
+        ? `square ${unit.name}`
+        : `cubic ${unit.name}`,
+      dims: scaleDims(unit.dims, exponent),
+      factor: unit.factor.pow(exponent),
+      factorFraction: unit.factorFraction?.pow(exponent) || null
+    }));
+  }
+
+  resolveBase(raw) {
+    const normalizedMicro = raw.replace(/[μu]/g, "µ");
+
+    if (this.symbolMap.has(normalizedMicro)) {
+      return this.symbolMap.get(normalizedMicro).map(u =>
+        this.cloneUnit(u, { styleLong: false })
+      );
+    }
+
+    const normalizedName = this.normalizeName(normalizedMicro);
+    if (this.nameMap.has(normalizedName)) {
+      return this.nameMap.get(normalizedName).map(u =>
+        this.cloneUnit(u, { styleLong: true })
+      );
+    }
+
+    const lower = normalizedMicro.toLowerCase();
+    const all = [...this.units, ...this.generated];
+    const fallback = [];
+    const seen = new Set();
+
+    for (const unit of all) {
+      for (const symbol of unit.symbols) {
+        if (symbol.toLowerCase() !== lower) continue;
+        const id = `${unit.key}|${symbol}|${unit.factor.toString()}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        fallback.push(this.cloneUnit(unit, {
+          symbol,
+          styleLong: false,
+          fallback: true
+        }));
+      }
+    }
+
+    fallback.sort((a, b) => {
+      const score = unit => {
+        let n = 0;
+        const symbol = unit.symbol;
+        for (let i = 0; i < Math.min(symbol.length, normalizedMicro.length); i++) {
+          if (symbol[i] === normalizedMicro[i]) n++;
+        }
+        return n;
+      };
+      return score(b) - score(a);
+    });
+
+    return fallback;
+  }
+
+  alternatives(dims) {
+    return (this.curated.get(dimsKey(dims)) || []).filter(Boolean);
+  }
+
+  prefixedVariants(base) {
+    const root = base.baseUnit || base;
+    if (root.prefixable === "none") return [base];
+    const variants = [root, ...this.generated.filter(u => u.baseUnit === root)];
+    return variants;
+  }
+
+  bestScaled(base, siValue) {
+    const variants = this.prefixedVariants(base);
+    let best = base;
+
+    for (const unit of variants) {
+      const value = siValue.div(unit.factor).abs();
+      if (value.gte(1) && value.lt(1000)) {
+        if (!best) best = unit;
+        else if (unit.factor.gt(best.factor)) best = unit;
+      }
+    }
+
+    return best || base;
+  }
+
+  derivedFor(op, left, right, dims) {
+    if (left && right && left.key === right.key && op === "*") {
+      return this.syntheticUnit({
+        key: `${left.key}^2`,
+        symbol: `${left.symbol}^2`,
+        name: `square ${left.name}`,
+        dims,
+        factor: left.factor.mul(right.factor),
+        factorFraction: safeFracOp(() =>
+          left.factorFraction.mul(right.factorFraction)
+        )
+      });
+    }
+
+    const key = dimsKey(dims);
+    const FORCE = "1,1,-2,0,0,0,0";
+
+    if (
+      key === FORCE &&
+      ((left?.key === "psi" && right?.key?.includes("inch")) ||
+       (right?.key === "psi" && left?.key?.includes("inch")))
+    ) {
+      return this.findByKey("pound-force");
+    }
+
+    const map = {
+      "2,1,-3,0,0,0,0": "watt",
+      "2,1,-2,0,0,0,0": "joule",
+      "-1,1,-2,0,0,0,0": "pascal",
+      "0,0,-1,0,0,0,0": "hertz",
+      "1,1,-2,0,0,0,0": "newton"
+    };
+
+    if (map[key]) return this.findByKey(map[key]);
+
+    if (key === "1,0,-1,0,0,0,0") {
+      return this.syntheticUnit({
+        key: "meter-per-second",
+        symbol: "m/s",
+        name: "meter per second",
+        dims,
+        factor: "1",
+        factorFraction: new Fraction(1n)
+      });
+    }
+
+    if (!left && right && op === "/" && dimsKey(dims) === "0,0,-1,0,0,0,0") {
+      return this.findByKey("hertz");
+    }
+
+    if (left && right) {
+      const symbol = op === "*"
+        ? `${left.symbol}·${right.symbol}`
+        : `${left.symbol}/${right.symbol}`;
+      const factor = op === "*"
+        ? left.factor.mul(right.factor)
+        : left.factor.div(right.factor);
+      const factorFraction = safeFracOp(() =>
+        op === "*"
+          ? left.factorFraction.mul(right.factorFraction)
+          : left.factorFraction.div(right.factorFraction)
+      );
+
+      return this.syntheticUnit({
+        key: symbol,
+        symbol,
+        name: symbol,
+        dims,
+        factor,
+        factorFraction
+      });
+    }
+
+    return null;
+  }
+
+  autocompleteWords() {
+    const out = new Set();
+
+    for (const unit of [...this.units, ...this.generated]) {
+      for (const name of unit.names) out.add(name);
+      for (const symbol of unit.symbols) out.add(symbol);
+    }
+
+    return [...out].sort((a, b) => a.localeCompare(b));
+  }
+
+  label(unit, longStyle, value) {
+    if (!unit) return "";
+
+    if (!longStyle) return unit.symbol;
+
+    let name = unit.name;
+    if (!value.abs().eq(1)) {
+      if (name.endsWith("foot")) name = name.replace(/foot$/, "feet");
+      else if (name.endsWith("inch")) name += "es";
+      else if (!name.endsWith("s")) name += "s";
+    }
+    return name;
+  }
+}
+
+const unitEngine = new UnitEngine();
+
+class Tokenizer {
+  constructor(source, scientific = true) {
+    this.source = source;
+    this.scientific = scientific;
+    this.tokens = [];
+  }
+
+  run() {
+    const s = this.source;
+    let i = 0;
+
+    while (i < s.length && this.tokens.length < 201) {
+      if (/\s/.test(s[i])) {
+        i++;
+        continue;
+      }
+
+      const phrase = unitEngine.matchPhrase(s, i);
+      if (phrase) {
+        this.tokens.push({
+          type: "id",
+          value: phrase.raw,
+          raw: phrase.raw,
+          start: i,
+          end: i + phrase.length
+        });
+        i += phrase.length;
+        continue;
+      }
+
+      if (s.startsWith("->", i)) {
+        this.tokens.push({ type: "op", value: "->", raw: "->", start: i, end: i + 2 });
+        i += 2;
+        continue;
+      }
+
+      if (s.startsWith("**", i)) {
+        this.tokens.push({ type: "op", value: "^", raw: "**", start: i, end: i + 2 });
+        i += 2;
+        continue;
+      }
+
+      if (s.startsWith("⁻¹", i)) {
+        this.tokens.push({ type: "supinv", value: -1, raw: "⁻¹", start: i, end: i + 2 });
+        i += 2;
+        continue;
+      }
+
+      if (s[i] === "²" || s[i] === "³") {
+        this.tokens.push({
+          type: "sup",
+          value: s[i] === "²" ? 2 : 3,
+          raw: s[i],
+          start: i,
+          end: i + 1
+        });
+        i++;
+        continue;
+      }
+
+      if (s[i] === "π") {
+        this.tokens.push({ type: "id", value: "pi", raw: "π", start: i, end: i + 1 });
+        i++;
+        continue;
+      }
+
+      if (s[i] === "°") {
+        if (s[i + 1] === "C" || s[i + 1] === "F") {
+          this.tokens.push({
+            type: "id",
+            value: s.slice(i, i + 2),
+            raw: s.slice(i, i + 2),
+            start: i,
+            end: i + 2
+          });
+          i += 2;
+        } else {
+          this.tokens.push({ type: "id", value: "°", raw: "°", start: i, end: i + 1 });
+          i++;
+        }
+        continue;
+      }
+
+      const numberRe = this.scientific
+        ? /^(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?/
+        : /^(?:\d+\.\d*|\.\d+|\d+)/;
+
+      const nm = s.slice(i).match(numberRe);
+      if (nm) {
+        this.tokens.push({
+          type: "num",
+          value: nm[0],
+          raw: nm[0],
+          start: i,
+          end: i + nm[0].length
+        });
+        i += nm[0].length;
+        continue;
+      }
+
+      const im = s.slice(i).match(/^[A-Za-z_µμΩ]+[A-Za-z0-9_µμΩ]*/);
+      if (im) {
+        const raw = im[0];
+        this.tokens.push({
+          type: "id",
+          value: raw,
+          raw,
+          start: i,
+          end: i + raw.length
+        });
+        i += raw.length;
+        continue;
+      }
+
+      const ch = s[i];
+      const normalized =
+        ch === "×" ? "*" :
+        ch === "÷" ? "/" :
+        ch === "−" ? "-" :
+        ch;
+
+      if ("+-*/%^!(),".includes(normalized)) {
+        this.tokens.push({
+          type: normalized === "," ? "comma" :
+                normalized === "(" || normalized === ")" ? "paren" : "op",
+          value: normalized,
+          raw: ch,
+          start: i,
+          end: i + 1
+        });
+        i++;
+        continue;
+      }
+
+      this.tokens.push({
+        type: "bad",
+        value: ch,
+        raw: ch,
+        start: i,
+        end: i + 1
+      });
+      i++;
+    }
+
+    return this.tokens;
+  }
+}
+
+const FUNCTIONS = new Set([
+  "log", "ln", "log2", "log_2", "sqrt", "cbrt",
+  "sin", "cos", "tan", "csc", "sec", "cot",
+  "asin", "acos", "atan",
+  "arcsin", "arccos", "arctan"
+]);
+
+const TRIG = new Set([
+  "sin", "cos", "tan", "csc", "sec", "cot",
+  "asin", "acos", "atan",
+  "arcsin", "arccos", "arctan"
+]);
+
+class Parser {
+  constructor(tokens, start = 0) {
+    this.tokens = tokens;
+    this.i = start;
+    this.start = start;
+    this.depth = 0;
+    this.ambiguousUnits = false;
+  }
+
+  peek(offset = 0) {
+    return this.tokens[this.i + offset] || null;
+  }
+
+  take() {
+    return this.tokens[this.i++] || null;
+  }
+
+  fail(message = "parse") {
+    throw new Error(message);
+  }
+
+  parseFull() {
+    const ast = this.parseExpression(0);
+
+    if (this.isConversionToken(this.peek())) {
+      const op = this.take();
+      if (!this.peek()) this.fail();
+      const target = this.parseExpression(0);
+      if (this.peek()) this.fail();
+      return {
+        type: "convert",
+        value: ast,
+        target,
+        op: op.value
+      };
+    }
+
+    if (this.peek()) this.fail();
+    return ast;
+  }
+
+  isConversionToken(token) {
+    if (!token) return false;
+    if (token.type === "op" && token.value === "->") return true;
+    if (token.type !== "id") return false;
+    const v = token.value.toLowerCase();
+    if (v === "to") return true;
+    if (v !== "in") return false;
+    return !!this.peek(1) && this.canStartOperand(this.peek(1));
+  }
+
+  parseExpression(minPrec) {
+    if (++this.depth > 80) this.fail("depth");
+
+    let left = this.parsePrefix();
+
+    while (true) {
+      const t = this.peek();
+      if (!t) break;
+
+      if (t.type === "op" && t.value === "!") {
+        this.take();
+        left = { type: "factorial", value: left };
+        continue;
+      }
+
+      if (t.type === "sup") {
+        this.take();
+        left = {
+          type: "binary",
+          op: "^",
+          left,
+          right: {
+            type: "number",
+            value: String(t.value),
+            token: t
+          }
+        };
+        continue;
+      }
+
+      if (t.type === "op" && t.value === "%") {
+        const next = this.peek(1);
+        const modulo = next && this.canStartOperand(next);
+
+        if (!modulo) {
+          this.take();
+          left = { type: "percent", value: left };
+          continue;
+        }
+      }
+
+      if (this.isConversionToken(t)) break;
+
+      let op = null;
+      let prec = -1;
+      let rightAssoc = false;
+      let implicit = false;
+
+      if (t.type === "op" && ["+", "-"].includes(t.value)) {
+        op = t.value;
+        prec = 10;
+      } else if (t.type === "op" && ["*", "/", "%"].includes(t.value)) {
+        op = t.value;
+        prec = 20;
+      } else if (
+        t.type === "id" &&
+        ["npr", "ncr"].includes(t.value.toLowerCase())
+      ) {
+        op = t.value.toLowerCase();
+        prec = 30;
+      } else if (t.type === "op" && t.value === "^") {
+        op = "^";
+        prec = 60;
+        rightAssoc = true;
+      } else if (
+        this.canStartOperand(t) &&
+        !(t.type === "num" && this.isBareNumber(left))
+      ) {
+        op = "imul";
+        prec = 40;
+        implicit = true;
+      } else {
+        break;
+      }
+
+      if (prec < minPrec) break;
+      if (!implicit) this.take();
+
+      const right = this.parseExpression(rightAssoc ? prec : prec + 1);
+      left = { type: "binary", op, left, right };
+    }
+
+    this.depth--;
+    return left;
+  }
+
+  isBareNumber(ast) {
+    return ast?.type === "number";
+  }
+
+  canStartOperand(token) {
+    if (!token) return false;
+    if (token.type === "num" || token.type === "id") return true;
+    return token.type === "paren" && token.value === "(";
+  }
+
+  parsePrefix() {
+    const t = this.take();
+    if (!t) this.fail();
+
+    if (t.type === "bad") this.fail();
+
+    if (t.type === "op" && (t.value === "+" || t.value === "-")) {
+      return {
+        type: "unary",
+        op: t.value,
+        value: this.parseExpression(50)
+      };
+    }
+
+    if (t.type === "num") {
+      return { type: "number", value: t.value, token: t };
+    }
+
+    if (t.type === "paren" && t.value === "(") {
+      const value = this.parseExpression(0);
+      const close = this.take();
+      if (!close || close.type !== "paren" || close.value !== ")") this.fail();
+      return { type: "group", value };
+    }
+
+    if (t.type !== "id") this.fail();
+
+    const rawName = t.value;
+    const lower = rawName.toLowerCase();
+
+    if (lower === "pi" || rawName === "π") {
+      return { type: "constant", name: "pi", token: t };
+    }
+
+    if (lower === "e") {
+      return { type: "constant", name: "e", token: t };
+    }
+
+    if (["npr", "ncr", "p", "c"].includes(lower) &&
+        this.peek()?.type === "paren" &&
+        this.peek()?.value === "(") {
+      return this.parseCombinatoricCall(lower, t);
+    }
+
+    const attachedTrig = lower.match(/^(sin|cos|tan|sec|csc|cot)(\d+)$/);
+    if (attachedTrig) {
+      const base = attachedTrig[1];
+      const n = attachedTrig[2];
+      const hasArgument =
+        !!this.peek() &&
+        (this.canStartOperand(this.peek()) ||
+         (this.peek().type === "paren" && this.peek().value === "("));
+
+      if (!hasArgument) {
+        return {
+          type: "function",
+          name: base,
+          args: [{ type: "number", value: n, token: t }]
+        };
+      }
+
+      const fn = this.parseFunctionArgument(base);
+      return {
+        type: "binary",
+        op: "^",
+        left: fn,
+        right: { type: "number", value: n, token: t }
+      };
+    }
+
+    const logBase = lower.match(/^log_?(\d+(?:\.\d+)?)$/);
+    if (logBase) {
+      const fn = this.parseFunctionArgument("log");
+      fn.base = logBase[1];
+      return fn;
+    }
+
+    if (FUNCTIONS.has(lower)) {
+      let name = lower;
+      let trigPower = null;
+
+      if (
+        ["sin", "cos", "tan", "sec", "csc", "cot"].includes(lower) &&
+        this.isInverseMarker(t)
+      ) {
+        this.consumeInverseMarker();
+        name =
+          lower === "sin" ? "asin" :
+          lower === "cos" ? "acos" :
+          lower === "tan" ? "atan" :
+          lower;
+      } else if (
+        ["sin", "cos", "tan", "sec", "csc", "cot"].includes(lower)
+      ) {
+        if (this.peek()?.type === "sup") {
+          trigPower = this.take().value;
+        } else if (
+          this.peek()?.type === "op" &&
+          this.peek().value === "^" &&
+          this.peek(1)?.type === "num"
+        ) {
+          this.take();
+          trigPower = Number(this.take().value);
+        }
+      }
+
+      let fn = this.parseFunctionArgument(name);
+      if (trigPower != null) {
+        fn = {
+          type: "binary",
+          op: "^",
+          left: fn,
+          right: {
+            type: "number",
+            value: String(trigPower),
+            token: t
+          }
+        };
+      }
+      return fn;
+    }
+
+    const units = unitEngine.resolve(rawName);
+    if (units.length) {
+      if (units.length > 1) this.ambiguousUnits = true;
+      return {
+        type: "unit",
+        candidates: units,
+        token: t,
+        raw: t.raw
+      };
+    }
+
+    this.fail("unknown identifier");
+  }
+
+  isInverseMarker(functionToken) {
+    const a = this.peek();
+    const b = this.peek(1);
+    const c = this.peek(2);
+
+    if (
+      a?.type === "op" && a.value === "-" &&
+      b?.type === "num" && b.value === "1" &&
+      functionToken.end === a.start &&
+      a.end === b.start &&
+      c
+    ) return true;
+
+    if (
+      a?.type === "op" && a.value === "^" &&
+      b?.type === "op" && b.value === "-" &&
+      c?.type === "num" && c.value === "1" &&
+      functionToken.end === a.start
+    ) return true;
+
+    if (a?.type === "supinv" && functionToken.end === a.start) return true;
+
+    return false;
+  }
+
+  consumeInverseMarker() {
+    if (this.peek()?.type === "supinv") {
+      this.take();
+      return;
+    }
+
+    if (this.peek()?.value === "-") {
+      this.take();
+      this.take();
+      return;
+    }
+
+    this.take();
+    this.take();
+    this.take();
+  }
+
+  parseFunctionArgument(name) {
+    if (this.peek()?.type === "paren" && this.peek().value === "(") {
+      this.take();
+      const arg = this.parseExpression(0);
+      const close = this.take();
+      if (!close || close.type !== "paren" || close.value !== ")") this.fail();
+      return { type: "function", name, args: [arg] };
+    }
+
+    if (!this.peek()) this.fail();
+    const arg = this.parseExpression(40);
+    return { type: "function", name, args: [arg] };
+  }
+
+  parseCombinatoricCall(name) {
+    this.take();
+    const a = this.parseExpression(0);
+    const comma = this.take();
+    if (!comma || comma.type !== "comma") this.fail();
+    const b = this.parseExpression(0);
+    const close = this.take();
+    if (!close || close.type !== "paren" || close.value !== ")") this.fail();
+
+    return {
+      type: "combinatoric",
+      op: name === "npr" || name === "p" ? "npr" : "ncr",
+      left: a,
+      right: b
+    };
+  }
+}
+
+function parseLongestSuffix(segment, scientific = true) {
+  if (!segment || segment.length > 500) return null;
+
+  const tokens = new Tokenizer(segment, scientific).run();
+  if (!tokens.length || tokens.length > 200) return null;
+
+  for (let start = 0; start < tokens.length; start++) {
+    try {
+      const parser = new Parser(tokens, start);
+      const ast = parser.parseFull();
+
+      return {
+        ast,
+        tokens,
+        startToken: start,
+        sourceStart: tokens[start].start,
+        source: segment.slice(tokens[start].start),
+        ambiguousUnits: parser.ambiguousUnits
+      };
+    } catch {
+      // Continue to the next suffix.
+    }
+  }
+
+  return null;
+}
+
+class Quantity {
+  constructor({
+    value,
+    dims = ZERO_DIMS,
+    rat = null,
+    unit = null,
+    prefs = [],
+    tempAbs = false,
+    unitAtom = false,
+    readings = [],
+    hadBareTrig = false,
+    forcedUnit = null
+  }) {
+    this.value = value instanceof D ? value : new D(value);
+    this.dims = cloneDims(dims);
+    this.rat = rat;
+    this.unit = unit;
+    this.prefs = prefs.filter(Boolean);
+    this.tempAbs = tempAbs;
+    this.unitAtom = unitAtom;
+    this.readings = readings;
+    this.hadBareTrig = hadBareTrig;
+    this.forcedUnit = forcedUnit;
+  }
+
+  clone(changes = {}) {
+    return new Quantity({
+      value: this.value,
+      dims: this.dims,
+      rat: this.rat,
+      unit: this.unit,
+      prefs: this.prefs,
+      tempAbs: this.tempAbs,
+      unitAtom: this.unitAtom,
+      readings: this.readings,
+      hadBareTrig: this.hadBareTrig,
+      forcedUnit: this.forcedUnit,
+      ...changes
+    });
+  }
+}
+
+class Evaluator {
+  constructor(mode = "rad") {
+    this.mode = mode;
+    this.maxBranches = 12;
+  }
+
+  evaluate(ast, depth = 0) {
+    if (depth > 80) throw new Error("depth");
+
+    switch (ast.type) {
+      case "number":
+        return [new Quantity({
+          value: new D(ast.value),
+          rat: Fraction.from(ast.value)
+        })];
+
+      case "constant":
+        return [new Quantity({
+          value: ast.name === "pi" ? PI : new D(1).exp(),
+          rat: null
+        })];
+
+      case "group":
+        return this.evaluate(ast.value, depth + 1);
+
+      case "unit":
+        return ast.candidates.map(unit => new Quantity({
+          value: unit.factor,
+          dims: unit.dims,
+          rat: unit.factorFraction,
+          unit,
+          prefs: [unit],
+          tempAbs: unit.temperature,
+          unitAtom: true,
+          readings: [{
+            start: ast.token.start,
+            end: ast.token.end,
+            text: unit.symbol
+          }]
+        }));
+
+      case "unary":
+        return this.evaluate(ast.value, depth + 1).map(q =>
+          ast.op === "-"
+            ? q.clone({
+                value: q.value.neg(),
+                rat: q.rat?.neg() || null
+              })
+            : q
+        );
+
+      case "binary":
+        return this.evaluateBinary(ast, depth + 1);
+
+      case "percent":
+        return this.evaluate(ast.value, depth + 1).map(q => {
+          if (!dimsZero(q.dims)) throw new Error("percent dimension");
+          return q.clone({
+            value: q.value.div(100),
+            rat: q.rat?.div(new Fraction(100n)) || null,
+            unit: null,
+            prefs: []
+          });
+        });
+
+      case "factorial":
+        return this.evaluate(ast.value, depth + 1).map(q =>
+          this.factorial(q)
+        );
+
+      case "function":
+        return this.evaluateFunction(ast, depth + 1);
+
+      case "combinatoric":
+        return this.evaluateCombinatoric(ast, depth + 1);
+
+      case "convert":
+        return this.evaluateConversion(ast, depth + 1);
+
+      default:
+        throw new Error("unknown AST");
+    }
+  }
+
+  cross(left, right, fn) {
+    const out = [];
+    for (const a of left) {
+      for (const b of right) {
+        try {
+          const q = fn(a, b);
+          if (q) {
+            this.validate(q);
+            out.push(q);
+          }
+        } catch {
+          // A single ambiguous reading may fail while another survives.
+        }
+        if (out.length >= this.maxBranches) return out;
+      }
+    }
+    return out;
+  }
+
+  evaluateBinary(ast, depth) {
+    const left = this.evaluate(ast.left, depth);
+    const right = this.evaluate(ast.right, depth);
+
+    if (!left.length || !right.length) return [];
+
+    return this.cross(left, right, (a, b) => {
+      switch (ast.op) {
+        case "+":
+        case "-":
+          return this.addSub(a, b, ast.op);
+        case "*":
+        case "imul":
+          return this.multiply(a, b);
+        case "/":
+          return this.divide(a, b);
+        case "^":
+          return this.power(a, b);
+        case "%":
+          return this.modulo(a, b);
+        case "npr":
+        case "ncr":
+          return this.combinatoric(a, b, ast.op);
+        default:
+          throw new Error("operator");
+      }
+    });
+  }
+
+  combineReadings(a, b) {
+    return [...a.readings, ...b.readings];
+  }
+
+  combinePrefs(a, b) {
+    const seen = new Set();
+    const out = [];
+    for (const unit of [...a.prefs, ...b.prefs]) {
+      const key = `${unit.key}|${unit.factor}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(unit);
+      }
+    }
+    return out;
+  }
+
+  addSub(a, b, op) {
+    if (!dimsEqual(a.dims, b.dims)) throw new Error("dimension mismatch");
+
+    if (a.tempAbs || b.tempAbs) {
+      if (!(a.tempAbs && b.tempAbs && a.unit && b.unit)) {
+        throw new Error("temperature mismatch");
+      }
+
+      const leftShown = a.value.sub(a.unit.offset).div(a.unit.factor);
+      const rightShown = b.value.sub(b.unit.offset).div(b.unit.factor);
+      const shown = op === "+" ? leftShown.add(rightShown) : leftShown.sub(rightShown);
+      const value = shown.mul(a.unit.factor).add(a.unit.offset);
+
+      return new Quantity({
+        value,
+        dims: a.dims,
+        rat: null,
+        unit: a.unit,
+        prefs: this.combinePrefs(a, b),
+        tempAbs: true,
+        readings: this.combineReadings(a, b),
+        hadBareTrig: a.hadBareTrig || b.hadBareTrig
+      });
+    }
+
+    return new Quantity({
+      value: op === "+" ? a.value.add(b.value) : a.value.sub(b.value),
+      dims: a.dims,
+      rat:
+        a.rat && b.rat
+          ? op === "+" ? a.rat.add(b.rat) : a.rat.sub(b.rat)
+          : null,
+      unit: a.unit || b.unit,
+      prefs: this.combinePrefs(a, b),
+      readings: this.combineReadings(a, b),
+      hadBareTrig: a.hadBareTrig || b.hadBareTrig
+    });
+  }
+
+  quantityFromUnitValue(number, unitQuantity) {
+    const unit = unitQuantity.unit;
+    let value = number.value.mul(unit.factor);
+    let rat =
+      number.rat && unit.factorFraction
+        ? number.rat.mul(unit.factorFraction)
+        : null;
+
+    if (unit.temperature) {
+      value = value.add(unit.offset);
+      rat =
+        rat && unit.offsetFraction
+          ? rat.add(unit.offsetFraction)
+          : null;
+    }
+
+    return new Quantity({
+      value,
+      dims: unit.dims,
+      rat,
+      unit,
+      prefs: [unit],
+      tempAbs: unit.temperature,
+      readings: this.combineReadings(number, unitQuantity),
+      hadBareTrig: number.hadBareTrig || unitQuantity.hadBareTrig
+    });
+  }
+
+  multiply(a, b) {
+    if (a.tempAbs || b.tempAbs) {
+      if (a.unitAtom && dimsZero(b.dims)) return this.quantityFromUnitValue(b, a);
+      if (b.unitAtom && dimsZero(a.dims)) return this.quantityFromUnitValue(a, b);
+      throw new Error("absolute temperature multiplication");
+    }
+
+    if (a.unitAtom && dimsZero(b.dims)) return this.quantityFromUnitValue(b, a);
+    if (b.unitAtom && dimsZero(a.dims)) return this.quantityFromUnitValue(a, b);
+
+    const dims = addDims(a.dims, b.dims);
+    const aScalar = dimsZero(a.dims);
+    const bScalar = dimsZero(b.dims);
+
+    let unit = null;
+    let prefs = this.combinePrefs(a, b);
+
+    if (aScalar && !bScalar) {
+      unit = b.unit;
+      prefs = b.prefs;
+    } else if (bScalar && !aScalar) {
+      unit = a.unit;
+      prefs = a.prefs;
+    } else if (!aScalar || !bScalar) {
+      unit = unitEngine.derivedFor("*", a.unit, b.unit, dims);
+      if (unit) prefs = [unit];
+    }
+
+    return new Quantity({
+      value: a.value.mul(b.value),
+      dims,
+      rat: a.rat && b.rat ? a.rat.mul(b.rat) : null,
+      unit,
+      prefs,
+      readings: this.combineReadings(a, b),
+      hadBareTrig: a.hadBareTrig || b.hadBareTrig
+    });
+  }
+
+  divide(a, b) {
+    if (b.value.eq(0)) throw new Error("division by zero");
+    if (a.tempAbs || b.tempAbs) throw new Error("temperature division");
+
+    const dims = addDims(a.dims, b.dims, -1);
+    const bScalar = dimsZero(b.dims);
+    let unit = null;
+    let prefs = [];
+
+    if (bScalar && !dimsZero(a.dims)) {
+      unit = a.unit;
+      prefs = a.prefs;
+    } else if (!dimsZero(dims)) {
+      unit = unitEngine.derivedFor("/", a.unit, b.unit, dims);
+      if (unit) prefs = [unit];
+    }
+
+    return new Quantity({
+      value: a.value.div(b.value),
+      dims,
+      rat: a.rat && b.rat ? a.rat.div(b.rat) : null,
+      unit,
+      prefs,
+      readings: this.combineReadings(a, b),
+      hadBareTrig: a.hadBareTrig || b.hadBareTrig
+    });
+  }
+
+  power(a, b) {
+    if (!dimsZero(b.dims)) throw new Error("dimensional exponent");
+    if (!b.value.isFinite() || b.value.abs().gt(1000000)) throw new Error("exponent cap");
+
+    const exponent = b.value;
+    const exponentNumber = exponent.toNumber();
+    const isInteger = exponent.isInteger();
+
+    if (a.value.lt(0) && !isInteger) throw new Error("complex result");
+
+    const newDims = a.dims.map(v => {
+      const x = new D(v).mul(exponent);
+      if (!x.isInteger()) throw new Error("fractional dimension");
+      return x.toNumber();
+    });
+
+    const value = a.value.pow(exponent);
+    let rat = null;
+
+    if (a.rat && isInteger) {
+      rat = a.rat.pow(exponentNumber);
+    } else if (
+      a.rat &&
+      exponent.eq("0.5") &&
+      a.rat.n >= 0n
+    ) {
+      const nRoot = BigInt(Math.round(Math.sqrt(Number(a.rat.n))));
+      const dRoot = BigInt(Math.round(Math.sqrt(Number(a.rat.d))));
+      if (nRoot * nRoot === a.rat.n && dRoot * dRoot === a.rat.d) {
+        rat = new Fraction(nRoot, dRoot);
+      }
+    }
+
+    let unit = null;
+    if (!dimsZero(newDims) && a.unit) {
+      if (isInteger) {
+        unit = unitEngine.syntheticUnit({
+          key: `${a.unit.key}^${exponentNumber}`,
+          symbol: `${a.unit.symbol}^${exponentNumber}`,
+          name: `${a.unit.name}^${exponentNumber}`,
+          dims: newDims,
+          factor: a.unit.factor.pow(exponent),
+          factorFraction: a.unit.factorFraction?.pow(exponentNumber) || null
+        });
+      } else if (exponent.eq("0.5") && /\^2$/.test(a.unit.symbol)) {
+        unit = unitEngine.syntheticUnit({
+          key: a.unit.key.replace(/\^2$/, ""),
+          symbol: a.unit.symbol.replace(/\^2$/, ""),
+          name: a.unit.name.replace(/^square /, ""),
+          dims: newDims,
+          factor: a.unit.factor.sqrt(),
+          factorFraction: null
+        });
+      }
+    }
+
+    return new Quantity({
+      value,
+      dims: newDims,
+      rat,
+      unit,
+      prefs: unit ? [unit] : [],
+      readings: this.combineReadings(a, b),
+      hadBareTrig: a.hadBareTrig || b.hadBareTrig
+    });
+  }
+
+  modulo(a, b) {
+    if (
+      !(dimsZero(a.dims) && dimsZero(b.dims)) &&
+      !dimsEqual(a.dims, b.dims)
+    ) throw new Error("modulo dimensions");
+
+    if (b.value.eq(0)) throw new Error("modulo zero");
+
+    return new Quantity({
+      value: a.value.mod(b.value),
+      dims: a.dims,
+      rat: a.rat && b.rat ? a.rat.mod(b.rat) : null,
+      unit: a.unit,
+      prefs: a.prefs,
+      readings: this.combineReadings(a, b),
+      hadBareTrig: a.hadBareTrig || b.hadBareTrig
+    });
+  }
+
+  factorial(q) {
+    if (!dimsZero(q.dims) || q.value.lt(0) || q.value.gt(170)) {
+      throw new Error("factorial domain");
+    }
+
+    if (q.value.isInteger()) {
+      const n = q.value.toNumber();
+      let result = 1n;
+      for (let i = 2n; i <= BigInt(n); i++) result *= i;
+
+      return new Quantity({
+        value: new D(result.toString()),
+        rat: new Fraction(result),
+        readings: q.readings,
+        hadBareTrig: q.hadBareTrig
+      });
+    }
+
+    const value = this.gammaNumber(q.value.toNumber() + 1);
+    if (!Number.isFinite(value)) throw new Error("gamma");
+
+    return new Quantity({
+      value: new D(value),
+      rat: null,
+      readings: q.readings,
+      hadBareTrig: q.hadBareTrig
+    });
+  }
+
+  gammaNumber(z) {
+    const p = [
+      0.99999999999980993,
+      676.5203681218851,
+      -1259.1392167224028,
+      771.32342877765313,
+      -176.61502916214059,
+      12.507343278686905,
+      -0.13857109526572012,
+      9.9843695780195716e-6,
+      1.5056327351493116e-7
+    ];
+
+    if (z < 0.5) {
+      return Math.PI / (Math.sin(Math.PI * z) * this.gammaNumber(1 - z));
+    }
+
+    z -= 1;
+    let x = p[0];
+    for (let i = 1; i < p.length; i++) x += p[i] / (z + i);
+    const t = z + p.length - 1.5;
+
+    return Math.sqrt(2 * Math.PI) *
+      Math.pow(t, z + 0.5) *
+      Math.exp(-t) *
+      x;
+  }
+
+  evaluateFunction(ast, depth) {
+    const branches = this.evaluate(ast.args[0], depth);
+    const out = [];
+
+    for (const q of branches) {
+      try {
+        const result = this.applyFunction(ast.name, q, ast.base);
+        this.validate(result);
+        out.push(result);
+      } catch {
+        // Per-branch domain error.
+      }
+    }
+
+    return out;
+  }
+
+  applyFunction(name, q, base = null) {
+    name = name.toLowerCase();
+
+    if (name === "sqrt") {
+      return this.power(q, new Quantity({
+        value: new D("0.5"),
+        rat: new Fraction(1n, 2n)
+      }));
+    }
+
+    if (name === "cbrt") {
+      if (q.value.lt(0)) {
+        const positive = q.clone({ value: q.value.neg(), rat: q.rat?.neg() || null });
+        const result = this.power(positive, new Quantity({
+          value: new D(1).div(3),
+          rat: new Fraction(1n, 3n)
+        }));
+        return result.clone({ value: result.value.neg(), rat: null });
+      }
+
+      return this.power(q, new Quantity({
+        value: new D(1).div(3),
+        rat: new Fraction(1n, 3n)
+      }));
+    }
+
+    if (["log", "ln", "log2"].includes(name)) {
+      if (!dimsZero(q.dims) || q.value.lte(0)) throw new Error("log domain");
+      let value;
+
+      if (name === "ln") value = q.value.ln();
+      else if (name === "log2") value = q.value.ln().div(new D(2).ln());
+      else if (base) {
+        const b = new D(base);
+        if (b.lte(0) || b.eq(1)) throw new Error("log base");
+        value = q.value.ln().div(b.ln());
+      } else value = q.value.log(10);
+
+      return new Quantity({
+        value,
+        rat: null,
+        readings: q.readings,
+        hadBareTrig: q.hadBareTrig
+      });
+    }
+
+    if (!TRIG.has(name)) throw new Error("function");
+
+    const inverse = ["asin", "acos", "atan", "arcsin", "arccos", "arctan"].includes(name);
+    let x = q.value;
+    let bare = false;
+
+    if (inverse) {
+      if (!dimsZero(q.dims)) throw new Error("inverse trig dimension");
+      if (
+        ["asin", "acos", "arcsin", "arccos"].includes(name) &&
+        x.abs().gt(1)
+      ) throw new Error("inverse domain");
+
+      bare = true;
+      let value;
+
+      if (name === "asin" || name === "arcsin") value = x.asin();
+      else if (name === "acos" || name === "arccos") value = x.acos();
+      else value = x.atan();
+
+      if (this.mode === "deg") value = value.mul(180).div(PI);
+
+      return new Quantity({
+        value,
+        rat: null,
+        readings: q.readings,
+        hadBareTrig: true
+      });
+    }
+
+    if (dimsEqual(q.dims, [0, 0, 0, 0, 0, 0, 1])) {
+      // Angle units are already stored as radians.
+    } else if (dimsZero(q.dims)) {
+      bare = true;
+      if (this.mode === "deg") x = x.mul(PI).div(180);
+    } else {
+      throw new Error("trig dimension");
+    }
+
+    let value;
+    if (name === "sin") value = x.sin();
+    else if (name === "cos") value = x.cos();
+    else if (name === "tan") value = x.tan();
+    else if (name === "csc") value = new D(1).div(x.sin());
+    else if (name === "sec") value = new D(1).div(x.cos());
+    else value = new D(1).div(x.tan());
+
+    if (!value.isFinite() || value.abs().gt("1e15")) throw new Error("trig pole");
+
+    return new Quantity({
+      value,
+      rat: null,
+      readings: q.readings,
+      hadBareTrig: q.hadBareTrig || bare
+    });
+  }
+
+  evaluateCombinatoric(ast, depth) {
+    const left = this.evaluate(ast.left, depth);
+    const right = this.evaluate(ast.right, depth);
+    return this.cross(left, right, (a, b) =>
+      this.combinatoric(a, b, ast.op)
+    );
+  }
+
+  combinatoric(a, b, op) {
+    if (
+      !dimsZero(a.dims) ||
+      !dimsZero(b.dims) ||
+      !a.value.isInteger() ||
+      !b.value.isInteger()
+    ) throw new Error("combinatoric domain");
+
+    const n = a.value.toNumber();
+    const r = b.value.toNumber();
+
+    if (n < 0 || r < 0 || r > n || n > 170) throw new Error("combinatoric cap");
+
+    let result = 1n;
+    if (op === "npr") {
+      for (let i = 0; i < r; i++) result *= BigInt(n - i);
+    } else {
+      const k = Math.min(r, n - r);
+      for (let i = 1; i <= k; i++) {
+        result = result * BigInt(n - k + i) / BigInt(i);
+      }
+    }
+
+    return new Quantity({
+      value: new D(result.toString()),
+      rat: new Fraction(result),
+      readings: this.combineReadings(a, b),
+      hadBareTrig: a.hadBareTrig || b.hadBareTrig
+    });
+  }
+
+  evaluateConversion(ast, depth) {
+    const values = this.evaluate(ast.value, depth);
+    const targets = this.evaluate(ast.target, depth);
+    const out = [];
+
+    for (const value of values) {
+      for (const target of targets) {
+        if (!target.unit || !dimsEqual(value.dims, target.dims)) continue;
+
+        out.push(value.clone({
+          unit: target.unit,
+          prefs: [target.unit],
+          forcedUnit: target.unit,
+          readings: this.combineReadings(value, target)
+        }));
+      }
+    }
+
+    return out;
+  }
+
+  validate(q) {
+    if (!q.value.isFinite() || q.value.abs().gt("1e1000000")) {
+      throw new Error("overflow");
+    }
+  }
+}
+
+class Formatter {
+  clean(value) {
+    if (!value.isFinite()) return { value, snapped: false };
+
+    if (value.abs().lt("1e-14")) {
+      return { value: new D(0), snapped: true };
+    }
+
+    const nearest = value.toNearest(1);
+    const tolerance = D.max(1, value.abs()).mul("1e-14");
+
+    if (value.sub(nearest).abs().lte(tolerance)) {
+      return { value: nearest, snapped: true };
+    }
+
+    return { value, snapped: false };
+  }
+
+  displayValue(quantity, unit = null) {
+    if (!unit) {
+      return {
+        value: quantity.value,
+        fraction: quantity.rat
+      };
+    }
+
+    if (quantity.tempAbs && unit.temperature) {
+      const value = quantity.value.sub(unit.offset).div(unit.factor);
+      let fraction = null;
+
+      if (
+        quantity.rat &&
+        unit.offsetFraction &&
+        unit.factorFraction
+      ) {
+        fraction = quantity.rat
+          .sub(unit.offsetFraction)
+          ?.div(unit.factorFraction) || null;
+      }
+
+      return { value, fraction };
+    }
+
+    return {
+      value: quantity.value.div(unit.factor),
+      fraction:
+        quantity.rat && unit.factorFraction
+          ? quantity.rat.div(unit.factorFraction)
+          : null
+    };
+  }
+
+  significantCount(text) {
+    const digits = text
+      .replace(/^[+-]/, "")
+      .replace(".", "")
+      .replace(/^0+/, "")
+      .replace(/0+$/, "");
+    return digits.length || 1;
+  }
+
+  exactText(fraction, value) {
+    if (!fraction) return null;
+    const text = fraction.terminatingString();
+    if (text == null || this.significantCount(text) > 20) return null;
+
+    const abs = value.abs();
+    if (!value.eq(0) && (abs.gte("1e15") || abs.lt("1e-6"))) {
+      return new D(text).toExponential().replace("e+", "e+");
+    }
+
+    return text;
+  }
+
+  integerPart(value) {
+    return value.abs().floor().toFixed(0);
+  }
+
+  ensureApproxDecimal(text) {
+    if (/e/i.test(text)) {
+      const [mantissa, exponent] = text.split(/e/i);
+      return `${mantissa.includes(".") ? mantissa : mantissa + ".0"}e${exponent}`;
+    }
+    return text.includes(".") ? text : text + ".0";
+  }
+
+  approximateInline(value) {
+    const cleaned = this.clean(value);
+    value = cleaned.value;
+
+    if (value.eq(0)) return "0";
+    if (cleaned.snapped && value.isInteger()) return value.toFixed(0);
+
+    const abs = value.abs();
+
+    if (abs.gte("1e15") || abs.lt("1e-6")) {
+      const exponent = value.e;
+      const mantissa = value.div(new D(10).pow(exponent));
+      const formatted = this.approximateInline(mantissa);
+      return `${formatted}e${exponent >= 0 ? "+" : ""}${exponent}`;
+    }
+
+    const originalInteger = this.integerPart(value);
+
+    for (let decimals = 1; decimals <= 40; decimals++) {
+      const rounded = value.toDecimalPlaces(decimals);
+      if (rounded.eq(0)) continue;
+      if (this.integerPart(rounded) !== originalInteger) continue;
+
+      const relative = rounded.sub(value).abs().div(abs);
+      if (relative.lte("0.05")) {
+        let text = rounded.toFixed(decimals).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+        return this.ensureApproxDecimal(text);
+      }
+    }
+
+    return this.ensureApproxDecimal(value.toSignificantDigits(20).toString());
+  }
+
+  significantText(value, significantFigures, preserveInteger = true) {
+    const cleaned = this.clean(value);
+    value = cleaned.value;
+
+    if (value.eq(0)) return "0";
+
+    let sf = significantFigures;
+    let rounded = value.toSignificantDigits(sf);
+
+    if (preserveInteger) {
+      while (
+        sf < 30 &&
+        this.integerPart(rounded) !== this.integerPart(value)
+      ) {
+        sf++;
+        rounded = value.toSignificantDigits(sf);
+      }
+    }
+
+    const abs = rounded.abs();
+    let text;
+
+    if (abs.gte("1e15") || abs.lt("1e-6")) {
+      text = rounded.toExponential(Math.max(0, sf - 1));
+      text = text
+        .replace(/(\.\d*?)0+e/, "$1e")
+        .replace(/\.e/, "e");
+    } else {
+      text = rounded.toFixed(Math.max(0, sf - rounded.e - 1));
+      text = text.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+    }
+
+    return text;
+  }
+
+  format(quantity, unit, {
+    inline = true,
+    alternative = false,
+    longUnits = false,
+    unitSpace = false
+  } = {}) {
+    const shown = this.displayValue(quantity, unit);
+    const cleaned = this.clean(shown.value);
+    const exact = this.exactText(shown.fraction, cleaned.value);
+
+    let number;
+    let approximate = false;
+
+    if (exact != null) {
+      number = exact;
+    } else if (cleaned.snapped && cleaned.value.isInteger()) {
+      number = cleaned.value.toFixed(0);
+    } else {
+      approximate = true;
+      number = alternative
+        ? this.significantText(cleaned.value, 3, true)
+        : this.approximateInline(cleaned.value);
+    }
+
+    let label = "";
+    if (unit) label = unitEngine.label(unit, longUnits, cleaned.value);
+
+    const compactDegree = label === "°" || label === "°C" || label === "°F";
+    const separator =
+      label && (longUnits || unitSpace) && !compactDegree ? " " : "";
+
+    return {
+      text: number + separator + label,
+      number,
+      approximate,
+      exact: !approximate,
+      cleanedValue: cleaned.value,
+      shownValue: shown.value,
+      fraction: shown.fraction
+    };
+  }
+
+  ladder(quantity, unit, primaryText, options) {
+    const shown = this.displayValue(quantity, unit);
+    const cleaned = this.clean(shown.value);
+    if (cleaned.snapped && cleaned.value.isInteger()) return [];
+
+    const exact = this.exactText(shown.fraction, cleaned.value);
+    if (exact != null) return [];
+
+    const primaryNumber = primaryText.match(/^[^\sA-Za-z°µΩ]+(?:e[+-]?\d+)?/i)?.[0] || primaryText;
+    let primaryError;
+
+    try {
+      primaryError = new D(primaryNumber).sub(cleaned.value).abs();
+    } catch {
+      primaryError = new D(Infinity);
+    }
+
+    const out = [];
+    const seen = new Set([primaryText]);
+
+    for (const sf of [3, 5, 8]) {
+      const rounded = cleaned.value.toSignificantDigits(sf);
+
+      if (this.integerPart(rounded) !== this.integerPart(cleaned.value)) continue;
+
+      const error = rounded.sub(cleaned.value).abs();
+      if (error.gte(primaryError)) continue;
+
+      const number = this.significantText(cleaned.value, sf, true);
+      const label = unit
+        ? unitEngine.label(unit, options.longUnits, cleaned.value)
+        : "";
+      const compactDegree = ["°", "°C", "°F"].includes(label);
+      const sep = label && (options.longUnits || options.unitSpace) && !compactDegree
+        ? " "
+        : "";
+      const text = number + sep + label;
+
+      if (!seen.has(text)) {
+        seen.add(text);
+        out.push(text);
+      }
+    }
+
+    return out;
+  }
+}
+
+const formatter = new Formatter();
+
+function unwrapGroups(ast) {
+  while (ast?.type === "group") ast = ast.value;
+  return ast;
+}
+
+function isLoneLiteral(ast) {
+  ast = unwrapGroups(ast);
+  if (ast?.type === "number") return true;
+  if (ast?.type === "unary" && ["+", "-"].includes(ast.op)) {
+    return isLoneLiteral(ast.value);
+  }
+  return false;
+}
+
+function isConstant(ast) {
+  return unwrapGroups(ast)?.type === "constant";
+}
+
+function isUnitExpression(ast) {
+  ast = unwrapGroups(ast);
+  if (!ast) return false;
+  if (ast.type === "unit") return true;
+  if (ast.type === "binary" && ast.op === "^") return isUnitExpression(ast.left);
+  return false;
+}
+
+function isBareUnitQuantity(ast) {
+  ast = unwrapGroups(ast);
+
+  if (ast?.type === "binary" && ast.op === "imul") {
+    const left = unwrapGroups(ast.left);
+    const right = unwrapGroups(ast.right);
+
+    return (
+      (isLoneLiteral(left) && isUnitExpression(right)) ||
+      (isUnitExpression(left) && isLoneLiteral(right))
+    );
+  }
+
+  return false;
+}
+
+function isLoneFiftyPercent(ast, source) {
+  return /^\s*\(?\s*50\s*%\s*\)?\s*$/.test(source);
+}
+
+function astHasAmbiguousUnits(ast) {
+  if (!ast || typeof ast !== "object") return false;
+  if (ast.type === "unit" && ast.candidates.length > 1) return true;
+
+  for (const value of Object.values(ast)) {
+    if (Array.isArray(value)) {
+      if (value.some(astHasAmbiguousUnits)) return true;
+    } else if (value && typeof value === "object" && astHasAmbiguousUnits(value)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function renderReadings(source, sourceStart, readings) {
+  const replacements = readings
+    .map(r => ({
+      start: r.start - sourceStart,
+      end: r.end - sourceStart,
+      text: r.text
+    }))
+    .filter(r => r.start >= 0 && r.end <= source.length)
+    .sort((a, b) => b.start - a.start);
+
+  let result = source;
+  const seen = new Set();
+
+  for (const r of replacements) {
+    const key = `${r.start}:${r.end}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result = result.slice(0, r.start) + r.text + result.slice(r.end);
+  }
+
+  return result;
+}
+
+class LineAnalyzer {
+  analyze(textarea) {
+    const value = textarea.value;
+    const caret = textarea.selectionStart;
+
+    if (caret !== textarea.selectionEnd) return null;
+
+    const lineStart = value.lastIndexOf("\n", caret - 1) + 1;
+    const nextNewline = value.indexOf("\n", caret);
+    const lineEnd = nextNewline === -1 ? value.length : nextNewline;
+
+    if (!/^\s*$/.test(value.slice(caret, lineEnd))) return null;
+
+    const beforeCaret = value.slice(lineStart, caret);
+    const trailingWhitespace = beforeCaret.match(/\s*$/)?.[0] || "";
+    let body = beforeCaret.slice(0, beforeCaret.length - trailingWhitespace.length);
+
+    if (!body.trim()) return null;
+
+    let bullet = false;
+    let bulletOffset = 0;
+    const bulletMatch = body.match(/^(\s*[-*+•–]\s+)(.*)$/s);
+
+    if (bulletMatch) {
+      bullet = true;
+      bulletOffset = bulletMatch[1].length;
+      body = bulletMatch[2];
+    }
+
+    const equals = [];
+    for (let i = 0; i < body.length; i++) {
+      if (body[i] === "=") equals.push(i);
+    }
+
+    let shape = "none";
+    let segment;
+    let segmentOffset = 0;
+    let partialText = "";
+    let partialStart = null;
+    let explicitEquals = false;
+
+    const endsWithEquals = /=\s*$/.test(body);
+
+    if (endsWithEquals) {
+      explicitEquals = true;
+      shape = "explicit";
+      const finalEquals = body.lastIndexOf("=");
+      const previousEquals = body.lastIndexOf("=", finalEquals - 1);
+      segmentOffset = previousEquals + 1;
+      segment = body.slice(segmentOffset, finalEquals).trimEnd();
+
+      const leftTrim = segment.length - segment.trimStart().length;
+      segmentOffset += leftTrim;
+      segment = segment.trimStart();
+    } else if (equals.length) {
+      const lastEquals = equals[equals.length - 1];
+      const after = body.slice(lastEquals + 1);
+      const beforeStart = equals.length > 1 ? equals[equals.length - 2] + 1 : 0;
+      const previous = body.slice(beforeStart, lastEquals);
+
+      if (this.looksLikePartialResult(after)) {
+        const previousParsed = parseLongestSuffix(previous.trim());
+        if (previousParsed) {
+          shape = "partial";
+          segment = previous.trim();
+          segmentOffset = beforeStart + previous.indexOf(segment);
+          partialText = after.trim();
+
+          const leading = after.length - after.trimStart().length;
+          partialStart =
+            lineStart +
+            bulletOffset +
+            lastEquals +
+            1 +
+            leading;
+        }
+      }
+
+      if (!segment) {
+        shape = "none";
+        segmentOffset = lastEquals + 1;
+        segment = body.slice(segmentOffset).trimStart();
+        segmentOffset += body.slice(lastEquals + 1).length - body.slice(lastEquals + 1).trimStart().length;
+      }
+    } else {
+      shape = "none";
+      segment = body.trimStart();
+      segmentOffset = body.length - body.trimStart().length;
+    }
+
+    if (!segment || segment.length > 500) return null;
+
+    const parsed = parseLongestSuffix(segment, true);
+    if (!parsed) return null;
+
+    const source = parsed.source.trimEnd();
+    const sourceStart = parsed.sourceStart;
+    const ast = parsed.ast;
+
+    if (isLoneLiteral(ast)) return null;
+    if (isLoneFiftyPercent(ast, source)) return null;
+
+    const phoneDate = this.isPhoneOrDate(source);
+    const bareUnit = isBareUnitQuantity(ast);
+    const ambiguous = parsed.ambiguousUnits || astHasAmbiguousUnits(ast);
+
+    let lineClass = "inline";
+    if (!explicitEquals && (phoneDate || bullet || bareUnit || ambiguous)) {
+      lineClass = "chip-only";
+    }
+
+    const spacedEquation = /\s/.test(source);
+    const unitSpace = /\d\s+[A-Za-zµμΩ°]/.test(source);
+    const longUnits = /\b(?:meters?|metres?|kilometers?|miles?|grams?|seconds?|hours?|watts?|joules?|feet|inches|pounds?)\b/i.test(source);
+
+    let alternateScientific = null;
+    if (/\d(?:\.\d+)?e[+-]\d/i.test(source)) {
+      const alternate = parseLongestSuffix(source, false);
+      if (alternate && !isLoneLiteral(alternate.ast)) {
+        alternateScientific = alternate;
+      }
+    }
+
+    return {
+      ast,
+      parsed,
+      source,
+      sourceStart,
+      shape,
+      bullet,
+      phoneDate,
+      bareUnit,
+      ambiguous,
+      lineClass,
+      explicitEquals,
+      spacedEquation,
+      unitSpace,
+      longUnits,
+      trailingWhitespace,
+      partialText,
+      partialStart,
+      caret,
+      lineStart,
+      alternateScientific
+    };
+  }
+
+  looksLikePartialResult(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+
+    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?(?:\s*[A-Za-zµμΩ°][A-Za-z0-9µμΩ°/^*· -]*)?$/i.test(trimmed);
+  }
+
+  isPhoneOrDate(source) {
+    const s = source.trim();
+
+    return [
+      /^\d{3}-\d{4}$/,
+      /^\d{3}-\d{3}-\d{4}$/,
+      /^\(?\d{3}\)?[ -]?\d{3}-\d{4}$/,
+      /^\d{4}-\d{1,2}-\d{1,2}$/,
+      /^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/
+    ].some(re => re.test(s));
+  }
+}
+
+class SuggestionEngine {
+  evaluateParsed(parsed, mode) {
+    try {
+      return new Evaluator(mode).evaluate(parsed.ast);
+    } catch {
+      return [];
+    }
+  }
+
+  choosePrimaryUnit(quantity) {
+    if (quantity.forcedUnit) return quantity.forcedUnit;
+    if (dimsZero(quantity.dims)) return null;
+
+    const candidates = quantity.prefs.filter(u => dimsEqual(u.dims, quantity.dims));
+
+    for (const unit of candidates) {
+      const value = quantity.tempAbs && unit.temperature
+        ? quantity.value.sub(unit.offset).div(unit.factor).abs()
+        : quantity.value.div(unit.factor).abs();
+
+      if (value.gte(1) && value.lt(1000)) return unit;
+    }
+
+    let primary = candidates[0] || quantity.unit || unitEngine.alternatives(quantity.dims)[0] || null;
+
+    if (
+      primary &&
+      ["watt", "joule", "hertz", "pascal", "newton"].includes(primary.key)
+    ) {
+      primary = unitEngine.bestScaled(primary, quantity.value);
+    }
+
+    return primary;
+  }
+
+  orderedAlternatives(quantity, primary) {
+    const all = [];
+    const seen = new Set();
+
+    const add = unit => {
+      if (!unit || !dimsEqual(unit.dims, quantity.dims)) return;
+      const key = `${unit.key}|${unit.factor}|${unit.offset}`;
+      const primaryKey = primary
+        ? `${primary.key}|${primary.factor}|${primary.offset}`
+        : "";
+      if (key === primaryKey || seen.has(key)) return;
+      seen.add(key);
+      all.push(unit);
+    };
+
+    for (const unit of quantity.prefs) add(unit);
+    for (const unit of unitEngine.alternatives(quantity.dims)) add(unit);
+
+    return all;
+  }
+
+  insertionFor(result, analysis) {
+    if (analysis.shape === "explicit") return result;
+    const eq = analysis.spacedEquation ? " = " : "=";
+    return eq + result;
+  }
+
+  chip({
+    analysis,
+    quantity,
+    unit,
+    result,
+    kind,
+    primary,
+    tag = null,
+    inlineEligible,
+    expressionOverride = null,
+    insertText = null
+  }) {
+    const expression =
+      expressionOverride ||
+      renderReadings(
+        analysis.source,
+        analysis.sourceStart,
+        quantity.readings
+      );
+
+    return {
+      insertText: insertText ?? this.insertionFor(result, analysis),
+      resultText: result,
+      displayBefore: `${expression} = `,
+      displayInsert: result,
+      displayAfter: "",
+      displayEquation: `${expression} = ${result}`,
+      typedPrefixLen: 0,
+      tag,
+      inlineEligible,
+      kind,
+      primary,
+      replaceStart: null,
+      replaceEnd: null
+    };
+  }
+
+  bundlesFor(quantity, analysis, tag = null, expressionOverride = null) {
+    const primaryUnit = this.choosePrimaryUnit(quantity);
+    const primaryFormat = formatter.format(quantity, primaryUnit, {
+      inline: true,
+      longUnits: analysis.longUnits,
+      unitSpace: analysis.unitSpace
+    });
+
+    const inlineEligible =
+      analysis.lineClass === "inline" &&
+      !analysis.ambiguous;
+
+    const primary = this.chip({
+      analysis,
+      quantity,
+      unit: primaryUnit,
+      result: primaryFormat.text,
+      kind: "primary",
+      primary: true,
+      tag,
+      inlineEligible,
+      expressionOverride
+    });
+
+    const alternatives = [];
+    if (!quantity.forcedUnit) {
+      for (const unit of this.orderedAlternatives(quantity, primaryUnit)) {
+        const formatted = formatter.format(quantity, unit, {
+          alternative: true,
+          longUnits: analysis.longUnits,
+          unitSpace: analysis.unitSpace
+        });
+
+        alternatives.push(this.chip({
+          analysis,
+          quantity,
+          unit,
+          result: formatted.text,
+          kind: "alternate",
+          primary: false,
+          tag,
+          inlineEligible: false,
+          expressionOverride
+        }));
+      }
+    }
+
+    const ladders = formatter
+      .ladder(quantity, primaryUnit, primaryFormat.text, {
+        longUnits: analysis.longUnits,
+        unitSpace: analysis.unitSpace
+      })
+      .map(result => this.chip({
+        analysis,
+        quantity,
+        unit: primaryUnit,
+        result,
+        kind: "ladder",
+        primary: false,
+        tag,
+        inlineEligible: false,
+        expressionOverride
+      }));
+
+    return { primary, alternatives, ladders };
+  }
+
+  build(analysis) {
+    let rad = this.evaluateParsed(analysis.parsed, "rad");
+    if (!rad.length) return [];
+
+    const hasBareTrig = rad.some(q => q.hadBareTrig);
+    let suggestions = [];
+
+    if (hasBareTrig) {
+      const deg = this.evaluateParsed(analysis.parsed, "deg");
+      const radBundles = rad.map(q => this.bundlesFor(q, analysis, "rad"));
+      const degBundles = deg.map(q => this.bundlesFor(q, analysis, "deg"));
+
+      suggestions.push(...radBundles.map(b => b.primary));
+      suggestions.push(...degBundles.map(b => b.primary));
+      suggestions.push(...radBundles.flatMap(b => b.ladders));
+      suggestions.push(...degBundles.flatMap(b => b.ladders));
+    } else {
+      const bundles = rad.map(q => this.bundlesFor(q, analysis));
+
+      if (analysis.bareUnit) {
+        suggestions.push(...bundles.flatMap(b => b.alternatives));
+
+        if (!suggestions.length) {
+          suggestions.push(...bundles.map(b => {
+            b.primary.inlineEligible = false;
+            return b.primary;
+          }));
+        }
+      } else if (analysis.ambiguous) {
+        suggestions.push(...bundles.map(b => {
+          b.primary.inlineEligible = false;
+          b.primary.kind = "ambiguous";
+          return b.primary;
+        }));
+      } else {
+        for (const bundle of bundles) {
+          suggestions.push(bundle.primary);
+          suggestions.push(...bundle.alternatives);
+          suggestions.push(...bundle.ladders);
+        }
+      }
+    }
+
+    if (analysis.alternateScientific) {
+      const alternate = this.evaluateParsed(analysis.alternateScientific, "rad");
+      for (const quantity of alternate) {
+        const bundle = this.bundlesFor(
+          quantity,
+          analysis,
+          null,
+          analysis.source.replace(
+            /(\d+(?:\.\d+)?)e([+-])(\d+)/i,
+            "$1·e $2 $3"
+          )
+        );
+
+        bundle.primary.inlineEligible = false;
+        bundle.primary.kind = "ambiguous";
+        suggestions.push(bundle.primary);
+      }
+    }
+
+    suggestions = this.dedupe(suggestions, hasBareTrig, analysis.ambiguous);
+
+    if (analysis.shape === "partial") {
+      suggestions = this.applyPartialResult(suggestions, analysis);
+    }
+
+    return suggestions;
+  }
+
+  applyPartialResult(suggestions, analysis) {
+    const typed = analysis.partialText;
+    const matching = [];
+
+    for (const suggestion of suggestions) {
+      if (!suggestion.resultText.startsWith(typed)) continue;
+      if (suggestion.resultText === typed) continue;
+
+      const remainder = suggestion.resultText.slice(typed.length);
+      matching.push({
+        ...suggestion,
+        insertText: remainder,
+        displayBefore: `${analysis.source} = ${typed}`,
+        displayInsert: remainder,
+        displayAfter: "",
+        typedPrefixLen: typed.length,
+        inlineEligible:
+          suggestion.primary &&
+          suggestion.kind === "primary" &&
+          typed.length < suggestion.resultText.length,
+        kind:
+          suggestion.kind === "primary"
+            ? "partial"
+            : suggestion.kind
+      });
+    }
+
+    if (matching.length) {
+      // Once the primary approximation is complete, only ladder remainders
+      // remain and stay bar-only.
+      const primaryComplete = suggestions.some(
+        s => s.primary && s.resultText === typed
+      );
+
+      if (primaryComplete) {
+        for (const item of matching) item.inlineEligible = false;
+      }
+
+      return matching;
+    }
+
+    const exactComplete = suggestions.some(s => s.resultText === typed);
+    if (exactComplete) return [];
+
+    const correct = suggestions.find(s => s.primary) || suggestions[0];
+    if (!correct) return [];
+
+    return [{
+      ...correct,
+      insertText: correct.resultText,
+      displayBefore: `${analysis.source} = `,
+      displayInsert: correct.resultText,
+      displayAfter: "",
+      inlineEligible: false,
+      kind: "replace",
+      replaceStart: analysis.partialStart,
+      replaceEnd: analysis.caret
+    }];
+  }
+
+  dedupe(items, trigMode, ambiguous) {
+    const out = [];
+    const seen = new Set();
+
+    for (const item of items) {
+      const key =
+        ambiguous
+          ? item.displayEquation
+          : item.resultText;
+
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+
+    return out;
+  }
+}
+
+class NameAutocomplete {
+  constructor() {
+    this.functions = [
+      "sqrt(", "cbrt(", "sin(", "cos(", "tan(",
+      "asin(", "acos(", "atan(", "log(", "ln(",
+      "log2(", "nPr(", "nCr(", "pi"
+    ];
+    this.units = unitEngine.autocompleteWords();
+  }
+
+  build(textarea) {
+    const caret = textarea.selectionStart;
+    const before = textarea.value.slice(0, caret);
+    const lineStart = before.lastIndexOf("\n") + 1;
+    const line = before.slice(lineStart);
+
+    const match = line.match(/([A-Za-zµμΩ_]+)$/);
+    if (!match) return [];
+
+    const prefix = match[1];
+    if (!prefix) return [];
+
+    const lower = prefix.toLowerCase();
+    const conversionContext = /(?:\bto|\bin|->)\s+[A-Za-zµμΩ_]*$/i.test(line);
+    let choices = conversionContext
+      ? this.units
+      : [...this.functions, ...this.units];
+
+    choices = choices
+      .filter(word =>
+        word.toLowerCase().startsWith(lower) &&
+        word.toLowerCase() !== lower
+      )
+      .sort((a, b) => {
+        if (lower === "sq" && a === "sqrt(") return -1;
+        if (lower === "sq" && b === "sqrt(") return 1;
+        return a.length - b.length || a.localeCompare(b);
+      })
+      .slice(0, 24);
+
+    return choices.map((word, index) => {
+      const remainder = word.slice(prefix.length);
+      return {
+        insertText: remainder,
+        resultText: word,
+        displayBefore: prefix,
+        displayInsert: remainder,
+        displayAfter: "",
+        displayEquation: word,
+        typedPrefixLen: prefix.length,
+        tag: null,
+        inlineEligible: index === 0,
+        kind: "autocomplete",
+        primary: index === 0,
+        replaceStart: null,
+        replaceEnd: null
+      };
+    });
+  }
+}
+
+class UI {
+  constructor() {
+    this.textarea = document.querySelector("#text");
+    this.mirror = document.querySelector("#mirror");
+    this.bar = document.querySelector("#bar");
+    this.strip = document.querySelector("#strip");
+
+    this.analyzer = new LineAnalyzer();
+    this.engine = new SuggestionEngine();
+    this.autocomplete = new NameAutocomplete();
+
+    this.suggestions = [];
+    this.highlight = 0;
+    this.userMoved = false;
+    this.composing = false;
+    this.dismissed = false;
+    this.timer = null;
+
+    this.restore();
+    this.bind();
+    this.run();
+  }
+
+  bind() {
+    this.textarea.addEventListener("input", () => {
+      localStorage.setItem("math-notes-content", this.textarea.value);
+      this.dismissed = false;
+      this.userMoved = false;
+      this.schedule();
+    });
+
+    this.textarea.addEventListener("scroll", () => this.syncMirrorScroll());
+
+    this.textarea.addEventListener("click", () => this.schedule());
+    this.textarea.addEventListener("select", () => this.schedule());
+
+    document.addEventListener("selectionchange", () => {
+      if (document.activeElement === this.textarea) this.schedule();
+    });
+
+    this.textarea.addEventListener("compositionstart", () => {
+      this.composing = true;
+      this.clear();
+    });
+
+    this.textarea.addEventListener("compositionend", () => {
+      this.composing = false;
+      this.dismissed = false;
+      this.schedule();
+    });
+
+    this.textarea.addEventListener("keydown", event => this.onKeyDown(event));
+
+    window.addEventListener("resize", () => {
+      this.renderGhost();
+      this.syncMirrorScroll();
+    });
+  }
+
+  restore() {
+    const saved = localStorage.getItem("math-notes-content");
+    if (saved != null) this.textarea.value = saved;
+  }
+
+  schedule() {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.run(), 30);
+  }
+
+  run() {
+    if (
+      this.composing ||
+      this.dismissed ||
+      this.textarea.selectionStart !== this.textarea.selectionEnd
+    ) {
+      this.clear();
+      return;
+    }
+
+    const analysis = this.analyzer.analyze(this.textarea);
+    let suggestions = analysis ? this.engine.build(analysis) : [];
+
+    if (!suggestions.length) {
+      suggestions = this.autocomplete.build(this.textarea);
+    }
+
+    this.suggestions = suggestions;
+    this.highlight = 0;
+    this.userMoved = false;
+    this.render();
+  }
+
+  clear() {
+    this.suggestions = [];
+    this.strip.replaceChildren();
+    this.bar.classList.remove("has-items");
+    this.mirror.replaceChildren();
+  }
+
+  render() {
+    this.strip.replaceChildren();
+
+    if (!this.suggestions.length) {
+      this.bar.classList.remove("has-items");
+      this.renderGhost();
+      return;
+    }
+
+    this.bar.classList.add("has-items");
+
+    this.suggestions.forEach((suggestion, index) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip" + (index === this.highlight ? " selected" : "");
+      chip.dataset.index = String(index);
+
+      const inner = document.createElement("span");
+      inner.className = "chip-inner";
+
+      const equation = document.createElement("span");
+      equation.className = "chip-equation";
+
+      const before = document.createElement("span");
+      before.className = "typed";
+      before.textContent = suggestion.displayBefore;
+
+      const inserted = document.createElement("span");
+      inserted.className = "inserted";
+      inserted.textContent = suggestion.displayInsert;
+
+      const after = document.createElement("span");
+      after.className = "typed";
+      after.textContent = suggestion.displayAfter;
+
+      equation.append(before, inserted, after);
+      inner.append(equation);
+
+      if (suggestion.tag) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = suggestion.tag;
+        inner.append(tag);
+      }
+
+      chip.append(inner);
+
+      chip.addEventListener("mousedown", event => event.preventDefault());
+      chip.addEventListener("pointerdown", event => {
+        if (event.pointerType === "mouse") event.preventDefault();
+      });
+      chip.addEventListener("click", event => {
+        event.preventDefault();
+        this.accept(index);
+      });
+
+      this.strip.append(chip);
+    });
+
+    const hint = document.createElement("span");
+    hint.id = "hint";
+    hint.textContent = "Tab/Enter accept · ←→ switch";
+    this.strip.append(hint);
+
+    this.renderGhost();
+  }
+
+  renderGhost() {
+    this.mirror.replaceChildren();
+
+    const suggestion = this.suggestions[this.highlight];
+    if (!suggestion?.inlineEligible) return;
+
+    const before = this.textarea.value.slice(0, this.textarea.selectionStart);
+    const transparent = document.createTextNode(before);
+    const ghost = document.createElement("span");
+    ghost.className = "ghost";
+    ghost.textContent = suggestion.insertText;
+
+    this.mirror.append(transparent, ghost, document.createTextNode("\u200b"));
+    this.syncMirrorScroll();
+  }
+
+  syncMirrorScroll() {
+    this.mirror.scrollTop = this.textarea.scrollTop;
+    this.mirror.scrollLeft = this.textarea.scrollLeft;
+  }
+
+  updateHighlight(next) {
+    this.highlight = next;
+    this.userMoved = true;
+
+    [...this.strip.querySelectorAll(".chip")].forEach((chip, index) => {
+      chip.classList.toggle("selected", index === next);
+    });
+
+    const selected = this.strip.querySelector(`.chip[data-index="${next}"]`);
+    selected?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: "smooth"
+    });
+
+    this.renderGhost();
+  }
+
+  ghostVisible() {
+    return !!this.suggestions[this.highlight]?.inlineEligible;
+  }
+
+  onKeyDown(event) {
+    if (this.composing || event.isComposing) return;
+
+    if (event.altKey && /^[1-9]$/.test(event.key)) {
+      const index = Number(event.key) - 1;
+      if (index < this.suggestions.length) {
+        event.preventDefault();
+        this.accept(index);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (this.suggestions.length) {
+        event.preventDefault();
+        this.dismissed = true;
+        this.clear();
+      }
+      return;
+    }
+
+    if (
+      ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key) &&
+      this.suggestions.length
+    ) {
+      const delta =
+        event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      const next = this.highlight + delta;
+
+      if (next >= 0 && next < this.suggestions.length) {
+        event.preventDefault();
+        this.updateHighlight(next);
+      } else {
+        this.dismissed = true;
+        this.clear();
+      }
+      return;
+    }
+
+    if (event.key === "Tab" || event.key === "Enter") {
+      const acceptable =
+        this.suggestions.length &&
+        (this.ghostVisible() || this.userMoved);
+
+      if (acceptable) {
+        event.preventDefault();
+        this.accept(this.highlight);
+        return;
+      }
+
+      if (event.key === "Tab") {
+        event.preventDefault();
+        this.insertText("\t");
+      }
+    }
+  }
+
+  insertText(text, start = null, end = null) {
+    const textarea = this.textarea;
+    textarea.focus();
+
+    const from = start ?? textarea.selectionStart;
+    const to = end ?? textarea.selectionEnd;
+    textarea.setSelectionRange(from, to);
+
+    let inserted = false;
+    try {
+      inserted = document.execCommand("insertText", false, text);
+    } catch {
+      inserted = false;
+    }
+
+    if (!inserted) {
+      textarea.setRangeText(text, from, to, "end");
+      textarea.dispatchEvent(new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: text
+      }));
+    }
+
+    localStorage.setItem("math-notes-content", textarea.value);
+  }
+
+  accept(index) {
+    const suggestion = this.suggestions[index];
+    if (!suggestion) return;
+
+    const start =
+      suggestion.replaceStart != null
+        ? suggestion.replaceStart
+        : this.textarea.selectionStart;
+    const end =
+      suggestion.replaceEnd != null
+        ? suggestion.replaceEnd
+        : this.textarea.selectionEnd;
+
+    this.insertText(suggestion.insertText, start, end);
+    this.dismissed = false;
+    this.userMoved = false;
+    this.schedule();
+  }
+}
+
+new UI();
+</script>
+</body>
+</html>
