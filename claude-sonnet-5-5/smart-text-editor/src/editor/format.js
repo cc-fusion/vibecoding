@@ -1,13 +1,20 @@
-// Number formatting: exact values, approximate ladders, constants with extra precision.
+// Number formatting: exact values, approximate ladders, constants with extra precision,
+// plus "written out" (non-scientific) and full-precision variants.
 import { D, RM, BIG } from './numeric.js';
+
+const LARGE_SIG = 20;      // significant digits of the "large precision" cell for approximate values
+
+// 10^-n, cached per call site precision
+const pow10neg = (n) => D.pow(10, -n);
 
 export function cleanVal(x) {
   if (!x.isFinite()) return null;
-  if (x.abs().lt('1e-14')) return new D(0);
+  const P = D.precision;
+  if (x.abs().lt(pow10neg(P - 10))) return new D(0);          // pure rounding noise (sin(pi) ...)
   const r = x.toDecimalPlaces(0, RM);
-  if (x.minus(r).abs().lt('1e-14')) return r;
+  if (!r.isZero() && x.minus(r).abs().lt('1e-14')) return r;   // default view: 1.00000000000000000001 -> 1
   const r20 = x.toSignificantDigits(20, RM);
-  if (!r20.eq(x) && x.minus(r20).abs().lte(x.abs().times('1e-35'))) return r20;
+  if (!r20.eq(x) && x.minus(r20).abs().lte(x.abs().times(pow10neg(P - 15)))) return r20;
   return x;
 }
 export function isSci(x) {
@@ -23,6 +30,10 @@ export function splitSci(x) {
 export function isExact(x) { return x.isZero() || x.sd() <= 20; }
 export function formatExact(x) {
   if (x.isZero()) return '0';
+  const { m, suf } = splitSci(x);
+  return m.toFixed() + suf;
+}
+function sciString(x) {
   const { m, suf } = splitSci(x);
   return m.toFixed() + suf;
 }
@@ -76,13 +87,46 @@ export function formatConst(x) {
   return out.length ? out : formatApprox(x);
 }
 
-// value -> [primary, ...ladder]; null = silent
+/* ---- full precision / written-out variants ----
+   fullVal: the value with only the last few (noise) digits stripped - NOT snapped to an integer. */
+export function fullVal(v) {
+  if (!v.isFinite()) return null;
+  const P = D.precision;
+  if (v.abs().lt(pow10neg(P - 10))) return null;
+  const r = v.toSignificantDigits(P - 8, RM);
+  return r.abs().gte(BIG) ? null : r;
+}
+// a terminating decimal that fits well inside the working precision
+const isTerminating = (fx) => fx.sd() <= D.precision - 10;
+
+// Extend the default list with:
+//   * the full-precision value when the default hides digits (1 + 10^-20 -> 1.00000000000000000001)
+//   * the written-out version of anything shown in scientific notation (1.6e-9 -> 0.0000000016)
+function withExtras(base, v, x) {
+  const fx = fullVal(v);
+  if (!fx) return base;
+  const out = base.slice();
+  const seen = new Set(out);
+  const add = (s) => { if (s && !seen.has(s)) { seen.add(s); out.push(s); } };
+
+  const exact = isTerminating(fx);
+  const differs = !fx.eq(x);
+  if (exact && differs) add(isSci(fx) ? sciString(fx) : fx.toFixed());
+
+  if (isSci(x) || isSci(fx)) {
+    for (const s of new Set([base[0], base[base.length - 1]])) if (s.includes('e')) add(new D(s).toFixed());
+    add((exact ? fx : fx.toSignificantDigits(LARGE_SIG, RM)).toFixed());
+  }
+  return out;
+}
+
+// value -> [primary, ...ladder, ...extras]; null = silent
 export function formatValue(v, precise) {
   const x = cleanVal(v);
   if (!x) return null;
   if (x.abs().gte(BIG)) return null;
-  if (isExact(x)) return [formatExact(x)];
-  return precise ? formatConst(x) : formatApprox(x);
+  const base = isExact(x) ? [formatExact(x)] : precise ? formatConst(x) : formatApprox(x);
+  return withExtras(base, v, x);
 }
 
 // alternate-unit formatting: exact in full, else 3 s.f. without touching integer digits
@@ -101,4 +145,12 @@ export function fmtAlt(v) {
     s = r.toFixed();
   }
   return s + suf;
+}
+
+// written-out companion of an alternate-unit value shown in scientific notation (else null)
+export function fmtAltWritten(v) {
+  const x = cleanVal(v);
+  if (!x || x.abs().gte(BIG) || !isSci(x)) return null;
+  const fx = fullVal(v) || x;
+  return (isTerminating(fx) ? fx : fx.toSignificantDigits(LARGE_SIG, RM)).toFixed();
 }

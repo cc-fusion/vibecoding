@@ -1,7 +1,7 @@
 // Unit candidates -> chip items
 import { MAX_ALTS } from './numeric.js';
 import { CURATED, CURATED_TEMP_ABS, DERIVED, dkey, ENG, mkOut, compoundOu, siCompound } from './units.js';
-import { cleanVal, fmtAlt, formatValue } from './format.js';
+import { cleanVal, fmtAlt, fmtAltWritten, formatValue } from './format.js';
 import { dEq, dZero } from './evaluator.js';
 
 function deriveFromU(um) {
@@ -69,7 +69,11 @@ export function itemsForQ(q, st) {
     for (const o of cu.cur) {
       if (own.has(o.sym)) continue;
       const s = fmtAlt(valOf(o));
-      if (s !== null) items.push({ num: s, unit: utext(o, s), kind: 'alt', x: cleanVal(valOf(o)) });
+      if (s !== null) {
+        items.push({ num: s, unit: utext(o, s), kind: 'alt', x: cleanVal(valOf(o)) });
+        const w = fmtAltWritten(valOf(o));              // scientific -> also written out in full
+        if (w && w !== s) items.push({ num: w, unit: utext(o, w), kind: 'alt', x: cleanVal(valOf(o)) });
+      }
       if (items.length >= MAX_ALTS) break;
     }
     return items;
@@ -90,6 +94,8 @@ export function itemsForQ(q, st) {
     const s = fmtAlt(valOf(o));
     if (s === null) continue;
     items.push({ num: s, unit: utext(o, s), kind: 'alt', x: cleanVal(valOf(o)) });
+    const w = fmtAltWritten(valOf(o));                  // scientific -> also written out in full
+    if (w && w !== s) items.push({ num: w, unit: utext(o, w), kind: 'alt', x: cleanVal(valOf(o)) });
     if (++n >= MAX_ALTS) break;
   }
   list.slice(1).forEach(s => items.push({ num: s, unit: utext(primary, s), kind: 'ladder', x: px }));

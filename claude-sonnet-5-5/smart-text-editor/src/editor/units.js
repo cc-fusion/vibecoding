@@ -178,56 +178,58 @@ function resolveUnitWord0(word) {
   const lw = word.toLowerCase();
   if (lw.startsWith('imp ')) {
     const b = resolveUnitWord(word.slice(4));
-    if (b && b.rds.length === 1 && b.rds[0].def.impDef) return { rds: [mkRd(b.rds[0].def.impDef, null)], folded: false, long: b.long };
-    return null;
+    return (b && b.rds.length === 1 && b.rds[0].def.impDef)
+      ? { rds: [mkRd(b.rds[0].def.impDef, null)], folded: false, long: b.long }
+      : null;
   }
-  const def = NAMES.get(lw);
-  if (def) return { rds: [mkRd(def, null)], folded: false, long: true };
-  for (const p of PREFIXES) for (const pn of [p.n].concat(p.alt || [])) {
-    if (lw.length > pn.length && lw.startsWith(pn)) {
-      const d2 = NAMES.get(lw.slice(pn.length));
-      if (d2 && pfOK(d2, p)) return { rds: [mkRd(d2, p)], folded: false, long: true };
+  const nd = NAMES.get(lw);
+  if (nd) return { rds: [mkRd(nd, null)], folded: false, long: true };
+  for (const p of PREFIXES) {
+    for (const pn of [p.n].concat(p.alt || [])) {
+      if (lw.length > pn.length && lw.startsWith(pn)) {
+        const d = NAMES.get(lw.slice(pn.length));
+        if (d && pfOK(d, p)) return { rds: [mkRd(d, p)], folded: false, long: true };
+      }
     }
   }
-  const c = LOWER.get(lw);
-  if (c && c.length) {                                         // case-folded fallback
-    const rds = c.slice().sort((a, b) => caseScore(word, b.sym) - caseScore(word, a.sym));
-    return { rds, folded: true, long: false };
+  const lo = LOWER.get(lw);
+  if (lo && lo.length) {
+    return { rds: lo.slice().sort((a, b) => caseScore(word, b.sym) - caseScore(word, a.sym)), folded: true, long: false };
   }
   return null;
 }
 
-/* ---- output units ---- */
+/* ---- output units (symbols the user may be shown) ---- */
 const outCache = new Map();
 function unitPow(s) {
   const m = /^(.+?)(?:\^(\d))?$/.exec(s);
   const rd = EXACT.get(m[1]);
   if (!rd) return null;
-  const pw = m[2] ? +m[2] : 1;
-  return { f: rd.ou.f.pow(pw), dims: rd.ou.dims.map(c => c * pw) };
+  const p = m[2] ? +m[2] : 1;
+  return { f: rd.ou.f.pow(p), dims: rd.ou.dims.map(c => c * p) };
 }
-export function mkOut(str) {
-  if (outCache.has(str)) return outCache.get(str);
+export function mkOut(sym) {
+  if (outCache.has(sym)) return outCache.get(sym);
   let ou = null;
-  const ex = EXACT.get(str);
-  if (ex) ou = ex.ou;
+  const rd = EXACT.get(sym);
+  if (rd) ou = rd.ou;
   else {
-    const parts = str.split('/');
+    const parts = sym.split('/');
     if (parts.length === 2) {
       const a = unitPow(parts[0]), b = unitPow(parts[1]);
-      if (a && b) ou = { sym: str, f: a.f.div(b.f), dims: a.dims.map((c, i) => c - b.dims[i]), compound: true };
+      if (a && b) ou = { sym, f: a.f.div(b.f), dims: a.dims.map((c, i) => c - b.dims[i]), compound: true };
     } else {
-      const a = unitPow(str);
-      if (a) ou = { sym: str, f: a.f, dims: a.dims, compound: true };
+      const a = unitPow(sym);
+      if (a) ou = { sym, f: a.f, dims: a.dims, compound: true };
     }
   }
-  outCache.set(str, ou);
+  outCache.set(sym, ou);
   return ou;
 }
 export function compoundOu(ents) {
-  const part = (x, e) => x.ou.sym + (e !== 1 ? '^' + e : '');
-  const num = ents.filter(x => x.e > 0).map(x => part(x, x.e));
-  const den = ents.filter(x => x.e < 0).map(x => part(x, -x.e));
+  const term = (x, n) => x.ou.sym + (n !== 1 ? '^' + n : '');
+  const num = ents.filter(x => x.e > 0).map(x => term(x, x.e));
+  const den = ents.filter(x => x.e < 0).map(x => term(x, -x.e));
   let sym = num.length ? num.join('\u00b7') : '1';
   if (den.length) sym += '/' + (den.length > 1 ? '(' + den.join('\u00b7') + ')' : den[0]);
   let f = new D(1), dims = ZERO;
@@ -237,21 +239,23 @@ export function compoundOu(ents) {
   }
   return { sym, f, dims, compound: true };
 }
-export function siCompound(d) {
-  const base = ['m', 'kg', 's', 'A', 'K', 'bit', 'rad'];
+export function siCompound(dims) {
+  const names = ['m', 'kg', 's', 'A', 'K', 'bit', 'rad'];
   const ents = [];
-  d.forEach((e, i) => { if (e) ents.push({ e, ou: { sym: base[i], f: new D(1), dims: dm(...ZERO.map((_, j) => j === i ? 1 : 0)) } }); });
+  dims.forEach((e, i) => {
+    if (e) ents.push({ e, ou: { sym: names[i], f: new D(1), dims: dm(...ZERO.map((_, j) => (j === i ? 1 : 0))) } });
+  });
   return ents.length ? compoundOu(ents) : null;
 }
 
-/* ---- named derived units: signature of unit families -> output unit ---- */
+/* ---- derived units: "A * V" -> W, "N / m^2" -> Pa, ... ---- */
 export const DERIVED = new Map();
 export const dkey = (a) => a.slice().sort().join(',');
 DERIVED.set(dkey(['I1', 'V1']), () => ['W']);
-DERIVED.set(dkey(['T1', 'W1']), (e) => e.some(x => x.ou.sym === 'h') ? ['Wh'] : ['J']);
+DERIVED.set(dkey(['T1', 'W1']), (ents) => ents.some(x => x.ou.sym === 'h') ? ['Wh'] : ['J']);
 DERIVED.set(dkey(['E1', 'T-1']), () => ['W']);
 DERIVED.set(dkey(['F1', 'L-2']), () => ['Pa']);
-DERIVED.set(dkey(['L2', 'P1']), (e) => e.some(x => x.ou.imp) ? ['lbf'] : ['N']);
+DERIVED.set(dkey(['L2', 'P1']), (ents) => ents.some(x => x.ou.imp) ? ['lbf'] : ['N']);
 DERIVED.set(dkey(['T-1']), () => ['Hz']);
 DERIVED.set(dkey(['I-1', 'V1']), () => ['\u03a9']);
 DERIVED.set(dkey(['I-1', 'W1']), () => ['V']);
@@ -260,9 +264,9 @@ DERIVED.set(dkey(['R-1', 'V1']), () => ['A']);
 DERIVED.set(dkey(['I1', 'R1']), () => ['V']);
 export const ENG = ['k', 'M', 'G', 'm', '\u00b5', 'n'];
 
-/* ---- curated alternate units per dimension ---- */
+/* ---- curated conversion targets per dimension ---- */
 export const CURATED = {};
-const CUR = (d, list) => { CURATED[d.join(',')] = list; };
+const CUR = (dims, list) => { CURATED[dims.join(',')] = list; };
 CUR(dL, ['mi', 'm', 'km', 'ft', 'in', 'yd', 'cm', 'mm']);
 CUR(dm(2), ['km^2', 'acre', 'ft^2', 'm^2', 'mi^2', 'cm^2']);
 CUR(dV, ['L', 'gal', 'qt', 'pt', 'cup', 'fl oz', 'mL', 'tbsp', 'tsp', 'm^3', 'ft^3', 'in^3']);

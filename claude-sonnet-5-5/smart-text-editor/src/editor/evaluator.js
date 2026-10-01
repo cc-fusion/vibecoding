@@ -1,6 +1,6 @@
 // Evaluator
 // Quantity: {v: Decimal (SI), d: dims, us: [unit-exponent maps], t: abs-temperature info}
-import { D, RM, BIG, PI, E_C } from './numeric.js';
+import { D, RM, BIG, piNow, eNow } from './numeric.js';
 import { ZERO, ANGLE, TH_D } from './units.js';
 
 const FAILX = { fail: true };
@@ -66,6 +66,7 @@ const tempX = (ou, K) => K.div(ou.f).minus(ou.offset || 0);
 const BERN = [[1, 6], [-1, 30], [1, 42], [-1, 30], [5, 66], [-691, 2730], [7, 6], [-3617, 510], [43867, 798], [-174611, 330]]
   .map(([a, b]) => new D(a).div(b));
 function gammaD(z) {
+  const PI = piNow();
   let prod = new D(1), zz = z;
   while (zz.lt(40)) { prod = prod.times(zz); zz = zz.plus(1); }
   let s = zz.minus(0.5).times(zz.ln()).minus(zz).plus(PI.times(2).ln().div(2));
@@ -78,6 +79,7 @@ function gammaD(z) {
   return s.exp().div(prod);
 }
 function gammaOnePlus(x) {
+  const PI = piNow();
   const w = x.plus(1);
   if (w.gt(0)) return gammaD(w);
   const sn = D.sin(PI.times(w));
@@ -131,6 +133,7 @@ function powQ(a, b) {
   return chk(Q(x.pow(y), dims, uScale(a.us, y.toNumber())));
 }
 function trigArg(q, ctx) {
+  const PI = piNow();
   nt(q);
   if (dZero(q.d)) {
     ctx.bare = true;
@@ -153,6 +156,7 @@ function fwdTrig(fn, x) {
   return r;
 }
 function invTrig(fn, x, mode) {
+  const PI = piNow();
   const clamp = (v) => {
     const a = v.abs();
     if (a.gt(1)) { if (a.minus(1).lt('1e-30')) return new D(v.isNeg() ? -1 : 1); failEv(); }
@@ -197,7 +201,7 @@ const pickOu = (n, ctx) => n.rd[(ctx.pick && ctx.pick.get(n)) || 0].ou;
 function ev(n, ctx) {
   switch (n.k) {
     case 'num': return chk(Q(new D(n.v)));
-    case 'const': return Q(n.name === 'pi' ? PI : E_C);
+    case 'const': return Q(n.name === 'pi' ? piNow() : eNow());
     case 'unit': {
       const ou = pickOu(n, ctx), pw = n.pw;
       return Q(ou.f.pow(pw), ou.dims.map(c => c * pw), [{ [ou.sym]: { ou, e: pw } }]);
@@ -238,14 +242,16 @@ function ev(n, ctx) {
           }
           return chk(Q(n.op === '+' ? a.v.plus(b.v) : a.v.minus(b.v), a.d, uAdd(a.us, b.us)));
         }
-        case '*': nt(a); nt(b); return chk(Q(a.v.times(b.v), dAdd(a.d, b.d), uMul(a.us, b.us, 1)));
+        case '*':
+          nt(a); nt(b);
+          return chk(Q(a.v.times(b.v), dAdd(a.d, b.d), uMul(a.us, b.us, 1)));
         case '/':
           nt(a); nt(b);
           if (b.v.isZero()) failEv();
           return chk(Q(a.v.div(b.v), dSub(a.d, b.d), uMul(a.us, b.us, -1)));
         case '%':
           nt(a); nt(b);
-          if (!dEq(a.d, b.d) || b.v.isZero()) failEv();
+          if (!(dEq(a.d, b.d) && !b.v.isZero())) failEv();
           return chk(Q(a.v.mod(b.v), a.d, a.us));
       }
       return failEv();
@@ -253,23 +259,20 @@ function ev(n, ctx) {
     case 'call': return callQ(n, ev(n.arg, ctx));
     case 'trig': {
       const q = ev(n.arg, ctx);
-      let out;
-      if (!n.inv) out = fwdTrig(n.fn, trigArg(q, ctx));
-      else {
-        ctx.bare = true;
-        nt(q);
+      let r;
+      if (n.inv) {
+        ctx.bare = true; nt(q);
         if (!dZero(q.d)) failEv();
-        out = invTrig(n.fn, q.v, ctx.mode);
-      }
-      let r = Q(out);
-      if (n.power) r = powQ(r, Q(new D(n.power.v)));
-      return chk(r);
+        r = invTrig(n.fn, q.v, ctx.mode);
+      } else r = fwdTrig(n.fn, trigArg(q, ctx));
+      let out = Q(r);
+      if (n.power) out = powQ(out, Q(new D(n.power.v)));
+      return chk(out);
     }
   }
   return failEv();
 }
 
-// -> null (silent) | [{q, tag: 'rad'|'deg'|null}]
 export function evaluateAst(ast, pick) {
   const run = (mode) => {
     const ctx = { mode, bare: false, pick };
@@ -277,11 +280,11 @@ export function evaluateAst(ast, pick) {
     try { q = ev(ast, ctx); } catch (e) { q = null; }
     return { q, ctx };
   };
-  const r1 = run('rad');
-  if (!r1.ctx.bare) return r1.q ? [{ q: r1.q, tag: null }] : null;
-  const r2 = run('deg');
+  const rad = run('rad');
+  if (!rad.ctx.bare) return rad.q ? [{ q: rad.q, tag: null }] : null;
+  const deg = run('deg');
   const out = [];
-  if (r1.q) out.push({ q: r1.q, tag: 'rad' });
-  if (r2.q) out.push({ q: r2.q, tag: 'deg' });
+  if (rad.q) out.push({ q: rad.q, tag: 'rad' });
+  if (deg.q) out.push({ q: deg.q, tag: 'deg' });
   return out.length ? out : null;
 }
