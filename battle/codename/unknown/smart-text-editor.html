@@ -1,0 +1,2035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>calc</title>
+<script src="https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/decimal.min.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#111418; --ghost:#9aa3ad; --bar:#f4f5f7; --barline:#e2e5e9;
+    --chip:#ffffff; --chipfg:#4c555f; --chipdim:#a8b0b8; --chipem:#111418;
+    --chipsel:#dfe9ff; --chipselline:#5b8dee; --hint:#a8b0b8; --tag:#a8b0b8;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1115; --fg:#e6e9ee; --ghost:#5a636e; --bar:#151922; --barline:#242a34;
+      --chip:#1c212b; --chipfg:#aab3bf; --chipdim:#5a636e; --chipem:#e6e9ee;
+      --chipsel:#25344f; --chipselline:#5b8dee; --hint:#5a636e; --tag:#5a636e;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--fg);}
+  body{overflow:hidden;}
+  #wrap{position:fixed;inset:0;width:100vw;height:100vh;}
+  #mirror,#ta{
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    margin:0; padding:18px 20px 72px 20px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    font-size:16px; line-height:1.6; letter-spacing:0;
+    white-space:pre-wrap; overflow-wrap:break-word; word-break:normal;
+    border:0; outline:0; background:transparent;
+    tab-size:4; -moz-tab-size:4;
+    scrollbar-gutter:stable;
+  }
+  #mirror{ z-index:1; color:transparent; overflow:hidden; pointer-events:none; user-select:none; }
+  #mirror .g{ color:var(--ghost); }
+  #ta{ z-index:2; resize:none; color:var(--fg); caret-color:var(--fg); background:transparent; overflow:auto; }
+  #ta::placeholder{color:var(--ghost);opacity:.6}
+
+  #bar{
+    position:fixed; left:0; right:0; bottom:0; z-index:5;
+    min-height:0; background:var(--bar); border-top:1px solid transparent;
+    display:flex; align-items:center; gap:6px;
+    overflow-x:auto; overflow-y:hidden; white-space:nowrap;
+    padding:0 8px; scrollbar-width:thin;
+    transition:min-height .1s ease;
+  }
+  #bar.on{ min-height:44px; border-top-color:var(--barline); padding:5px 8px; }
+  #bar::-webkit-scrollbar{height:4px}
+  #bar::-webkit-scrollbar-thumb{background:var(--barline);border-radius:4px}
+  .chip{
+    flex:0 0 auto; display:inline-flex; align-items:center; gap:7px;
+    max-width:min(70vw,640px);
+    padding:7px 12px; border-radius:9px; cursor:pointer;
+    background:var(--chip); border:1px solid var(--barline); color:var(--chipfg);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; line-height:1.3;
+    user-select:none; -webkit-tap-highlight-color:transparent;
+  }
+  .chip .eq{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip .dim{ color:var(--chipdim); }
+  .chip .em{ color:var(--chipem); font-weight:600; }
+  .chip .tag{ color:var(--tag); font-size:10.5px; opacity:.85; letter-spacing:.04em; }
+  .chip .num{ color:var(--chipdim); font-size:10px; opacity:.7 }
+  .chip.sel{ background:var(--chipsel); border-color:var(--chipselline); }
+  .chip.sel .dim{ opacity:.85 }
+  #hint{ flex:0 0 auto; margin-left:auto; padding:0 8px 0 14px; color:var(--hint); font-size:11px;
+         font-family:ui-monospace,monospace; opacity:.75; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea id="ta" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
+    placeholder="1/97&#10;5 km to mi&#10;3kw * 2s ="></textarea>
+</div>
+<div id="bar"></div>
+<script>
+"use strict";
+/* ============================================================================
+   0. Setup
+   ========================================================================== */
+const D = Decimal.clone({ precision: 50, toExpNeg: -40, toExpPos: 40 });
+const d = (x) => new D(x);
+const ZERO = d(0), ONE = d(1);
+const PI = D.acos(-1);
+const E = D.exp(1);
+
+const CAPS = { chars: 500, tokens: 200, depth: 60, fact: 170, exp: 1e6, big: d("1e400") };
+
+/* Dimension vector: [length, mass, time, current, temperature, data, angle] */
+const NDIM = 7;
+const DIMNAMES = ["m","kg","s","A","K","b","rad"];
+const zdim = () => [0,0,0,0,0,0,0];
+const dimAdd = (a,b,s=1) => a.map((v,i)=>v+b[i]*s);
+const dimMul = (a,k) => a.map(v=>v*k);
+const dimEq = (a,b) => a.every((v,i)=>v===b[i]);
+const dimZero = (a) => a.every(v=>v===0);
+const dimKey = (a) => a.join(",");
+
+/* ============================================================================
+   1. Unit table
+   ========================================================================== */
+const L=0,M=1,T=2,I=3,K=4,B=5,A=6;
+function dm(o){ const v=zdim(); for(const k in o) v[k]=o[k]; return v; }
+
+const PREFIXES = {
+  Q:30, R:27, Y:24, Z:21, E:18, P:15, T:12, G:9, M:6, k:3, h:2, da:1,
+  d:-1, c:-2, m:-3, "µ":-6, u:-6, n:-9, p:-12, f:-15, a:-18, z:-21, y:-24, r:-27, q:-30
+};
+const PREFIX_NAMES = {
+  quetta:30, ronna:27, yotta:24, zetta:21, exa:18, peta:15, tera:12, giga:9, mega:6,
+  kilo:3, hecto:2, deca:1, deka:1, deci:-1, centi:-2, milli:-3, micro:-6, nano:-9,
+  pico:-12, femto:-15, atto:-18, zepto:-21, yocto:-24, ronto:-27, quecto:-30
+};
+const LARGE_PREFIX = ["Q","R","Y","Z","E","P","T","G","M","k"];
+
+/* factor = value in SI base */
+const U = [];
+function unit(o){ U.push(o); return o; }
+
+// Length
+unit({names:["meter","metre"],symbols:["m"],dims:dm({[L]:1}),f:"1",pfx:"all",pop:1});
+unit({names:["mile"],symbols:["mi"],dims:dm({[L]:1}),f:"1609.344"});
+unit({names:["yard"],symbols:["yd"],dims:dm({[L]:1}),f:"0.9144"});
+unit({names:["foot","feet"],symbols:["ft","'"],dims:dm({[L]:1}),f:"0.3048"});
+unit({names:["inch","inches"],symbols:["in","\""],dims:dm({[L]:1}),f:"0.0254"});
+unit({names:["nautical mile"],symbols:["nmi"],dims:dm({[L]:1}),f:"1852"});
+unit({names:["angstrom"],symbols:["Å"],dims:dm({[L]:1}),f:"1e-10"});
+unit({names:["light year","lightyear"],symbols:["ly"],dims:dm({[L]:1}),f:"9460730472580800"});
+// Mass
+unit({names:["gram","gramme"],symbols:["g"],dims:dm({[M]:1}),f:"0.001",pfx:"all",pop:1});
+unit({names:["tonne","metric ton"],symbols:["t"],dims:dm({[M]:1}),f:"1000"});
+unit({names:["pound","lb"],symbols:["lb","lbs"],dims:dm({[M]:1}),f:"0.45359237"});
+unit({names:["ounce"],symbols:["oz"],dims:dm({[M]:1}),f:"0.028349523125"});
+unit({names:["stone"],symbols:["st"],dims:dm({[M]:1}),f:"6.35029318"});
+// Time
+unit({names:["second"],symbols:["s","sec"],dims:dm({[T]:1}),f:"1",pfx:"all",pop:1});
+unit({names:["minute"],symbols:["min"],dims:dm({[T]:1}),f:"60"});
+unit({names:["hour"],symbols:["h","hr"],dims:dm({[T]:1}),f:"3600"});
+unit({names:["day"],symbols:["d","day"],dims:dm({[T]:1}),f:"86400"});
+unit({names:["week"],symbols:["wk"],dims:dm({[T]:1}),f:"604800"});
+unit({names:["month"],symbols:["mo"],dims:dm({[T]:1}),f:"2629800"});
+unit({names:["year"],symbols:["yr","y"],dims:dm({[T]:1}),f:"31557600"});
+unit({names:["decade"],symbols:[],dims:dm({[T]:1}),f:"315576000"});
+unit({names:["century","centuries"],symbols:[],dims:dm({[T]:1}),f:"3155760000"});
+// Angle
+unit({names:["radian"],symbols:["rad"],dims:dm({[A]:1}),f:"1",pop:1});
+unit({names:["degree"],symbols:["deg","°"],dims:dm({[A]:1}),f:String(Math.PI/180),fd:()=>PI.div(180),pop:1});
+unit({names:["gradian","gon"],symbols:["grad"],dims:dm({[A]:1}),f:"0",fd:()=>PI.div(200)});
+unit({names:["turn","revolution"],symbols:["rev"],dims:dm({[A]:1}),f:"0",fd:()=>PI.times(2)});
+// Temperature
+unit({names:["kelvin"],symbols:["K"],dims:dm({[K]:1}),f:"1",pfx:"all"});
+unit({names:["celsius","centigrade"],symbols:["°C","C"],dims:dm({[K]:1}),f:"1",off:"273.15",abs:true});
+unit({names:["fahrenheit"],symbols:["°F","F"],dims:dm({[K]:1}),f:"0.5555555555555555555555555555555555555556",fd:()=>d(5).div(9),off:"255.3722222222222222222222222222222222222",offd:()=>d(459.67).times(5).div(9),abs:true});
+// Current / electrical
+unit({names:["ampere","amp"],symbols:["A"],dims:dm({[I]:1}),f:"1",pfx:"all",pop:1});
+unit({names:["volt"],symbols:["V"],dims:dm({[M]:1,[L]:2,[T]:-3,[I]:-1}),f:"1",pfx:"all",pop:1});
+unit({names:["ohm"],symbols:["Ω","ohm"],dims:dm({[M]:1,[L]:2,[T]:-3,[I]:-2}),f:"1",pfx:"all"});
+unit({names:["coulomb"],symbols:["C"],dims:dm({[I]:1,[T]:1}),f:"1",pfx:"all"});
+unit({names:["farad"],symbols:["F"],dims:dm({[M]:-1,[L]:-2,[T]:4,[I]:2}),f:"1",pfx:"all"});
+// Data
+unit({names:["bit"],symbols:["b"],dims:dm({[B]:1}),f:"1",pfx:"large",pop:1});
+unit({names:["byte"],symbols:["B"],dims:dm({[B]:1}),f:"8",pfx:"large",pop:1});
+// Frequency
+unit({names:["hertz"],symbols:["Hz"],dims:dm({[T]:-1}),f:"1",pfx:"all",pop:1});
+// Force
+unit({names:["newton"],symbols:["N"],dims:dm({[M]:1,[L]:1,[T]:-2}),f:"1",pfx:"all",pop:1});
+unit({names:["pound force","poundforce"],symbols:["lbf"],dims:dm({[M]:1,[L]:1,[T]:-2}),f:"4.4482216152605"});
+// Energy
+unit({names:["joule"],symbols:["J"],dims:dm({[M]:1,[L]:2,[T]:-2}),f:"1",pfx:"all",pop:1});
+unit({names:["calorie"],symbols:["cal"],dims:dm({[M]:1,[L]:2,[T]:-2}),f:"4.184",pfx:"all"});
+unit({names:["watt hour","watthour"],symbols:["Wh"],dims:dm({[M]:1,[L]:2,[T]:-2}),f:"3600",pfx:"all"});
+unit({names:["british thermal unit"],symbols:["BTU"],dims:dm({[M]:1,[L]:2,[T]:-2}),f:"1055.05585262"});
+unit({names:["electronvolt"],symbols:["eV"],dims:dm({[M]:1,[L]:2,[T]:-2}),f:"1.602176634e-19",pfx:"all"});
+// Power
+unit({names:["watt"],symbols:["W"],dims:dm({[M]:1,[L]:2,[T]:-3}),f:"1",pfx:"all",pop:1});
+unit({names:["horsepower","mechanical horsepower"],symbols:["hp","HP"],dims:dm({[M]:1,[L]:2,[T]:-3}),f:"745.69987158227022"});
+unit({names:["metric horsepower","ps"],symbols:["PS"],dims:dm({[M]:1,[L]:2,[T]:-3}),f:"735.49875"});
+// Pressure
+unit({names:["pascal"],symbols:["Pa"],dims:dm({[M]:1,[L]:-1,[T]:-2}),f:"1",pfx:"all",pop:1});
+unit({names:["bar"],symbols:["bar"],dims:dm({[M]:1,[L]:-1,[T]:-2}),f:"100000",pfx:"all"});
+unit({names:["atmosphere"],symbols:["atm"],dims:dm({[M]:1,[L]:-1,[T]:-2}),f:"101325"});
+unit({names:["psi","pounds per square inch"],symbols:["PSI","psi"],dims:dm({[M]:1,[L]:-1,[T]:-2}),f:"6894.757293168361"});
+unit({names:["torr","millimeter of mercury"],symbols:["torr","mmHg"],dims:dm({[M]:1,[L]:-1,[T]:-2}),f:"133.322368421"});
+// Volume
+unit({names:["liter","litre"],symbols:["L","l"],dims:dm({[L]:3}),f:"0.001",pfx:"all",pop:1});
+unit({names:["gallon"],symbols:["gal"],dims:dm({[L]:3}),f:"0.003785411784"});
+unit({names:["imperial gallon","uk gallon"],symbols:["impgal","ukgal"],dims:dm({[L]:3}),f:"0.00454609"});
+unit({names:["quart"],symbols:["qt"],dims:dm({[L]:3}),f:"0.000946352946"});
+unit({names:["pint"],symbols:["pt"],dims:dm({[L]:3}),f:"0.000473176473"});
+unit({names:["imperial pint","uk pint"],symbols:["imppt","ukpt"],dims:dm({[L]:3}),f:"0.00056826125"});
+unit({names:["cup"],symbols:["cup"],dims:dm({[L]:3}),f:"0.0002365882365"});
+unit({names:["tablespoon"],symbols:["tbsp"],dims:dm({[L]:3}),f:"0.00001478676478125"});
+unit({names:["teaspoon"],symbols:["tsp"],dims:dm({[L]:3}),f:"0.00000492892159375"});
+unit({names:["fluid ounce","floz"],symbols:["floz","fl oz"],dims:dm({[L]:3}),f:"0.0000295735295625"});
+unit({names:["imperial fluid ounce","uk fluid ounce"],symbols:["impfloz","ukfloz"],dims:dm({[L]:3}),f:"0.0000284130625"});
+unit({names:["barrel"],symbols:["bbl"],dims:dm({[L]:3}),f:"0.158987294928"});
+// Area
+unit({names:["acre"],symbols:["ac"],dims:dm({[L]:2}),f:"4046.8564224"});
+unit({names:["hectare"],symbols:["ha"],dims:dm({[L]:2}),f:"10000"});
+// Speed
+unit({names:["knot"],symbols:["kn","kt","knot"],dims:dm({[L]:1,[T]:-1}),f:"0.5144444444444444444444444444444444444444",fd:()=>d(1852).div(3600)});
+unit({names:["mile per hour","miles per hour"],symbols:["mph"],dims:dm({[L]:1,[T]:-1}),f:"0.44704"});
+unit({names:["kilometer per hour","kilometre per hour"],symbols:["kph","kmh"],dims:dm({[L]:1,[T]:-1}),f:"0.2777777777777777777777777777777777777778",fd:()=>d(1).div(3.6)});
+// Fuel economy
+unit({names:["mile per gallon","miles per gallon"],symbols:["mpg"],dims:dm({[L]:-2}),f:"425143.70749732"});
+unit({names:["kilometer per liter","km per liter"],symbols:["kmpl","kmL"],dims:dm({[L]:-2}),f:"1000000"});
+
+/* prefixable + plural/alias registry */
+const NAME_MAP = new Map();   // lowercase name -> unit
+const SYM_MAP  = new Map();   // exact symbol -> unit
+const SYM_LOWER = new Map();  // lowercase symbol -> [units]
+function regName(n,u){ NAME_MAP.set(n.toLowerCase(), u); }
+for(const u of U){
+  u.pfx = u.pfx || "none";
+  u.f = u.fd ? u.fd() : d(u.f);
+  u.off = u.offd ? u.offd() : (u.off!=null ? d(u.off) : null);
+  u.sym = u.symbols[0] || u.names[0];
+  for(const n of u.names){
+    regName(n,u);
+    if(!/s$/.test(n)) regName(n+"s",u);
+    if(/y$/.test(n)) regName(n.slice(0,-1)+"ies",u);
+    if(/(ch|sh|s|x|z)$/.test(n)) regName(n+"es",u);
+  }
+  for(const s of u.symbols){
+    if(!SYM_MAP.has(s)) SYM_MAP.set(s,u);
+    const lo=s.toLowerCase();
+    if(!SYM_LOWER.has(lo)) SYM_LOWER.set(lo,[]);
+    SYM_LOWER.get(lo).push(u);
+  }
+}
+regName("sq feet",NAME_MAP.get("foot"));
+regName("celcius",NAME_MAP.get("celsius"));
+regName("kelvins",NAME_MAP.get("kelvin"));
+
+/* Special named aliases handled in resolver */
+const UNIT_ALIASES = {
+  "Cal": {u:NAME_MAP.get("calorie"), scale:d(1000)},
+  "kcal": {u:NAME_MAP.get("calorie"), scale:d(1000)},
+  "Kcal": {u:NAME_MAP.get("calorie"), scale:d(1000)},
+};
+
+/* ============================================================================
+   2. Quantity
+   ========================================================================== */
+class Q {
+  constructor(v, dims, unit){
+    this.v = v;                      // Decimal, in SI base
+    this.dims = dims || zdim();
+    this.u = unit || null;           // display unit descriptor (UnitExpr) or null
+  }
+}
+/* UnitExpr = { parts:[{u, pfx(exp int), pow, sym}], sepSpace:bool, longNames:bool } */
+function ue(parts, opt){ return Object.assign({parts, space:false, long:false, absTemp:false}, opt||{}); }
+function ueFactor(x){ // Decimal factor to SI
+  let f = ONE;
+  for(const p of x.parts){
+    let base = p.u.f.times(D.pow(10, p.pfx||0));
+    f = f.times(D.pow(base, p.pow));
+  }
+  return f;
+}
+function ueDims(x){
+  let dd = zdim();
+  for(const p of x.parts) dd = dimAdd(dd, dimMul(p.u.dims, p.pow));
+  return dd;
+}
+function pfxSym(e){
+  if(!e) return "";
+  for(const k in PREFIXES) if(PREFIXES[k]===e && k!=="u") return k;
+  return "e"+e;
+}
+function pfxName(e){
+  if(!e) return "";
+  for(const k in PREFIX_NAMES) if(PREFIX_NAMES[k]===e) return k;
+  return "";
+}
+function ueStr(x){
+  if(!x || !x.parts.length) return "";
+  const num = x.parts.filter(p=>p.pow>0), den = x.parts.filter(p=>p.pow<0);
+  const one = (p, pw) => {
+    let s;
+    if(x.long){
+      const nm = p.u.names[0];
+      s = (pfxName(p.pfx)||"") + nm;
+      if(pw>1) s += "^"+pw;
+    } else {
+      s = (p.sym!=null? p.sym : (pfxSym(p.pfx)+p.u.sym));
+      if(pw>1) s += "^"+pw;
+    }
+    return s;
+  };
+  let a = num.map(p=>one(p,p.pow)).join("·");
+  if(!den.length) return a;
+  let b = den.map(p=>one(p,-p.pow)).join("·");
+  if(!a) a = "1";
+  return a+"/"+b;
+}
+
+/* ============================================================================
+   3. Derived naming
+   ========================================================================== */
+const DERIVED = [];
+function derive(sym){ const u=SYM_MAP.get(sym); if(u) DERIVED.push(u); }
+["W","J","Pa","Hz","N","V","Ω","C","F","lbf"].forEach(derive);
+const DERIVED_BY_DIM = new Map();
+for(const u of DERIVED){ const k=dimKey(u.dims); if(!DERIVED_BY_DIM.has(k)) DERIVED_BY_DIM.set(k,[]); DERIVED_BY_DIM.get(k).push(u); }
+
+/* ============================================================================
+   4. Tokenizer
+   ========================================================================== */
+const SUPS = {"⁰":"0","¹":"1","²":"2","³":"3","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9","⁻":"-","⁺":"+"};
+function normalize(s){
+  return s.replace(/×/g,"*").replace(/÷/g,"/").replace(/[−–—]/g, m=> m==="−"?"-":m)
+          .replace(/π/g,"π").replace(/μ/g,"µ");
+}
+const FUNCS = ["arcsinh","arccosh","arctanh","arcsin","arccos","arctan","arccsc","arcsec","arccot",
+  "asinh","acosh","atanh","asin","acos","atan","acsc","asec","acot",
+  "sinh","cosh","tanh","sin","cos","tan","csc","sec","cot",
+  "sqrt","cbrt","log2","log10","ln","log","exp","abs","round","floor","ceil","sign",
+  "nPr","nCr","npr","ncr"];
+const TRIGF = new Set(["sin","cos","tan","csc","sec","cot","sinh","cosh","tanh"]);
+const INVTRIG = new Set(["asin","acos","atan","acsc","asec","acot","arcsin","arccos","arctan","arccsc","arcsec","arccot",
+                         "asinh","acosh","atanh","arcsinh","arccosh","arctanh"]);
+const CONSTS = { pi:()=>PI, "π":()=>PI, e:()=>E, tau:()=>PI.times(2), phi:()=>d(1).plus(D.sqrt(5)).div(2) };
+
+function isIdentChar(c){ return /[A-Za-zÅΩ°µ_]/.test(c); }
+
+function tokenize(src){
+  const s = normalize(src);
+  const out = [];
+  let i = 0;
+  const n = s.length;
+  while(i < n){
+    if(out.length > CAPS.tokens) return null;
+    const c = s[i];
+    if(c === " " || c === "\t"){ i++; if(out.length) out[out.length-1].spAfter = true; continue; }
+    const start = i;
+    // superscript run
+    if(SUPS[c]){
+      let j=i, t="";
+      while(j<n && SUPS[s[j]]){ t+=SUPS[s[j]]; j++; }
+      out.push({k:"sup", v:t, s:start, e:j}); i=j; continue;
+    }
+    // number
+    if(/[0-9]/.test(c) || (c==="." && /[0-9]/.test(s[i+1]||""))){
+      let j=i;
+      while(j<n && /[0-9]/.test(s[j])) j++;
+      if(s[j]==="." && /[0-9]/.test(s[j+1]||"")){ j++; while(j<n && /[0-9]/.test(s[j])) j++; }
+      else if(s[j]==="." && !isIdentChar(s[j+1]||"") && !/[0-9]/.test(s[j+1]||"")){ /* trailing dot: skip */ }
+      let numEnd = j;
+      let sci = null, ambig = false;
+      // scientific notation: e/E followed by optional sign + digits
+      if((s[j]==="e"||s[j]==="E")){
+        let k=j+1, sign="";
+        if(s[k]==="+"||s[k]==="-"){ sign=s[k]; k++; }
+        if(/[0-9]/.test(s[k]||"")){
+          let k2=k; while(k2<n && /[0-9]/.test(s[k2])) k2++;
+          // not scientific if followed directly by identifier char (1e5m is 1e5 * m, fine)
+          sci = { end:k2, text:s.slice(i,k2) };
+          if(sign==="-") ambig = true;   // Ne-N ambiguity
+          if(sign==="") ambig = false;
+        }
+      }
+      if(sci){
+        out.push({k:"num", v:sci.text, s:start, e:sci.end, ambigSci:ambig,
+                  mant:s.slice(i,numEnd)});
+        i = sci.end; continue;
+      }
+      out.push({k:"num", v:s.slice(i,numEnd), s:start, e:numEnd});
+      i = numEnd; continue;
+    }
+    // identifier
+    if(isIdentChar(c)){
+      let j=i;
+      while(j<n && (isIdentChar(s[j]) || (/[0-9]/.test(s[j]) && false))) j++;
+      let word = s.slice(i,j);
+      out.push({k:"id", v:word, s:start, e:j});
+      i=j; continue;
+    }
+    // operators
+    const three = s.substr(i,3), two = s.substr(i,2);
+    if(two === "**"){ out.push({k:"op", v:"^", s:start, e:i+2}); i+=2; continue; }
+    if(two === "->"){ out.push({k:"op", v:"->", s:start, e:i+2}); i+=2; continue; }
+    if("+-*/%^!(),".includes(c)){ out.push({k:"op", v:c, s:start, e:i+1}); i++; continue; }
+    if(c==="'" || c==='"'){ out.push({k:"id", v:c, s:start, e:i+1}); i++; continue; }
+    return null; // unknown char
+  }
+  return out;
+}
+
+/* ============================================================================
+   5. Unit resolution
+   ========================================================================== */
+function unitCandidatesExact(sym){
+  // returns list of {u, pfx, sym(canonical display), exact:true}
+  const res = [];
+  if(UNIT_ALIASES[sym]){ const a=UNIT_ALIASES[sym]; res.push({u:a.u, pfx:0, scale:a.scale, sym:sym}); return res; }
+  if(SYM_MAP.has(sym)) res.push({u:SYM_MAP.get(sym), pfx:0, sym:sym});
+  if(res.length) return res;
+  // prefix + symbol (greedy: try 2-char prefix first)
+  for(const plen of [2,1]){
+    if(sym.length<=plen) continue;
+    const p = sym.slice(0,plen), rest = sym.slice(plen);
+    if(!(p in PREFIXES)) continue;
+    const u = SYM_MAP.get(rest);
+    if(!u) continue;
+    if(u.pfx==="none") continue;
+    const ex = PREFIXES[p];
+    if(u.pfx==="large" && !(LARGE_PREFIX.includes(p==="u"?"µ":p))) continue;
+    res.push({u, pfx:ex, sym:(p==="u"?"µ":p)+u.sym});
+  }
+  return res;
+}
+function unitCandidatesFolded(sym){
+  const lo = sym.toLowerCase();
+  const seen = new Set(), res = [];
+  const push = (u,pfx,symOut, score)=>{
+    const k = u.sym+"|"+pfx;
+    if(seen.has(k)) return; seen.add(k);
+    res.push({u,pfx,sym:symOut,score});
+  };
+  // whole symbol case-folded
+  for(const [s,u] of SYM_MAP){ if(s.toLowerCase()===lo) push(u,0,s, s===sym?10:5); }
+  for(const k in UNIT_ALIASES){ if(k.toLowerCase()===lo){ const a=UNIT_ALIASES[k]; res.push({u:a.u,pfx:0,scale:a.scale,sym:k,score:k===sym?10:5}); } }
+  // prefix(case) + symbol(case)
+  for(let plen of [1,2]){
+    if(sym.length<=plen) continue;
+    const pTyped = sym.slice(0,plen), restTyped = sym.slice(plen);
+    for(const p in PREFIXES){
+      if(p.toLowerCase()!==pTyped.toLowerCase()) continue;
+      for(const [s,u] of SYM_MAP){
+        if(s.toLowerCase()!==restTyped.toLowerCase()) continue;
+        if(u.pfx==="none") continue;
+        const pc = (p==="u"?"µ":p);
+        if(u.pfx==="large" && !LARGE_PREFIX.includes(pc)) continue;
+        push(u, PREFIXES[p], pc+s, (p===pTyped?2:0) + (s===restTyped?1:0));
+      }
+    }
+  }
+  return res;
+}
+function resolveUnitSym(sym){
+  // -> {mode:'exact'|'folded', cands:[...]}
+  const ex = unitCandidatesExact(sym);
+  if(ex.length) return {mode:"exact", cands:[ex[0]]};
+  const fo = unitCandidatesFolded(sym);
+  if(fo.length){
+    fo.sort((a,b)=> (b.score||0)-(a.score||0));
+    return {mode: fo.length===1 ? "exact":"folded", cands:fo};
+  }
+  return null;
+}
+function resolveUnitName(word){
+  const lo = word.toLowerCase();
+  if(NAME_MAP.has(lo)) return {u:NAME_MAP.get(lo), pfx:0, long:true};
+  for(const p in PREFIX_NAMES){
+    if(lo.startsWith(p) && lo.length>p.length){
+      const rest = lo.slice(p.length);
+      const u = NAME_MAP.get(rest);
+      if(u && u.pfx!=="none"){
+        const pc = pfxSym(PREFIX_NAMES[p]);
+        if(u.pfx==="large" && !LARGE_PREFIX.includes(pc)) continue;
+        return {u, pfx:PREFIX_NAMES[p], long:true};
+      }
+    }
+  }
+  return null;
+}
+function lookupUnitWord(word){
+  // returns {mode, cands, long} or null
+  const byName = resolveUnitName(word);
+  if(byName) return {mode:"exact", cands:[{u:byName.u,pfx:byName.pfx,sym:pfxSym(byName.pfx)+byName.u.sym}], long:true};
+  const r = resolveUnitSym(word);
+  if(r) return {mode:r.mode, cands:r.cands, long:false};
+  return null;
+}
+
+/* ============================================================================
+   6. Parser  (precedence climbing) -> AST
+   ========================================================================== */
+class PErr extends Error {}
+function perr(){ throw new PErr("parse"); }
+
+function Parser(toks, ctx){
+  let p = 0, depth = 0;
+  const ctxo = ctx || {};
+  const peek = (k=0) => toks[p+k];
+  const at = (kind,val) => { const t=toks[p]; return t && t.k===kind && (val===undefined || t.v===val); };
+  const eat = (kind,val) => { if(at(kind,val)){ return toks[p++]; } return null; };
+
+  function isUnitWord(t){
+    if(!t || t.k!=="id") return false;
+    if(CONSTS[t.v]!==undefined) return false;
+    if(FUNCS.includes(t.v)) return false;
+    return !!lookupUnitWord(t.v);
+  }
+  function isConvKw(t){ return t && ((t.k==="id" && (t.v==="to"||t.v==="in"||t.v==="into"||t.v==="as")) || (t.k==="op"&&t.v==="->")); }
+
+  /* unit expression parsing: sequence of unit words with powers, / and · */
+  function parseUnitExpr(allowSlash){
+    const parts = [];
+    let ambig = null;
+    let long = false, space = false;
+    function one(sign){
+      const t = peek();
+      if(!t || t.k!=="id") return false;
+      // "square"/"cubic" prefix words
+      if(/^(square|sq|cubic|cu)$/i.test(t.v)){
+        const nx = toks[p+1];
+        if(nx && nx.k==="id" && lookupUnitWord(nx.v)){
+          const pw = /^(square|sq)$/i.test(t.v)?2:3;
+          p++; const w = toks[p++];
+          const r = lookupUnitWord(w.v);
+          const c = r.cands[0];
+          const part = {u:c.u,pfx:c.pfx,pow:pw*sign,sym:c.sym,scale:c.scale};
+          parts.push(part);
+          if(r.mode==="folded" && !ambig) ambig = {word:w.v, cands:r.cands, part, ts:w.s, te:w.e};
+          if(r.long) long = true;
+          return true;
+        }
+      }
+      if(!isUnitWord(t)) return false;
+      const r = lookupUnitWord(t.v);
+      const ambTok = t;
+      p++;
+      const c = r.cands[0];
+      if(r.long) long = true;
+      let pw = 1;
+      // exponent forms
+      const nt = peek();
+      if(nt && nt.k==="sup" && /^-?\d+$/.test(nt.v)){ pw = parseInt(nt.v,10); p++; }
+      else if(nt && nt.k==="op" && nt.v==="^" && toks[p+1] && (toks[p+1].k==="num") && /^\d+$/.test(toks[p+1].v)){ pw=parseInt(toks[p+1].v,10); p+=2; }
+      else if(nt && nt.k==="op" && nt.v==="^" && toks[p+1] && toks[p+1].k==="op" && toks[p+1].v==="-" && toks[p+2] && toks[p+2].k==="num"){ pw=-parseInt(toks[p+2].v,10); p+=3; }
+      else if(nt && nt.k==="num" && /^[23]$/.test(nt.v) && !toks[p-1].spAfter){ pw=parseInt(nt.v,10); p++; }
+      else if(nt && nt.k==="id" && /^(squared|cubed)$/i.test(nt.v)){ pw = nt.v.toLowerCase()==="squared"?2:3; p++; }
+      const part = {u:c.u,pfx:c.pfx,pow:pw*sign,sym:c.sym,scale:c.scale};
+      parts.push(part);
+      if(r.mode==="folded" && !ambig) ambig = {word:ambTok.v, cands:r.cands, part, ts:ambTok.s, te:ambTok.e};
+      return true;
+    }
+    if(!one(1)) return null;
+    for(;;){
+      if(allowSlash!==false && at("op","/") && isUnitWord(toks[p+1])){
+        // only if followed by unit word AND nothing numeric after
+        p++; if(!one(-1)) perr();
+        continue;
+      }
+      if(at("op","*") && isUnitWord(toks[p+1])){ p++; if(!one(1)) perr(); continue; }
+      if(isUnitWord(peek()) && peek().k==="id" && !isConvKw(peek())){ if(!one(1)) break; continue; }
+      break;
+    }
+    return {node:{t:"unit", ue:ue(parts,{long}), ambig}, ambig};
+  }
+
+  function parsePrimary(){
+    if(depth++ > CAPS.depth) perr();
+    try{
+      let t = peek();
+      if(!t) perr();
+      if(t.k==="op" && t.v==="("){
+        p++;
+        const e = parseExpr(0);
+        if(!eat("op",")")) perr();
+        return applyPostfix({t:"paren", a:e});
+      }
+      if(t.k==="num"){
+        p++;
+        let node = {t:"num", v:t.v, tok:t};
+        // attached unit?
+        return applyPostfix(node);
+      }
+      if(t.k==="op" && (t.v==="-"||t.v==="+")){
+        // handled in parseUnary
+        perr();
+      }
+      if(t.k==="id"){
+        const w = t.v;
+        // constant
+        if(CONSTS[w]!==undefined && !(w==="e" && false)){
+          p++; return applyPostfix({t:"const", v:w});
+        }
+        // function
+        const fn = matchFunc();
+        if(fn) return fn;
+        // unit alone (e.g. "m" after number handled elsewhere) -> treat as unit-quantity error
+        perr();
+      }
+      perr();
+    } finally { depth--; }
+  }
+
+  function matchFunc(){
+    const t = peek();
+    if(!t || t.k!=="id") return null;
+    let name = t.v;
+    let base = null;
+    // exact function
+    if(FUNCS.includes(name)) base = name;
+    else {
+      // log_2 / log2 / log5 style handled via id+num? tokenizer splits digits from ids
+      if(/^log_?$/i.test(name)) base = "log";
+      else if(/^(nPr|nCr)$/i.test(name)) base = name.toLowerCase()==="npr"?"nPr":"nCr";
+      else if(name==="P"||name==="C") base = name==="P"?"nPr":"nCr";
+      else return null;
+    }
+    let q = p+1;
+    let logBase = null, power = null, inverse = false;
+    if(base==="log"){
+      // log_2(x) or log2(x) or log5(3)
+      if(toks[q] && toks[q].k==="id" && toks[q].v==="_" ){ q++; }
+      if(toks[q] && toks[q].k==="num" && /^\d+(\.\d+)?$/.test(toks[q].v) && !toks[q-1].spAfter){
+        logBase = toks[q].v; q++;
+      }
+    }
+    if(base==="log" && name==="log2"){ logBase="2"; }
+    if(name==="log10"){ logBase="10"; }
+    // inverse via -1 / ⁻¹ / ^-1
+    const isTrig = TRIGF.has(base);
+    if(isTrig){
+      const t1 = toks[q];
+      if(t1 && t1.k==="sup" && t1.v==="-1"){ inverse=true; q++; }
+      else if(t1 && t1.k==="sup" && /^\d+$/.test(t1.v)){ power=parseInt(t1.v,10); q++; }
+      else if(t1 && t1.k==="op" && t1.v==="^" && toks[q+1]){
+        if(toks[q+1].k==="op" && toks[q+1].v==="-" && toks[q+2] && toks[q+2].k==="num" && toks[q+2].v==="1"){ inverse=true; q+=3; }
+        else if(toks[q+1].k==="num" && /^\d+$/.test(toks[q+1].v)){ power=parseInt(toks[q+1].v,10); q+=2; }
+        else if(toks[q+1].k==="sup"){ if(toks[q+1].v==="-1"){inverse=true;q+=2;} else {power=parseInt(toks[q+1].v,10);q+=2;} }
+      }
+      else if(t1 && t1.k==="op" && t1.v==="-" && !toks[q-1].spAfter && toks[q+1] && toks[q+1].k==="num" && toks[q+1].v.startsWith("1")){
+        // sin-1( or sin-1 0.5 : inverse only if directly followed by ( or number-no-space
+        const after = toks[q+2];
+        if(toks[q+1].v==="1" && (!toks[q+1].spAfter ? (after && after.k==="op" && after.v==="(") : true)){
+          if(after && after.k==="op" && after.v==="("){ inverse=true; q+=2; }
+          else if(after && (after.k==="num" || after.k==="id")){ inverse=true; q+=2; }
+        }
+      }
+    }
+    // digit run glued: tokenizer separates; handle "sin2(30)" => power 2 if arg follows
+    if(isTrig && !inverse && power===null){
+      const t1 = toks[q];
+      if(t1 && t1.k==="num" && /^\d+$/.test(t1.v) && !toks[q-1].spAfter){
+        const after = toks[q+1];
+        const argFollows = after && ((after.k==="op"&&after.v==="(") || after.k==="num" || (after.k==="id"));
+        if(argFollows){ power=parseInt(t1.v,10); q++; }
+      }
+    }
+    let fname = base;
+    if(inverse) fname = ({sin:"asin",cos:"acos",tan:"atan",csc:"acsc",sec:"asec",cot:"acot",sinh:"asinh",cosh:"acosh",tanh:"atanh"})[base] || base;
+
+    const save = p; p = q;
+    // two-arg forms
+    if((fname==="nPr"||fname==="nCr") && at("op","(")){
+      p++; const a1=parseExpr(0); if(!eat("op",",")) perr(); const a2=parseExpr(0); if(!eat("op",")")) perr();
+      return applyPostfix({t:"call2", f:fname, a:a1, b:a2});
+    }
+    let arg;
+    if(at("op","(")){
+      p++; arg = parseExpr(0); if(!eat("op",")")) perr();
+      arg = {t:"paren", a:arg};
+    } else {
+      // implicit-multiplication run as argument
+      if(!peek()){ p=save; perr(); }
+      arg = parseImplicitRun();
+    }
+    let node = {t:"call", f:fname, a:arg, logBase, power, funcName:base, hadParen:true};
+    return applyPostfix(node);
+  }
+
+  function applyPostfix(node){
+    for(;;){
+      // unit attachment
+      if(isUnitWord(peek()) || (peek() && peek().k==="id" && /^(square|sq|cubic|cu)$/i.test(peek().v) && isUnitWord(toks[p+1]))){
+        const spaced = p>0 && toks[p-1] && toks[p-1].spAfter;
+        const before = p;
+        const ur = parseUnitExpr(true);
+        if(!ur){ p=before; }
+        else {
+          ur.node.ue.space = !!spaced;
+          node = {t:"withunit", a:node, ue:ur.node.ue, ambig:ur.ambig};
+          continue;
+        }
+      }
+      if(at("op","!")){ p++; node = {t:"fact", a:node}; continue; }
+      if(peek() && peek().k==="sup" && /^\d+$/.test(peek().v)){ const s=toks[p++]; node={t:"bin",op:"^",a:node,b:{t:"num",v:s.v}}; continue; }
+      break;
+    }
+    return node;
+  }
+
+  function parseUnary(){
+    if(at("op","-")){ p++; const a = parseUnary(); return {t:"neg", a}; }
+    if(at("op","+")){ p++; return parseUnary(); }
+    return parsePower();
+  }
+  function parsePower(){
+    const base = parsePrimary();
+    if(at("op","^")){
+      p++;
+      const exp = parseUnary();  // right assoc, unary allowed
+      return applyPostfix2({t:"bin", op:"^", a:base, b:exp});
+    }
+    return base;
+  }
+  function applyPostfix2(n){
+    if(at("op","!")){ p++; return {t:"fact", a:n}; }
+    return n;
+  }
+  function startsOperand(t, t2){
+    if(!t) return false;
+    if(t.k==="num") return true;
+    if(t.k==="op" && t.v==="(") return true;
+    if(t.k==="id"){
+      if(CONSTS[t.v]!==undefined) return true;
+      if(FUNCS.includes(t.v) || t.v==="log"||t.v==="P"||t.v==="C") return true;
+      if(lookupUnitWord(t.v)) return true;
+      return false;
+    }
+    if(t.k==="op" && t.v==="-") return false;
+    return false;
+  }
+  function canContinueImplicit(){
+    const t = peek();
+    if(!t) return false;
+    if(t.k==="num") return false;              // "3 4" not valid
+    if(t.k==="op" && t.v==="(") return true;
+    if(t.k==="id"){
+      if(isConvKw(t)) return false;
+      if(t.v==="nPr"||t.v==="nCr"||t.v==="npr"||t.v==="ncr") return false;
+      if(CONSTS[t.v]!==undefined) return true;
+      if(FUNCS.includes(t.v)) return true;
+      if(lookupUnitWord(t.v)) return true;
+      return false;
+    }
+    return false;
+  }
+  function parseImplicitRun(){
+    let left = parseUnary();
+    for(;;){
+      if(!canContinueImplicit()) break;
+      const right = parsePower();
+      left = {t:"bin", op:"*", a:left, b:right, implicit:true};
+    }
+    return left;
+  }
+  function parsePermComb(){
+    let left = parseImplicitRun();
+    for(;;){
+      const t = peek();
+      if(t && t.k==="id" && /^(nPr|nCr|npr|ncr)$/i.test(t.v)){
+        const f = /r$/i.test(t.v) && /p/i.test(t.v[1]) ? "nPr" : (/c/i.test(t.v[0])||/c/i.test(t.v[1])?"nCr":"nPr");
+        const fn = t.v.toLowerCase()==="npr"?"nPr":"nCr";
+        p++;
+        const right = parseImplicitRun();
+        left = {t:"call2", f:fn, a:left, b:right};
+        continue;
+      }
+      break;
+    }
+    return left;
+  }
+  function parseMul(){
+    let left = parsePermComb();
+    for(;;){
+      if(at("op","*")||at("op","/")){
+        const op = toks[p].v; p++;
+        const right = parsePermComb();
+        left = {t:"bin", op, a:left, b:right};
+        continue;
+      }
+      if(at("op","%")){
+        // infix modulo when next token can start an operand
+        const nt = toks[p+1];
+        if(startsOperand(nt)){
+          p++;
+          const right = parsePermComb();
+          left = {t:"bin", op:"%", a:left, b:right};
+          continue;
+        } else {
+          p++;
+          left = {t:"pct", a:left};
+          continue;
+        }
+      }
+      break;
+    }
+    return left;
+  }
+  function parseAdd(){
+    let left = parseMul();
+    for(;;){
+      if(at("op","+")||at("op","-")){
+        const op = toks[p].v; p++;
+        const right = parseMul();
+        left = {t:"bin", op, a:left, b:right};
+        continue;
+      }
+      break;
+    }
+    return left;
+  }
+  function parseConv(){
+    let left = parseAdd();
+    const t = peek();
+    if(isConvKw(t)){
+      const save=p;
+      p++;
+      const ur = parseUnitExpr(true);
+      if(!ur){ p=save; return left; }
+      return {t:"conv", a:left, ue:ur.node.ue, ambig:ur.ambig};
+    }
+    return left;
+  }
+  function parseExpr(){ return parseConv(); }
+
+  return {
+    parse(){
+      const node = parseExpr();
+      return {node, pos:p};
+    },
+    get pos(){ return p; }
+  };
+}
+
+/* ============================================================================
+   7. Evaluator
+   ========================================================================== */
+class EErr extends Error {}
+function eerr(m){ throw new EErr(m||"e"); }
+
+function qnum(v){ return new Q(d(v), zdim(), null); }
+function qIsPlain(q){ return dimZero(q.dims) && (!q.u || !q.u.parts.length); }
+
+function clean(x){
+  if(!(x instanceof D)) x = d(x);
+  if(!x.isFinite()) eerr("inf");
+  if(x.abs().lt("1e-14")) return ZERO;
+  const r = x.toDecimalPlaces(0, D.ROUND_HALF_EVEN);
+  if(!r.isZero() && x.minus(r).abs().div(D.max(r.abs(),1)).lt("1e-25")) return r;
+  if(x.minus(r).abs().lt("1e-14") && x.abs().lt("1e15")) return r;
+  return x;
+}
+
+function evalNode(node, env){
+  switch(node.t){
+    case "num": {
+      let v = node.v;
+      if(env.sciAlt && node.tok && node.tok.ambigSci){
+        // alternate reading: mantissa * e - exponent  (handled by rewriting in analyzer)
+      }
+      return qnum(v);
+    }
+    case "const": return qnum(CONSTS[node.v]());
+    case "paren": { const q = evalNode(node.a, env); return q; }
+    case "neg": { const q = evalNode(node.a, env); return new Q(q.v.neg(), q.dims, q.u); }
+    case "pct": { const q = evalNode(node.a, env); if(!dimZero(q.dims)) eerr("dim"); return new Q(q.v.div(100), zdim(), null); }
+    case "fact": {
+      const q = evalNode(node.a, env);
+      if(!dimZero(q.dims)) eerr("dim");
+      return qnum(factorial(q.v));
+    }
+    case "withunit": {
+      const q = evalNode(node.a, env);
+      if(!qIsPlain(q)) {
+        // multiply existing quantity by unit: e.g. 5 m /s handled in unit expr; else error
+        eerr("unit");
+      }
+      const x = node.ue;
+      const f = ueFactor(x);
+      const dims = ueDims(x);
+      let val = q.v.times(f);
+      const p0 = x.parts[0];
+      if(p0 && p0.scale) val = q.v.times(p0.scale).times(f);
+      if(x.parts.length===1 && x.parts[0].pow===1 && x.parts[0].u.off){
+        val = q.v.times(x.parts[0].u.f).plus(x.parts[0].u.off);
+        const nq = new Q(val, dims, x); nq.absTemp = true; return nq;
+      }
+      return new Q(val, dims, x);
+    }
+    case "unit": {
+      const x = node.ue;
+      return new Q(ueFactor(x), ueDims(x), x);
+    }
+    case "conv": {
+      const q = evalNode(node.a, env);
+      const x = node.ue;
+      const dims = ueDims(x);
+      if(!dimEq(q.dims, dims)) eerr("dim");
+      const nq = new Q(q.v, q.dims, x);
+      nq.forced = true;
+      return nq;
+    }
+    case "bin": return evalBin(node, env);
+    case "call": return evalCall(node, env);
+    case "call2": {
+      const a = evalNode(node.a, env), b = evalNode(node.b, env);
+      if(!dimZero(a.dims)||!dimZero(b.dims)) eerr("dim");
+      const n = a.v, r = b.v;
+      if(!n.isInteger()||!r.isInteger()||n.lt(0)||r.lt(0)||r.gt(n)) eerr("dom");
+      if(n.gt(CAPS.fact)) eerr("cap");
+      const P = factorial(n).div(factorial(n.minus(r)));
+      return qnum(node.f==="nPr" ? P : P.div(factorial(r)));
+    }
+  }
+  eerr("node");
+}
+
+function factorial(x){
+  if(!x.isFinite()) eerr();
+  if(x.isInteger() && x.gte(0)){
+    if(x.gt(CAPS.fact)) eerr("cap");
+    let r = ONE;
+    for(let i=2;i<=x.toNumber();i++) r = r.times(i);
+    return r;
+  }
+  if(x.isInteger() && x.lt(0)) eerr("dom");
+  if(x.gt(CAPS.fact)||x.lt(-170)) eerr("cap");
+  return gamma(x.plus(1));
+}
+function gamma(zz){
+  // Lanczos, in double then refined -- adequate
+  const g = 7;
+  const C = [0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,
+    -176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  let z = zz.toNumber();
+  if(z < 0.5) return d(Math.PI).div(D.sin(PI.times(zz))).div(gamma(d(1).minus(zz)));
+  z -= 1;
+  let x = C[0];
+  for(let i=1;i<g+2;i++) x += C[i]/(z+i);
+  const t = z + g + 0.5;
+  const r = Math.sqrt(2*Math.PI) * Math.pow(t, z+0.5) * Math.exp(-t) * x;
+  if(!isFinite(r)) eerr("cap");
+  return d(r);
+}
+
+function sameUnitPreference(a,b){
+  // pick display unit for + -
+  if(!a.u && !b.u) return null;
+  if(!a.u) return b.u;
+  if(!b.u) return a.u;
+  const fa = ueFactor(a.u), fb = ueFactor(b.u);
+  return fa.gte(fb) ? a.u : b.u;
+}
+
+function evalBin(node, env){
+  const op = node.op;
+  const a = evalNode(node.a, env);
+  const b = evalNode(node.b, env);
+  if(op==="+"||op==="-"){
+    if(!dimEq(a.dims,b.dims)) eerr("dim");
+    const isTemp = a.absTemp || b.absTemp;
+    let v = op==="+" ? a.v.plus(b.v) : a.v.minus(b.v);
+    let u = sameUnitPreference(a,b);
+    if(isTemp){
+      // delta semantics: 20C + 5C = 25C
+      const au = a.absTemp ? a.u : null, bu = b.absTemp ? b.u : null;
+      const pu = au||bu;
+      const off = pu.parts[0].u.off || ZERO, fct = pu.parts[0].u.f;
+      const an = a.v.minus(a.absTemp?off:ZERO), bn = b.v.minus(b.absTemp?off:ZERO);
+      let raw = op==="+" ? an.plus(b.absTemp? b.v.minus(off) : b.v) : an.minus(b.absTemp? b.v.minus(off): b.v);
+      const q = new Q(raw.plus(off), a.dims, pu); q.absTemp = true; return q;
+    }
+    return new Q(v, a.dims, u);
+  }
+  if(op==="*"||op==="/"){
+    if(a.absTemp || b.absTemp) eerr("temp");
+    if(op==="/" && b.v.isZero()) eerr("div0");
+    const v = op==="*" ? a.v.times(b.v) : a.v.div(b.v);
+    const dims = op==="*" ? dimAdd(a.dims,b.dims) : dimAdd(a.dims,b.dims,-1);
+    let u = combineUnits(a.u,b.u,op);
+    if(dimZero(dims)) u = null;
+    const q = new Q(v, dims, u);
+    return q;
+  }
+  if(op==="%"){
+    if(!dimZero(a.dims) && !dimEq(a.dims,b.dims)) eerr("dim");
+    if(!dimZero(b.dims) && !dimEq(a.dims,b.dims)) eerr("dim");
+    if(b.v.isZero()) eerr("div0");
+    return new Q(a.v.mod(b.v), a.dims, a.u);
+  }
+  if(op==="^"){
+    if(!dimZero(b.dims)) eerr("dim");
+    const e = b.v;
+    if(e.abs().gt(CAPS.exp)) eerr("cap");
+    if(dimZero(a.dims)){
+      if(a.v.isNeg() && !e.isInteger()) eerr("complex");
+      if(a.v.isZero() && e.isNeg()) eerr("div0");
+      let r;
+      try{ r = D.pow(a.v, e); }catch(err){ eerr("pow"); }
+      if(!r.isFinite()) eerr("inf");
+      if(r.abs().gt(CAPS.big)) eerr("cap");
+      return qnum(r);
+    }
+    // dimensional
+    if(!e.isInteger()){
+      const nd = a.dims.map(x=>x*e.toNumber());
+      if(!nd.every(x=>Number.isInteger(Math.round(x*1e9)/1e9) && Math.abs(x-Math.round(x))<1e-9)) eerr("dim");
+      const r = D.pow(a.v, e);
+      const nu = a.u ? ue(a.u.parts.map(pp=>({...pp,pow:pp.pow*e.toNumber()})),{long:a.u.long,space:a.u.space}) : null;
+      if(nu && !nu.parts.every(pp=>Math.abs(pp.pow-Math.round(pp.pow))<1e-9)) eerr("dim");
+      if(nu) nu.parts.forEach(pp=>pp.pow=Math.round(pp.pow));
+      return new Q(r, nd.map(x=>Math.round(x)), nu);
+    }
+    const k = e.toNumber();
+    const nd = dimMul(a.dims,k);
+    const nu = a.u ? ue(a.u.parts.map(pp=>({...pp,pow:pp.pow*k})),{long:a.u.long,space:a.u.space}) : null;
+    return new Q(D.pow(a.v,e), nd, nu);
+  }
+  eerr("op");
+}
+function combineUnits(ua,ub,op){
+  if(!ua && !ub) return null;
+  const parts = [];
+  const add = (list, sign) => { for(const pp of list) parts.push({...pp, pow:pp.pow*sign}); };
+  if(ua) add(ua.parts,1);
+  if(ub) add(ub.parts, op==="*"?1:-1);
+  // merge same unit+prefix
+  const merged = [];
+  for(const pp of parts){
+    const f = merged.find(m=>m.u===pp.u && m.pfx===pp.pfx);
+    if(f) f.pow += pp.pow; else merged.push({...pp});
+  }
+  const fin = merged.filter(m=>m.pow!==0);
+  if(!fin.length) return null;
+  return ue(fin, {long:(ua&&ua.long)||(ub&&ub.long), space:(ua&&ua.space)||(ub&&ub.space)});
+}
+
+const DEG2RAD = () => PI.div(180);
+function evalCall(node, env){
+  const f = node.f;
+  let arg = evalNode(node.a, env);
+  const pw = node.power;
+  let res;
+  const trig = TRIGF.has(f);
+  const inv = INVTRIG.has(f);
+  if(trig){
+    let x;
+    if(dimZero(arg.dims)){
+      if(arg.bareAngle===false){}
+      env.sawBare = true;
+      x = env.deg ? arg.v.times(DEG2RAD()) : arg.v;
+    } else if(dimEq(arg.dims, dm({[A]:1}))){
+      x = arg.v;
+    } else eerr("dim");
+    res = trigCalc(f, x);
+    if(pw!=null) res = D.pow(res, pw);
+    return qnum(res);
+  }
+  if(inv){
+    if(!dimZero(arg.dims)) eerr("dim");
+    let r = invTrigCalc(f, arg.v);
+    if(env.deg){ env.sawBare = true; r = r.times(180).div(PI); }
+    else env.sawBare = true;
+    if(pw!=null) r = D.pow(r, pw);
+    return qnum(r);
+  }
+  switch(f){
+    case "sqrt": {
+      if(arg.v.isNeg()) eerr("complex");
+      if(!dimZero(arg.dims)){
+        const nd = arg.dims.map(x=>x/2);
+        if(!nd.every(x=>Number.isInteger(x))) eerr("dim");
+        const nu = arg.u ? ue(arg.u.parts.map(pp=>({...pp,pow:pp.pow/2})),{long:arg.u.long,space:arg.u.space}) : null;
+        if(nu && !nu.parts.every(pp=>Number.isInteger(pp.pow))) eerr("dim");
+        return new Q(D.sqrt(arg.v), nd, nu);
+      }
+      return qnum(D.sqrt(arg.v));
+    }
+    case "cbrt": {
+      if(!dimZero(arg.dims)){
+        const nd = arg.dims.map(x=>x/3);
+        if(!nd.every(x=>Number.isInteger(x))) eerr("dim");
+        const nu = arg.u ? ue(arg.u.parts.map(pp=>({...pp,pow:pp.pow/3})),{long:arg.u.long}) : null;
+        if(nu && !nu.parts.every(pp=>Number.isInteger(pp.pow))) eerr("dim");
+        return new Q(cbrtD(arg.v), nd, nu);
+      }
+      return qnum(cbrtD(arg.v));
+    }
+    case "abs": return new Q(arg.v.abs(), arg.dims, arg.u);
+    case "round": return new Q(arg.v.toDecimalPlaces(0,D.ROUND_HALF_UP), arg.dims, arg.u);
+    case "floor": return new Q(arg.v.floor(), arg.dims, arg.u);
+    case "ceil": return new Q(arg.v.ceil(), arg.dims, arg.u);
+    case "sign": return qnum(d(arg.v.cmp(0)));
+  }
+  if(!dimZero(arg.dims)) eerr("dim");
+  switch(f){
+    case "ln": if(arg.v.lte(0)) eerr("complex"); return qnum(D.ln(arg.v));
+    case "log": {
+      if(arg.v.lte(0)) eerr("complex");
+      const base = node.logBase ? d(node.logBase) : d(10);
+      if(base.lte(0)||base.eq(1)) eerr("dom");
+      return qnum(D.ln(arg.v).div(D.ln(base)));
+    }
+    case "log2": if(arg.v.lte(0)) eerr("complex"); return qnum(D.log2(arg.v));
+    case "log10": if(arg.v.lte(0)) eerr("complex"); return qnum(D.log10(arg.v));
+    case "exp": { const r = D.exp(arg.v); if(!r.isFinite()||r.abs().gt(CAPS.big)) eerr("cap"); return qnum(r); }
+  }
+  eerr("fn");
+}
+function cbrtD(x){
+  if(x.isZero()) return ZERO;
+  const neg = x.isNeg();
+  if(neg) eerr("complex");
+  return D.pow(x, d(1).div(3));
+}
+function trigCalc(f,x){
+  let r;
+  switch(f){
+    case "sin": r = D.sin(x); break;
+    case "cos": r = D.cos(x); break;
+    case "tan": r = D.tan(x); break;
+    case "csc": { const s=D.sin(x); if(s.isZero()) eerr("pole"); r = d(1).div(s); break; }
+    case "sec": { const c=D.cos(x); if(c.isZero()) eerr("pole"); r = d(1).div(c); break; }
+    case "cot": { const t=D.tan(x); if(t.isZero()) eerr("pole"); r = d(1).div(t); break; }
+    case "sinh": r = D.sinh(x); break;
+    case "cosh": r = D.cosh(x); break;
+    case "tanh": r = D.tanh(x); break;
+    default: eerr("fn");
+  }
+  if(!r.isFinite()) eerr("pole");
+  if(r.abs().gt("1e15")) eerr("pole");
+  return r;
+}
+function invTrigCalc(f,x){
+  const n = f.replace(/^arc/,"a");
+  switch(n){
+    case "asin": if(x.abs().gt(1)) eerr("complex"); return D.asin(x);
+    case "acos": if(x.abs().gt(1)) eerr("complex"); return D.acos(x);
+    case "atan": return D.atan(x);
+    case "acsc": if(x.abs().lt(1)) eerr("complex"); return D.asin(d(1).div(x));
+    case "asec": if(x.abs().lt(1)) eerr("complex"); return D.acos(d(1).div(x));
+    case "acot": return D.atan(d(1).div(x.isZero()?d("1e-40"):x));
+    case "asinh": return D.asinh(x);
+    case "acosh": if(x.lt(1)) eerr("complex"); return D.acosh(x);
+    case "atanh": if(x.abs().gte(1)) eerr("complex"); return D.atanh(x);
+  }
+  eerr("fn");
+}
+
+/* ============================================================================
+   8. Formatter
+   ========================================================================== */
+function isExact(x){
+  if(x.isZero()) return true;
+  const s = x.toFixed();               // full decimal, no exponent
+  if(/e/i.test(s)) return false;
+  const digits = s.replace(/[-.]/g,"").replace(/^0+/,"").replace(/0+$/,"");
+  const sig = digits.length || 1;
+  return sig <= 20;
+}
+function stripZeros(s){
+  if(s.indexOf(".")<0) return s;
+  return s.replace(/0+$/,"").replace(/\.$/,"");
+}
+function needSci(x){
+  if(x.isZero()) return false;
+  const a = x.abs();
+  return a.gte("1e15") || a.lt("1e-6");
+}
+function sciParts(x){
+  const e = x.abs().log(10).floor().toNumber();
+  const m = x.div(D.pow(10,e));
+  return {m, e};
+}
+function fmtSci(mantStr, e){ return mantStr + "e" + (e>=0?"":"") + e; }
+
+function fmtExact(x){
+  if(needSci(x)){
+    const {m,e} = sciParts(x);
+    return fmtSci(stripZeros(m.toFixed(Math.min(20, 15))), e);
+  }
+  return stripZeros(x.toFixed(Math.min(30, 25)));
+}
+/* inline approximation: fewest decimals d>=1 with rel err <=5%, non-zero, integer part unchanged */
+function approxInline(x){
+  if(x.isZero()) return "0";
+  if(needSci(x)){
+    const {m,e} = sciParts(x);
+    const ms = approxInline(m);
+    return fmtSci(ms, e);
+  }
+  const intPart = x.lt(0) ? x.ceil() : x.floor();
+  const intStr = intPart.toFixed();
+  for(let dd=1; dd<=20; dd++){
+    const r = x.toDecimalPlaces(dd, D.ROUND_HALF_UP);
+    if(r.isZero()) continue;
+    const rel = r.minus(x).abs().div(x.abs());
+    if(rel.gt(0.05)) continue;
+    const ri = r.lt(0)? r.ceil() : r.floor();
+    if(!ri.eq(intPart)) continue;
+    return r.toFixed(dd);
+  }
+  return stripZeros(x.toFixed(10));
+}
+/* significant-figure rounding that never touches the integer part */
+function trimTail(s){
+  if(s.indexOf(".")<0) return s;
+  s = s.replace(/0+$/,"");
+  if(s.endsWith(".")) s += "0";
+  return s;
+}
+function sigfig(x, n){
+  if(x.isZero()) return null;
+  const r = x.toSignificantDigits(n, D.ROUND_HALF_UP);
+  const xi = x.lt(0)?x.ceil():x.floor(), ri = r.lt(0)?r.ceil():r.floor();
+  if(!ri.eq(xi)) return null;
+  if(r.isZero()) return null;
+  if(needSci(x)){
+    const {m,e} = sciParts(x);
+    const mr = m.toSignificantDigits(n, D.ROUND_HALF_UP);
+    return fmtSci(trimTail(mr.toFixed(Math.max(1,n-1))), e);
+  }
+  // number of decimals needed
+  const exp = x.abs().log(10).floor().toNumber();
+  let dec = n - 1 - exp;
+  if(dec < 1) dec = 1;
+  const out = x.toDecimalPlaces(dec, D.ROUND_HALF_UP);
+  if(out.isZero()) return null;
+  const oi = out.lt(0)?out.ceil():out.floor();
+  if(!oi.eq(xi)) return null;
+  return trimTail(out.toFixed(dec));
+}
+function fmtNumber(x){
+  const c = clean(x);
+  if(isExact(c)) return {s:fmtExact(c), exact:true, val:c};
+  return {s:approxInline(c), exact:false, val:c};
+}
+function ladderOf(x, inlineStr){
+  const out = [];
+  const seen = new Set([inlineStr]);
+  for(const n of [3,5,8]){
+    const s = sigfig(x, n);
+    if(!s) continue;
+    if(seen.has(s)) continue;
+    // must be more precise than inline
+    const decOf = t => { const i=t.indexOf("."); return i<0?0:t.length-i-1; };
+    const base = inlineStr.split("e")[0], cur = s.split("e")[0];
+    if(decOf(cur) <= decOf(base)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+/* Quantity formatting */
+function unitDisplay(q, opts){
+  const x = q.u;
+  if(!x || !x.parts.length){
+    // derived naming for dimensionful results without unit
+    return "";
+  }
+  return ueStr(x);
+}
+function valueInUnit(q, target){
+  // target: UnitExpr
+  const f = ueFactor(target);
+  const p0 = target.parts[0];
+  if(target.parts.length===1 && p0.pow===1 && p0.u.off){
+    return q.v.minus(p0.u.off).div(p0.u.f);
+  }
+  let v = q.v.div(f);
+  if(p0 && p0.scale) v = v.div(p0.scale);
+  return v;
+}
+function fmtQuantity(q, target, mode){
+  // mode: 'inline' (full rules) | 'alt' (3sf)
+  const u = target || q.u;
+  let v = u ? valueInUnit(q,u) : q.v;
+  v = clean(v);
+  let numStr, exact = isExact(v);
+  if(exact) numStr = fmtExact(v);
+  else if(mode==="alt"){ numStr = sigfig(v,3) || approxInline(v); }
+  else numStr = approxInline(v);
+  let us = u ? ueStr(u) : "";
+  if(us && u.long && !v.abs().eq(1) && /[a-z]$/.test(us) && !/s$/.test(us)) us += "s";
+  const sep = (u && u.space) ? " " : "";
+  return { s: numStr + (us? sep+us : ""), num:numStr, exact, val:v, unitStr:us };
+}
+
+/* ============================================================================
+   9. Alternate units per dimension
+   ========================================================================== */
+const ALT = [
+  { dims: dm({[L]:1}), syms:["mi","m","km","ft","in","cm","mm","yd"] },
+  { dims: dm({[M]:1}), syms:["kg","g","lb","oz","t"] },
+  { dims: dm({[T]:1}), syms:["s","min","h","d","wk","yr","ms"] },
+  { dims: dm({[A]:1}), syms:["deg","rad","grad"] },
+  { dims: dm({[K]:1}), syms:["°C","°F","K"] },
+  { dims: dm({[B]:1}), syms:["B","kB","MB","GB","TB","b","Mb","Gb"] },
+  { dims: dm({[L]:2}), syms:["km^2","ac","ft^2","m^2","mi^2","ha","in^2"] },
+  { dims: dm({[L]:3}), syms:["L","mL","m^3","gal","qt","pt","cup","floz","ft^3"] },
+  { dims: dm({[L]:1,[T]:-1}), syms:["m/s","mph","kph","ft/s","kn"] },
+  { dims: dm({[M]:1,[L]:2,[T]:-2}), syms:["J","kJ","cal","kcal","Wh","kWh","BTU"] },
+  { dims: dm({[M]:1,[L]:2,[T]:-3}), syms:["W","kW","hp","PS","MW"] },
+  { dims: dm({[M]:1,[L]:-1,[T]:-2}), syms:["Pa","kPa","bar","atm","PSI"] },
+  { dims: dm({[M]:1,[L]:1,[T]:-2}), syms:["N","lbf","kN"] },
+  { dims: dm({[T]:-1}), syms:["Hz","kHz","MHz","GHz"] },
+  { dims: dm({[I]:1}), syms:["A","mA","kA"] },
+  { dims: dm({[M]:1,[L]:2,[T]:-3,[I]:-1}), syms:["V","mV","kV"] },
+  { dims: dm({[M]:1,[L]:2,[T]:-3,[I]:-2}), syms:["Ω","kΩ","MΩ"] },
+  { dims: dm({[L]:-2}), syms:["mpg","kmpl"] },
+];
+function parseUnitSymToUE(sym){
+  const toks = tokenize(sym);
+  if(!toks) return null;
+  const P = Parser(toks,{});
+  try{
+    const parts=[]; let i=0;
+    // simple: reuse parser's unit expression via a tiny manual parse
+    const pr = ParseUnitOnly(toks);
+    return pr;
+  }catch(e){ return null; }
+}
+function ParseUnitOnly(toks){
+  let p=0;
+  const parts=[];
+  function one(sign){
+    const t=toks[p];
+    if(!t||t.k!=="id") return false;
+    const r = lookupUnitWord(t.v);
+    if(!r) return false;
+    p++;
+    const c = r.cands[0];
+    let pw=1;
+    const nt=toks[p];
+    if(nt&&nt.k==="op"&&nt.v==="^"&&toks[p+1]&&toks[p+1].k==="num"){ pw=parseInt(toks[p+1].v,10); p+=2; }
+    else if(nt&&nt.k==="sup"){ pw=parseInt(nt.v,10); p++; }
+    parts.push({u:c.u,pfx:c.pfx,pow:pw*sign,sym:c.sym,scale:c.scale});
+    return true;
+  }
+  if(!one(1)) return null;
+  while(p<toks.length){
+    if(toks[p].k==="op"&&toks[p].v==="/"){ p++; if(!one(-1)) return null; continue; }
+    if(toks[p].k==="op"&&toks[p].v==="*"){ p++; if(!one(1)) return null; continue; }
+    if(toks[p].k==="id"){ if(!one(1)) return null; continue; }
+    return null;
+  }
+  return ue(parts,{});
+}
+const ALT_CACHE = new Map();
+function altUnitsFor(dims){
+  const k = dimKey(dims);
+  if(ALT_CACHE.has(k)) return ALT_CACHE.get(k);
+  const ent = ALT.find(a=>dimEq(a.dims,dims));
+  let list = [];
+  if(ent){
+    for(const s of ent.syms){
+      const x = parseUnitSymToUE(s);
+      if(x && dimEq(ueDims(x),dims)) list.push(x);
+    }
+  }
+  ALT_CACHE.set(k,list);
+  return list;
+}
+
+/* derived naming for compound results */
+function simplifyUnit(q){
+  if(!q.u || !q.u.parts.length) return q.u;
+  const parts = q.u.parts;
+  if(parts.length===1 && parts[0].pow===1) return q.u;
+  const dims = ueDims(q.u);
+  const cands = DERIVED_BY_DIM.get(dimKey(dims));
+  if(cands && cands.length){
+    const total = ueFactor(q.u);
+    let best = null;
+    for(const named of cands){
+      const f = total.div(named.f);
+      let lg;
+      try{ lg = f.log(10); }catch(e){ continue; }
+      const r = lg.toDecimalPlaces(0, D.ROUND_HALF_EVEN);
+      if(lg.minus(r).abs().gt("1e-25")) continue;
+      const e = r.toNumber();
+      if(e!==0 && pfxSym(e).startsWith("e")) continue;
+      if(named.pfx==="none" && e!==0) continue;
+      const score = Math.abs(e);
+      if(!best || score < best.score) best = {named, e, score};
+    }
+    if(best){
+      return ue([{u:best.named, pfx:best.e, pow:1, sym:pfxSym(best.e)+best.named.sym}],
+                {long:q.u.long, space:q.u.space});
+    }
+  }
+  return q.u;
+}
+
+window.__calcInternals = {tokenize, Parser, evalNode, Q, fmtNumber, ladderOf};
+</script>
+<script>
+/* ============================================================================
+   10. Line analysis + suggestion engine
+   ========================================================================== */
+const PHONE_DATE = [
+  /^\d{3}-\d{4}$/,
+  /^\d{3}-\d{3}-\d{4}$/,
+  /^\(?\d{3}\)?[ -]?\d{3}-\d{4}$/,
+  /^\d{4}-\d{1,2}-\d{1,2}$/,
+  /^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}$/
+];
+const LONE_LIT = /^[+-]?\s*(\(\s*)?[+-]?\d+(\.\d+)?\s*\)?$/;
+
+function evaluateExpr(text){
+  // returns {ok, results:[{q, deg?, env}], ambigUnit, sawBare}
+  const toks = tokenize(text);
+  if(!toks || !toks.length) return null;
+  let parsed;
+  try{
+    const P = Parser(toks,{});
+    const r = P.parse();
+    if(r.pos !== toks.length) return null;
+    parsed = r.node;
+  }catch(e){ return null; }
+  return {ast:parsed, toks};
+}
+
+function runEval(ast, deg){
+  const env = {deg:!!deg, sawBare:false};
+  try{
+    const q = evalNode(ast, env);
+    if(!q || !q.v || !q.v.isFinite()) return null;
+    if(q.v.abs().gt(CAPS.big)) return null;
+    return {q, env};
+  }catch(e){ return null; }
+}
+function hasBareTrig(ast){
+  let found = false;
+  (function walk(n){
+    if(!n || typeof n!=="object" || found) return;
+    if(n.t==="call" && (TRIGF.has(n.f)||INVTRIG.has(n.f))){
+      if(INVTRIG.has(n.f)) { found = true; return; }
+      // bare if argument is dimensionless
+      const env={deg:false,sawBare:false};
+      try{
+        const a = evalNode(n.a, env);
+        if(dimZero(a.dims)) { found = true; return; }
+      }catch(e){}
+    }
+    for(const k in n){ const v=n[k]; if(v&&typeof v==="object") walk(v); }
+  })(ast);
+  return found;
+}
+function findAmbig(ast){
+  let res = null;
+  (function walk(n){
+    if(!n||typeof n!=="object"||res) return;
+    if(n.ambig) { res = n.ambig; return; }
+    for(const k in n){ const v=n[k]; if(v&&typeof v==="object") walk(v); }
+  })(ast);
+  return res;
+}
+
+/* Find longest syntactically valid suffix that ends exactly at caret */
+function findExpression(segment){
+  if(segment.length > CAPS.chars) return null;
+  const toks = tokenize(segment);
+  if(!toks || !toks.length) return null;
+  if(toks.length > CAPS.tokens) return null;
+  for(let st=0; st<toks.length; st++){
+    const sub = toks.slice(st);
+    // must contain at least one operator/function/unit to be interesting? no – allow
+    try{
+      const P = Parser(sub,{});
+      const r = P.parse();
+      if(r.pos === sub.length){
+        return { text: segment.slice(sub[0].s), ast: r.node, toks: sub, start: sub[0].s };
+      }
+    }catch(e){ /* try next start */ }
+  }
+  return null;
+}
+
+function analyzeLine(lineBeforeCaret){
+  const raw = lineBeforeCaret;
+  const trailWS = (raw.match(/\s*$/)||[""])[0];
+  let line = raw.slice(0, raw.length - trailWS.length);
+  if(!line) return null;
+  if(line.length > CAPS.chars) return null;
+
+  // bullet
+  let bullet = false, bulletEnd = 0;
+  const bm = line.match(/^(\s*)([-*+•–])(\s+)/);
+  if(bm){ bullet = true; bulletEnd = bm[0].length; }
+  const body = bullet ? line.slice(bulletEnd) : line;
+  if(!body.trim()) return null;
+
+  // segment on '='
+  const parts = [];
+  let idx = 0, last = 0;
+  for(let i=0;i<body.length;i++){
+    if(body[i]==="=" && body[i-1]!=="!" && body[i-1]!=="<" && body[i-1]!==">" && body[i+1]!=="="){
+      parts.push({text:body.slice(last,i), end:i}); last = i+1;
+    }
+  }
+  parts.push({text:body.slice(last), end:body.length});
+
+  const hasEq = parts.length>1;
+  const tail = parts[parts.length-1].text;
+
+  let shape, exprSeg, typedResult=null, prevSeg=null;
+  if(hasEq && tail.trim()===""){
+    shape = "eq-empty";
+    exprSeg = parts[parts.length-2].text;
+  } else if(hasEq && /^\s*[-+]?\d*\.?\d+(\s*[A-Za-zµΩ°^/·]+[A-Za-z0-9µΩ°^/·]*)?\s*$/.test(tail) && tail.trim()!==""){
+    // possible typed partial result
+    const prev = parts[parts.length-2].text;
+    const pe = findExpression(prev.trim().length?prev:"");
+    if(pe){ shape="typed-result"; exprSeg = prev; typedResult = tail.trim(); }
+    else { shape = hasEq? "post-eq":"none"; exprSeg = tail; }
+  } else {
+    shape = hasEq ? "post-eq" : "none";
+    exprSeg = tail;
+  }
+
+  const found = findExpression(exprSeg);
+  if(!found) return null;
+
+  return {
+    raw, line, trailWS, bullet, bulletEnd, body, parts, hasEq, shape,
+    exprSeg, typedResult, found,
+    eqExplicit: hasEq
+  };
+}
+
+/* spacing detection */
+function spacingOf(exprText, hasEq, lineEndsWithEq, trailWS){
+  const spaced = /\s[-+*/]\s/.test(exprText) || /\s(to|in)\s/.test(exprText);
+  return spaced;
+}
+
+/* ============================================================================
+   11. Building suggestions
+   ========================================================================== */
+function eqDisplay(exprText){ return exprText.trim().replace(/\s+/g," "); }
+
+function buildSuggestions(A){
+  if(!A) return {chips:[], cls:"none"};
+  const found = A.found;
+  const exprText = found.text.trim();
+  const chips = [];
+
+  // classification
+  let cls = "inline";
+  const eqTyped = A.hasEq;
+  const rawExpr = found.text;
+  if(LONE_LIT.test(exprText)) return {chips:[], cls:"lone"};
+  if(!eqTyped && /^[-+]?\s*\d+(\.\d+)?\s*%$/.test(exprText)) return {chips:[], cls:"lone"};
+  if(!eqTyped){
+    if(PHONE_DATE.some(r=>r.test(exprText))) cls = "chip";
+    else if(A.bullet && found.start===0) cls = "chip";
+  }
+
+  const ambig = findAmbig(found.ast);
+  if(ambig && ambig.cands.length>1) cls = "chip";
+
+  // Determine bare-unit-only (e.g. "5km")
+  const bareUnitOnly = /^[-+]?\s*\d*\.?\d+\s*[A-Za-zµΩ°][A-Za-z0-9µΩ°^²³/·\s]*$/.test(exprText)
+    && !/[+\-*/%^!]/.test(exprText.replace(/^[-+]/,""))
+    && !/\b(to|in|into|as)\b/.test(exprText) && exprText.indexOf("->")<0;
+
+  // evaluate
+  const bare = hasBareTrig(found.ast);
+  let runs = [];
+  if(bare){
+    const r1 = runEval(found.ast,false), r2 = runEval(found.ast,true);
+    if(r1) runs.push({res:r1, tag:"rad"});
+    if(r2) runs.push({res:r2, tag:"deg"});
+  } else {
+    const r = runEval(found.ast,false);
+    if(r) runs.push({res:r, tag:null});
+  }
+  if(!runs.length) return {chips:[], cls:"none"};
+
+  // ambiguous-unit readings -> one chip per reading
+  let readings = null;
+  if(ambig && ambig.cands.length>1){
+    readings = ambig.cands;
+  }
+
+  // spacing
+  const userSpaced = /\s[-+*/]\s|\s(to|in|into)\s/.test(exprText);
+  const eqSpacing = userSpaced ? " = " : "=";
+
+  // insertion prefix: "=" shapes insert only the remainder
+  let insPrefix = (A.shape==="eq-empty" || A.shape==="typed-result") ? "" : (userSpaced ? " = " : "=");
+
+  const out = [];
+  const pushChip = (o)=>{ out.push(o); };
+
+  function unitSpacePref(q){
+    // user's number/unit spacing
+    return /\d\s+[A-Za-zµΩ°]/.test(exprText);
+  }
+  function longNamePref(){
+    return /[A-Za-z]{4,}/.test(exprText.replace(/\b(to|in|into|sqrt|cbrt|log|sin|cos|tan|asin|acos|atan|nPr|nCr|pi|exp|abs)\b/g,""));
+  }
+
+  for(const run of runs){
+    const q0 = run.res.q;
+    let q = q0;
+    if(q.u) q = new Q(q.v, q.dims, simplifyUnit(q));
+    const space = unitSpacePref(q);
+    const longn = longNamePref() && q.u && q.u.long;
+    if(q.u){ q.u = ue(q.u.parts, {long: !!(q.u.long && longn), space}); }
+
+    // choose primary unit
+    let primary = q.u;
+    if(q.u && q.u.parts.length===1){
+      const alts = altUnitsFor(q.dims);
+      // prefer the unit whose value is in [1,1000)
+      const cur = valueInUnit(q, q.u).abs();
+      if(!(cur.gte(1) && cur.lt(1000))){
+        // keep the operand's unit as primary anyway (spec: operand units next)
+      }
+    }
+    const prim = fmtQuantity(q, primary, "inline");
+    const tag = run.tag;
+
+    if(readings){
+      // one chip per reading: rebuild using each candidate
+      continue;
+    }
+
+    const eqFull = eqDisplay(exprText) + " = ";
+    pushChip({
+      kind:"primary",
+      insertText: insPrefix + prim.s,
+      result: prim.s,
+      eqLeft: eqFull,
+      tag,
+      inlineEligible: (cls==="inline"),
+      hideBare: bareUnitOnly && !dimZero(q.dims),
+      q, unit:primary
+    });
+
+    // alternate units
+    if(q.u || !dimZero(q.dims)){
+      const alts = altUnitsFor(q.dims);
+      const primStr = ueStr(primary||{parts:[]});
+      let n=0;
+      for(const av of alts){
+        const s = ueStr(av);
+        if(s===primStr) continue;
+        const av2 = ue(av.parts, {space, long:!!longn});
+        const f = fmtQuantity(q, av2, "alt");
+        if(f.num==null) continue;
+        pushChip({
+          kind:"alt",
+          insertText: insPrefix + f.s,
+          result: f.s,
+          eqLeft: eqFull,
+          tag,
+          inlineEligible:false,
+          q, unit:av2
+        });
+        if(++n>=7) break;
+      }
+    }
+  }
+
+  // ambiguous readings chips: mutate the shared part, re-evaluate the same AST
+  if(readings){
+    const off = found.start;
+    const lead = rawExpr.slice(0, Math.max(0, ambig.ts - off));
+    const trail = rawExpr.slice(Math.max(0, ambig.te - off));
+    for(const c of readings){
+      ambig.part.u = c.u; ambig.part.pfx = c.pfx; ambig.part.sym = c.sym; ambig.part.scale = c.scale;
+      const r = runEval(found.ast,false);
+      if(!r) continue;
+      let q = r.q;
+      if(q.u) q = new Q(q.v, q.dims, simplifyUnit(q));
+      const space = /\d\s+[A-Za-zµΩ°]/.test(exprText);
+      if(q.u) q.u = ue(q.u.parts,{long:false, space});
+      const prim = fmtQuantity(q, q.u, "inline");
+      pushChip({
+        kind:"reading",
+        insertText: insPrefix + prim.s,
+        result: prim.s,
+        eqLeft: (lead + c.sym + trail).trim().replace(/\s+/g," ") + " = ",
+        tag:null,
+        inlineEligible:false,
+        q, unit:q.u
+      });
+    }
+  }
+
+  // ladder for the primary chips
+  const withLadder = [];
+  for(let i=0;i<out.length;i++){
+    withLadder.push(out[i]);
+  }
+  const ladders = [];
+  for(const c of out){
+    if(c.kind!=="primary") continue;
+    const q = c.q;
+    const v = clean(c.unit ? valueInUnit(q,c.unit) : q.v);
+    if(isExact(v)) continue;
+    const inlineNum = approxInline(v);
+    const us = c.unit ? ueStr(c.unit) : "";
+    const sep = (c.unit && c.unit.space) ? " " : "";
+    for(const s of ladderOf(v, inlineNum)){
+      ladders.push({
+        kind:"ladder",
+        insertText: insPrefix + s + (us?sep+us:""),
+        result: s + (us?sep+us:""),
+        eqLeft: c.eqLeft,
+        tag: c.tag,
+        inlineEligible:false,
+        q
+      });
+    }
+  }
+
+  // ordering
+  const prims = out.filter(c=>c.kind==="primary");
+  const rest  = out.filter(c=>c.kind!=="primary");
+  let ordered = (runs.length>1)
+    ? [...prims, ...ladders, ...rest]           // rad primary, deg primary, rad ladder, deg ladder
+    : [...prims, ...rest, ...ladders];          // primary, alt units, longer decimals
+
+  // bare unit line (5km): the "same unit" primary is useless, drop it from the bar
+  const isBareUnit = ordered.some(c=>c.hideBare);
+  if(isBareUnit){
+    ordered = ordered.filter(c=>!c.hideBare);
+    cls = "bareunit";
+  }
+
+  // dedupe by rendered result
+  const dedupe = (list)=>{
+    const seen = new Set(), o = [];
+    for(const c of list){ if(seen.has(c.result)) continue; seen.add(c.result); o.push(c); }
+    return o;
+  };
+  ordered = dedupe(ordered);
+
+  // typed partial result handling
+  if(A.shape==="typed-result"){
+    const typed = A.typedResult;
+    const matched = [];
+    let sawComplete = false;
+    for(const c of ordered){
+      const full = c.result;
+      if(full === typed){ sawComplete = true; continue; }
+      if(full.startsWith(typed) && full.length>typed.length){
+        matched.push(Object.assign({}, c, {
+          insertText: full.slice(typed.length),
+          typedPrefixLen: typed.length,
+          inlineEligible: (c.kind==="primary" && cls==="inline")
+        }));
+      }
+    }
+    if(matched.length) ordered = matched;
+    else if(sawComplete) return {chips:[], cls:"complete"};
+    else {
+      // replace chip: swap in the correct value
+      const p = ordered.find(c=>c.kind==="primary") || ordered[0];
+      if(!p) return {chips:[], cls:"none"};
+      ordered = [Object.assign({},p,{
+        kind:"replace",
+        insertText: p.result,
+        replaceLen: typed.length,
+        inlineEligible:false
+      })];
+    }
+  }
+
+  const fin = ordered;
+  if(cls!=="inline") for(const c of fin) c.inlineEligible = false;
+
+  return {chips: fin.slice(0,24), cls, insPrefix};
+}
+</script>
+<script>
+/* ============================================================================
+   12. Name autocomplete
+   ========================================================================== */
+const COMPLETION_POOL = (()=>{
+  const s = new Set();
+  ["sqrt(","cbrt(","log(","ln(","log2(","sin(","cos(","tan(","asin(","acos(","atan(",
+   "sinh(","cosh(","tanh(","abs(","round(","floor(","ceil(","exp(","nPr(","nCr("].forEach(x=>s.add(x));
+  ["pi","e","tau","phi"].forEach(x=>s.add(x));
+  for(const u of U){ for(const n of u.names) s.add(n); for(const sy of u.symbols) if(/^[A-Za-z]{2,}$/.test(sy)) s.add(sy); }
+  for(const p in PREFIX_NAMES){ ["meter","gram","second","byte","bit","watt","joule","hertz","liter","newton","pascal","volt","amp"].forEach(b=>s.add(p+b)); }
+  return [...s];
+})();
+function completionsFor(word, convMode){
+  if(!word || word.length<2) return [];
+  const lo = word.toLowerCase();
+  const res = [];
+  for(const c of COMPLETION_POOL){
+    if(c.toLowerCase().startsWith(lo) && c.length>word.length) res.push(c);
+  }
+  res.sort((a,b)=> a.length-b.length || a.localeCompare(b));
+  return res.slice(0,8);
+}
+</script>
+<script>
+/* ============================================================================
+   13. UI
+   ========================================================================== */
+const ta = document.getElementById("ta");
+const mirror = document.getElementById("mirror");
+const bar = document.getElementById("bar");
+
+let state = { chips:[], sel:0, moved:false, dismissed:false, ctx:null, composing:false };
+
+const SAVE_KEY = "calc.text.v1";
+try{ const v = localStorage.getItem(SAVE_KEY); if(v!=null) ta.value = v; }catch(e){}
+
+function saveSoon(){ clearTimeout(saveSoon._t); saveSoon._t=setTimeout(()=>{ try{localStorage.setItem(SAVE_KEY, ta.value);}catch(e){} },250); }
+
+function lineBounds(){
+  const v = ta.value, c = ta.selectionStart;
+  let s = v.lastIndexOf("\n", c-1)+1;
+  let e = v.indexOf("\n", c); if(e<0) e = v.length;
+  return {s,e,c};
+}
+function caretAtLineEnd(){
+  const {e,c} = lineBounds();
+  const rest = ta.value.slice(c, e);
+  return /^\s*$/.test(rest);
+}
+
+function compute(){
+  if(state.composing) return clearAll();
+  if(ta.selectionStart !== ta.selectionEnd) return clearAll();
+  if(state.dismissed) return clearAll(true);
+  if(!caretAtLineEnd()) return clearAll();
+  const {s,c} = lineBounds();
+  const before = ta.value.slice(s,c);
+  if(!before.trim()) return clearAll();
+
+  let A=null, r=null;
+  try{ A = analyzeLine(before); }catch(e){ A=null; }
+  if(A){ try{ r = buildSuggestions(A); }catch(e){ r=null; } }
+
+  let chips = (r && r.chips) ? r.chips : [];
+
+  // name autocomplete fallback (only when no expression was recognised at all)
+  if(!chips.length && !A){
+    const m = before.match(/([A-Za-z]{2,})$/);
+    if(m){
+      const w = m[1];
+      const convM = /(\bto|\bin|->)\s*$/.test(before.slice(0, before.length-w.length));
+      const comps = completionsFor(w, convM);
+      chips = comps.map(cp=>({
+        kind:"complete",
+        insertText: cp.slice(w.length),
+        result: cp,
+        eqLeft: "",
+        displayFull: cp,
+        typedPrefixLen: w.length,
+        inlineEligible: true,
+        tag: null
+      }));
+    }
+  }
+
+  state.chips = chips;
+  if(state.sel >= chips.length) state.sel = 0;
+  render();
+}
+
+function renderGhost(){
+  const v = ta.value, c = ta.selectionStart;
+  const chip = state.chips[state.sel];
+  mirror.textContent = "";
+  if(!chip || !chip.inlineEligible || state.dismissed){
+    mirror.scrollTop = ta.scrollTop; mirror.scrollLeft = ta.scrollLeft;
+    return false;
+  }
+  const pre = document.createTextNode(v.slice(0,c));
+  const g = document.createElement("span");
+  g.className = "g";
+  g.textContent = chip.insertText;
+  const post = document.createTextNode(v.slice(c));
+  mirror.appendChild(pre); mirror.appendChild(g); mirror.appendChild(post);
+  mirror.scrollTop = ta.scrollTop; mirror.scrollLeft = ta.scrollLeft;
+  return true;
+}
+
+function esc(s){ return s.replace(/[&<>]/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m])); }
+function midEllipsis(s, max){
+  if(s.length<=max) return s;
+  const h = Math.floor((max-1)/2);
+  return s.slice(0,h) + "…" + s.slice(s.length-(max-1-h));
+}
+
+function chipHTML(c, i){
+  let html = "";
+  if(c.kind==="complete"){
+    const typed = c.result.slice(0, c.typedPrefixLen);
+    html = `<span class="dim">${esc(typed)}</span><span class="em">${esc(c.result.slice(c.typedPrefixLen))}</span>`;
+  } else if(c.kind==="replace"){
+    html = `<span class="dim">${esc(midEllipsis(c.eqLeft,44))}</span><span class="em">${esc(c.result)}</span>`;
+  } else {
+    const left = midEllipsis(c.eqLeft, 44);
+    const tl = c.typedPrefixLen||0;
+    const typed = c.result.slice(0,tl), rest = c.result.slice(tl);
+    html = `<span class="dim">${esc(left)}${esc(typed)}</span><span class="em">${esc(rest)}</span>`;
+  }
+  const tag = c.tag ? `<span class="tag">${esc(c.tag)}</span>` : "";
+  return `<div class="chip${i===state.sel?" sel":""}" data-i="${i}"><span class="eq">${html}</span>${tag}</div>`;
+}
+
+function render(){
+  const chips = state.chips;
+  if(!chips.length){
+    bar.className = "";
+    bar.innerHTML = "";
+    renderGhost();
+    return;
+  }
+  bar.className = "on";
+  bar.innerHTML = chips.map(chipHTML).join("") +
+    `<span id="hint">Tab/Enter accept · ←→ switch</span>`;
+  renderGhost();
+  const el = bar.querySelector(".chip.sel");
+  if(el) el.scrollIntoView({block:"nearest", inline:"nearest"});
+}
+
+function clearAll(keepDismiss){
+  state.chips = []; state.sel = 0;
+  if(!keepDismiss) state.moved = false;
+  bar.className=""; bar.innerHTML="";
+  mirror.textContent="";
+  return;
+}
+
+function insertText(text, replaceLen){
+  ta.focus();
+  if(replaceLen){
+    const c = ta.selectionStart;
+    ta.setSelectionRange(c-replaceLen, c);
+  }
+  let ok = false;
+  try{ ok = document.execCommand("insertText", false, text); }catch(e){ ok=false; }
+  if(!ok){
+    const s = ta.selectionStart, e = ta.selectionEnd;
+    ta.setRangeText(text, s, e, "end");
+    ta.dispatchEvent(new Event("input", {bubbles:true}));
+  }
+  saveSoon();
+}
+
+function acceptable(){
+  const c = state.chips[state.sel];
+  if(!c) return false;
+  if(state.dismissed) return false;
+  if(c.inlineEligible) return true;     // ghost visible
+  if(state.moved) return true;
+  return false;
+}
+
+function accept(i){
+  const c = state.chips[i==null?state.sel:i];
+  if(!c) return false;
+  insertText(c.insertText, c.replaceLen||0);
+  state.moved = false; state.sel = 0;
+  setTimeout(()=>{ schedule(0); }, 0);
+  return true;
+}
+
+let timer=null;
+function schedule(ms){
+  clearTimeout(timer);
+  timer = setTimeout(compute, ms==null?30:ms);
+}
+
+ta.addEventListener("input", ()=>{ state.dismissed=false; state.moved=false; state.sel=0; saveSoon(); schedule(); });
+ta.addEventListener("scroll", ()=>{ mirror.scrollTop = ta.scrollTop; mirror.scrollLeft = ta.scrollLeft; });
+ta.addEventListener("click", ()=>{ state.moved=false; schedule(0); });
+ta.addEventListener("compositionstart", ()=>{ state.composing=true; clearAll(); });
+ta.addEventListener("compositionend", ()=>{ state.composing=false; schedule(); });
+ta.addEventListener("blur", ()=>{ /* keep chips */ });
+
+ta.addEventListener("keydown", (ev)=>{
+  const k = ev.key;
+  if(state.composing) return;
+  if(ev.altKey && /^[1-9]$/.test(k)){
+    const i = parseInt(k,10)-1;
+    if(state.chips[i]){ ev.preventDefault(); accept(i); }
+    return;
+  }
+  if(k==="Escape"){ if(state.chips.length){ ev.preventDefault(); } state.dismissed=true; clearAll(); return; }
+  if(k==="Tab"){
+    if(acceptable()){ ev.preventDefault(); accept(); return; }
+    ev.preventDefault(); insertText("\t"); schedule(); return;
+  }
+  if(k==="Enter"){
+    if(acceptable()){ ev.preventDefault(); accept(); return; }
+    return; // natural newline
+  }
+  if(state.chips.length && (k==="ArrowLeft"||k==="ArrowUp"||k==="ArrowRight"||k==="ArrowDown")){
+    const prev = (k==="ArrowLeft"||k==="ArrowUp");
+    const ni = state.sel + (prev?-1:1);
+    if(ni>=0 && ni<state.chips.length){
+      ev.preventDefault();
+      state.sel = ni; state.moved = true; render();
+      return;
+    }
+    // fall through: dismiss ghost
+    state.dismissed = true; clearAll();
+    return;
+  }
+  if(k==="ArrowLeft"||k==="ArrowRight"||k==="ArrowUp"||k==="ArrowDown"||k==="Home"||k==="End"){
+    setTimeout(()=>{ state.moved=false; schedule(0); },0);
+  }
+});
+ta.addEventListener("keyup",(ev)=>{
+  if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(ev.key)) { /* handled */ }
+});
+
+bar.addEventListener("mousedown",(ev)=>{
+  const el = ev.target.closest(".chip");
+  if(!el) return;
+  ev.preventDefault();
+  accept(parseInt(el.dataset.i,10));
+});
+bar.addEventListener("touchstart",(ev)=>{
+  const el = ev.target.closest(".chip");
+  if(!el) return;
+  ev.preventDefault();
+  accept(parseInt(el.dataset.i,10));
+},{passive:false});
+
+document.addEventListener("selectionchange", ()=>{
+  if(document.activeElement !== ta) return;
+  if(state.composing) return;
+  if(ta.selectionStart !== ta.selectionEnd){ clearAll(); return; }
+  schedule(40);
+});
+window.addEventListener("resize", ()=>{ renderGhost(); });
+ta.focus();
+schedule(0);
+</script>
+</body>
+</html>
