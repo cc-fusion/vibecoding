@@ -1,0 +1,1930 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8f8f6">
+  <title></title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --paper: #fafaf8;
+      --ink: #27313b;
+      --muted: #7a8795;
+      --ghost: #aeb8c3;
+      --line: rgba(74, 90, 108, .13);
+      --chip: rgba(255, 255, 255, .83);
+      --chip-hover: #fff;
+      --accent: #3d6fa5;
+      --accent-soft: rgba(61, 111, 165, .10);
+      --shadow: 0 3px 14px rgba(22, 36, 52, .06);
+      --selection: rgba(96, 143, 190, .24);
+      --code-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background: var(--paper);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #111417;
+        --ink: #dce2e8;
+        --muted: #87929e;
+        --ghost: #687480;
+        --line: rgba(215, 226, 238, .13);
+        --chip: rgba(32, 38, 44, .94);
+        --chip-hover: #262d34;
+        --accent: #8ab5e3;
+        --accent-soft: rgba(138, 181, 227, .13);
+        --shadow: 0 4px 18px rgba(0, 0, 0, .2);
+        --selection: rgba(103, 154, 204, .28);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--paper); }
+    body { color: var(--ink); -webkit-font-smoothing: antialiased; }
+    #mirror, #editor {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      border: 0;
+      padding: clamp(30px, 7.2vh, 76px) clamp(22px, 7.5vw, 112px) 92px;
+      font-family: var(--code-font);
+      font-size: clamp(15px, 1.35vw, 18px);
+      font-weight: 400;
+      line-height: 1.72;
+      letter-spacing: 0;
+      tab-size: 4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: normal;
+      text-align: left;
+      box-sizing: border-box;
+    }
+    #mirror {
+      z-index: 1;
+      overflow: auto;
+      color: var(--ink);
+      pointer-events: none;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    #mirror::-webkit-scrollbar { display: none; }
+    #mirror .ghost { color: var(--ghost); font-style: normal; }
+    #editor {
+      z-index: 2;
+      display: block;
+      resize: none;
+      outline: none;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      caret-color: var(--accent);
+      background: transparent;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-color: transparent transparent;
+      scrollbar-width: none;
+      -webkit-appearance: none;
+      border-radius: 0;
+    }
+    #editor::-webkit-scrollbar { display: none; }
+    #editor::selection { background: var(--selection); -webkit-text-fill-color: transparent; }
+    #editor:focus { outline: none; }
+    #bottomBar {
+      position: fixed;
+      z-index: 4;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 62px;
+      padding: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      border-top: 1px solid var(--line);
+      background: var(--paper);
+      background: color-mix(in srgb, var(--paper) 91%, transparent);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      transition: height .12s ease, border-color .12s ease;
+    }
+    #bottomBar.is-empty {
+      height: max(3px, env(safe-area-inset-bottom));
+      min-height: 3px;
+      padding: 0;
+      gap: 0;
+      border-top-color: rgba(122, 135, 149, .16);
+      background: var(--paper);
+      backdrop-filter: none;
+    }
+    #chips {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      overscroll-behavior-x: contain;
+    }
+    #chips::-webkit-scrollbar { display: none; }
+    .chip {
+      appearance: none;
+      flex: 0 0 auto;
+      min-height: 38px;
+      max-width: min(620px, 68vw);
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--chip);
+      box-shadow: var(--shadow);
+      color: var(--muted);
+      font: 500 13px/1 var(--code-font);
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .12s ease, background .12s ease, transform .12s ease, color .12s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .chip:hover { background: var(--chip-hover); border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); }
+    .chip:active { transform: translateY(1px); }
+    .chip.selected {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
+      background: var(--accent-soft);
+      color: var(--ink);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent), var(--shadow);
+    }
+    .equation {
+      display: inline-block;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      vertical-align: middle;
+      white-space: nowrap;
+      text-overflow: clip;
+    }
+    .known { color: var(--muted); opacity: .82; }
+    .fresh { color: var(--accent); font-weight: 650; }
+    .ellipsis { color: var(--muted); opacity: .72; }
+    .tag {
+      display: inline-block;
+      margin-left: 10px;
+      padding-left: 9px;
+      border-left: 1px solid var(--line);
+      color: var(--muted);
+      opacity: .72;
+      font: 11px/1 var(--code-font);
+      text-transform: lowercase;
+      vertical-align: middle;
+    }
+    #keyHint {
+      flex: 0 0 auto;
+      padding-right: 2px;
+      color: var(--muted);
+      opacity: .64;
+      font: 11px/1.2 var(--code-font);
+      white-space: nowrap;
+      user-select: none;
+    }
+    #keyHint[hidden] { display: none; }
+    @media (max-width: 640px) {
+      #mirror, #editor { padding: 32px 22px 84px; font-size: 16px; line-height: 1.68; }
+      #bottomBar { height: 58px; gap: 10px; padding-left: 10px; padding-right: max(10px, env(safe-area-inset-right)); }
+      .chip { min-height: 42px; max-width: 76vw; padding: 0 12px; font-size: 12px; border-radius: 9px; }
+      #keyHint { max-width: 80px; text-align: right; white-space: normal; line-height: 1.35; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
+  </style>
+</head>
+<body>
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea id="editor" aria-label="Math notepad" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" wrap="soft" autofocus></textarea>
+  <div id="bottomBar" class="is-empty" aria-label="Suggestions">
+    <div id="chips" role="listbox" aria-label="Math suggestions"></div>
+    <div id="keyHint" hidden>Tab/Enter accept · ←→ switch</div>
+  </div>
+  <script>
+/* Decimal.js 10.4.3 is bundled inline under MIT; its copyright and license notice follows. */
+!function(n){"use strict";
+/*!
+   *  decimal.js v10.4.3
+   *  An arbitrary-precision Decimal type for JavaScript.
+   *  https://github.com/MikeMcl/decimal.js
+   *  Copyright (c) 2022 Michael Mclaughlin <M8ch88l@gmail.com>
+   *  MIT Licence
+   */var e,i,t,r,s=9e15,o=1e9,u="0123456789abcdef",c="2.3025850929940456840179914546843642076011014886287729760333279009675726096773524802359972050895982983419677840422862486334095254650828067566662873690987816894829072083255546808437998948262331985283935053089653777326288461633662222876982198867465436674744042432743651550489343149393914796194044002221051017141748003688084012647080685567743216228355220114804663715659121373450747856947683463616792101806445070648000277502684916746550586856935673420670581136429224554405758925724208241314695689016758940256776311356919292033376587141660230105703089634572075440370847469940168269282808481184289314848524948644871927809676271275775397027668605952496716674183485704422507197965004714951050492214776567636938662976979522110718264549734772662425709429322582798502585509785265383207606726317164309505995087807523710333101197857547331541421808427543863591778117054309827482385045648019095610299291824318237525357709750539565187697510374970888692180205189339507238539205144634197265287286965110862571492198849978748873771345686209167058",f="3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679821480865132823066470938446095505822317253594081284811174502841027019385211055596446229489549303819644288109756659334461284756482337867831652712019091456485669234603486104543266482133936072602491412737245870066063155881748815209209628292540917153643678925903600113305305488204665213841469519415116094330572703657595919530921861173819326117931051185480744623799627495673518857527248912279381830119491298336733624406566430860213949463952247371907021798609437027705392171762931767523846748184676694051320005681271452635608277857713427577896091736371787214684409012249534301465495853710507922796892589235420199561121290219608640344181598136297747713099605187072113499999983729780499510597317328160963185950244594553469083026425223082533446850352619311881710100031378387528865875332083814206171776691473035982534904287554687311595628638823537875937519577818577805321712268066130019278766111959092164201989380952572010654858632789",a={precision:20,rounding:4,modulo:1,toExpNeg:-7,toExpPos:21,minE:-s,maxE:s,crypto:!1},l=!0,h="[DecimalError] ",d=h+"Invalid argument: ",p=h+"Precision limit exceeded",g=h+"crypto unavailable",m="[object Decimal]",w=Math.floor,v=Math.pow,N=/^0b([01]+(\.[01]*)?|\.[01]+)(p[+-]?\d+)?$/i,b=/^0x([0-9a-f]+(\.[0-9a-f]*)?|\.[0-9a-f]+)(p[+-]?\d+)?$/i,E=/^0o([0-7]+(\.[0-7]*)?|\.[0-7]+)(p[+-]?\d+)?$/i,x=/^(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i,y=1e7,M=c.length-1,q=f.length-1,O={toStringTag:m};function D(n){var e,i,t,r=n.length-1,s="",o=n[0];if(r>0){for(s+=o,e=1;e<r;e++)(i=7-(t=n[e]+"").length)&&(s+=k(i)),s+=t;(i=7-(t=(o=n[e])+"").length)&&(s+=k(i))}else if(0===o)return"0";for(;o%10==0;)o/=10;return s+o}function F(n,e,i){if(n!==~~n||n<e||n>i)throw Error(d+n)}function A(n,e,i,t){var r,s,o,u;for(s=n[0];s>=10;s/=10)--e;return--e<0?(e+=7,r=0):(r=Math.ceil((e+1)/7),e%=7),s=v(10,7-e),u=n[r]%s|0,null==t?e<3?(0==e?u=u/100|0:1==e&&(u=u/10|0),o=i<4&&99999==u||i>3&&49999==u||5e4==u||0==u):o=(i<4&&u+1==s||i>3&&u+1==s/2)&&(n[r+1]/s/100|0)==v(10,e-2)-1||(u==s/2||0==u)&&!(n[r+1]/s/100|0):e<4?(0==e?u=u/1e3|0:1==e?u=u/100|0:2==e&&(u=u/10|0),o=(t||i<4)&&9999==u||!t&&i>3&&4999==u):o=((t||i<4)&&u+1==s||!t&&i>3&&u+1==s/2)&&(n[r+1]/s/1e3|0)==v(10,e-3)-1,o}function S(n,e,i){for(var t,r,s=[0],o=0,c=n.length;o<c;){for(r=s.length;r--;)s[r]*=e;for(s[0]+=u.indexOf(n.charAt(o++)),t=0;t<s.length;t++)s[t]>i-1&&(void 0===s[t+1]&&(s[t+1]=0),s[t+1]+=s[t]/i|0,s[t]%=i)}return s.reverse()}O.absoluteValue=O.abs=function(){var n=new this.constructor(this);return n.s<0&&(n.s=1),P(n)},O.ceil=function(){return P(new this.constructor(this),this.e+1,2)},O.clampedTo=O.clamp=function(n,e){var i=this,t=i.constructor;if(n=new t(n),e=new t(e),!n.s||!e.s)return new t(NaN);if(n.gt(e))throw Error(d+e);return i.cmp(n)<0?n:i.cmp(e)>0?e:new t(i)},O.comparedTo=O.cmp=function(n){var e,i,t,r,s=this,o=s.d,u=(n=new s.constructor(n)).d,c=s.s,f=n.s;if(!o||!u)return c&&f?c!==f?c:o===u?0:!o^c<0?1:-1:NaN;if(!o[0]||!u[0])return o[0]?c:u[0]?-f:0;if(c!==f)return c;if(s.e!==n.e)return s.e>n.e^c<0?1:-1;for(e=0,i=(t=o.length)<(r=u.length)?t:r;e<i;++e)if(o[e]!==u[e])return o[e]>u[e]^c<0?1:-1;return t===r?0:t>r^c<0?1:-1},O.cosine=O.cos=function(){var n,e,i=this,t=i.constructor;return i.d?i.d[0]?(n=t.precision,e=t.rounding,t.precision=n+Math.max(i.e,i.sd())+7,t.rounding=1,i=function(n,e){var i,t,r;if(e.isZero())return e;t=e.d.length,t<32?r=(1/z(4,i=Math.ceil(t/3))).toString():(i=16,r="2.3283064365386962890625e-10");n.precision+=i,e=J(n,1,e.times(r),new n(1));for(var s=i;s--;){var o=e.times(e);e=o.times(o).minus(o).times(8).plus(1)}return n.precision-=i,e}(t,G(t,i)),t.precision=n,t.rounding=e,P(2==r||3==r?i.neg():i,n,e,!0)):new t(1):new t(NaN)},O.cubeRoot=O.cbrt=function(){var n,e,i,t,r,s,o,u,c,f,a=this,h=a.constructor;if(!a.isFinite()||a.isZero())return new h(a);for(l=!1,(s=a.s*v(a.s*a,1/3))&&Math.abs(s)!=1/0?t=new h(s.toString()):(i=D(a.d),(s=((n=a.e)-i.length+1)%3)&&(i+=1==s||-2==s?"0":"00"),s=v(i,1/3),n=w((n+1)/3)-(n%3==(n<0?-1:2)),(t=new h(i=s==1/0?"5e"+n:(i=s.toExponential()).slice(0,i.indexOf("e")+1)+n)).s=a.s),o=(n=h.precision)+3;;)if(f=(c=(u=t).times(u).times(u)).plus(a),t=Z(f.plus(a).times(u),f.plus(c),o+2,1),D(u.d).slice(0,o)===(i=D(t.d)).slice(0,o)){if("9999"!=(i=i.slice(o-3,o+1))&&(r||"4999"!=i)){+i&&(+i.slice(1)||"5"!=i.charAt(0))||(P(t,n+1,1),e=!t.times(t).times(t).eq(a));break}if(!r&&(P(u,n+1,0),u.times(u).times(u).eq(a))){t=u;break}o+=4,r=1}return l=!0,P(t,n,h.rounding,e)},O.decimalPlaces=O.dp=function(){var n,e=this.d,i=NaN;if(e){if(i=7*((n=e.length-1)-w(this.e/7)),n=e[n])for(;n%10==0;n/=10)i--;i<0&&(i=0)}return i},O.dividedBy=O.div=function(n){return Z(this,new this.constructor(n))},O.dividedToIntegerBy=O.divToInt=function(n){var e=this.constructor;return P(Z(this,new e(n),0,1,1),e.precision,e.rounding)},O.equals=O.eq=function(n){return 0===this.cmp(n)},O.floor=function(){return P(new this.constructor(this),this.e+1,3)},O.greaterThan=O.gt=function(n){return this.cmp(n)>0},O.greaterThanOrEqualTo=O.gte=function(n){var e=this.cmp(n);return 1==e||0===e},O.hyperbolicCosine=O.cosh=function(){var n,e,i,t,r,s=this,o=s.constructor,u=new o(1);if(!s.isFinite())return new o(s.s?1/0:NaN);if(s.isZero())return u;i=o.precision,t=o.rounding,o.precision=i+Math.max(s.e,s.sd())+4,o.rounding=1,(r=s.d.length)<32?e=(1/z(4,n=Math.ceil(r/3))).toString():(n=16,e="2.3283064365386962890625e-10"),s=J(o,1,s.times(e),new o(1),!0);for(var c,f=n,a=new o(8);f--;)c=s.times(s),s=u.minus(c.times(a.minus(c.times(a))));return P(s,o.precision=i,o.rounding=t,!0)},O.hyperbolicSine=O.sinh=function(){var n,e,i,t,r=this,s=r.constructor;if(!r.isFinite()||r.isZero())return new s(r);if(e=s.precision,i=s.rounding,s.precision=e+Math.max(r.e,r.sd())+4,s.rounding=1,(t=r.d.length)<3)r=J(s,2,r,r,!0);else{n=(n=1.4*Math.sqrt(t))>16?16:0|n,r=J(s,2,r=r.times(1/z(5,n)),r,!0);for(var o,u=new s(5),c=new s(16),f=new s(20);n--;)o=r.times(r),r=r.times(u.plus(o.times(c.times(o).plus(f))))}return s.precision=e,s.rounding=i,P(r,e,i,!0)},O.hyperbolicTangent=O.tanh=function(){var n,e,i=this,t=i.constructor;return i.isFinite()?i.isZero()?new t(i):(n=t.precision,e=t.rounding,t.precision=n+7,t.rounding=1,Z(i.sinh(),i.cosh(),t.precision=n,t.rounding=e)):new t(i.s)},O.inverseCosine=O.acos=function(){var n,e=this,i=e.constructor,t=e.abs().cmp(1),r=i.precision,s=i.rounding;return-1!==t?0===t?e.isNeg()?L(i,r,s):new i(0):new i(NaN):e.isZero()?L(i,r+4,s).times(.5):(i.precision=r+6,i.rounding=1,e=e.asin(),n=L(i,r+4,s).times(.5),i.precision=r,i.rounding=s,n.minus(e))},O.inverseHyperbolicCosine=O.acosh=function(){var n,e,i=this,t=i.constructor;return i.lte(1)?new t(i.eq(1)?0:NaN):i.isFinite()?(n=t.precision,e=t.rounding,t.precision=n+Math.max(Math.abs(i.e),i.sd())+4,t.rounding=1,l=!1,i=i.times(i).minus(1).sqrt().plus(i),l=!0,t.precision=n,t.rounding=e,i.ln()):new t(i)},O.inverseHyperbolicSine=O.asinh=function(){var n,e,i=this,t=i.constructor;return!i.isFinite()||i.isZero()?new t(i):(n=t.precision,e=t.rounding,t.precision=n+2*Math.max(Math.abs(i.e),i.sd())+6,t.rounding=1,l=!1,i=i.times(i).plus(1).sqrt().plus(i),l=!0,t.precision=n,t.rounding=e,i.ln())},O.inverseHyperbolicTangent=O.atanh=function(){var n,e,i,t,r=this,s=r.constructor;return r.isFinite()?r.e>=0?new s(r.abs().eq(1)?r.s/0:r.isZero()?r:NaN):(n=s.precision,e=s.rounding,t=r.sd(),Math.max(t,n)<2*-r.e-1?P(new s(r),n,e,!0):(s.precision=i=t-r.e,r=Z(r.plus(1),new s(1).minus(r),i+n,1),s.precision=n+4,s.rounding=1,r=r.ln(),s.precision=n,s.rounding=e,r.times(.5))):new s(NaN)},O.inverseSine=O.asin=function(){var n,e,i,t,r=this,s=r.constructor;return r.isZero()?new s(r):(e=r.abs().cmp(1),i=s.precision,t=s.rounding,-1!==e?0===e?((n=L(s,i+4,t).times(.5)).s=r.s,n):new s(NaN):(s.precision=i+6,s.rounding=1,r=r.div(new s(1).minus(r.times(r)).sqrt().plus(1)).atan(),s.precision=i,s.rounding=t,r.times(2)))},O.inverseTangent=O.atan=function(){var n,e,i,t,r,s,o,u,c,f=this,a=f.constructor,h=a.precision,d=a.rounding;if(f.isFinite()){if(f.isZero())return new a(f);if(f.abs().eq(1)&&h+4<=q)return(o=L(a,h+4,d).times(.25)).s=f.s,o}else{if(!f.s)return new a(NaN);if(h+4<=q)return(o=L(a,h+4,d).times(.5)).s=f.s,o}for(a.precision=u=h+10,a.rounding=1,n=i=Math.min(28,u/7+2|0);n;--n)f=f.div(f.times(f).plus(1).sqrt().plus(1));for(l=!1,e=Math.ceil(u/7),t=1,c=f.times(f),o=new a(f),r=f;-1!==n;)if(r=r.times(c),s=o.minus(r.div(t+=2)),r=r.times(c),void 0!==(o=s.plus(r.div(t+=2))).d[e])for(n=e;o.d[n]===s.d[n]&&n--;);return i&&(o=o.times(2<<i-1)),l=!0,P(o,a.precision=h,a.rounding=d,!0)},O.isFinite=function(){return!!this.d},O.isInteger=O.isInt=function(){return!!this.d&&w(this.e/7)>this.d.length-2},O.isNaN=function(){return!this.s},O.isNegative=O.isNeg=function(){return this.s<0},O.isPositive=O.isPos=function(){return this.s>0},O.isZero=function(){return!!this.d&&0===this.d[0]},O.lessThan=O.lt=function(n){return this.cmp(n)<0},O.lessThanOrEqualTo=O.lte=function(n){return this.cmp(n)<1},O.logarithm=O.log=function(n){var e,i,t,r,s,o,u,c,f=this,a=f.constructor,h=a.precision,d=a.rounding;if(null==n)n=new a(10),e=!0;else{if(i=(n=new a(n)).d,n.s<0||!i||!i[0]||n.eq(1))return new a(NaN);e=n.eq(10)}if(i=f.d,f.s<0||!i||!i[0]||f.eq(1))return new a(i&&!i[0]?-1/0:1!=f.s?NaN:i?0:1/0);if(e)if(i.length>1)s=!0;else{for(r=i[0];r%10==0;)r/=10;s=1!==r}if(l=!1,o=V(f,u=h+5),t=e?_(a,u+10):V(n,u),A((c=Z(o,t,u,1)).d,r=h,d))do{if(o=V(f,u+=10),t=e?_(a,u+10):V(n,u),c=Z(o,t,u,1),!s){+D(c.d).slice(r+1,r+15)+1==1e14&&(c=P(c,h+1,0));break}}while(A(c.d,r+=10,d));return l=!0,P(c,h,d)},O.minus=O.sub=function(n){var e,i,t,r,s,o,u,c,f,a,h,d,p=this,g=p.constructor;if(n=new g(n),!p.d||!n.d)return p.s&&n.s?p.d?n.s=-n.s:n=new g(n.d||p.s!==n.s?p:NaN):n=new g(NaN),n;if(p.s!=n.s)return n.s=-n.s,p.plus(n);if(f=p.d,d=n.d,u=g.precision,c=g.rounding,!f[0]||!d[0]){if(d[0])n.s=-n.s;else{if(!f[0])return new g(3===c?-0:0);n=new g(p)}return l?P(n,u,c):n}if(i=w(n.e/7),a=w(p.e/7),f=f.slice(),s=a-i){for((h=s<0)?(e=f,s=-s,o=d.length):(e=d,i=a,o=f.length),s>(t=Math.max(Math.ceil(u/7),o)+2)&&(s=t,e.length=1),e.reverse(),t=s;t--;)e.push(0);e.reverse()}else{for((h=(t=f.length)<(o=d.length))&&(o=t),t=0;t<o;t++)if(f[t]!=d[t]){h=f[t]<d[t];break}s=0}for(h&&(e=f,f=d,d=e,n.s=-n.s),o=f.length,t=d.length-o;t>0;--t)f[o++]=0;for(t=d.length;t>s;){if(f[--t]<d[t]){for(r=t;r&&0===f[--r];)f[r]=y-1;--f[r],f[t]+=y}f[t]-=d[t]}for(;0===f[--o];)f.pop();for(;0===f[0];f.shift())--i;return f[0]?(n.d=f,n.e=T(f,i),l?P(n,u,c):n):new g(3===c?-0:0)},O.modulo=O.mod=function(n){var e,i=this,t=i.constructor;return n=new t(n),!i.d||!n.s||n.d&&!n.d[0]?new t(NaN):!n.d||i.d&&!i.d[0]?P(new t(i),t.precision,t.rounding):(l=!1,9==t.modulo?(e=Z(i,n.abs(),0,3,1)).s*=n.s:e=Z(i,n,0,t.modulo,1),e=e.times(n),l=!0,i.minus(e))},O.naturalExponential=O.exp=function(){return B(this)},O.naturalLogarithm=O.ln=function(){return V(this)},O.negated=O.neg=function(){var n=new this.constructor(this);return n.s=-n.s,P(n)},O.plus=O.add=function(n){var e,i,t,r,s,o,u,c,f,a,h=this,d=h.constructor;if(n=new d(n),!h.d||!n.d)return h.s&&n.s?h.d||(n=new d(n.d||h.s===n.s?h:NaN)):n=new d(NaN),n;if(h.s!=n.s)return n.s=-n.s,h.minus(n);if(f=h.d,a=n.d,u=d.precision,c=d.rounding,!f[0]||!a[0])return a[0]||(n=new d(h)),l?P(n,u,c):n;if(s=w(h.e/7),t=w(n.e/7),f=f.slice(),r=s-t){for(r<0?(i=f,r=-r,o=a.length):(i=a,t=s,o=f.length),r>(o=(s=Math.ceil(u/7))>o?s+1:o+1)&&(r=o,i.length=1),i.reverse();r--;)i.push(0);i.reverse()}for((o=f.length)-(r=a.length)<0&&(r=o,i=a,a=f,f=i),e=0;r;)e=(f[--r]=f[r]+a[r]+e)/y|0,f[r]%=y;for(e&&(f.unshift(e),++t),o=f.length;0==f[--o];)f.pop();return n.d=f,n.e=T(f,t),l?P(n,u,c):n},O.precision=O.sd=function(n){var e,i=this;if(void 0!==n&&n!==!!n&&1!==n&&0!==n)throw Error(d+n);return i.d?(e=U(i.d),n&&i.e+1>e&&(e=i.e+1)):e=NaN,e},O.round=function(){var n=this,e=n.constructor;return P(new e(n),n.e+1,e.rounding)},O.sine=O.sin=function(){var n,e,i=this,t=i.constructor;return i.isFinite()?i.isZero()?new t(i):(n=t.precision,e=t.rounding,t.precision=n+Math.max(i.e,i.sd())+7,t.rounding=1,i=function(n,e){var i,t=e.d.length;if(t<3)return e.isZero()?e:J(n,2,e,e);i=(i=1.4*Math.sqrt(t))>16?16:0|i,e=e.times(1/z(5,i)),e=J(n,2,e,e);for(var r,s=new n(5),o=new n(16),u=new n(20);i--;)r=e.times(e),e=e.times(s.plus(r.times(o.times(r).minus(u))));return e}(t,G(t,i)),t.precision=n,t.rounding=e,P(r>2?i.neg():i,n,e,!0)):new t(NaN)},O.squareRoot=O.sqrt=function(){var n,e,i,t,r,s,o=this,u=o.d,c=o.e,f=o.s,a=o.constructor;if(1!==f||!u||!u[0])return new a(!f||f<0&&(!u||u[0])?NaN:u?o:1/0);for(l=!1,0==(f=Math.sqrt(+o))||f==1/0?(((e=D(u)).length+c)%2==0&&(e+="0"),f=Math.sqrt(e),c=w((c+1)/2)-(c<0||c%2),t=new a(e=f==1/0?"5e"+c:(e=f.toExponential()).slice(0,e.indexOf("e")+1)+c)):t=new a(f.toString()),i=(c=a.precision)+3;;)if(t=(s=t).plus(Z(o,s,i+2,1)).times(.5),D(s.d).slice(0,i)===(e=D(t.d)).slice(0,i)){if("9999"!=(e=e.slice(i-3,i+1))&&(r||"4999"!=e)){+e&&(+e.slice(1)||"5"!=e.charAt(0))||(P(t,c+1,1),n=!t.times(t).eq(o));break}if(!r&&(P(s,c+1,0),s.times(s).eq(o))){t=s;break}i+=4,r=1}return l=!0,P(t,c,a.rounding,n)},O.tangent=O.tan=function(){var n,e,i=this,t=i.constructor;return i.isFinite()?i.isZero()?new t(i):(n=t.precision,e=t.rounding,t.precision=n+10,t.rounding=1,(i=i.sin()).s=1,i=Z(i,new t(1).minus(i.times(i)).sqrt(),n+10,0),t.precision=n,t.rounding=e,P(2==r||4==r?i.neg():i,n,e,!0)):new t(NaN)},O.times=O.mul=function(n){var e,i,t,r,s,o,u,c,f,a=this,h=a.constructor,d=a.d,p=(n=new h(n)).d;if(n.s*=a.s,!(d&&d[0]&&p&&p[0]))return new h(!n.s||d&&!d[0]&&!p||p&&!p[0]&&!d?NaN:d&&p?0*n.s:n.s/0);for(i=w(a.e/7)+w(n.e/7),(c=d.length)<(f=p.length)&&(s=d,d=p,p=s,o=c,c=f,f=o),s=[],t=o=c+f;t--;)s.push(0);for(t=f;--t>=0;){for(e=0,r=c+t;r>t;)u=s[r]+p[t]*d[r-t-1]+e,s[r--]=u%y|0,e=u/y|0;s[r]=(s[r]+e)%y|0}for(;!s[--o];)s.pop();return e?++i:s.shift(),n.d=s,n.e=T(s,i),l?P(n,h.precision,h.rounding):n},O.toBinary=function(n,e){return K(this,2,n,e)},O.toDecimalPlaces=O.toDP=function(n,e){var i=this,t=i.constructor;return i=new t(i),void 0===n?i:(F(n,0,o),void 0===e?e=t.rounding:F(e,0,8),P(i,n+i.e+1,e))},O.toExponential=function(n,e){var i,t=this,r=t.constructor;return void 0===n?i=R(t,!0):(F(n,0,o),void 0===e?e=r.rounding:F(e,0,8),i=R(t=P(new r(t),n+1,e),!0,n+1)),t.isNeg()&&!t.isZero()?"-"+i:i},O.toFixed=function(n,e){var i,t,r=this,s=r.constructor;return void 0===n?i=R(r):(F(n,0,o),void 0===e?e=s.rounding:F(e,0,8),i=R(t=P(new s(r),n+r.e+1,e),!1,n+t.e+1)),r.isNeg()&&!r.isZero()?"-"+i:i},O.toFraction=function(n){var e,i,t,r,s,o,u,c,f,a,h,p,g=this,m=g.d,w=g.constructor;if(!m)return new w(g);if(f=i=new w(1),t=c=new w(0),o=(s=(e=new w(t)).e=U(m)-g.e-1)%7,e.d[0]=v(10,o<0?7+o:o),null==n)n=s>0?e:f;else{if(!(u=new w(n)).isInt()||u.lt(f))throw Error(d+u);n=u.gt(e)?s>0?e:f:u}for(l=!1,u=new w(D(m)),a=w.precision,w.precision=s=7*m.length*2;h=Z(u,e,0,1,1),1!=(r=i.plus(h.times(t))).cmp(n);)i=t,t=r,r=f,f=c.plus(h.times(r)),c=r,r=e,e=u.minus(h.times(r)),u=r;return r=Z(n.minus(i),t,0,1,1),c=c.plus(r.times(f)),i=i.plus(r.times(t)),c.s=f.s=g.s,p=Z(f,t,s,1).minus(g).abs().cmp(Z(c,i,s,1).minus(g).abs())<1?[f,t]:[c,i],w.precision=a,l=!0,p},O.toHexadecimal=O.toHex=function(n,e){return K(this,16,n,e)},O.toNearest=function(n,e){var i=this,t=i.constructor;if(i=new t(i),null==n){if(!i.d)return i;n=new t(1),e=t.rounding}else{if(n=new t(n),void 0===e?e=t.rounding:F(e,0,8),!i.d)return n.s?i:n;if(!n.d)return n.s&&(n.s=i.s),n}return n.d[0]?(l=!1,i=Z(i,n,0,e,1).times(n),l=!0,P(i)):(n.s=i.s,i=n),i},O.toNumber=function(){return+this},O.toOctal=function(n,e){return K(this,8,n,e)},O.toPower=O.pow=function(n){var e,i,t,r,s,o,u=this,c=u.constructor,f=+(n=new c(n));if(!(u.d&&n.d&&u.d[0]&&n.d[0]))return new c(v(+u,f));if((u=new c(u)).eq(1))return u;if(t=c.precision,s=c.rounding,n.eq(1))return P(u,t,s);if((e=w(n.e/7))>=n.d.length-1&&(i=f<0?-f:f)<=9007199254740991)return r=C(c,u,i,t),n.s<0?new c(1).div(r):P(r,t,s);if((o=u.s)<0){if(e<n.d.length-1)return new c(NaN);if(1&n.d[e]||(o=1),0==u.e&&1==u.d[0]&&1==u.d.length)return u.s=o,u}return(e=0!=(i=v(+u,f))&&isFinite(i)?new c(i+"").e:w(f*(Math.log("0."+D(u.d))/Math.LN10+u.e+1)))>c.maxE+1||e<c.minE-1?new c(e>0?o/0:0):(l=!1,c.rounding=u.s=1,i=Math.min(12,(e+"").length),(r=B(n.times(V(u,t+i)),t)).d&&A((r=P(r,t+5,1)).d,t,s)&&(e=t+10,+D((r=P(B(n.times(V(u,e+i)),e),e+5,1)).d).slice(t+1,t+15)+1==1e14&&(r=P(r,t+1,0))),r.s=o,l=!0,c.rounding=s,P(r,t,s))},O.toPrecision=function(n,e){var i,t=this,r=t.constructor;return void 0===n?i=R(t,t.e<=r.toExpNeg||t.e>=r.toExpPos):(F(n,1,o),void 0===e?e=r.rounding:F(e,0,8),i=R(t=P(new r(t),n,e),n<=t.e||t.e<=r.toExpNeg,n)),t.isNeg()&&!t.isZero()?"-"+i:i},O.toSignificantDigits=O.toSD=function(n,e){var i=this.constructor;return void 0===n?(n=i.precision,e=i.rounding):(F(n,1,o),void 0===e?e=i.rounding:F(e,0,8)),P(new i(this),n,e)},O.toString=function(){var n=this,e=n.constructor,i=R(n,n.e<=e.toExpNeg||n.e>=e.toExpPos);return n.isNeg()&&!n.isZero()?"-"+i:i},O.truncated=O.trunc=function(){return P(new this.constructor(this),this.e+1,1)},O.valueOf=O.toJSON=function(){var n=this,e=n.constructor,i=R(n,n.e<=e.toExpNeg||n.e>=e.toExpPos);return n.isNeg()?"-"+i:i};var Z=function(){function n(n,e,i){var t,r=0,s=n.length;for(n=n.slice();s--;)t=n[s]*e+r,n[s]=t%i|0,r=t/i|0;return r&&n.unshift(r),n}function e(n,e,i,t){var r,s;if(i!=t)s=i>t?1:-1;else for(r=s=0;r<i;r++)if(n[r]!=e[r]){s=n[r]>e[r]?1:-1;break}return s}function t(n,e,i,t){for(var r=0;i--;)n[i]-=r,r=n[i]<e[i]?1:0,n[i]=r*t+n[i]-e[i];for(;!n[0]&&n.length>1;)n.shift()}return function(r,s,o,u,c,f){var a,l,h,d,p,g,m,v,N,b,E,x,M,q,O,D,F,A,S,Z,R=r.constructor,T=r.s==s.s?1:-1,_=r.d,L=s.d;if(!(_&&_[0]&&L&&L[0]))return new R(r.s&&s.s&&(_?!L||_[0]!=L[0]:L)?_&&0==_[0]||!L?0*T:T/0:NaN);for(f?(p=1,l=r.e-s.e):(f=y,p=7,l=w(r.e/p)-w(s.e/p)),S=L.length,F=_.length,b=(N=new R(T)).d=[],h=0;L[h]==(_[h]||0);h++);if(L[h]>(_[h]||0)&&l--,null==o?(q=o=R.precision,u=R.rounding):q=c?o+(r.e-s.e)+1:o,q<0)b.push(1),g=!0;else{if(q=q/p+2|0,h=0,1==S){for(d=0,L=L[0],q++;(h<F||d)&&q--;h++)O=d*f+(_[h]||0),b[h]=O/L|0,d=O%L|0;g=d||h<F}else{for((d=f/(L[0]+1)|0)>1&&(L=n(L,d,f),_=n(_,d,f),S=L.length,F=_.length),D=S,x=(E=_.slice(0,S)).length;x<S;)E[x++]=0;(Z=L.slice()).unshift(0),A=L[0],L[1]>=f/2&&++A;do{d=0,(a=e(L,E,S,x))<0?(M=E[0],S!=x&&(M=M*f+(E[1]||0)),(d=M/A|0)>1?(d>=f&&(d=f-1),1==(a=e(m=n(L,d,f),E,v=m.length,x=E.length))&&(d--,t(m,S<v?Z:L,v,f))):(0==d&&(a=d=1),m=L.slice()),(v=m.length)<x&&m.unshift(0),t(E,m,x,f),-1==a&&(a=e(L,E,S,x=E.length))<1&&(d++,t(E,S<x?Z:L,x,f)),x=E.length):0===a&&(d++,E=[0]),b[h++]=d,a&&E[0]?E[x++]=_[D]||0:(E=[_[D]],x=1)}while((D++<F||void 0!==E[0])&&q--);g=void 0!==E[0]}b[0]||b.shift()}if(1==p)N.e=l,i=g;else{for(h=1,d=b[0];d>=10;d/=10)h++;N.e=h+l*p-1,P(N,c?o+N.e+1:o,u,g)}return N}}();function P(n,e,i,t){var r,s,o,u,c,f,a,h,d,p=n.constructor;n:if(null!=e){if(!(h=n.d))return n;for(r=1,u=h[0];u>=10;u/=10)r++;if((s=e-r)<0)s+=7,o=e,c=(a=h[d=0])/v(10,r-o-1)%10|0;else if((d=Math.ceil((s+1)/7))>=(u=h.length)){if(!t)break n;for(;u++<=d;)h.push(0);a=c=0,r=1,o=(s%=7)-7+1}else{for(a=u=h[d],r=1;u>=10;u/=10)r++;c=(o=(s%=7)-7+r)<0?0:a/v(10,r-o-1)%10|0}if(t=t||e<0||void 0!==h[d+1]||(o<0?a:a%v(10,r-o-1)),f=i<4?(c||t)&&(0==i||i==(n.s<0?3:2)):c>5||5==c&&(4==i||t||6==i&&(s>0?o>0?a/v(10,r-o):0:h[d-1])%10&1||i==(n.s<0?8:7)),e<1||!h[0])return h.length=0,f?(e-=n.e+1,h[0]=v(10,(7-e%7)%7),n.e=-e||0):h[0]=n.e=0,n;if(0==s?(h.length=d,u=1,d--):(h.length=d+1,u=v(10,7-s),h[d]=o>0?(a/v(10,r-o)%v(10,o)|0)*u:0),f)for(;;){if(0==d){for(s=1,o=h[0];o>=10;o/=10)s++;for(o=h[0]+=u,u=1;o>=10;o/=10)u++;s!=u&&(n.e++,h[0]==y&&(h[0]=1));break}if(h[d]+=u,h[d]!=y)break;h[d--]=0,u=1}for(s=h.length;0===h[--s];)h.pop()}return l&&(n.e>p.maxE?(n.d=null,n.e=NaN):n.e<p.minE&&(n.e=0,n.d=[0])),n}function R(n,e,i){if(!n.isFinite())return $(n);var t,r=n.e,s=D(n.d),o=s.length;return e?(i&&(t=i-o)>0?s=s.charAt(0)+"."+s.slice(1)+k(t):o>1&&(s=s.charAt(0)+"."+s.slice(1)),s=s+(n.e<0?"e":"e+")+n.e):r<0?(s="0."+k(-r-1)+s,i&&(t=i-o)>0&&(s+=k(t))):r>=o?(s+=k(r+1-o),i&&(t=i-r-1)>0&&(s=s+"."+k(t))):((t=r+1)<o&&(s=s.slice(0,t)+"."+s.slice(t)),i&&(t=i-o)>0&&(r+1===o&&(s+="."),s+=k(t))),s}function T(n,e){var i=n[0];for(e*=7;i>=10;i/=10)e++;return e}function _(n,e,i){if(e>M)throw l=!0,i&&(n.precision=i),Error(p);return P(new n(c),e,1,!0)}function L(n,e,i){if(e>q)throw Error(p);return P(new n(f),e,i,!0)}function U(n){var e=n.length-1,i=7*e+1;if(e=n[e]){for(;e%10==0;e/=10)i--;for(e=n[0];e>=10;e/=10)i++}return i}function k(n){for(var e="";n--;)e+="0";return e}function C(n,e,i,t){var r,s=new n(1),o=Math.ceil(t/7+4);for(l=!1;;){if(i%2&&Q((s=s.times(e)).d,o)&&(r=!0),0===(i=w(i/2))){i=s.d.length-1,r&&0===s.d[i]&&++s.d[i];break}Q((e=e.times(e)).d,o)}return l=!0,s}function I(n){return 1&n.d[n.d.length-1]}function H(n,e,i){for(var t,r=new n(e[0]),s=0;++s<e.length;){if(!(t=new n(e[s])).s){r=t;break}r[i](t)&&(r=t)}return r}function B(n,e){var i,t,r,s,o,u,c,f=0,a=0,h=0,d=n.constructor,p=d.rounding,g=d.precision;if(!n.d||!n.d[0]||n.e>17)return new d(n.d?n.d[0]?n.s<0?0:1/0:1:n.s?n.s<0?0:n:NaN);for(null==e?(l=!1,c=g):c=e,u=new d(.03125);n.e>-2;)n=n.times(u),h+=5;for(c+=t=Math.log(v(2,h))/Math.LN10*2+5|0,i=s=o=new d(1),d.precision=c;;){if(s=P(s.times(n),c,1),i=i.times(++a),D((u=o.plus(Z(s,i,c,1))).d).slice(0,c)===D(o.d).slice(0,c)){for(r=h;r--;)o=P(o.times(o),c,1);if(null!=e)return d.precision=g,o;if(!(f<3&&A(o.d,c-t,p,f)))return P(o,d.precision=g,p,l=!0);d.precision=c+=10,i=s=u=new d(1),a=0,f++}o=u}}function V(n,e){var i,t,r,s,o,u,c,f,a,h,d,p=1,g=n,m=g.d,w=g.constructor,v=w.rounding,N=w.precision;if(g.s<0||!m||!m[0]||!g.e&&1==m[0]&&1==m.length)return new w(m&&!m[0]?-1/0:1!=g.s?NaN:m?0:g);if(null==e?(l=!1,a=N):a=e,w.precision=a+=10,t=(i=D(m)).charAt(0),!(Math.abs(s=g.e)<15e14))return f=_(w,a+2,N).times(s+""),g=V(new w(t+"."+i.slice(1)),a-10).plus(f),w.precision=N,null==e?P(g,N,v,l=!0):g;for(;t<7&&1!=t||1==t&&i.charAt(1)>3;)t=(i=D((g=g.times(n)).d)).charAt(0),p++;for(s=g.e,t>1?(g=new w("0."+i),s++):g=new w(t+"."+i.slice(1)),h=g,c=o=g=Z(g.minus(1),g.plus(1),a,1),d=P(g.times(g),a,1),r=3;;){if(o=P(o.times(d),a,1),D((f=c.plus(Z(o,new w(r),a,1))).d).slice(0,a)===D(c.d).slice(0,a)){if(c=c.times(2),0!==s&&(c=c.plus(_(w,a+2,N).times(s+""))),c=Z(c,new w(p),a,1),null!=e)return w.precision=N,c;if(!A(c.d,a-10,v,u))return P(c,w.precision=N,v,l=!0);w.precision=a+=10,f=o=g=Z(h.minus(1),h.plus(1),a,1),d=P(g.times(g),a,1),r=u=1}c=f,r+=2}}function $(n){return String(n.s*n.s/0)}function j(n,e){var i,t,r;for((i=e.indexOf("."))>-1&&(e=e.replace(".","")),(t=e.search(/e/i))>0?(i<0&&(i=t),i+=+e.slice(t+1),e=e.substring(0,t)):i<0&&(i=e.length),t=0;48===e.charCodeAt(t);t++);for(r=e.length;48===e.charCodeAt(r-1);--r);if(e=e.slice(t,r)){if(r-=t,n.e=i=i-t-1,n.d=[],t=(i+1)%7,i<0&&(t+=7),t<r){for(t&&n.d.push(+e.slice(0,t)),r-=7;t<r;)n.d.push(+e.slice(t,t+=7));t=7-(e=e.slice(t)).length}else t-=r;for(;t--;)e+="0";n.d.push(+e),l&&(n.e>n.constructor.maxE?(n.d=null,n.e=NaN):n.e<n.constructor.minE&&(n.e=0,n.d=[0]))}else n.e=0,n.d=[0];return n}function W(n,i){var t,r,s,o,u,c,f,a,h;if(i.indexOf("_")>-1){if(i=i.replace(/(\d)_(?=\d)/g,"$1"),x.test(i))return j(n,i)}else if("Infinity"===i||"NaN"===i)return+i||(n.s=NaN),n.e=NaN,n.d=null,n;if(b.test(i))t=16,i=i.toLowerCase();else if(N.test(i))t=2;else{if(!E.test(i))throw Error(d+i);t=8}for((o=i.search(/p/i))>0?(f=+i.slice(o+1),i=i.substring(2,o)):i=i.slice(2),u=(o=i.indexOf("."))>=0,r=n.constructor,u&&(o=(c=(i=i.replace(".","")).length)-o,s=C(r,new r(t),o,2*o)),o=h=(a=S(i,t,y)).length-1;0===a[o];--o)a.pop();return o<0?new r(0*n.s):(n.e=T(a,h),n.d=a,l=!1,u&&(n=Z(n,s,4*c)),f&&(n=n.times(Math.abs(f)<54?v(2,f):e.pow(2,f))),l=!0,n)}function J(n,e,i,t,r){var s,o,u,c,f=n.precision,a=Math.ceil(f/7);for(l=!1,c=i.times(i),u=new n(t);;){if(o=Z(u.times(c),new n(e++*e++),f,1),u=r?t.plus(o):t.minus(o),t=Z(o.times(c),new n(e++*e++),f,1),void 0!==(o=u.plus(t)).d[a]){for(s=a;o.d[s]===u.d[s]&&s--;);if(-1==s)break}s=u,u=t,t=o,o=s}return l=!0,o.d.length=a+1,o}function z(n,e){for(var i=n;--e;)i*=n;return i}function G(n,e){var i,t=e.s<0,s=L(n,n.precision,1),o=s.times(.5);if((e=e.abs()).lte(o))return r=t?4:1,e;if((i=e.divToInt(s)).isZero())r=t?3:2;else{if((e=e.minus(i.times(s))).lte(o))return r=I(i)?t?2:3:t?4:1,e;r=I(i)?t?1:4:t?3:2}return e.minus(s).abs()}function K(n,e,t,r){var s,c,f,a,l,h,d,p,g,m=n.constructor,w=void 0!==t;if(w?(F(t,1,o),void 0===r?r=m.rounding:F(r,0,8)):(t=m.precision,r=m.rounding),n.isFinite()){for(w?(s=2,16==e?t=4*t-3:8==e&&(t=3*t-2)):s=e,(f=(d=R(n)).indexOf("."))>=0&&(d=d.replace(".",""),(g=new m(1)).e=d.length-f,g.d=S(R(g),10,s),g.e=g.d.length),c=l=(p=S(d,10,s)).length;0==p[--l];)p.pop();if(p[0]){if(f<0?c--:((n=new m(n)).d=p,n.e=c,p=(n=Z(n,g,t,r,0,s)).d,c=n.e,h=i),f=p[t],a=s/2,h=h||void 0!==p[t+1],h=r<4?(void 0!==f||h)&&(0===r||r===(n.s<0?3:2)):f>a||f===a&&(4===r||h||6===r&&1&p[t-1]||r===(n.s<0?8:7)),p.length=t,h)for(;++p[--t]>s-1;)p[t]=0,t||(++c,p.unshift(1));for(l=p.length;!p[l-1];--l);for(f=0,d="";f<l;f++)d+=u.charAt(p[f]);if(w){if(l>1)if(16==e||8==e){for(f=16==e?4:3,--l;l%f;l++)d+="0";for(l=(p=S(d,s,e)).length;!p[l-1];--l);for(f=1,d="1.";f<l;f++)d+=u.charAt(p[f])}else d=d.charAt(0)+"."+d.slice(1);d=d+(c<0?"p":"p+")+c}else if(c<0){for(;++c;)d="0"+d;d="0."+d}else if(++c>l)for(c-=l;c--;)d+="0";else c<l&&(d=d.slice(0,c)+"."+d.slice(c))}else d=w?"0p+0":"0";d=(16==e?"0x":2==e?"0b":8==e?"0o":"")+d}else d=$(n);return n.s<0?"-"+d:d}function Q(n,e){if(n.length>e)return n.length=e,!0}function X(n){return new this(n).abs()}function Y(n){return new this(n).acos()}function nn(n){return new this(n).acosh()}function en(n,e){return new this(n).plus(e)}function tn(n){return new this(n).asin()}function rn(n){return new this(n).asinh()}function sn(n){return new this(n).atan()}function on(n){return new this(n).atanh()}function un(n,e){n=new this(n),e=new this(e);var i,t=this.precision,r=this.rounding,s=t+4;return n.s&&e.s?n.d||e.d?!e.d||n.isZero()?(i=e.s<0?L(this,t,r):new this(0)).s=n.s:!n.d||e.isZero()?(i=L(this,s,1).times(.5)).s=n.s:e.s<0?(this.precision=s,this.rounding=1,i=this.atan(Z(n,e,s,1)),e=L(this,s,1),this.precision=t,this.rounding=r,i=n.s<0?i.minus(e):i.plus(e)):i=this.atan(Z(n,e,s,1)):(i=L(this,s,1).times(e.s>0?.25:.75)).s=n.s:i=new this(NaN),i}function cn(n){return new this(n).cbrt()}function fn(n){return P(n=new this(n),n.e+1,2)}function an(n,e,i){return new this(n).clamp(e,i)}function ln(n){if(!n||"object"!=typeof n)throw Error(h+"Object expected");var e,i,t,r=!0===n.defaults,u=["precision",1,o,"rounding",0,8,"toExpNeg",-s,0,"toExpPos",0,s,"maxE",0,s,"minE",-s,0,"modulo",0,9];for(e=0;e<u.length;e+=3)if(i=u[e],r&&(this[i]=a[i]),void 0!==(t=n[i])){if(!(w(t)===t&&t>=u[e+1]&&t<=u[e+2]))throw Error(d+i+": "+t);this[i]=t}if(i="crypto",r&&(this[i]=a[i]),void 0!==(t=n[i])){if(!0!==t&&!1!==t&&0!==t&&1!==t)throw Error(d+i+": "+t);if(t){if("undefined"==typeof crypto||!crypto||!crypto.getRandomValues&&!crypto.randomBytes)throw Error(g);this[i]=!0}else this[i]=!1}return this}function hn(n){return new this(n).cos()}function dn(n){return new this(n).cosh()}function pn(n,e){return new this(n).div(e)}function gn(n){return new this(n).exp()}function mn(n){return P(n=new this(n),n.e+1,3)}function wn(){var n,e,i=new this(0);for(l=!1,n=0;n<arguments.length;)if((e=new this(arguments[n++])).d)i.d&&(i=i.plus(e.times(e)));else{if(e.s)return l=!0,new this(1/0);i=e}return l=!0,i.sqrt()}function vn(n){return n instanceof e||n&&n.toStringTag===m||!1}function Nn(n){return new this(n).ln()}function bn(n,e){return new this(n).log(e)}function En(n){return new this(n).log(2)}function xn(n){return new this(n).log(10)}function yn(){return H(this,arguments,"lt")}function Mn(){return H(this,arguments,"gt")}function qn(n,e){return new this(n).mod(e)}function On(n,e){return new this(n).mul(e)}function Dn(n,e){return new this(n).pow(e)}function Fn(n){var e,i,t,r,s=0,u=new this(1),c=[];if(void 0===n?n=this.precision:F(n,1,o),t=Math.ceil(n/7),this.crypto)if(crypto.getRandomValues)for(e=crypto.getRandomValues(new Uint32Array(t));s<t;)(r=e[s])>=429e7?e[s]=crypto.getRandomValues(new Uint32Array(1))[0]:c[s++]=r%1e7;else{if(!crypto.randomBytes)throw Error(g);for(e=crypto.randomBytes(t*=4);s<t;)(r=e[s]+(e[s+1]<<8)+(e[s+2]<<16)+((127&e[s+3])<<24))>=214e7?crypto.randomBytes(4).copy(e,s):(c.push(r%1e7),s+=4);s=t/4}else for(;s<t;)c[s++]=1e7*Math.random()|0;for(n%=7,(t=c[--s])&&n&&(r=v(10,7-n),c[s]=(t/r|0)*r);0===c[s];s--)c.pop();if(s<0)i=0,c=[0];else{for(i=-1;0===c[0];i-=7)c.shift();for(t=1,r=c[0];r>=10;r/=10)t++;t<7&&(i-=7-t)}return u.e=i,u.d=c,u}function An(n){return P(n=new this(n),n.e+1,this.rounding)}function Sn(n){return(n=new this(n)).d?n.d[0]?n.s:0*n.s:n.s||NaN}function Zn(n){return new this(n).sin()}function Pn(n){return new this(n).sinh()}function Rn(n){return new this(n).sqrt()}function Tn(n,e){return new this(n).sub(e)}function _n(){var n=0,e=arguments,i=new this(e[n]);for(l=!1;i.s&&++n<e.length;)i=i.plus(e[n]);return l=!0,P(i,this.precision,this.rounding)}function Ln(n){return new this(n).tan()}function Un(n){return new this(n).tanh()}function kn(n){return P(n=new this(n),n.e+1,1)}e=function n(e){var i,t,r;function s(n){var e,i,t,r=this;if(!(r instanceof s))return new s(n);if(r.constructor=s,vn(n))return r.s=n.s,void(l?!n.d||n.e>s.maxE?(r.e=NaN,r.d=null):n.e<s.minE?(r.e=0,r.d=[0]):(r.e=n.e,r.d=n.d.slice()):(r.e=n.e,r.d=n.d?n.d.slice():n.d));if("number"===(t=typeof n)){if(0===n)return r.s=1/n<0?-1:1,r.e=0,void(r.d=[0]);if(n<0?(n=-n,r.s=-1):r.s=1,n===~~n&&n<1e7){for(e=0,i=n;i>=10;i/=10)e++;return void(l?e>s.maxE?(r.e=NaN,r.d=null):e<s.minE?(r.e=0,r.d=[0]):(r.e=e,r.d=[n]):(r.e=e,r.d=[n]))}return 0*n!=0?(n||(r.s=NaN),r.e=NaN,void(r.d=null)):j(r,n.toString())}if("string"!==t)throw Error(d+n);return 45===(i=n.charCodeAt(0))?(n=n.slice(1),r.s=-1):(43===i&&(n=n.slice(1)),r.s=1),x.test(n)?j(r,n):W(r,n)}if(s.prototype=O,s.ROUND_UP=0,s.ROUND_DOWN=1,s.ROUND_CEIL=2,s.ROUND_FLOOR=3,s.ROUND_HALF_UP=4,s.ROUND_HALF_DOWN=5,s.ROUND_HALF_EVEN=6,s.ROUND_HALF_CEIL=7,s.ROUND_HALF_FLOOR=8,s.EUCLID=9,s.config=s.set=ln,s.clone=n,s.isDecimal=vn,s.abs=X,s.acos=Y,s.acosh=nn,s.add=en,s.asin=tn,s.asinh=rn,s.atan=sn,s.atanh=on,s.atan2=un,s.cbrt=cn,s.ceil=fn,s.clamp=an,s.cos=hn,s.cosh=dn,s.div=pn,s.exp=gn,s.floor=mn,s.hypot=wn,s.ln=Nn,s.log=bn,s.log10=xn,s.log2=En,s.max=yn,s.min=Mn,s.mod=qn,s.mul=On,s.pow=Dn,s.random=Fn,s.round=An,s.sign=Sn,s.sin=Zn,s.sinh=Pn,s.sqrt=Rn,s.sub=Tn,s.sum=_n,s.tan=Ln,s.tanh=Un,s.trunc=kn,void 0===e&&(e={}),e&&!0!==e.defaults)for(r=["precision","rounding","toExpNeg","toExpPos","maxE","minE","modulo","crypto"],i=0;i<r.length;)e.hasOwnProperty(t=r[i++])||(e[t]=this[t]);return s.config(e),s}(a),e.prototype.constructor=e,e.default=e.Decimal=e,c=new e(c),f=new e(f),"function"==typeof define&&define.amd?define((function(){return e})):"undefined"!=typeof module&&module.exports?("function"==typeof Symbol&&"symbol"==typeof Symbol.iterator&&(O[Symbol.for("nodejs.util.inspect.custom")]=O.toString,O[Symbol.toStringTag]="Decimal"),module.exports=e):(n||(n="undefined"!=typeof self&&self&&self.self==self?self:window),t=n.Decimal,e.noConflict=function(){return n.Decimal=t,e},n.Decimal=e)}(this);
+/* Built-in expression engine and editor UI. The page is intentionally a single-file, dependency-free app. */
+(() => {
+  'use strict';
+
+  const Decimal = window.Decimal;
+  Decimal.set({ precision: 50, rounding: Decimal.ROUND_HALF_UP, toExpNeg: -30, toExpPos: 50, maxE: 1e9, minE: -1e9 });
+  const D = (x) => new Decimal(x);
+  const ZERO_DIMS = () => [0, 0, 0, 0, 0, 0, 0];
+  const MAX_EXPR = 500;
+  const MAX_TOKENS = 200;
+  const MAX_AMBIGUOUS_READINGS = 8;
+  const PREC = { add: 40, mul: 50, choose: 60, implicit: 70, unary: 80, power: 90, postfix: 100 };
+  const editor = document.getElementById('editor');
+  const mirror = document.getElementById('mirror');
+  const bar = document.getElementById('bottomBar');
+  const chipsNode = document.getElementById('chips');
+  const hintNode = document.getElementById('keyHint');
+
+  // Small exact-rational sidecar lets formatting distinguish terminating decimal results
+  // from rounded approximations without giving up Decimal.js arithmetic.
+  const gcd = (a, b) => { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) [a, b] = [b, a % b]; return a || 1n; };
+  function rat(n, d = 1n) {
+    if (n === null || d === null || d === 0n) return null;
+    if (d < 0n) { n = -n; d = -d; }
+    const g = gcd(n, d); n /= g; d /= g;
+    if (String(n).length > 1200 || String(d).length > 1200) return null;
+    return { n, d };
+  }
+  function ratFromString(s) {
+    s = String(s).trim().replace(/,/g, '');
+    const m = s.match(/^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/);
+    if (!m || !(m[2] || m[3])) return null;
+    const sign = m[1] === '-' ? -1n : 1n;
+    const frac = m[3] || '';
+    let n = BigInt((m[2] || '0') + frac) * sign;
+    let scale = frac.length - Number(m[4] || 0);
+    if (!Number.isFinite(scale) || Math.abs(scale) > 1200) return null;
+    if (scale < 0) { n *= 10n ** BigInt(-scale); scale = 0; }
+    return rat(n, 10n ** BigInt(scale));
+  }
+  function ratAdd(a, b) { return a && b ? rat(a.n * b.d + b.n * a.d, a.d * b.d) : null; }
+  function ratSub(a, b) { return a && b ? rat(a.n * b.d - b.n * a.d, a.d * b.d) : null; }
+  function ratMul(a, b) { return a && b ? rat(a.n * b.n, a.d * b.d) : null; }
+  function ratDiv(a, b) { return a && b && b.n !== 0n ? rat(a.n * b.d, a.d * b.n) : null; }
+  function ratPow(a, n) {
+    if (!a || !Number.isInteger(n) || Math.abs(n) > 1000) return null;
+    if (n === 0) return rat(1n);
+    if (n < 0) return a.n === 0n ? null : rat(a.d ** BigInt(-n), a.n ** BigInt(-n));
+    return rat(a.n ** BigInt(n), a.d ** BigInt(n));
+  }
+  function decimalFromRat(r) { return r ? D(r.n.toString()).div(D(r.d.toString())) : null; }
+  function ratFiniteString(r) {
+    if (!r) return null;
+    let d = r.d, twos = 0, fives = 0;
+    while (d % 2n === 0n) { d /= 2n; twos++; }
+    while (d % 5n === 0n) { d /= 5n; fives++; }
+    if (d !== 1n) return null;
+    const places = Math.max(twos, fives);
+    if (places > 1100) return null;
+    let n = r.n;
+    if (places > twos) n *= 2n ** BigInt(places - twos);
+    if (places > fives) n *= 5n ** BigInt(places - fives);
+    const neg = n < 0n; let s = (neg ? -n : n).toString();
+    if (!places) return (neg ? '-' : '') + s;
+    if (s.length <= places) s = '0'.repeat(places + 1 - s.length) + s;
+    let out = s.slice(0, -places) + '.' + s.slice(-places);
+    out = out.replace(/0+$/, '').replace(/\.$/, '');
+    if (out.startsWith('.')) out = '0' + out;
+    return (neg ? '-' : '') + out;
+  }
+  function significantCount(s) {
+    let x = String(s).replace(/^[+-]/, '').toLowerCase().split('e')[0].replace('.', '');
+    x = x.replace(/^0+/, '').replace(/0+$/, '');
+    return x.length || 1;
+  }
+  function ratIsExact(r) {
+    const s = ratFiniteString(r);
+    return s !== null && significantCount(s) <= 20;
+  }
+  const ratZero = () => rat(0n);
+  const ratOne = () => rat(1n);
+
+  const dims = { L: 0, M: 1, T: 2, I: 3, Temp: 4, Data: 5, Angle: 6 };
+  const baseUnits = [];
+  const symbolMap = new Map();
+  const nameMap = new Map();
+  const allUnits = [];
+  const prefixes = [
+    { s: 'Q', name: 'quetta', exp: 30, allow: 'large' }, { s: 'R', name: 'ronna', exp: 27, allow: 'large' },
+    { s: 'Y', name: 'yotta', exp: 24, allow: 'large' }, { s: 'Z', name: 'zetta', exp: 21, allow: 'large' },
+    { s: 'E', name: 'exa', exp: 18, allow: 'large' }, { s: 'P', name: 'peta', exp: 15, allow: 'large' },
+    { s: 'T', name: 'tera', exp: 12, allow: 'large' }, { s: 'G', name: 'giga', exp: 9, allow: 'large' },
+    { s: 'M', name: 'mega', exp: 6, allow: 'large' }, { s: 'k', name: 'kilo', exp: 3, allow: 'large' },
+    { s: 'h', name: 'hecto', exp: 2, allow: 'all' }, { s: 'da', name: 'deca', exp: 1, allow: 'all' },
+    { s: 'd', name: 'deci', exp: -1, allow: 'all' }, { s: 'c', name: 'centi', exp: -2, allow: 'all' },
+    { s: 'm', name: 'milli', exp: -3, allow: 'all' }, { s: 'µ', name: 'micro', exp: -6, allow: 'all' },
+    { s: 'n', name: 'nano', exp: -9, allow: 'all' }, { s: 'p', name: 'pico', exp: -12, allow: 'all' },
+    { s: 'f', name: 'femto', exp: -15, allow: 'all' }, { s: 'a', name: 'atto', exp: -18, allow: 'all' },
+    { s: 'z', name: 'zepto', exp: -21, allow: 'all' }, { s: 'y', name: 'yocto', exp: -24, allow: 'all' },
+    { s: 'r', name: 'ronto', exp: -27, allow: 'all' }, { s: 'q', name: 'quecto', exp: -30, allow: 'all' }
+  ];
+  const prefixAliases = { µ: ['µ', 'μ', 'u'] };
+  let unitId = 0;
+  function unit(def) {
+    const u = {
+      id: 'u' + (++unitId), symbol: def.symbol || '', name: def.name || def.symbol || '', names: def.names || [], symbols: def.symbols || (def.symbol ? [def.symbol] : []),
+      dims: def.dims || ZERO_DIMS(), factor: def.factorD ? D(def.factorD) : D(def.factor || 1),
+      factorRat: def.factorRat || ratFromString(def.factorD || def.factor || '1'),
+      offset: def.offsetD ? D(def.offsetD) : D(def.offset || 0), offsetRat: def.offsetRat || ratFromString(def.offsetD || def.offset || '0'),
+      affine: !!def.affine, prefixable: def.prefixable || 'none', family: def.family || '', isDeltaTemp: !!def.isDeltaTemp, variant: def.variant || ''
+    };
+    allUnits.push(u);
+    for (const s of u.symbols) if (s) { if (!symbolMap.has(s)) symbolMap.set(s, []); symbolMap.get(s).push(u); }
+    for (const n of [u.name, ...u.names]) if (n) { const key = normalizeName(n); if (!nameMap.has(key)) nameMap.set(key, []); nameMap.get(key).push(u); }
+    return u;
+  }
+  function normalizeName(s) { return String(s).trim().toLowerCase().replace(/[’']/g, '').replace(/\s+/g, ' '); }
+  function makeBase(symbol, name, dim, factor, options = {}) {
+    const ds = ZERO_DIMS(); if (dim) for (const [k, v] of Object.entries(dim)) ds[dims[k]] = v;
+    const u = unit({ symbol, name, names: options.names || [], symbols: options.symbols || [symbol], dims: ds, factorD: String(factor), prefixable: options.prefixable || 'none', family: options.family || '', offsetD: options.offsetD || '0', offsetRat: options.offsetRat || null, affine: !!options.affine, variant: options.variant || '' });
+    baseUnits.push(u); return u;
+  }
+  function makeDerivedUnit(symbol, name, dimMap, factor, names = [], options = {}) {
+    const ds = ZERO_DIMS(); for (const [k, v] of Object.entries(dimMap)) ds[dims[k]] = v;
+    const u = unit({ symbol, name, names, symbols: options.symbols || [symbol], dims: ds, factorD: String(factor), factorRat: options.factorRat || ratFromString(String(factor)), prefixable: options.prefixable || 'none', family: options.family || '', variant: options.variant || '' });
+    return u;
+  }
+
+  const U = {};
+  U.m = makeBase('m', 'meter', { L: 1 }, '1', { names: ['metre', 'meters', 'metres'], prefixable: 'all', family: 'length' });
+  U.g = makeBase('g', 'gram', { M: 1 }, '0.001', { names: ['grams'], prefixable: 'all', family: 'mass' });
+  U.kg = makeBase('kg', 'kilogram', { M: 1 }, '1', { names: ['kilograms'], prefixable: 'none', family: 'mass' });
+  U.s = makeBase('s', 'second', { T: 1 }, '1', { names: ['seconds', 'sec', 'secs'], prefixable: 'all', family: 'time' });
+  U.A = makeBase('A', 'ampere', { I: 1 }, '1', { names: ['amp', 'amps', 'amperes'], prefixable: 'all', family: 'current' });
+  U.K = makeBase('K', 'kelvin', { Temp: 1 }, '1', { names: ['kelvins'], prefixable: 'all', family: 'temperature' });
+  U.B = makeBase('B', 'byte', { Data: 1 }, '8', { names: ['bytes'], prefixable: 'large', family: 'data' });
+  U.b = makeBase('b', 'bit', { Data: 1 }, '1', { names: ['bits'], prefixable: 'large', family: 'data' });
+  U.bps = makeBase('bps', 'bit per second', { Data: 1, T: -1 }, '1', { names: ['bits per second', 'bit per second'], prefixable: 'large', family: 'data rate' });
+  U.Bps = makeBase('B/s', 'byte per second', { Data: 1, T: -1 }, '8', { names: ['bytes per second', 'byte per second'], symbols: ['B/s'], prefixable: 'large', family: 'data rate' });
+  U.rad = makeBase('rad', 'radian', { Angle: 1 }, '1', { names: ['radians'], family: 'angle' });
+  U.deg = makeBase('°', 'degree', { Angle: 1 }, '0.017453292519943295769236907684886127134428718885417', { names: ['degrees', 'deg'], symbols: ['°', 'deg'], family: 'angle', factorRat: rat(1n, 180n) && ratDiv(ratFromString('3.1415926535897932384626433832795028841971693993751'), rat(180n)) });
+  U.grad = makeBase('grad', 'gradian', { Angle: 1 }, '0.015707963267948966192313216916397514420985846996876', { names: ['gradians', 'gon'], family: 'angle' });
+  U.lb = makeBase('lb', 'pound', { M: 1 }, '0.45359237', { names: ['pounds', 'lbs', 'pound mass'], symbols: ['lb', 'lbs'], family: 'mass' });
+  U.oz = makeBase('oz', 'ounce', { M: 1 }, '0.028349523125', { names: ['ounces'], family: 'mass' });
+  U.mi = makeBase('mi', 'mile', { L: 1 }, '1609.344', { names: ['miles'], family: 'length' });
+  U.yd = makeBase('yd', 'yard', { L: 1 }, '0.9144', { names: ['yards'], family: 'length' });
+  U.ft = makeBase('ft', 'foot', { L: 1 }, '0.3048', { names: ['feet'], family: 'length' });
+  U.in = makeBase('in', 'inch', { L: 1 }, '0.0254', { names: ['inches'], family: 'length' });
+  U.min = makeBase('min', 'minute', { T: 1 }, '60', { names: ['minutes', 'mins'], family: 'time' });
+  U.hr = makeBase('h', 'hour', { T: 1 }, '3600', { names: ['hour', 'hours', 'hr', 'hrs'], symbols: ['h', 'hr'], family: 'time' });
+  U.day = makeBase('d', 'day', { T: 1 }, '86400', { names: ['days'], symbols: ['d', 'day'], family: 'time' });
+  U.week = makeBase('wk', 'week', { T: 1 }, '604800', { names: ['weeks', 'wks'], family: 'time' });
+  U.month = makeBase('mo', 'month', { T: 1 }, '2629800', { names: ['months'], family: 'time' });
+  U.year = makeBase('yr', 'year', { T: 1 }, '31557600', { names: ['years', 'yrs'], family: 'time' });
+  U.decade = makeBase('decade', 'decade', { T: 1 }, '315576000', { names: ['decades'], family: 'time' });
+  U.century = makeBase('century', 'century', { T: 1 }, '3155760000', { names: ['centuries'], family: 'time' });
+  U.L = makeBase('L', 'liter', { L: 3 }, '0.001', { names: ['litre', 'liters', 'litres'], symbols: ['L', 'l'], prefixable: 'all', family: 'volume' });
+  U.gal = makeBase('gal', 'gallon', { L: 3 }, '0.003785411784', { names: ['gallons', 'US gallon', 'US gallons'], family: 'volume' });
+  U.igal = makeBase('imp gal', 'imperial gallon', { L: 3 }, '0.00454609', { names: ['imperial gallons', 'UK gallon', 'UK gallons', 'imp gallon', 'imp gallons'], symbols: ['imp gal', 'uk gal'], family: 'volume', variant: 'imperial' });
+  U.qt = makeBase('qt', 'quart', { L: 3 }, '0.000946352946', { names: ['quarts'], family: 'volume' });
+  U.pint = makeBase('pt', 'pint', { L: 3 }, '0.000473176473', { names: ['pints'], family: 'volume' });
+  U.cup = makeBase('cup', 'cup', { L: 3 }, '0.0002365882365', { names: ['cups'], family: 'volume' });
+  U.tbsp = makeBase('tbsp', 'tablespoon', { L: 3 }, '0.00001478676478125', { names: ['tablespoons', 'tbsp'], family: 'volume' });
+  U.tsp = makeBase('tsp', 'teaspoon', { L: 3 }, '0.00000492892159375', { names: ['teaspoons'], family: 'volume' });
+  U.floz = makeBase('fl oz', 'fluid ounce', { L: 3 }, '0.0000295735295625', { names: ['fluid ounces', 'fl oz', 'floz'], symbols: ['fl oz', 'floz'], family: 'volume' });
+  U.ifloz = makeBase('imp fl oz', 'imperial fluid ounce', { L: 3 }, '0.0000284130625', { names: ['imperial fluid ounces', 'UK fluid ounce'], symbols: ['imp fl oz'], family: 'volume', variant: 'imperial' });
+  U.J = makeBase('J', 'joule', { M: 1, L: 2, T: -2 }, '1', { names: ['joules'], prefixable: 'all', family: 'energy' });
+  U.cal = makeBase('cal', 'calorie', { M: 1, L: 2, T: -2 }, '4.184', { names: ['calories'], prefixable: 'all', family: 'energy' });
+  U.Cal = makeBase('Cal', 'food calorie', { M: 1, L: 2, T: -2 }, '4184', { names: ['Calorie', 'Calories', 'kilocalorie', 'kilocalories', 'kcal'], symbols: ['Cal'], family: 'energy' });
+  U.Wh = makeBase('Wh', 'watt-hour', { M: 1, L: 2, T: -2 }, '3600', { names: ['watt hour', 'watt hours', 'watt-hour', 'watt-hours'], prefixable: 'all', family: 'energy' });
+  U.Hz = makeBase('Hz', 'hertz', { T: -1 }, '1', { names: ['hertz'], prefixable: 'all', family: 'frequency' });
+  U.Pa = makeBase('Pa', 'pascal', { M: 1, L: -1, T: -2 }, '1', { names: ['pascals'], prefixable: 'all', family: 'pressure' });
+  U.bar = makeBase('bar', 'bar', { M: 1, L: -1, T: -2 }, '100000', { names: ['bars'], prefixable: 'all', family: 'pressure' });
+  U.atm = makeBase('atm', 'atmosphere', { M: 1, L: -1, T: -2 }, '101325', { names: ['atmospheres'], family: 'pressure' });
+  U.psi = makeBase('PSI', 'pound per square inch', { M: 1, L: -1, T: -2 }, '6894.7572931683613367226734453468906937813875627751', { names: ['psi', 'pounds per square inch'], symbols: ['PSI', 'psi'], family: 'pressure' });
+  U.mph = makeBase('mph', 'mile per hour', { L: 1, T: -1 }, '0.44704', { names: ['miles per hour'], family: 'speed' });
+  U.kph = makeBase('kph', 'kilometer per hour', { L: 1, T: -1 }, '0.27777777777777777777777777777777777777777777777778', { names: ['km/h', 'kilometres per hour', 'kilometers per hour'], family: 'speed' }); U.kph.factorRat = rat(5n, 18n);
+  U.kn = makeBase('kn', 'knot', { L: 1, T: -1 }, '0.51444444444444444444444444444444444444444444444444', { names: ['knots', 'knot'], symbols: ['kn', 'kt'], family: 'speed' }); U.kn.factorRat = rat(463n, 900n);
+  U.mps = makeBase('m/s', 'meter per second', { L: 1, T: -1 }, '1', { names: ['meters per second', 'metres per second'], symbols: ['m/s'], family: 'speed' });
+  U.fts = makeBase('ft/s', 'foot per second', { L: 1, T: -1 }, '0.3048', { names: ['feet per second'], symbols: ['ft/s'], family: 'speed' });
+  U.kmL = makeBase('km/L', 'kilometer per liter', { L: -2 }, '1000000', { names: ['kilometers per liter', 'kilometres per litre', 'km per l'], family: 'fuel' });
+  U.mpg = makeBase('mpg', 'mile per gallon', { L: -2 }, '425143.707', { names: ['miles per gallon'], family: 'fuel' });
+  U.W = makeBase('W', 'watt', { M: 1, L: 2, T: -3 }, '1', { names: ['watts'], prefixable: 'all', family: 'power' });
+  U.hp = makeBase('hp', 'mechanical horsepower', { M: 1, L: 2, T: -3 }, '745.69987158227022', { names: ['horsepower', 'mechanical horsepower'], symbols: ['hp', 'HP'], family: 'power', variant: 'mechanical' });
+  U.PS = makeBase('PS', 'metric horsepower', { M: 1, L: 2, T: -3 }, '735.49875', { names: ['metric horsepower', 'horsepower metric'], family: 'power', variant: 'metric' });
+  U.N = makeBase('N', 'newton', { M: 1, L: 1, T: -2 }, '1', { names: ['newtons'], prefixable: 'all', family: 'force' });
+  U.lbf = makeBase('lbf', 'pound-force', { M: 1, L: 1, T: -2 }, '4.4482216152605', { names: ['pound force', 'pounds force', 'pound-force'], family: 'force' });
+  U.V = makeBase('V', 'volt', { M: 1, L: 2, T: -3, I: -1 }, '1', { names: ['volts'], prefixable: 'all', family: 'voltage' });
+  U.ohm = makeBase('Ω', 'ohm', { M: 1, L: 2, T: -3, I: -2 }, '1', { names: ['ohms', 'Ohm', 'Ohms'], symbols: ['Ω', 'ohm'], prefixable: 'all', family: 'resistance' });
+  U.C = makeBase('°C', 'celsius', { Temp: 1 }, '1', { names: ['celsius', 'degree celsius', 'degrees celsius'], symbols: ['°C', '℃'], offsetD: '273.15', affine: true, family: 'temperature' });
+  U.F = makeBase('°F', 'fahrenheit', { Temp: 1 }, '0.55555555555555555555555555555555555555555555555556', { names: ['fahrenheit', 'degree fahrenheit', 'degrees fahrenheit'], symbols: ['°F', '℉'], offsetD: '255.37222222222222222222222222222222222222222222222222', offsetRat: rat(45967n, 180n), factorRat: rat(5n, 9n), affine: true, family: 'temperature' });
+
+  // Prefixable names and canonical symbol forms.
+  const generatedPrefixes = [];
+  const prefixScale = (p) => D('1e' + p.exp);
+  const largePrefix = (p) => ['k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 'R', 'Q'].includes(p.s);
+  for (const b of baseUnits) {
+    if (b.prefixable === 'none') continue;
+    for (const p of prefixes) {
+      if (b.prefixable === 'large' && !largePrefix(p)) continue;
+      // Affine temperatures are not prefixed as Celsius or Fahrenheit.
+      if (b.affine) continue;
+      const sym = p.s + b.symbol;
+      const factor = prefixScale(p).mul(b.factor);
+      const prefixUnit = unit({ symbol: sym, name: p.name + b.name, names: [p.name + b.name + 's'], symbols: [sym], dims: b.dims.slice(), factorD: factor.toString(), factorRat: ratMul(ratFromString('1e' + p.exp), b.factorRat), prefixable: 'none', family: b.family, variant: b.variant });
+      generatedPrefixes.push({ prefix: p, base: b, unit: prefixUnit });
+      // Additional micro glyphs are accepted but canonical output remains µ.
+      if (p.s === 'µ') for (const alias of ['μ', 'u']) {
+        const alt = unit({ symbol: sym, name: p.name + b.name, names: [], symbols: [alias + b.symbol], dims: b.dims.slice(), factorD: factor.toString(), factorRat: ratMul(ratFromString('1e' + p.exp), b.factorRat), prefixable: 'none', family: b.family });
+        generatedPrefixes.push({ prefix: p, base: b, unit: alt, alias: true });
+      }
+    }
+  }
+
+  // Convenient named compound units, also used by derived-unit recognition.
+  const m2 = makeDerivedUnit('m^2', 'square meter', { L: 2 }, '1', ['square meter', 'square meters', 'square metre', 'square metres', 'sq meter', 'sq meters', 'sq m']);
+  const km2 = makeDerivedUnit('km^2', 'square kilometer', { L: 2 }, '1000000', ['square kilometer', 'square kilometers', 'square kilometre', 'square kilometres', 'sq km']);
+  const mi2 = makeDerivedUnit('mi^2', 'square mile', { L: 2 }, '2589988.110336', ['square mile', 'square miles', 'sq mi']);
+  const yd2 = makeDerivedUnit('yd^2', 'square yard', { L: 2 }, '0.83612736', ['square yard', 'square yards', 'sq yd']);
+  const ft2 = makeDerivedUnit('ft^2', 'square foot', { L: 2 }, '0.09290304', ['square foot', 'square feet', 'sq ft']);
+  const in2 = makeDerivedUnit('in^2', 'square inch', { L: 2 }, '0.00064516', ['square inch', 'square inches', 'sq in']);
+  const acre = makeDerivedUnit('acre', 'acre', { L: 2 }, '4046.8564224', ['acres']);
+  const ha = makeDerivedUnit('ha', 'hectare', { L: 2 }, '10000', ['hectares']);
+  const m3 = makeDerivedUnit('m^3', 'cubic meter', { L: 3 }, '1', ['cubic meter', 'cubic meters', 'cubic metre', 'cubic metres']);
+  const ft3 = makeDerivedUnit('ft^3', 'cubic foot', { L: 3 }, '0.028316846592', ['cubic foot', 'cubic feet']);
+  const in3 = makeDerivedUnit('in^3', 'cubic inch', { L: 3 }, '0.000016387064', ['cubic inch', 'cubic inches']);
+  const LperS = makeDerivedUnit('L/s', 'liter per second', { L: 3, T: -1 }, '0.001', ['liters per second', 'litres per second']);
+
+  // Install generated prefixed units into the resolver maps after base names are registered.
+  const addGeneratedNames = () => {};
+  const multiwordUnits = [];
+  for (const u of allUnits) {
+    for (const n of [u.name, ...u.names]) if (/\s/.test(n.trim())) multiwordUnits.push({ phrase: n, unit: u });
+  }
+  // Additional phrase aliases and exponent spellings.
+  const phraseAliases = [
+    ['square meter', m2], ['square meters', m2], ['square metre', m2], ['square metres', m2], ['sq m', m2],
+    ['square kilometer', km2], ['square kilometers', km2], ['square kilometre', km2], ['square kilometres', km2], ['sq km', km2],
+    ['square mile', mi2], ['square miles', mi2], ['sq mi', mi2], ['square yard', yd2], ['square yards', yd2], ['sq yd', yd2],
+    ['square foot', ft2], ['square feet', ft2], ['sq ft', ft2], ['square inch', in2], ['square inches', in2], ['sq in', in2],
+    ['cubic meter', m3], ['cubic meters', m3], ['cubic metre', m3], ['cubic metres', m3], ['cubic foot', ft3], ['cubic feet', ft3],
+    ['cubic inch', in3], ['cubic inches', in3], ['meters squared', m2], ['metres squared', m2], ['meter squared', m2], ['metre squared', m2],
+    ['feet squared', ft2], ['foot squared', ft2], ['inches squared', in2], ['inch squared', in2], ['meters cubed', m3], ['metres cubed', m3],
+    ['meter cubed', m3], ['metre cubed', m3], ['feet cubed', ft3], ['foot cubed', ft3]
+  ];
+  for (const [phrase, u] of phraseAliases) multiwordUnits.push({ phrase, unit: u });
+  multiwordUnits.sort((a, b) => b.phrase.length - a.phrase.length);
+
+  const allBaseSymbols = [];
+  for (const b of baseUnits) for (const s of b.symbols) if (s && !s.includes(' ')) allBaseSymbols.push({ sym: s, unit: b });
+  const allPrefixedSymbols = [];
+  for (const g of generatedPrefixes) {
+    if (g.alias) continue;
+    const bs = g.base.symbols.filter(s => s && !s.includes(' '));
+    for (const s of bs) allPrefixedSymbols.push({ sym: g.prefix.s + s, unit: g.unit, prefix: g.prefix, base: g.base });
+  }
+
+  function uniqueUnits(list) {
+    const seen = new Set(); return list.filter(u => { if (!u || seen.has(u.id)) return false; seen.add(u.id); return true; });
+  }
+  function powerUnit(u, exponent) {
+    if (!Number.isFinite(exponent) || Math.abs(exponent) > 20) throw Error('unit exponent cap');
+    if (u.affine && exponent !== 1) throw Error('affine unit power');
+    const ds = u.dims.map(x => x * exponent);
+    if (ds.some(x => !Number.isInteger(x) || Math.abs(x) > 30)) throw Error('fractional unit dimensions');
+    const factor = u.factor.pow(exponent);
+    const factorR = Number.isInteger(exponent) ? ratPow(u.factorRat, exponent) : null;
+    let symbol;
+    if (exponent === 1) symbol = u.symbol;
+    else if (exponent === 0) symbol = '';
+    else symbol = `${u.symbol}^${String(exponent)}`;
+    const tempUnit = { id: `compound:${u.id}:${exponent}`, symbol, name: symbol, names: [], symbols: [symbol], dims: ds, factor, factorRat: factorR, offset: D(0), offsetRat: ratZero(), affine: false, prefixable: 'none', family: '', sources: [u] };
+    // Reciprocal seconds are the conventional hertz name; powers of one unit otherwise stay explicit.
+    if (exponent === -1) return findNamedUnit(tempUnit.dims, tempUnit.factor, [u, null], false) || tempUnit;
+    return tempUnit;
+  }
+  function combineUnit(a, b, divide = false) {
+    if (!a && !b) return null;
+    if (!a) return divide ? powerUnit(b, -1) : b;
+    if (!b) return a;
+    const dimsOut = a.dims.map((x, i) => x + (divide ? -b.dims[i] : b.dims[i]));
+    if (dimsOut.some(x => !Number.isInteger(x) || Math.abs(x) > 30)) throw Error('dimension cap');
+    const factorOut = divide ? a.factor.div(b.factor) : a.factor.mul(b.factor);
+    const fRat = divide ? ratDiv(a.factorRat, b.factorRat) : ratMul(a.factorRat, b.factorRat);
+    let sym;
+    if (a.id === b.id) sym = `${a.symbol}^${divide ? '-1' : '2'}`;
+    else sym = divide ? `${a.symbol}/${b.symbol}` : `${a.symbol}·${b.symbol}`;
+    const temp = { id: `compound:${a.id}:${divide ? '/' : '*'}:${b.id}`, symbol: sym, name: sym, names: [], symbols: [sym], dims: dimsOut, factor: factorOut, factorRat: fRat, offset: D(0), offsetRat: ratZero(), affine: false, prefixable: 'none', sources: [a, b] };
+    return findNamedUnit(dimsOut, factorOut, [a, b], false) || temp;
+  }
+  function sameDims(a, b) { return a && b && a.length === b.length && a.every((x, i) => x === b[i]); }
+  function closeFactor(a, b) { return a.sub(b).abs().lte(b.abs().mul('1e-12').add('1e-24')); }
+  function findNamedUnit(dimVec, factor, sources = [], sameUnitPower = false) {
+    // Only name products/quotients when the source units differ. Powers of one unit stay explicit.
+    if (sameUnitPower && sources.length && sources[0].id === (sources[1] || sources[0]).id) return null;
+    const candidates = [...allUnits, ...generatedPrefixes.map(g => g.unit), m2, km2, mi2, yd2, ft2, in2, acre, ha, m3, ft3, in3, LperS];
+    for (const u of candidates) {
+      if (!u || !sameDims(u.dims, dimVec)) continue;
+      if (closeFactor(u.factor, factor)) {
+        if (sources.length >= 2 && sources[0] && sources[1] && sources[0].id === sources[1].id && u !== sources[0]) continue;
+        return u;
+      }
+    }
+    return null;
+  }
+
+  function getNameUnits(text) { return nameMap.get(normalizeName(text)) || []; }
+  function allowedPrefix(prefix, base) { return base.prefixable === 'all' || (base.prefixable === 'large' && largePrefix(prefix)); }
+  function resolveUnitToken(raw) {
+    const s = raw.replace(/[μu]/g, ch => ch === 'u' ? 'µ' : 'µ');
+    // Exact symbols win, including exact base units such as m, min, mi, and pt.
+    const exact = symbolMap.get(raw);
+    if (exact && exact.length) return { units: uniqueUnits(exact), ambiguous: false, exact: true };
+    // Full names are deliberately case-insensitive.
+    const named = getNameUnits(raw);
+    if (named.length) return { units: uniqueUnits(named), ambiguous: false, exact: true };
+    // Common exponent suffixes glued to symbols: m2, ft2, m3.
+    const exponentMatch = raw.match(/^(.+?)([23])$/);
+    if (exponentMatch) {
+      const base = resolveUnitToken(exponentMatch[1]);
+      if (base.units.length) return { units: uniqueUnits(base.units.map(u => powerUnit(u, Number(exponentMatch[2])))), ambiguous: base.ambiguous, exact: base.exact };
+    }
+    // Full prefix names, with plurals and base-unit spellings.
+    const lower = normalizeName(raw);
+    const prefixedNames = [];
+    for (const p of prefixes) {
+      const aliases = [p.name];
+      for (const base of baseUnits) {
+        if (!allowedPrefix(p, base) || base.affine) continue;
+        const baseNames = [base.name, ...base.names].map(normalizeName);
+        for (const bn of baseNames) {
+          if (lower === normalizeName(p.name + bn) || lower === normalizeName(p.name + bn + 's')) {
+            const found = generatedPrefixes.find(g => g.prefix.s === p.s && g.base.id === base.id);
+            if (found) prefixedNames.push(found.unit);
+          }
+        }
+      }
+    }
+    if (prefixedNames.length) return { units: uniqueUnits(prefixedNames), ambiguous: false, exact: true };
+    // Case-folded fallback: enumerate prefix-case and base-symbol-case interpretations.
+    const key = raw.toLowerCase();
+    const folded = [];
+    for (const entry of allBaseSymbols) if (entry.sym.toLowerCase() === key) folded.push(entry.unit);
+    for (const entry of allPrefixedSymbols) if (entry.sym.toLowerCase() === key) folded.push(entry.unit);
+    // If a lowercase spelling uses the micro prefix, accept u/µ/μ forms too.
+    if (/[uμ]/i.test(raw)) {
+      for (const g of generatedPrefixes) {
+        if (g.alias && g.unit.symbol.toLowerCase() === key) folded.push(g.unit);
+      }
+    }
+    const foldedUnique = uniqueUnits(folded);
+    if (foldedUnique.length) {
+      const score = (u) => {
+        const cand = u.symbol;
+        let n = Math.abs(raw.length - cand.length) * 3;
+        for (let i = 0; i < Math.min(raw.length, cand.length); i++) if (raw[i] !== cand[i]) n += raw[i].toLowerCase() === cand[i].toLowerCase() ? 1 : 4;
+        return n;
+      };
+      foldedUnique.sort((a, b) => score(a) - score(b));
+      return { units: foldedUnique, ambiguous: foldedUnique.length > 1, exact: false };
+    }
+    return { units: [], ambiguous: false, exact: false };
+  }
+
+  function matchMultiwordUnit(src, pos) {
+    const tail = src.slice(pos);
+    for (const entry of multiwordUnits) {
+      const re = new RegExp('^' + entry.phrase.split(/\s+/).map(escapeRegExp).join('\\s+') + '(?![\\p{L}\\p{N}])', 'iu');
+      const m = tail.match(re);
+      if (m) return { length: m[0].length, units: [entry.unit], ambiguous: false, exact: true, raw: m[0] };
+    }
+    return null;
+  }
+  function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function tokenize(src, options = {}) {
+    const tokens = [];
+    let i = 0;
+    const sci = options.scientific !== false;
+    const push = (type, raw, start, end, extra = {}) => tokens.push({ type, raw, start, end, ...extra });
+    while (i < src.length) {
+      const ch = src[i];
+      if (/\s/.test(ch)) { i++; continue; }
+      const mw = matchMultiwordUnit(src, i);
+      if (mw && (i === 0 || !/[\p{L}\p{N}_]/u.test(src[i - 1]))) { push('unit', mw.raw, i, i + mw.length, { unitOptions: mw.units, ambiguous: false, unitExact: true }); i += mw.length; continue; }
+      if (src.startsWith('->', i)) { push('convert', '->', i, i + 2); i += 2; continue; }
+      if (src.startsWith('**', i)) { push('op', '**', i, i + 2); i += 2; continue; }
+      if (ch === '×') { push('op', '*', i, i + 1); i++; continue; }
+      if (ch === '÷') { push('op', '/', i, i + 1); i++; continue; }
+      if (ch === '−') { push('op', '-', i, i + 1); i++; continue; }
+      if (ch === '·') { push('op', '*', i, i + 1); i++; continue; }
+      if (ch === '²' || ch === '³') { push('op', '^', i, i + 1, { superscript: true }); push('num', ch === '²' ? '2' : '3', i, i + 1, { value: ch === '²' ? '2' : '3', rat: rat(BigInt(ch === '²' ? 2 : 3)) }); i++; continue; }
+      if (ch === '⁻' && src[i + 1] === '¹') { push('op', '^', i, i + 2, { superscript: true }); push('op', '-', i, i + 2, { superscript: true }); push('num', '1', i, i + 2, { value: '1', rat: ratOne() }); i += 2; continue; }
+      const numberMatch = src.slice(i).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (numberMatch) {
+        let raw = numberMatch[0];
+        // If the e exponent has no digits, the e remains the Euler constant (2e = 2·e).
+        const end = i + raw.length;
+        if (!sci && /e[+-]?\d+$/i.test(raw)) {
+          const expM = raw.match(/^(.*?)(?:e)([+-]?\d+)$/i);
+          if (expM) {
+            const mant = expM[1]; push('num', mant, i, i + mant.length, { value: mant, rat: ratFromString(mant) });
+            push('const', 'e', i + mant.length, i + mant.length + 1, { name: 'e' });
+            i += mant.length + 1;
+            continue;
+          }
+        }
+        push('num', raw, i, end, { value: raw, rat: ratFromString(raw), scientific: /e/i.test(raw) }); i = end; continue;
+      }
+      // Trig inverse spellings such as sin-1(0.5), sin-1 0.5, sin^-1(0.5), and sin⁻¹.
+      const inv = src.slice(i).match(/^(sin|cos|tan|csc|sec|cot)(?:\s*\^\s*-\s*1|⁻¹|-1)(?=\s*(?:\(|\d|\.|[A-Za-zπ]))/i);
+      if (inv) {
+        const arg = inv[1].toLowerCase();
+        const nextIndex = i + inv[0].length;
+        const after = src.slice(nextIndex).trimStart();
+        const directlyJoinedMinus1 = /-1$/.test(inv[0].replace(/\s+/g, ''));
+        // sin -1 has a space before the minus and is not inverse notation.
+        const hasSpaceBeforeMinus = /^\s/.test(inv[0].slice(arg.length));
+        if (!hasSpaceBeforeMinus || !directlyJoinedMinus1) {
+          push('func', inv[0], i, nextIndex, { name: 'a' + arg, inverse: true }); i = nextIndex; continue;
+        }
+      }
+      // P(n,r) and C(n,r) are choose/permutation function spellings, not prefixes on words such as pi or PSI.
+      const chooseCall = src.slice(i).match(/^(P|C)(?=\s*\()/);
+      if (chooseCall) {
+        push('func', chooseCall[0], i, i + chooseCall[0].length, { name: chooseCall[1] === 'P' ? 'npr' : 'ncr' });
+        i += chooseCall[0].length; continue;
+      }
+      // Function names with optional base suffixes, including log_2 and log5.
+      const fnMatch = src.slice(i).match(/^(arcsin|arccos|arctan|asin|acos|atan|csc|sec|cot|sin|cos|tan|sqrt|cbrt|ln|log(?:_\d+|\d+)?|nPr|nCr)/i);
+      if (fnMatch) {
+        const rawName = fnMatch[0];
+        const low = rawName.toLowerCase();
+        let name = low, base = null;
+        if (/^log_?\d+$/.test(low)) { base = Number(low.replace('log_', '').replace('log', '')); name = 'logbase'; }
+        if (/^arcsin$/.test(low)) name = 'asin';
+        if (/^arccos$/.test(low)) name = 'acos';
+        if (/^arctan$/.test(low)) name = 'atan';
+        if (rawName === 'P' || rawName === 'p') name = 'npr';
+        if (rawName === 'C' || rawName === 'c') name = 'ncr';
+        if (/^npr$/i.test(rawName)) name = 'npr';
+        if (/^ncr$/i.test(rawName)) name = 'ncr';
+        let end = i + rawName.length;
+        let funcPower = null;
+        // Compact function-power forms: sin2(30), sin2 x, sin², sin^2(...).
+        const trigBase = ['sin', 'cos', 'tan', 'csc', 'sec', 'cot'].includes(name);
+        if (trigBase) {
+          const compactPow = src.slice(end).match(/^(\d+)(?=\s*(?:\(|[A-Za-zπµμ]))/);
+          if (compactPow) { funcPower = Number(compactPow[1]); end += compactPow[1].length; }
+          const powered = src.slice(end).match(/^(?:\s*(?:\^|\*\*)\s*(\d+)|([²³]))(?=\s*(?:\(|\d|\.|[A-Za-zπµμ]))/);
+          if (powered) {
+            funcPower = Number(powered[1] || (powered[2] === '²' ? 2 : 3));
+            end += powered[0].length;
+          }
+        }
+        if ((name === 'npr' || name === 'ncr') && src[end] !== '(') {
+          push('choose', rawName.toLowerCase(), i, end, { op: name });
+        } else {
+          push('func', src.slice(i, end), i, end, { name, base, funcPower, inverse: name.startsWith('a') && ['asin', 'acos', 'atan'].includes(name) });
+        }
+        i = end; continue;
+      }
+      if (ch === 'π') { push('const', ch, i, i + 1, { name: 'pi' }); i++; continue; }
+      if (/[A-Za-zµμΩ°]/u.test(ch)) {
+        // Consume one identifier/symbol run (digits included for m2, log5, and scientific ambiguities).
+        const idMatch = src.slice(i).match(/^[A-Za-zµμΩ°][A-Za-z0-9_µμΩ°]*/u);
+        const raw = idMatch ? idMatch[0] : ch;
+        const end = i + raw.length;
+        const low = raw.toLowerCase();
+        if (low === 'pi') { push('const', raw, i, end, { name: 'pi' }); i = end; continue; }
+        if (low === 'e') { push('const', raw, i, end, { name: 'e' }); i = end; continue; }
+        if (low === 'npr' || low === 'ncr') { push('choose', low, i, end, { op: low }); i = end; continue; }
+        const r = resolveUnitToken(raw);
+        if (r.units.length) { push('unit', raw, i, end, { unitOptions: r.units, ambiguous: r.ambiguous, unitExact: r.exact }); i = end; continue; }
+        // Inverse spellings were matched above; reserve words are not implicit multiplication operands.
+        push('unknown', raw, i, end); i = end; continue;
+      }
+      const op = { '+': '+', '-': '-', '*': '*', '/': '/', '^': '^', '%': '%', '!': '!', '(': '(', ')': ')', ',': ',', '=': '=', '(': '(', ')': ')' }[ch];
+      if (op) { push(op === '(' || op === ')' || op === ',' ? op : 'op', op, i, i + 1); i++; continue; }
+      push('unknown', ch, i, i + 1); i++;
+    }
+    // Percent is postfix at end, before a closing parenthesis, or before additive/multiplicative operators;
+    // it is modulo when the next token can begin an operand.
+    for (let j = 0; j < tokens.length; j++) {
+      if (tokens[j].type === 'op' && tokens[j].raw === '%') {
+        const next = tokens[j + 1];
+        const canStart = next && ['num', 'const', 'unit', 'func', '('].includes(next.type);
+        tokens[j].percentMode = canStart ? 'mod' : 'post';
+      }
+    }
+    return tokens;
+  }
+
+  function cloneTokenChoices(tokens, max = MAX_AMBIGUOUS_READINGS) {
+    let variants = [{ tokens: tokens.map(t => ({ ...t })), readings: [] }];
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.type !== 'unit' || !t.unitOptions || t.unitOptions.length <= 1) {
+        for (const v of variants) if (t.type === 'unit') {
+          v.tokens[i].unit = t.unitOptions?.[0];
+          if (t.unitOptions?.[0] && !t.unitExact && t.raw !== t.unitOptions[0].symbol) v.readings.push({ start: t.start, end: t.end, raw: t.raw, unit: t.unitOptions[0] });
+        }
+        continue;
+      }
+      const next = [];
+      for (const v of variants) for (const u of t.unitOptions) {
+        const ts = v.tokens.map(x => ({ ...x })); ts[i].unit = u;
+        next.push({ tokens: ts, readings: [...v.readings, { start: t.start, end: t.end, raw: t.raw, unit: u }] });
+        if (next.length >= max) break;
+      }
+      variants = next;
+      if (variants.length >= max) variants = variants.slice(0, max);
+    }
+    return variants;
+  }
+
+  class Parser {
+    constructor(tokens) { this.t = tokens; this.i = 0; this.depth = 0; }
+    peek() { return this.t[this.i]; }
+    take() { return this.t[this.i++]; }
+    parse() {
+      const node = this.expr(0);
+      if (this.i !== this.t.length) throw Error('unexpected token');
+      return node;
+    }
+    expr(minBP = 0) {
+      if (++this.depth > 120) { this.depth--; throw Error('recursion depth cap'); }
+      try { return this.exprInner(minBP); } finally { this.depth--; }
+    }
+    exprInner(minBP = 0) {
+      let t = this.take();
+      if (!t) throw Error('empty');
+      let left;
+      if (t.type === 'num') left = { type: 'num', value: t.value, rat: t.rat, raw: t.raw, pos: t.start };
+      else if (t.type === 'const') left = { type: 'const', name: t.name, raw: t.raw, pos: t.start };
+      else if (t.type === 'unit') left = { type: 'unit', unit: t.unit || t.unitOptions?.[0], raw: t.raw, pos: t.start, ambiguous: !!t.ambiguous };
+      else if (t.type === 'unknown' || t.type === 'convert' || t.type === 'choose') throw Error('unknown identifier');
+      else if (t.type === 'op' && (t.raw === '+' || t.raw === '-')) left = { type: 'unary', op: t.raw, value: this.expr(PREC.unary), pos: t.start };
+      else if (t.type === '(') {
+        left = this.expr(0);
+        if (!this.peek() || this.peek().type !== ')') throw Error('missing close');
+        this.take();
+      } else if (t.type === 'func') {
+        if (t.name === 'npr' || t.name === 'ncr') {
+          if (!this.peek() || this.peek().type !== '(') throw Error('choose needs args');
+          this.take(); const a = this.expr(0);
+          if (!this.peek() || this.take().type !== ',') throw Error('choose comma');
+          const b = this.expr(0);
+          if (!this.peek() || this.take().type !== ')') throw Error('choose close');
+          left = { type: 'choosefn', op: t.name, a, b, pos: t.start };
+        } else {
+          let args;
+          if (this.peek() && this.peek().type === '(') {
+            this.take(); args = [];
+            if (this.peek() && this.peek().type !== ')') {
+              do { args.push(this.expr(0)); if (!this.peek() || this.peek().type !== ',') break; this.take(); } while (true);
+            }
+            if (!this.peek() || this.take().type !== ')') throw Error('function close');
+          } else {
+            args = [this.expr(PREC.implicit)];
+          }
+          left = { type: 'call', name: t.name, base: t.base, funcPower: t.funcPower, args, pos: t.start };
+        }
+      } else throw Error('unexpected start');
+
+      while (this.peek()) {
+        const n = this.peek();
+        // Postfix factorial and percent.
+        if (n.type === 'op' && (n.raw === '!' || (n.raw === '%' && n.percentMode === 'post'))) {
+          if (PREC.postfix < minBP) break;
+          this.take(); left = { type: 'postfix', op: n.raw, value: left, pos: n.start }; continue;
+        }
+        // Exponentiation is right associative.
+        if (n.type === 'op' && (n.raw === '^' || n.raw === '**')) {
+          const bp = PREC.power; if (bp < minBP) break;
+          this.take(); const right = this.expr(bp); left = { type: 'binary', op: '^', left, right, pos: n.start }; continue;
+        }
+        // nPr and nCr sit between implicit multiplication and ordinary multiplication.
+        if (n.type === 'choose') {
+          const bp = PREC.choose; if (bp < minBP) break;
+          this.take(); const right = this.expr(bp + 1); left = { type: 'choose', op: n.op, left, right, pos: n.start }; continue;
+        }
+        if (n.type === 'op' && (n.raw === '*' || n.raw === '/' || (n.raw === '%' && n.percentMode === 'mod'))) {
+          const bp = PREC.mul; if (bp < minBP) break;
+          this.take(); const right = this.expr(bp + 1); left = { type: 'binary', op: n.raw, left, right, pos: n.start }; continue;
+        }
+        if (n.type === 'op' && (n.raw === '+' || n.raw === '-')) {
+          const bp = PREC.add; if (bp < minBP) break;
+          this.take(); const right = this.expr(bp + 1); left = { type: 'binary', op: n.raw, left, right, pos: n.start }; continue;
+        }
+        if (canStartAtom(n)) {
+          const bp = PREC.implicit; if (bp < minBP) break;
+          if (left.type === 'num' && n.type === 'num') throw Error('adjacent bare numbers');
+          const right = this.expr(bp + 1); left = { type: 'binary', op: 'implicit', left, right, pos: n.start }; continue;
+        }
+        break;
+      }
+      return left;
+    }
+  }
+  function canStartAtom(t) { return t && ['num', 'const', 'unit', 'func', '('].includes(t.type); }
+
+  function normalizeDecimal(x) {
+    if (!x.isFinite()) throw Error('non-finite');
+    if (x.abs().lt('1e-14')) return D(0);
+    const near = x.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+    if (x.sub(near).abs().lte('1e-14')) return near;
+    return x;
+  }
+  function dimsZero(ds) { return ds.every(x => x === 0); }
+  function dimAdd(a, b, sign = 1) { const out = a.map((x, i) => x + sign * b[i]); if (out.some(x => !Number.isInteger(x) || Math.abs(x) > 30)) throw Error('dimension cap'); return out; }
+  function q(value, dim = ZERO_DIMS(), options = {}) {
+    const vv = normalizeDecimal(D(value));
+    const rr = options.rat === undefined ? null : options.rat;
+    const qv = { kind: 'q', v: vv, dims: dim.slice(), rat: rr, display: options.display || null, sources: options.sources ? [...options.sources] : (options.display ? [options.display] : []), absolute: !!options.absolute, tempRaw: options.tempRaw ?? null, approx: options.approx ?? !ratIsExact(rr), bareLiteral: !!options.bareLiteral };
+    if (qv.v.isInteger() && (!qv.rat || qv.v.isZero())) qv.rat = rat(BigInt(qv.v.toFixed(0)));
+    return qv;
+  }
+  function unitAtom(u) { if (!u) throw Error('unknown unit'); return { kind: 'unitAtom', unit: u }; }
+  function ratForUnit(u) { return u.factorRat; }
+  function fromUnit(value, u) {
+    if (u.affine) {
+      const si = value.v.mul(u.factor).add(u.offset);
+      const rr = ratAdd(ratMul(value.rat, u.factorRat), u.offsetRat);
+      return q(si, u.dims, { rat: rr, display: u, sources: [u], absolute: true, tempRaw: value.v, approx: !ratIsExact(rr) });
+    }
+    const rr = ratMul(value.rat, u.factorRat);
+    return q(value.v.mul(u.factor), u.dims, { rat: rr, display: u, sources: [u], absolute: u.dims[dims.Temp] === 1 && !u.isDeltaTemp, approx: !ratIsExact(rr) });
+  }
+  function valueInUnit(qq, u) {
+    if (!sameDims(qq.dims, u.dims)) throw Error('dimension mismatch');
+    if (u.affine) return qq.v.sub(u.offset).div(u.factor);
+    return qq.v.div(u.factor);
+  }
+  function ratInUnit(qq, u) {
+    if (!qq.rat) return null;
+    if (u.affine) return ratDiv(ratSub(qq.rat, u.offsetRat), u.factorRat);
+    return ratDiv(qq.rat, u.factorRat);
+  }
+  function chooseDisplay(a, b, result) {
+    if (dimsZero(result.dims)) return null;
+    if (result.dims[dims.Temp] && a.absolute && b.absolute) return a.display || b.display;
+    const candidates = [];
+    for (const u of [a.display, b.display, ...a.sources, ...b.sources]) if (u && sameDims(u.dims, result.dims) && !candidates.some(x => x.id === u.id)) candidates.push(u);
+    if (!candidates.length) return result.display;
+    for (const u of candidates) {
+      try { const n = valueInUnit(result, u).abs(); if (n.gte(1) && n.lt(1000)) return u; } catch (_) {}
+    }
+    return candidates[0];
+  }
+  function evalNode(node, ctx) {
+    if (node.type === 'num') {
+      const exp = String(node.value).match(/[eE]([+-]?\d+)$/);
+      if (exp && Math.abs(Number(exp[1])) > 10000) throw Error('scientific exponent cap');
+      return q(D(node.value), ZERO_DIMS(), { rat: node.rat, bareLiteral: true, approx: !ratIsExact(node.rat) });
+    }
+    if (node.type === 'const') return q(node.name === 'pi' ? Decimal.acos(-1) : Decimal.exp(1), ZERO_DIMS(), { rat: null, approx: true });
+    if (node.type === 'unit') return unitAtom(node.unit);
+    if (node.type === 'unary') {
+      const v = evalNode(node.value, ctx);
+      if (v.kind === 'unitAtom') throw Error('unit sign');
+      if (node.op === '+') return v;
+      if (v.absolute && v.display) {
+        const rawValue = valueInUnit(v, v.display).neg();
+        return fromUnit(q(rawValue, ZERO_DIMS(), { rat: ratInUnit(v, v.display) ? rat(-ratInUnit(v, v.display).n, ratInUnit(v, v.display).d) : null, approx: v.approx }), v.display);
+      }
+      return q(v.v.neg(), v.dims, { rat: v.rat ? rat(-v.rat.n, v.rat.d) : null, display: v.display, sources: v.sources, absolute: v.absolute, tempRaw: v.tempRaw === null ? null : D(v.tempRaw).neg(), approx: v.approx, bareLiteral: v.bareLiteral });
+    }
+    if (node.type === 'postfix') {
+      const a = evalNode(node.value, ctx); if (a.kind === 'unitAtom') throw Error('postfix unit');
+      if (node.op === '%') return q(a.v.div(100), a.dims, { rat: ratDiv(a.rat, rat(100n)), display: a.display, sources: a.sources, absolute: a.absolute, approx: a.approx });
+      if (node.op === '!') {
+        if (!dimsZero(a.dims)) throw Error('factorial unit');
+        if (a.v.lt(0)) throw Error('factorial domain');
+        if (a.v.isInteger()) {
+          const n = Number(a.v.toFixed(0)); if (n > 170) throw Error('factorial cap');
+          let z = 1n; for (let i = 2n; i <= BigInt(n); i++) z *= i;
+          return q(D(z.toString()), ZERO_DIMS(), { rat: rat(z), approx: false });
+        }
+        const g = gamma(Number(a.v) + 1); if (!Number.isFinite(g) || g > 1e300) throw Error('gamma overflow');
+        return q(g, ZERO_DIMS(), { rat: null, approx: true });
+      }
+    }
+    if (node.type === 'choose' || node.type === 'choosefn') {
+      const a = evalNode(node.left || node.a, ctx), b = evalNode(node.right || node.b, ctx);
+      if (a.kind === 'unitAtom' || b.kind === 'unitAtom' || !dimsZero(a.dims) || !dimsZero(b.dims)) throw Error('choose dimensions');
+      if (!a.v.isInteger() || !b.v.isInteger()) throw Error('choose integer');
+      const n = Number(a.v.toFixed(0)), r = Number(b.v.toFixed(0));
+      if (n < 0 || r < 0 || r > n || n > 170) throw Error('choose cap');
+      let value = 1n;
+      if (node.op === 'npr') for (let i = 0; i < r; i++) value *= BigInt(n - i);
+      else { const k = Math.min(r, n - r); for (let i = 1; i <= k; i++) value = value * BigInt(n - k + i) / BigInt(i); }
+      return q(D(value.toString()), ZERO_DIMS(), { rat: rat(value), approx: false });
+    }
+    if (node.type === 'binary') {
+      const a = evalNode(node.left, ctx), b = evalNode(node.right, ctx);
+      if (node.op === 'implicit') {
+        if (a.kind === 'unitAtom' && b.kind === 'q' && dimsZero(b.dims)) return fromUnit(b, a.unit);
+        if (b.kind === 'unitAtom' && a.kind === 'q' && dimsZero(a.dims)) return fromUnit(a, b.unit);
+        return multiplyValues(a, b, false);
+      }
+      if (node.op === '^') {
+        if (a.kind === 'unitAtom' && b.kind === 'q' && dimsZero(b.dims)) return unitAtom(powerUnit(a.unit, Number(b.v)));
+        return powerValues(a, b);
+      }
+      if (node.op === '+' || node.op === '-') return addValues(a, b, node.op === '-' ? -1 : 1);
+      if (node.op === '*' || node.op === '/') return multiplyValues(a, b, node.op === '/');
+      if (node.op === '%') return moduloValues(a, b);
+    }
+    if (node.type === 'call') {
+      const args = node.args.map(a => evalNode(a, ctx));
+      if (node.name === 'npr' || node.name === 'ncr') {
+        if (args.length !== 2) throw Error('choose args');
+        const fake = { type: 'choosefn', op: node.name, a: node.args[0], b: node.args[1] };
+        return evalNode(fake, ctx);
+      }
+      if (args.length !== 1 || args[0].kind === 'unitAtom') throw Error('function args');
+      let a = args[0];
+      if (node.name === 'sqrt' || node.name === 'cbrt') {
+        const degree = node.name === 'sqrt' ? 2 : 3;
+        if (node.name === 'sqrt' && a.v.lt(0)) throw Error('root domain');
+        const ds = a.dims.map(x => x / degree); if (ds.some(x => !Number.isInteger(x))) throw Error('fractional dimensions');
+        const value = node.name === 'sqrt' ? a.v.sqrt() : D(Math.cbrt(Number(a.v)));
+        let rr = null;
+        if (a.rat) {
+          const absN = a.rat.n < 0n ? -a.rat.n : a.rat.n;
+          const rn = degree === 2 ? bigintSqrt(absN) : bigintCbrt(absN);
+          const rd = degree === 2 ? bigintSqrt(a.rat.d) : bigintCbrt(a.rat.d);
+          if (rn ** BigInt(degree) === absN && rd ** BigInt(degree) === a.rat.d) rr = rat(a.rat.n < 0n ? -rn : rn, rd);
+        }
+        let unitDisplay = null;
+        if (a.display) {
+          const rootFactor = degree === 2 ? a.display.factor.sqrt() : D(Math.cbrt(Number(a.display.factor)));
+          unitDisplay = findNamedUnit(ds, rootFactor, [], false) || powerUnit(a.display, 1 / degree);
+        }
+        return q(value, ds, { rat: rr, display: unitDisplay, sources: unitDisplay ? [unitDisplay] : [], approx: !ratIsExact(rr) });
+      }
+      if (['sin', 'cos', 'tan', 'csc', 'sec', 'cot', 'asin', 'acos', 'atan'].includes(node.name)) {
+        if (node.name.startsWith('a')) {
+          if (!dimsZero(a.dims)) throw Error('inverse trig dimension');
+          ctx.bareTrig ||= true;
+          const x = Number(a.v); if (node.name === 'asin' && Math.abs(x) > 1 || node.name === 'acos' && Math.abs(x) > 1) throw Error('inverse trig domain');
+          let val = node.name === 'asin' ? Math.asin(x) : node.name === 'acos' ? Math.acos(x) : Math.atan(x);
+          if (ctx.mode === 'deg') val = val * 180 / Math.PI;
+          const outUnit = ctx.mode === 'deg' ? U.deg : U.rad;
+          return fromUnit(q(val, ZERO_DIMS(), { rat: null, approx: true }), outUnit);
+        }
+        let angle;
+        if (sameDims(a.dims, U.rad.dims)) angle = Number(a.v);
+        else if (dimsZero(a.dims)) { ctx.bareTrig ||= true; angle = Number(a.v) * (ctx.mode === 'deg' ? Math.PI / 180 : 1); }
+        else throw Error('trig dimension');
+        let val;
+        if (node.name === 'sin') val = Math.sin(angle);
+        else if (node.name === 'cos') val = Math.cos(angle);
+        else if (node.name === 'tan') val = Math.tan(angle);
+        else if (node.name === 'csc') val = 1 / Math.sin(angle);
+        else if (node.name === 'sec') val = 1 / Math.cos(angle);
+        else val = 1 / Math.tan(angle);
+        if (!Number.isFinite(val) || Math.abs(val) > 1e15) throw Error('trig pole');
+        if (Math.abs(val) < 1e-14) val = 0;
+        const simple = nearestTrigRational(node.name, angle, val);
+        let result = q(val, ZERO_DIMS(), { rat: simple, approx: !ratIsExact(simple) });
+        if (node.funcPower !== null && node.funcPower !== undefined) result = powerValues(result, q(node.funcPower, ZERO_DIMS(), { rat: rat(BigInt(node.funcPower)) }));
+        return result;
+      }
+      if (['log', 'ln', 'log2', 'logbase'].includes(node.name)) {
+        if (!dimsZero(a.dims) || a.v.lte(0)) throw Error('log domain');
+        const base = node.name === 'ln' ? Math.E : node.name === 'log2' ? 2 : node.name === 'logbase' ? node.base : 10;
+        const val = Math.log(Number(a.v)) / Math.log(base);
+        if (!Number.isFinite(val)) throw Error('log overflow');
+        return q(val, ZERO_DIMS(), { rat: null, approx: true });
+      }
+      throw Error('unknown function');
+    }
+    throw Error('invalid AST');
+  }
+  function bigintSqrt(n) { if (n < 2n) return n; let x0 = n >> 1n, x1 = (x0 + n / x0) >> 1n; while (x1 < x0) { x0 = x1; x1 = (x0 + n / x0) >> 1n; } return x0; }
+  function bigintCbrt(n) { if (n < 2n) return n; let x = 1n << BigInt(Math.ceil(n.toString(2).length / 3)); while (true) { const y = (2n * x + n / (x * x)) / 3n; if (y >= x) return x; x = y; } }
+  function nearestTrigRational(name, angle, val) {
+    if (Math.abs(val) < 1e-14 || Math.abs(val - 1) < 1e-14 || Math.abs(val + 1) < 1e-14) return ratFromString(String(Math.round(val)));
+    if (['sin', 'cos'].includes(name) && Math.abs(Math.abs(val) - 0.5) < 1e-14) return rat(val < 0 ? -1n : 1n, 2n);
+    return null;
+  }
+  function addValues(a, b, sign) {
+    if (a.kind === 'unitAtom' || b.kind === 'unitAtom' || !sameDims(a.dims, b.dims)) throw Error('add dimensions');
+    if (a.dims[dims.Temp] && a.absolute && b.absolute && sign === -1) {
+      const rr = ratSub(a.rat, b.rat);
+      return q(a.v.sub(b.v), a.dims, { rat: rr, display: U.K, sources: [U.K], absolute: false, approx: !ratIsExact(rr) });
+    }
+    if (a.dims[dims.Temp] && a.absolute && b.absolute) {
+      // When two absolute temperature readings are added, the second reading is treated as a delta.
+      const display = a.display || b.display || U.K;
+      const delta = b.v.sub(b.display?.offset || 0).mul(b.display?.factor || 1);
+      const outV = sign === 1 ? a.v.add(delta) : a.v.sub(delta);
+      const bDeltaRat = b.display ? ratMul(b.rat ? ratSub(b.rat, b.display.offsetRat) : null, b.display.factorRat) : b.rat;
+      const rr = sign === 1 ? ratAdd(a.rat, bDeltaRat) : ratSub(a.rat, bDeltaRat);
+      return q(outV, a.dims, { rat: rr, display, sources: [display], absolute: true, approx: !ratIsExact(rr) });
+    }
+    if (a.dims[dims.Temp] && (a.absolute || b.absolute) && sign === -1 && a.absolute && b.absolute) {
+      return q(a.v.sub(b.v), a.dims, { rat: ratSub(a.rat, b.rat), display: U.K, sources: [U.K], absolute: false });
+    }
+    const rr = sign === 1 ? ratAdd(a.rat, b.rat) : ratSub(a.rat, b.rat);
+    const out = q(sign === 1 ? a.v.add(b.v) : a.v.sub(b.v), a.dims, { rat: rr, sources: [...a.sources, ...b.sources], approx: a.approx || b.approx || !ratIsExact(rr) });
+    out.display = chooseDisplay(a, b, out);
+    return out;
+  }
+  function multiplyValues(a, b, divide) {
+    if (a.kind === 'unitAtom' && b.kind === 'unitAtom') return unitAtom(combineUnit(a.unit, b.unit, divide));
+    if (a.kind === 'unitAtom') {
+      if (b.kind !== 'q' || !dimsZero(b.dims) || divide) throw Error('unit operation');
+      return fromUnit(b, a.unit);
+    }
+    if (b.kind === 'unitAtom') {
+      if (a.absolute || b.unit.affine) throw Error('absolute temperature arithmetic');
+      const dimsOut = dimAdd(a.dims, b.unit.dims, divide ? -1 : 1);
+      const rr = divide ? ratDiv(a.rat, b.unit.factorRat) : ratMul(a.rat, b.unit.factorRat);
+      const disp = combineUnit(a.display, b.unit, divide) || b.unit;
+      const value = divide ? a.v.div(b.unit.factor) : a.v.mul(b.unit.factor);
+      return q(value, dimsOut, { rat: rr, display: disp, sources: [...a.sources, b.unit], absolute: false, approx: a.approx || !ratIsExact(rr) });
+    }
+    if (a.absolute || b.absolute) throw Error('absolute temperature arithmetic');
+    const outDims = dimAdd(a.dims, b.dims, divide ? -1 : 1);
+    const value = divide ? a.v.div(b.v) : a.v.mul(b.v);
+    const rr = divide ? ratDiv(a.rat, b.rat) : ratMul(a.rat, b.rat);
+    const display = combineUnit(a.display, b.display, divide);
+    const out = q(value, outDims, { rat: rr, display, sources: [...a.sources, ...b.sources], approx: a.approx || b.approx || !ratIsExact(rr) });
+    if (!out.display && !dimsZero(outDims)) out.display = defaultCompoundUnit(outDims);
+    return out;
+  }
+  function defaultCompoundUnit(ds) {
+    const bases = [[dims.M, U.kg], [dims.L, U.m], [dims.T, U.s], [dims.I, U.A], [dims.Temp, U.K], [dims.Data, U.b], [dims.Angle, U.rad]];
+    const terms = [];
+    for (const [idx, u] of bases) if (ds[idx]) terms.push({ exp: ds[idx], text: `${u.symbol}${Math.abs(ds[idx]) === 1 ? '' : '^' + Math.abs(ds[idx])}` });
+    const num = terms.filter(t => t.exp > 0).map(t => t.text), den = terms.filter(t => t.exp < 0).map(t => t.text);
+    const symbol = (num.join('·') || '1') + (den.length ? '/' + den.join('·') : '');
+    return { id: 'basecompound:' + ds.join(','), symbol, name: symbol, names: [], symbols: [symbol], dims: ds.slice(), factor: D(1), factorRat: ratOne(), offset: D(0), offsetRat: ratZero(), affine: false, prefixable: 'none' };
+  }
+  function powerValues(a, b) {
+    if (a.kind === 'unitAtom') {
+      if (b.kind !== 'q' || !dimsZero(b.dims)) throw Error('unit exponent');
+      return unitAtom(powerUnit(a.unit, Number(b.v)));
+    }
+    if (b.kind === 'unitAtom' || !dimsZero(b.dims)) throw Error('exponent dimension');
+    const exponent = Number(b.v);
+    if (!Number.isFinite(exponent) || Math.abs(exponent) > 10000) throw Error('exponent cap');
+    const isInteger = b.v.isInteger();
+    if (a.v.lt(0) && !isInteger) throw Error('negative fractional power');
+    const outDims = a.dims.map(d => d * exponent);
+    if (outDims.some(x => !Number.isInteger(x) || Math.abs(x) > 30)) throw Error('fractional dimensions');
+    let value;
+    try { value = a.v.pow(b.v); } catch (_) { throw Error('power domain'); }
+    if (!value.isFinite()) throw Error('power overflow');
+    const rr = isInteger ? ratPow(a.rat, exponent) : null;
+    const display = a.display ? powerUnit(a.display, exponent) : null;
+    return q(value, outDims, { rat: rr, display, sources: display ? [display] : [], approx: a.approx || b.approx || !ratIsExact(rr) });
+  }
+  function moduloValues(a, b) {
+    if (a.kind === 'unitAtom' || b.kind === 'unitAtom') throw Error('mod unit');
+    if (!(dimsZero(a.dims) && dimsZero(b.dims)) && !sameDims(a.dims, b.dims)) throw Error('mod dimensions');
+    const v = a.v.mod(b.v); const rr = null;
+    return q(v, a.dims, { rat: rr, display: a.display || b.display, sources: [...a.sources, ...b.sources], approx: true });
+  }
+  function gamma(z) {
+    const p = [676.5203681218851, -1259.1392167224028, 771.3234287776531, -176.6150291621406, 12.507343278686905, -0.13857109526572012, 9.984369578019572e-6, 1.5056327351493116e-7];
+    if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gamma(1 - z));
+    z -= 1; let x = 0.99999999999980993; for (let i = 0; i < p.length; i++) x += p[i] / (z + i + 1);
+    const t = z + p.length - 0.5; return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+  }
+
+  function cleanedValue(x) { return normalizeDecimal(D(x)); }
+  function scientificString(value, significant = null) {
+    const v = D(value);
+    if (v.isZero()) return '0';
+    const sig = significant || Math.max(2, significantCount(v.toString()));
+    let out = v.toSignificantDigits(sig, Decimal.ROUND_HALF_UP).toExponential(Math.max(0, sig - 1));
+    out = out.replace(/\.0+(?=e)/, '').replace(/(\.\d*?)0+(?=e)/, '$1').replace('e+', 'e');
+    return out;
+  }
+  function sameIntegerPart(a, b) {
+    const aa = D(a).abs().floor(), bb = D(b).abs().floor(); return aa.eq(bb);
+  }
+  function fixedTrim(v, places) {
+    let s = D(v).toFixed(places, Decimal.ROUND_HALF_UP);
+    if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    return s === '-0' ? '0' : s;
+  }
+  function formatExactOrInline(value, exactRat, mode = 'primary') {
+    const v = cleanedValue(value);
+    if (v.isZero()) return { text: '0', exact: true, inlineDigits: 0 };
+    const exact = ratIsExact(exactRat);
+    if (exact) {
+      const s = ratFiniteString(exactRat);
+      if (v.abs().gte('1e15') || v.abs().lt('1e-6')) return { text: scientificString(v, Math.min(20, significantCount(s))), exact: true, inlineDigits: 0 };
+      return { text: s, exact: true, inlineDigits: 0 };
+    }
+    if (mode === 'alt') {
+      let sig = 3, rounded = v.toSignificantDigits(sig, Decimal.ROUND_HALF_UP);
+      while (sig < 20 && !sameIntegerPart(v, rounded)) { sig++; rounded = v.toSignificantDigits(sig, Decimal.ROUND_HALF_UP); }
+      if (v.abs().gte('1e15') || v.abs().lt('1e-6')) return { text: scientificString(v, sig), exact: false, inlineDigits: 0 };
+      const decimalPlaces = Math.max(0, sig - v.abs().e - 1);
+      return { text: fixedTrim(rounded, Math.max(0, decimalPlaces)), exact: false, inlineDigits: decimalPlaces };
+    }
+    if (v.abs().gte('1e15') || v.abs().lt('1e-6')) return { text: scientificString(v, Math.max(3, significantCount(v.toString()))), exact: false, inlineDigits: 0 };
+    for (let d = 1; d <= 24; d++) {
+      const rounded = v.toDecimalPlaces(d, Decimal.ROUND_HALF_UP);
+      if (rounded.isZero() || !sameIntegerPart(v, rounded)) continue;
+      const rel = rounded.sub(v).abs().div(v.abs());
+      if (rel.lte('0.05')) return { text: fixedTrim(rounded, d), exact: false, inlineDigits: d };
+    }
+    return { text: fixedTrim(v, 12), exact: false, inlineDigits: 12 };
+  }
+  function formatSignificant(value, sig) {
+    const v = cleanedValue(value);
+    if (v.isZero()) return '0';
+    if (v.abs().gte('1e15') || v.abs().lt('1e-6')) return scientificString(v, sig);
+    const r = v.toSignificantDigits(sig, Decimal.ROUND_HALF_UP);
+    if (!sameIntegerPart(v, r)) return null;
+    let places = Math.max(0, sig - r.abs().e - 1);
+    places = Math.min(60, places);
+    return fixedTrim(r, places);
+  }
+  function formatQuantityValue(qq, displayUnit = null, mode = 'primary') {
+    if (qq.kind === 'unitAtom') return { text: qq.unit.symbol, exact: true, value: D(1), rat: ratOne() };
+    const u = displayUnit || qq.display;
+    const value = u ? valueInUnit(qq, u) : qq.v;
+    const r = u ? ratInUnit(qq, u) : qq.rat;
+    const form = formatExactOrInline(value, r, mode);
+    let unitText = u ? u.symbol : '';
+    if (!u && !dimsZero(qq.dims)) unitText = defaultCompoundUnit(qq.dims).symbol;
+    const sourceWithSpace = !!(u && /\d\s+[A-Za-zµμΩ°]/.test(qq._sourceText || ''));
+    return { ...form, value, rat: r, unit: u, unitText, full: form.text + (unitText ? (sourceWithSpace ? ' ' : '') + unitText : '') };
+  }
+  function qExact(qq, u = null) {
+    const r = u ? ratInUnit(qq, u) : qq.rat;
+    const v = u ? valueInUnit(qq, u) : qq.v;
+    return ratIsExact(r) || v.isZero() || v.isInteger() && qq.approx === false;
+  }
+  function getLadder(qq, unitUsed, sourceText) {
+    const value = unitUsed ? valueInUnit(qq, unitUsed) : qq.v;
+    const r = unitUsed ? ratInUnit(qq, unitUsed) : qq.rat;
+    if (ratIsExact(r)) return [];
+    const primary = formatExactOrInline(value, r, 'primary').text;
+    const out = [];
+    for (const n of [3, 5, 8]) {
+      const s = formatSignificant(value, n);
+      if (!s || s === primary || out.includes(s)) continue;
+      if (value.abs().gte('1e15') || value.abs().lt('1e-6')) {
+        // Scientific values still use significant-digit ordering.
+      }
+      out.push(s);
+    }
+    return out.map(s => ({ valueText: s, unit: unitUsed, kind: 'ladder' }));
+  }
+  function unitOutputSpacing(sourceExpr) { return /\d\s+[A-Za-zµμΩ°]/.test(sourceExpr) ? ' ' : ''; }
+  function prettySource(source, readings = [], scientificAlt = false) {
+    let out = String(source).trim().replace(/×/g, '×').replace(/÷/g, '÷').replace(/−/g, '−').replace(/[μ]/g, 'µ');
+    for (const r of [...readings].sort((a, b) => b.start - a.start)) out = out.slice(0, r.start) + r.unit.symbol + out.slice(r.end);
+    if (scientificAlt) {
+      out = out.replace(/(\d+(?:\.\d+)?)e([+-]?\d+)/ig, (_, mant, exp) => `${mant}·e ${Number(exp) < 0 ? '−' : '+'} ${Math.abs(Number(exp))}`);
+    }
+    if (readings.length || scientificAlt) out = canonicalSpacing(out);
+    return out;
+  }
+  function canonicalSpacing(text) {
+    let out = '';
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (/[+*/]/.test(c)) {
+        out = out.trimEnd() + ` ${c === '*' ? '·' : c} `;
+        while (/\s$/.test(out)) break;
+        while (/^\s/.test(text[i + 1] || '')) i++;
+        continue;
+      }
+      if (c === '-') {
+        const before = out.trimEnd().slice(-1);
+        let j = i + 1; while (/\s/.test(text[j] || '')) j++;
+        const unary = !before || /[([{,+*/^·−]/.test(before);
+        if (unary) { out = out.trimEnd() + '−'; while (/\s/.test(text[i + 1] || '')) i++; }
+        else { out = out.trimEnd() + ' − '; while (/\s/.test(text[i + 1] || '')) i++; }
+        continue;
+      }
+      out += c;
+    }
+    return out.replace(/\s+/g, ' ').trim();
+  }
+  function scientificPretty(source) {
+    return String(source).replace(/(\d+(?:\.\d+)?)e([+-]?\d+)/ig, (_, mant, expText) => {
+      const exp = Number(expText); const sup = String(Math.abs(exp)).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('');
+      const sign = exp < 0 ? '⁻' : '';
+      return `${mant === '1' ? '' : mant + '×'}10${sign}${sup}`;
+    });
+  }
+  function displayExpr(source, scientific = false, readings = []) {
+    let s = prettySource(source, readings, false);
+    if (scientific) s = scientificPretty(s);
+    return s;
+  }
+
+  function expandAmbiguities(tokens, max = MAX_AMBIGUOUS_READINGS) { return cloneTokenChoices(tokens, max); }
+  function findValidSuffix(source, options = {}) {
+    const trimmed = source.trim(); if (!trimmed || trimmed.length > MAX_EXPR) return null;
+    const tokens = tokenize(trimmed, options);
+    if (!tokens.length || tokens.length > MAX_TOKENS) return null;
+    for (let start = 0; start < tokens.length; start++) {
+      const suffixTokens = tokens.slice(start);
+      const variants = expandAmbiguities(suffixTokens);
+      const valid = [];
+      for (const v of variants) {
+        try { const ast = new Parser(v.tokens).parse(); valid.push({ ast, tokens: v.tokens, readings: v.readings }); } catch (_) {}
+      }
+      if (valid.length) {
+        const startPos = tokens[start].start;
+        return { ...valid[0], variants: valid, startPos, expression: trimmed.slice(startPos).trim(), source: trimmed, ambiguous: suffixTokens.some(t => t.type === 'unit' && t.ambiguous), tokens: valid[0].tokens };
+      }
+    }
+    return null;
+  }
+  function evaluateVariants(found, mode = 'rad') {
+    const results = [];
+    for (const variant of found.variants || [found]) {
+      const ctx = { mode, bareTrig: false };
+      try {
+        const result = evalNode(variant.ast, ctx);
+        if (result.kind !== 'q' || !result.v.isFinite()) continue;
+        result.v = normalizeDecimal(result.v);
+        results.push({ q: result, bareTrig: ctx.bareTrig, readings: variant.readings || [], ast: variant.ast, tokens: variant.tokens });
+      } catch (_) { /* semantic failures are intentionally silent */ }
+    }
+    return results;
+  }
+  function literalOnly(ast) {
+    if (!ast) return false;
+    if (ast.type === 'num') return true;
+    if (ast.type === 'unary') return literalOnly(ast.value);
+    return false;
+  }
+  function constantOnly(ast) { return ast && ast.type === 'const'; }
+  function literalNumberNode(ast) { return !!ast && (ast.type === 'num' || ast.type === 'unary' && literalNumberNode(ast.value)); }
+  function unitOnlyNode(ast) {
+    if (!ast) return false;
+    if (ast.type === 'unit') return true;
+    if (ast.type === 'binary' && ast.op === '^') return unitOnlyNode(ast.left) && literalNumberNode(ast.right);
+    if (ast.type === 'binary' && (ast.op === '*' || ast.op === '/' || ast.op === 'implicit')) return unitOnlyNode(ast.left) && unitOnlyNode(ast.right);
+    return false;
+  }
+  function bareUnitOnly(ast) {
+    if (!ast || ast.type !== 'binary') return false;
+    const op = ast.op;
+    if (op === 'implicit' || op === '*') {
+      return literalNumberNode(ast.left) && unitOnlyNode(ast.right) || unitOnlyNode(ast.left) && literalNumberNode(ast.right);
+    }
+    if (op === '/' && bareUnitOnly(ast.left) && unitOnlyNode(ast.right)) return true;
+    if (op === '*' && bareUnitOnly(ast.left) && unitOnlyNode(ast.right)) return true;
+    return false;
+  }
+  function lonePostPercent(ast) { return ast && ast.type === 'postfix' && ast.op === '%' && literalOnly(ast.value); }
+  function containsTrig(ast) {
+    if (!ast || typeof ast !== 'object') return false;
+    if (ast.type === 'call' && ['sin', 'cos', 'tan', 'csc', 'sec', 'cot', 'asin', 'acos', 'atan'].includes(ast.name)) return true;
+    return Object.keys(ast).some(k => {
+      const v = ast[k];
+      if (Array.isArray(v)) return v.some(containsTrig);
+      return v && typeof v === 'object' && (v.type || v.name) ? containsTrig(v) : false;
+    });
+  }
+  function isPhoneOrDate(expr) {
+    return /^(?:\d{3}-\d{4}|\d{3}-\d{3}-\d{4}|\(?\d{3}\)?[ -]?\d{3}-\d{4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})$/.test(expr.trim());
+  }
+  function wantsSpacedEquals(expr) { return /\s[+\-*/^×÷]\s/.test(expr); }
+  function resultInsertion(fullText, explicit, expr, partial = false) {
+    if (partial || explicit) return fullText;
+    return (wantsSpacedEquals(expr) ? ' = ' : '=') + fullText;
+  }
+  function resultEquation(expr, fullText) { return `${expr} = ${fullText}`; }
+  function insertShape(full, explicit, expr, partial = false) {
+    return resultInsertion(full, explicit, expr, partial);
+  }
+  function addChip(list, chip) {
+    if (!chip || !chip.insertText) return;
+    const key = `${chip.insertText}|${chip.tag || ''}|${chip.replaceRange ? 'replace' : ''}`;
+    if (list.some(c => `${c.insertText}|${c.tag || ''}|${c.replaceRange ? 'replace' : ''}` === key)) return;
+    list.push(chip);
+  }
+  function makeChip({ insertText, equation, highlightStart, tag = '', inlineEligible = false, kind = 'primary', replaceRange = null, aria = '' }) {
+    return { insertText, displayEquation: equation, highlightStart: Math.max(0, Math.min(equation.length, highlightStart)), typedPrefixLen: 0, tag: tag || null, inlineEligible: !!inlineEligible, kind, replaceRange, aria };
+  }
+  function makeFullChip(expr, fullText, insert, explicit, inlineEligible, kind, tag = '') {
+    const eq = resultEquation(expr, fullText);
+    const start = explicit ? eq.lastIndexOf(' = ') + 3 : expr.length;
+    return makeChip({ insertText: insert, equation: eq, highlightStart: start, inlineEligible, kind, tag });
+  }
+  function unitAlternativesFor(qv) {
+    if (dimsZero(qv.dims)) return [];
+    const f = qv.dims;
+    const lists = [];
+    const add = (arr) => { if (arr) lists.push(...arr); };
+    if (f[dims.L] === 1 && f[dims.M] === 0 && f[dims.T] === 0 && f[dims.I] === 0 && f[dims.Temp] === 0) add([U.km, U.mi, U.m, U.ft, U.yd, U.in]);
+    else if (f[dims.L] === 2 && f[dims.M] === 0 && f[dims.T] === 0) add([km2, acre, ft2, m2, mi2, yd2, in2, ha]);
+    else if (f[dims.M] === 1 && f[dims.L] === 0 && f[dims.T] === 0) add([U.kg, U.g, U.lb, U.oz]);
+    else if (f[dims.T] === 1 && f[dims.M] === 0 && f[dims.L] === 0) add([U.s, U.min, U.hr, U.day, U.week, U.year]);
+    else if (f[dims.Temp] === 1 && f[dims.M] === 0 && f[dims.L] === 0) add([U.F, U.C, U.K]);
+    else if (f[dims.Angle] === 1 && f[dims.M] === 0 && f[dims.L] === 0) add([U.deg, U.rad, U.grad]);
+    else if (f[dims.L] === 1 && f[dims.T] === -1 && f[dims.M] === 0) add([U.mph, U.kph, U.fts, U.kn, U.mps]);
+    else if (f[dims.L] === -2 && f[dims.T] === 0 && f[dims.M] === 0) add([U.mpg, U.kmL]);
+    else if (f[dims.M] === 1 && f[dims.L] === 2 && f[dims.T] === -3 && f[dims.I] === 0) add([U.kW || generatedPrefixes.find(g => g.unit.symbol === 'kW')?.unit, U.hp, U.PS, U.W]);
+    else if (f[dims.M] === 1 && f[dims.L] === 1 && f[dims.T] === -2) add([U.N, U.lbf]);
+    else if (f[dims.M] === 1 && f[dims.L] === -1 && f[dims.T] === -2) add([U.Pa, U.bar, U.atm, U.psi]);
+    else if (f[dims.M] === 1 && f[dims.L] === 2 && f[dims.T] === -2) add([U.J, U.cal, U.Wh]);
+    else if (f[dims.T] === -1 && f[dims.M] === 0 && f[dims.Data] === 0 && f[dims.L] === 0) add([U.Hz]);
+    else if (f[dims.L] === 3 && f[dims.M] === 0) add([U.gal, U.L, U.qt, U.pint, U.cup, U.floz, ft3]);
+    else if (f[dims.I] === 1 && f[dims.M] === 0) add([U.A]);
+    else if (f[dims.M] === 1 && f[dims.L] === 2 && f[dims.T] === -3 && f[dims.I] === -1) add([U.V]);
+    else if (f[dims.M] === 1 && f[dims.L] === 2 && f[dims.T] === -3 && f[dims.I] === -2) add([U.ohm]);
+    else if (f[dims.Data] === 1 && f[dims.T] === 0) add([U.B, U.b]);
+    else if (f[dims.Data] === 1 && f[dims.T] === -1) add([generatedPrefixes.find(g => g.unit.symbol === 'Mbps')?.unit, generatedPrefixes.find(g => g.unit.symbol === 'MB/s')?.unit, U.bps, U.Bps]);
+    const primaryId = qv.display?.id;
+    return uniqueUnits(lists.filter(u => u && u.id !== primaryId && sameDims(u.dims, qv.dims)));
+  }
+  function usesLongUnitNames(sourceExpr) {
+    try {
+      return tokenize(sourceExpr).some(t => {
+        if (t.type !== 'unit') return false;
+        const u = t.unitOptions?.[0];
+        const symbolForms = [...(u?.symbols || []), u?.symbol].filter(Boolean).map(x => x.toLowerCase());
+        return !symbolForms.includes(t.raw.toLowerCase());
+      });
+    } catch (_) { return false; }
+  }
+  function unitNameForValue(u, value) {
+    if (!u) return '';
+    const singular = D(value).abs().eq(1);
+    if (singular) return u.name || u.symbol;
+    const irregular = { foot: 'feet', inch: 'inches', person: 'people', child: 'children', celsius: 'degrees celsius', fahrenheit: 'degrees fahrenheit', 'pound per square inch': 'pounds per square inch', 'foot per second': 'feet per second', 'fluid ounce': 'fluid ounces', 'square foot': 'square feet', 'cubic foot': 'cubic feet' };
+    if (irregular[u.name]) return irregular[u.name];
+    const plural = (u.names || []).find(n => /s$/i.test(n) && n.length > 2 && !/[\/]/.test(n));
+    if (plural) return plural;
+    const irregularAlias = (u.names || []).find(n => ['feet', 'men', 'women', 'children'].includes(n.toLowerCase()));
+    if (irregularAlias) return irregularAlias;
+    if (/s$/i.test(u.name)) return u.name;
+    return (u.name || u.symbol) + 's';
+  }
+  function displaySuffix(qv, unitUsed, sourceExpr, mode = 'primary', preserveInputSpacing = false) {
+    const fmt = formatQuantityValue(qv, unitUsed, mode);
+    const longNames = unitUsed && usesLongUnitNames(sourceExpr);
+    const unitText = unitUsed ? (longNames ? unitNameForValue(unitUsed, fmt.value) : unitUsed.symbol) : fmt.unitText;
+    const spacing = unitText ? (longNames || preserveInputSpacing && unitOutputSpacing(sourceExpr) ? ' ' : '') : '';
+    return { ...fmt, full: fmt.text + spacing + (unitText || ''), valueOnly: fmt.text, unitText: unitText || '', spacing, longNames };
+  }
+  function partialPrefixMatches(full, typed) {
+    const a = String(full).trim(), b = String(typed).trim();
+    return a.toLowerCase().startsWith(b.toLowerCase());
+  }
+  function partialRemainder(full, typed) {
+    const a = String(full).trim(), b = String(typed).trim(); return a.slice(b.length);
+  }
+  function makePrimaryAndLadder(result, exprDisplay, expressionRaw, explicit, partial, classInfo, outputUnit = null, tag = '', primaryMode = 'primary') {
+    const qv = result.q; qv._sourceText = expressionRaw;
+    const display = outputUnit || qv.display;
+    const keepSpacing = classInfo.bareUnit || classInfo.conversion;
+    const formatted = displaySuffix(qv, display, exprDisplay, primaryMode, keepSpacing);
+    const full = formatted.full;
+    const chips = [];
+    const eligible = classInfo.inline && !classInfo.ambiguous;
+    if (partial) {
+      const typed = partial.typedText;
+      if (partialPrefixMatches(full, typed)) {
+        const rem = partialRemainder(full, typed);
+        if (rem) {
+          const eq = resultEquation(exprDisplay, full);
+          const start = eq.length - rem.length;
+          addChip(chips, makeChip({ insertText: rem, equation: eq, highlightStart: start, inlineEligible: eligible, kind: 'partial-primary', tag }));
+        }
+      } else {
+        const eq = resultEquation(exprDisplay, full);
+        addChip(chips, makeChip({ insertText: full, equation: eq, highlightStart: eq.length - full.length, inlineEligible: false, kind: 'replace', replaceRange: partial.replaceRange, tag }));
+      }
+    } else {
+      const ins = insertShape(full, explicit, expressionRaw);
+      addChip(chips, makeFullChip(exprDisplay, full, ins, explicit, eligible, 'primary', tag));
+    }
+
+    // Unit alternatives follow the primary and are always bar-only.
+    if (display && !dimsZero(qv.dims)) {
+      for (const alt of unitAlternativesFor(qv)) {
+        let altFmt;
+        try { altFmt = displaySuffix(qv, alt, exprDisplay, 'alt', keepSpacing); } catch (_) { continue; }
+        if (!altFmt || !altFmt.full) continue;
+        // Avoid duplicate rounded result/unit pairs.
+        if (alt.id === display.id || altFmt.full === full) continue;
+        if (partial && !partialPrefixMatches(altFmt.full, partial.typedText)) continue;
+        const ins = partial ? partialRemainder(altFmt.full, partial.typedText) : insertShape(altFmt.full, explicit, expressionRaw);
+        if (!ins) continue;
+        const eq = resultEquation(exprDisplay, altFmt.full);
+        addChip(chips, makeChip({ insertText: ins, equation: eq, highlightStart: partial && partialPrefixMatches(altFmt.full, partial.typedText) ? eq.length - partialRemainder(altFmt.full, partial.typedText).length : explicit ? eq.lastIndexOf(' = ') + 3 : exprDisplay.length, inlineEligible: false, kind: 'alternate' }));
+      }
+    }
+    // Longer precision is always after alternate units.
+    for (const ladder of getLadder(qv, display, expressionRaw)) {
+      const suffix = ladder.valueText + (ladder.unit ? (usesLongUnitNames(exprDisplay) || keepSpacing && unitOutputSpacing(exprDisplay) ? ' ' : '') + (usesLongUnitNames(exprDisplay) ? unitNameForValue(ladder.unit, valueInUnit(qv, ladder.unit)) : ladder.unit.symbol) : '');
+      if (suffix === full) continue;
+      let ins = suffix;
+      if (partial) {
+        if (!partialPrefixMatches(suffix, partial.typedText)) continue;
+        ins = partialRemainder(suffix, partial.typedText);
+        if (!ins) continue;
+      } else ins = insertShape(suffix, explicit, expressionRaw);
+      const eq = resultEquation(exprDisplay, suffix);
+      addChip(chips, makeChip({ insertText: ins, equation: eq, highlightStart: partial ? eq.length - ins.length : explicit ? eq.lastIndexOf(' = ') + 3 : exprDisplay.length, inlineEligible: false, kind: 'ladder', tag }));
+    }
+    return chips;
+  }
+  function makeTrigChips(results, exprDisplay, expressionRaw, explicit, classInfo, partial) {
+    const rad = results.find(r => r.mode === 'rad'); const deg = results.find(r => r.mode === 'deg');
+    const ordered = [];
+    if (rad) ordered.push(rad); if (deg) ordered.push(deg);
+    const chips = [];
+    for (const item of ordered) {
+      const qv = item.result.q; qv._sourceText = expressionRaw;
+      const angleMode = qv.dims[dims.Angle] !== 0;
+      const modeUnit = angleMode ? qv.display : null;
+      const modeValue = modeUnit ? valueInUnit(qv, modeUnit) : qv.v;
+      const modeRat = modeUnit ? ratInUnit(qv, modeUnit) : qv.rat;
+      let modeFormatted = formatExactOrInline(modeValue, modeRat, 'primary');
+      if (angleMode && item.mode === 'rad' && !modeFormatted.exact && !modeValue.isZero()) {
+        for (let dp = 2; dp <= 24; dp++) {
+          const rounded = modeValue.toDecimalPlaces(dp, Decimal.ROUND_HALF_UP);
+          if (!rounded.isZero() && sameIntegerPart(modeValue, rounded) && rounded.sub(modeValue).abs().div(modeValue.abs()).lte('0.05')) {
+            modeFormatted = { ...modeFormatted, text: fixedTrim(rounded, dp), inlineDigits: dp };
+            break;
+          }
+        }
+      }
+      const fmt = { ...modeFormatted, full: modeFormatted.text };
+      const tag = item.mode;
+      if (partial) {
+        if (partialPrefixMatches(fmt.full, partial.typedText)) {
+          const rem = partialRemainder(fmt.full, partial.typedText);
+          if (rem) addChip(chips, makeChip({ insertText: rem, equation: resultEquation(exprDisplay, fmt.full), highlightStart: resultEquation(exprDisplay, fmt.full).length - rem.length, inlineEligible: classInfo.inline && !classInfo.ambiguous, kind: 'partial-primary', tag }));
+        } else {
+          const eq = resultEquation(exprDisplay, fmt.full);
+          addChip(chips, makeChip({ insertText: fmt.full, equation: eq, highlightStart: eq.length - fmt.full.length, inlineEligible: false, kind: 'replace', replaceRange: partial.replaceRange, tag }));
+        }
+      } else {
+        const ins = insertShape(fmt.full, explicit, expressionRaw);
+        addChip(chips, makeFullChip(exprDisplay, fmt.full, ins, explicit, classInfo.inline && !classInfo.ambiguous, 'primary', tag));
+      }
+    }
+    // Radian ladders then degree ladders, matching the requested trig ordering.
+    for (const item of ordered) {
+      const qv = item.result.q; qv._sourceText = expressionRaw;
+      const ladderUnit = qv.dims[dims.Angle] !== 0 ? qv.display : null;
+      for (const ladder of getLadder(qv, ladderUnit, expressionRaw)) {
+        const text = ladder.valueText;
+        if (partial && !partialPrefixMatches(text, partial.typedText)) continue;
+        const ins = partial ? partialRemainder(text, partial.typedText) : insertShape(text, explicit, expressionRaw);
+        if (!ins) continue;
+        const eq = resultEquation(exprDisplay, text);
+        addChip(chips, makeChip({ insertText: ins, equation: eq, highlightStart: partial ? eq.length - ins.length : explicit ? eq.lastIndexOf(' = ') + 3 : exprDisplay.length, inlineEligible: false, kind: 'ladder', tag: item.mode }));
+      }
+    }
+    return chips;
+  }
+
+  function extractConversion(src) {
+    const m = src.match(/\s+(?:to|in)\s+(.+)$/i) || src.match(/\s*->\s*(.+)$/);
+    if (!m) return null;
+    const full = m[0]; const target = m[1].trim();
+    if (!target) return null;
+    const idx = src.lastIndexOf(full);
+    const left = src.slice(0, idx).trim();
+    return left && target ? { left, target, operator: /->/.test(full) ? '->' : /\bin\b/i.test(full) ? 'in' : 'to' } : null;
+  }
+  function parseUnitExpression(text) {
+    const found = findValidSuffix('1 ' + text);
+    if (!found) return null;
+    const evaluated = evaluateVariants(found, 'rad');
+    if (!evaluated.length) return null;
+    // Read target syntax as number times unit; keep the unit expression from its quantity.
+    const qv = evaluated[0].q;
+    return qv.display || null;
+  }
+  function autocompleteOptions(text) {
+    const trimmed = text;
+    const chips = [];
+    const conv = trimmed.match(/(?:\s+(?:to|in)|\s*->)\s*([A-Za-zµμΩ°]*)$/i);
+    if (conv) {
+      const typed = conv[1] || '';
+      if (typed && (resolveUnitToken(typed).units.length || getNameUnits(typed).length)) return [];
+      const options = [...baseUnits, ...generatedPrefixes.map(g => g.unit), km2, mi2, ft2, m2, acre, m3, ft3, in3, ...allUnits].filter(u => u.symbol && u.symbol.trim());
+      const seen = new Set();
+      for (const u of options) {
+        for (const candidate of [u.symbol, u.name, ...(u.names || [])].filter(Boolean)) {
+          if (!candidate.toLowerCase().startsWith(typed.toLowerCase()) || candidate.toLowerCase() === typed.toLowerCase()) continue;
+          const rem = candidate.slice(typed.length); const k = candidate.toLowerCase(); if (seen.has(k)) continue; seen.add(k);
+          const eq = `${trimmed.slice(0, trimmed.length - typed.length)}${candidate}`;
+          addChip(chips, makeChip({ insertText: rem, equation: eq, highlightStart: eq.length - rem.length, inlineEligible: true, kind: 'autocomplete' }));
+          if (chips.length >= 12) break;
+        }
+        if (chips.length >= 12) break;
+      }
+      if (chips.length) return chips;
+    }
+    const m = trimmed.match(/([A-Za-zµμΩ°]+)$/);
+    if (!m) return [];
+    const partial = m[1], before = trimmed.slice(0, -partial.length);
+    // Do not autocomplete an exact complete token.
+    const exact = resolveUnitToken(partial).units.length || ['pi', 'e', 'sin', 'cos', 'tan', 'sqrt', 'cbrt', 'log', 'ln', 'asin', 'acos', 'atan', 'csc', 'sec', 'cot'].includes(partial.toLowerCase());
+    if (exact) return [];
+    const candidates = [];
+    const fnNames = ['sqrt', 'cbrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'arcsin', 'arccos', 'arctan', 'log', 'log2', 'ln', 'csc', 'sec', 'cot'];
+    for (const f of fnNames) if (f.toLowerCase().startsWith(partial.toLowerCase()) && f.length > partial.length) candidates.push({ text: f + (['sqrt', 'cbrt'].includes(f) ? '(' : ''), label: f });
+    const baseNames = [...baseUnits, ...allUnits].flatMap(u => [u.name, ...u.names]).filter(Boolean);
+    for (const p of prefixes) {
+      for (const b of baseUnits) {
+        if (!allowedPrefix(p, b) || b.affine) continue;
+        const n = p.name + b.name;
+        if (n.toLowerCase().startsWith(partial.toLowerCase()) && n.length > partial.length) candidates.push({ text: n, label: n });
+      }
+    }
+    for (const n of baseNames) if (n.toLowerCase().startsWith(partial.toLowerCase()) && n.length > partial.length) candidates.push({ text: n, label: n });
+    const symbolOptions = [...baseUnits, ...generatedPrefixes.map(g => g.unit), ...allUnits, km2, mi2, ft2, m2, m3, ft3, in3, acre];
+    for (const u of symbolOptions) if (u.symbol && u.symbol.toLowerCase().startsWith(partial.toLowerCase()) && u.symbol.length > partial.length) candidates.push({ text: u.symbol, label: u.symbol });
+    const seen = new Set();
+    for (const c of candidates) {
+      const key = c.text.toLowerCase(); if (seen.has(key)) continue; seen.add(key);
+      const rem = c.text.slice(partial.length); const eq = `${before}${c.text}`;
+      addChip(chips, makeChip({ insertText: rem, equation: eq, highlightStart: eq.length - rem.length, inlineEligible: true, kind: 'autocomplete' }));
+      if (chips.length >= 10) break;
+    }
+    return chips;
+  }
+
+  function parseAndEvaluate(source, mode = 'rad', scientific = true) {
+    const conversion = extractConversion(source);
+    if (conversion) {
+      const found = findValidSuffix(conversion.left, { scientific });
+      if (!found) return null;
+      const vals = evaluateVariants(found, mode);
+      const target = parseUnitExpression(conversion.target);
+      if (!target || !vals.length) return null;
+      const out = [];
+      for (const result of vals) {
+        if (!sameDims(result.q.dims, target.dims)) continue;
+        result.q.display = target; result.q.sources = [...result.q.sources, target];
+        out.push({ ...result, conversion, found, target, source: source.slice(found.startPos) });
+      }
+      return out.length ? { conversion, found, results: out, target } : null;
+    }
+    const found = findValidSuffix(source, { scientific });
+    if (!found) return null;
+    const results = evaluateVariants(found, mode);
+    return results.length ? { found, results } : { found, results: [] };
+  }
+
+  function normalizeDisplayText(qv, unitUsed, expr) {
+    const fmt = displaySuffix(qv, unitUsed, expr, 'primary');
+    return fmt.full;
+  }
+  function makeReplaceRange(globalStart, typed) { return { start: globalStart, end: globalStart + typed.length }; }
+
+  function analyzeLine(fullText, caret) {
+    const lineStart = fullText.lastIndexOf('\n', caret - 1) + 1;
+    let lineEnd = fullText.indexOf('\n', caret); if (lineEnd < 0) lineEnd = fullText.length;
+    const after = fullText.slice(caret, lineEnd);
+    if (after.trim() !== '') return [];
+    const beforeAll = fullText.slice(lineStart, caret);
+    const before = beforeAll.trimEnd();
+    if (!before.trim()) return [];
+    let body = before, bullet = false, bodyOffset = 0;
+    const bm = body.match(/^(\s*[-*+•–]\s+)([\s\S]*)$/);
+    if (bm) { bullet = true; bodyOffset = bm[1].length; body = bm[2]; }
+    let eqIndex = body.lastIndexOf('=');
+    const explicit = body.trimEnd().endsWith('=');
+    let partial = null;
+    // A numeric/unit suffix after '=' is a partial answer only when the immediately previous segment is valid.
+    if (eqIndex >= 0 && !explicit) {
+      const typedRaw = body.slice(eqIndex + 1);
+      const leading = (typedRaw.match(/^\s*/) || [''])[0].length;
+      const typed = typedRaw.trim();
+      const priorSegment = body.slice(0, eqIndex).trim();
+      if (typed && isPartialAnswerText(typed) && priorSegment) {
+        const priorConv = parseAndEvaluate(priorSegment, 'rad', true);
+        if (priorConv && priorConv.results?.length) {
+          const first = priorConv.results[0];
+          const found = priorConv.found;
+          const ast = found?.ast;
+          const replaceStart = lineStart + bodyOffset + eqIndex + 1 + leading;
+          partial = { typedText: typed, replaceRange: makeReplaceRange(replaceStart, typed), priorSegment, prior: first, priorPack: priorConv };
+        }
+      }
+    }
+
+    let sourceSegment, exprBaseOffset;
+    if (partial) {
+      sourceSegment = partial.priorSegment;
+      exprBaseOffset = bodyOffset + body.lastIndexOf('=', eqIndex - 1) + 1;
+    } else if (explicit) {
+      const previousEq = body.lastIndexOf('=', eqIndex - 1);
+      sourceSegment = body.slice(previousEq + 1, eqIndex).trim();
+      exprBaseOffset = bodyOffset + previousEq + 1;
+    } else {
+      const last = body.lastIndexOf('=');
+      sourceSegment = body.slice(last + 1).trim();
+      exprBaseOffset = bodyOffset + last + 1;
+    }
+    if (!sourceSegment || sourceSegment.length > MAX_EXPR) return [];
+    // Completion path runs before math analysis, but never after an explicit trailing equals.
+    if (!explicit && !partial) {
+      const ac = autocompleteOptions(sourceSegment);
+      if (ac.length) return ac;
+    }
+
+    let conversion = extractConversion(sourceSegment);
+    let found, selectedResults, sourceExpr, expressionRaw, readings, isSciAmbig = false, sciAlt = null;
+    if (conversion) {
+      const pack = parseAndEvaluate(sourceSegment, 'rad', true);
+      if (!pack || !pack.results.length) return [];
+      found = pack.found; selectedResults = pack.results; expressionRaw = sourceSegment.slice(found.startPos).trim();
+      sourceExpr = displayExpr(sourceSegment.trim()); readings = [];
+    } else {
+      found = findValidSuffix(sourceSegment, { scientific: true });
+      if (!found) return [];
+      expressionRaw = found.expression;
+      sourceExpr = displayExpr(expressionRaw, false, found.readings || []);
+      readings = found.readings || [];
+      selectedResults = evaluateVariants(found, 'rad');
+      const sciPattern = /\d+(?:\.\d+)?e[+-]?\d+/i.test(expressionRaw);
+      if (sciPattern) {
+        const altFound = findValidSuffix(expressionRaw, { scientific: false });
+        if (altFound) {
+          const altResults = evaluateVariants(altFound, 'rad');
+          if (altResults.length) { isSciAmbig = true; sciAlt = { found: altFound, results: altResults[0] ? altResults : [] }; }
+        }
+      }
+    }
+
+    const firstAst = found.ast;
+    if (literalOnly(firstAst) && !isSciAmbig) return [];
+    if (lonePostPercent(firstAst) && !explicit) return [];
+
+    // Check both modes whenever the AST contains trig: one mode may fail at a pole while the other survives.
+    let trigModeNeeded = false;
+    if (!conversion && containsTrig(found.ast)) {
+      const radResults = evaluateVariants(found, 'rad');
+      const degResults = evaluateVariants(found, 'deg');
+      trigModeNeeded = radResults.some(r => r.bareTrig) || degResults.some(r => r.bareTrig);
+      if (trigModeNeeded) {
+        selectedResults = [];
+        if (radResults.length) selectedResults.push({ mode: 'rad', result: radResults[0] });
+        if (degResults.length) selectedResults.push({ mode: 'deg', result: degResults[0] });
+      } else {
+        selectedResults = radResults.map(r => ({ mode: '', result: r }));
+      }
+    } else if (conversion) {
+      selectedResults = selectedResults.map(r => ({ mode: '', result: r }));
+    } else {
+      selectedResults = selectedResults.map(r => ({ mode: '', result: r }));
+    }
+    if (!selectedResults.length) return [];
+
+    const phoneDate = isPhoneOrDate(expressionRaw);
+    const classInfo = {
+      inline: !bullet && !phoneDate && !found.ambiguous && !isSciAmbig && !(conversion === null && bareUnitOnly(firstAst)),
+      ambiguous: !!found.ambiguous || isSciAmbig,
+      bullet, phoneDate, bareUnit: bareUnitOnly(firstAst), conversion: !!conversion
+    };
+    if (bullet || phoneDate) classInfo.inline = !!explicit && !found.ambiguous && !isSciAmbig;
+    if (found.ambiguous || isSciAmbig) classInfo.inline = false;
+    if (classInfo.bareUnit && conversion) classInfo.inline = !bullet && !phoneDate && !found.ambiguous;
+
+    // Case-fold ambiguity is deliberately chip-only: show one primary reading per interpretation.
+    if (found.ambiguous) {
+      const all = [];
+      const rawVariants = evaluateVariants(found, 'rad');
+      for (const baseResult of rawVariants) {
+        const eqExpr = displayExpr(expressionRaw, false, baseResult.readings || []);
+        const qv = baseResult.q; qv._sourceText = expressionRaw;
+        const fmt = displaySuffix(qv, conversion ? conversion.target : qv.display, expressionRaw, 'primary');
+        const full = fmt.full;
+        if (partial) {
+          if (partialPrefixMatches(full, partial.typedText)) {
+            const rem = partialRemainder(full, partial.typedText);
+            if (!rem) continue;
+            const eq = resultEquation(eqExpr, full);
+            addChip(all, makeChip({ insertText: rem, equation: eq, highlightStart: eq.length - rem.length, inlineEligible: false, kind: 'ambiguous-reading' }));
+          } else {
+            const eq = resultEquation(eqExpr, full);
+            addChip(all, makeChip({ insertText: full, equation: eq, highlightStart: eq.length - full.length, inlineEligible: false, kind: 'replace', replaceRange: partial.replaceRange }));
+          }
+        } else {
+          const ins = insertShape(full, explicit, expressionRaw);
+          const eq = resultEquation(eqExpr, full);
+          addChip(all, makeChip({ insertText: ins, equation: eq, highlightStart: explicit ? eq.lastIndexOf(' = ') + 3 : eqExpr.length, inlineEligible: false, kind: 'ambiguous-reading' }));
+        }
+      }
+      return all;
+    }
+
+    // Scientific-notation ambiguity: scientific parse first, then the literal e-minus reading.
+    if (isSciAmbig && sciAlt && !trigModeNeeded) {
+      const primary = selectedResults[0].result || selectedResults[0];
+      const out = makePrimaryAndLadder(primary, canonicalSpacing(scientificPretty(sourceExpr)), expressionRaw, explicit, partial, { ...classInfo, inline: !bullet && !phoneDate, ambiguous: false }, null, '');
+      const alt = sciAlt.results[0];
+      const altExpr = prettySource(expressionRaw, [], true);
+      const altQ = alt.q;
+      const altFmt = displaySuffix(altQ, altQ.display, expressionRaw, 'primary');
+      const ins = partial ? (partialPrefixMatches(altFmt.full, partial.typedText) ? partialRemainder(altFmt.full, partial.typedText) : '') : insertShape(altFmt.full, explicit, expressionRaw);
+      if (ins) addChip(out, makeChip({ insertText: ins, equation: resultEquation(altExpr, altFmt.full), highlightStart: explicit ? resultEquation(altExpr, altFmt.full).lastIndexOf(' = ') + 3 : altExpr.length, inlineEligible: false, kind: 'ambiguity' }));
+      return out;
+    }
+
+    if (trigModeNeeded) {
+      const trigResults = selectedResults.filter(x => x.mode).map(x => ({ mode: x.mode, result: x.result }));
+      // Remove duplicate rad/deg results such as sin(0).
+      if (trigResults.length === 2) {
+        const a = trigResults[0].result.q, b = trigResults[1].result.q;
+        if (a.v.eq(b.v) && sameDims(a.dims, b.dims) && a.display?.symbol === b.display?.symbol) trigResults.pop();
+      }
+      return makeTrigChips(trigResults, sourceExpr, expressionRaw, explicit, classInfo, partial);
+    }
+
+    const standardResult = selectedResults[0].result || selectedResults[0];
+    standardResult.q._sourceText = expressionRaw;
+    if (classInfo.bareUnit && !conversion) {
+      // A lone measured quantity shows conversions only, never a ghost or the same-value primary.
+      const qv = standardResult.q;
+      const chips = [];
+      const display = qv.display;
+      const altUnits = unitAlternativesFor(qv);
+      for (const alt of altUnits) {
+        const f = displaySuffix(qv, alt, expressionRaw, 'alt', true);
+        const ins = insertShape(f.full, explicit, expressionRaw);
+        const eq = resultEquation(sourceExpr, f.full);
+        addChip(chips, makeChip({ insertText: ins, equation: eq, highlightStart: explicit ? eq.lastIndexOf(' = ') + 3 : sourceExpr.length, inlineEligible: false, kind: 'alternate' }));
+      }
+      return chips;
+    }
+    return makePrimaryAndLadder(standardResult, sourceExpr, expressionRaw, explicit, partial, classInfo, null, '', conversion ? 'alt' : 'primary');
+  }
+
+  function isPartialAnswerText(s) {
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*[A-Za-zµμΩ°][A-Za-z0-9_µμΩ°]*(?:\s*\^?\s*[+-]?\d+)?)?$/.test(s)) return false;
+    return true;
+  }
+
+  let suggestions = [];
+  let selectedIndex = 0;
+  let explicitlyMoved = false;
+  let dismissed = false;
+  let composing = false;
+  let timer = 0;
+  let saveTimer = 0;
+  const STORAGE_KEY = 'quiet-math-notepad-v1';
+
+  try { const saved = localStorage.getItem(STORAGE_KEY); if (saved !== null) editor.value = saved; } catch (_) {}
+  function save() { try { localStorage.setItem(STORAGE_KEY, editor.value); } catch (_) {} }
+  function scheduleAnalyze(delay = 30) {
+    clearTimeout(timer); timer = setTimeout(() => analyzeNow(), delay);
+  }
+  function analyzeNow() {
+    if (composing || editor.selectionStart !== editor.selectionEnd) { setSuggestions([]); return; }
+    const found = analyzeLine(editor.value, editor.selectionStart);
+    if (dismissed) { setSuggestions([]); return; }
+    setSuggestions(found);
+  }
+  function renderMiddle(el, chip) {
+    const full = chip.displayEquation || '';
+    const start = chip.highlightStart || 0;
+    const max = 76;
+    let prefix = full.slice(0, start), highlight = full.slice(start);
+    const combined = prefix + highlight;
+    if (combined.length <= max) {
+      if (prefix) { const s = document.createElement('span'); s.className = 'known'; s.textContent = prefix; el.appendChild(s); }
+      if (highlight) { const s = document.createElement('span'); s.className = 'fresh'; s.textContent = highlight; el.appendChild(s); }
+      return;
+    }
+    const leftN = 34, rightN = 36;
+    const left = combined.slice(0, leftN), right = combined.slice(-rightN);
+    const leftSpan = document.createElement('span'); leftSpan.className = 'known'; leftSpan.textContent = left; el.appendChild(leftSpan);
+    const ell = document.createElement('span'); ell.className = 'ellipsis'; ell.textContent = ' … '; el.appendChild(ell);
+    const hStart = Math.max(0, start - (combined.length - rightN));
+    const rightPrefix = right.slice(0, hStart), rightFresh = right.slice(hStart);
+    if (rightPrefix) { const s = document.createElement('span'); s.className = 'known'; s.textContent = rightPrefix; el.appendChild(s); }
+    if (rightFresh) { const s = document.createElement('span'); s.className = 'fresh'; s.textContent = rightFresh; el.appendChild(s); }
+  }
+  function setSuggestions(next, preserveSelection = false) {
+    const old = selectedIndex;
+    suggestions = Array.isArray(next) ? next : [];
+    if (!preserveSelection) { selectedIndex = 0; explicitlyMoved = false; }
+    else selectedIndex = Math.min(old, Math.max(0, suggestions.length - 1));
+    renderChips(); syncMirror();
+  }
+  function renderChips() {
+    chipsNode.replaceChildren();
+    bar.classList.toggle('is-empty', suggestions.length === 0);
+    hintNode.hidden = suggestions.length === 0;
+    for (let i = 0; i < suggestions.length; i++) {
+      const chip = suggestions[i];
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'chip' + (i === selectedIndex ? ' selected' : '');
+      button.setAttribute('aria-label', chip.aria || chip.displayEquation || chip.insertText);
+      button.setAttribute('aria-pressed', i === selectedIndex ? 'true' : 'false');
+      button.addEventListener('mousedown', e => e.preventDefault());
+      button.addEventListener('click', () => { acceptChip(i); editor.focus({ preventScroll: true }); });
+      const equation = document.createElement('span'); equation.className = 'equation'; renderMiddle(equation, chip); button.appendChild(equation);
+      if (chip.tag) { const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = chip.tag; button.appendChild(tag); }
+      chipsNode.appendChild(button);
+    }
+    if (selectedIndex >= 0 && chipsNode.children[selectedIndex]) {
+      const el = chipsNode.children[selectedIndex];
+      const rect = el.getBoundingClientRect(), parent = chipsNode.getBoundingClientRect();
+      if (rect.left < parent.left) chipsNode.scrollLeft -= parent.left - rect.left + 12;
+      else if (rect.right > parent.right) chipsNode.scrollLeft += rect.right - parent.right + 12;
+    }
+  }
+  function ghostText() {
+    if (!suggestions.length) return '';
+    const chip = suggestions[selectedIndex];
+    if (!chip || !chip.inlineEligible) return '';
+    return chip.insertText;
+  }
+  function syncMirror() {
+    const value = editor.value;
+    const start = editor.selectionStart || 0;
+    const end = editor.selectionEnd || start;
+    const ghost = (start === end) ? ghostText() : '';
+    mirror.replaceChildren();
+    const before = document.createTextNode(value.slice(0, start)); mirror.appendChild(before);
+    if (ghost) { const span = document.createElement('span'); span.className = 'ghost'; span.textContent = ghost; mirror.appendChild(span); }
+    mirror.appendChild(document.createTextNode(value.slice(start)));
+    if (value.endsWith('\n')) mirror.appendChild(document.createTextNode('\u200b'));
+    mirror.scrollTop = editor.scrollTop; mirror.scrollLeft = editor.scrollLeft;
+  }
+  function insertTextAtSelection(text, replaceRange = null) {
+    let start = editor.selectionStart, end = editor.selectionEnd;
+    if (replaceRange) { start = replaceRange.start; end = replaceRange.end; editor.setSelectionRange(start, end); }
+    const before = editor.value.slice(0, start), after = editor.value.slice(end);
+    const oldLength = end - start;
+    let ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (_) {}
+    if (!ok) {
+      editor.setRangeText(text, start, end, 'end');
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (editor.value === before + text + after && editor.selectionStart === start + text.length) {
+      // native command already placed the caret.
+    } else if (editor.value === before + after) {
+      editor.setRangeText(text, start, end, 'end');
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    const target = Math.min(editor.value.length, start + text.length);
+    editor.setSelectionRange(target, target);
+    dismissed = false; explicitlyMoved = false;
+    save(); scheduleAnalyze(30); syncMirror();
+  }
+  function acceptChip(index = selectedIndex) {
+    const chip = suggestions[index]; if (!chip) return false;
+    const replace = chip.replaceRange || null;
+    setSuggestions([]);
+    insertTextAtSelection(chip.insertText, replace);
+    return true;
+  }
+
+  editor.addEventListener('input', () => {
+    dismissed = false; explicitlyMoved = false;
+    clearTimeout(saveTimer); saveTimer = setTimeout(save, 100);
+    scheduleAnalyze(30); syncMirror();
+  });
+  editor.addEventListener('scroll', syncMirror, { passive: true });
+  editor.addEventListener('select', () => { scheduleAnalyze(0); syncMirror(); });
+  editor.addEventListener('click', () => { scheduleAnalyze(0); syncMirror(); });
+  editor.addEventListener('keyup', e => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) { scheduleAnalyze(0); syncMirror(); }
+  });
+  editor.addEventListener('compositionstart', () => { composing = true; setSuggestions([]); });
+  editor.addEventListener('compositionend', () => { composing = false; dismissed = false; scheduleAnalyze(30); });
+  editor.addEventListener('keydown', e => {
+    if (e.isComposing || composing) return;
+    if (e.key === 'Escape') { dismissed = true; setSuggestions([]); e.preventDefault(); return; }
+    if (dismissed) dismissed = false;
+    if (e.altKey && /^[1-9]$/.test(e.key)) {
+      const i = Number(e.key) - 1; if (suggestions[i]) { e.preventDefault(); acceptChip(i); }
+      return;
+    }
+    if ((e.key === 'Tab' || e.key === 'Enter') && (ghostText() || explicitlyMoved) && suggestions[selectedIndex]) {
+      e.preventDefault(); acceptChip(selectedIndex); return;
+    }
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); insertTextAtSelection('\t'); return; }
+    if (e.key === 'Enter') { e.preventDefault(); insertTextAtSelection('\n'); return; }
+    if (suggestions.length && ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(e.key)) {
+      const dir = (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? -1 : 1;
+      const next = selectedIndex + dir;
+      if (next >= 0 && next < suggestions.length) {
+        e.preventDefault(); selectedIndex = next; explicitlyMoved = true; renderChips(); syncMirror(); return;
+      }
+      // At the ends, let the textarea move its caret and dismiss its inline preview.
+      explicitlyMoved = false; dismissed = true; setTimeout(() => { scheduleAnalyze(0); }, 0); return;
+    }
+    // Any real keystroke clears a one-shot dismissal; normal typing then re-evaluates on input.
+    if (e.key.length === 1 || ['Backspace', 'Delete'].includes(e.key)) {
+      dismissed = false; explicitlyMoved = false;
+    }
+  });
+  editor.addEventListener('keyup', () => { syncMirror(); });
+  window.addEventListener('resize', syncMirror);
+
+  // Exposed only to make manual smoke-testing of the standalone document convenient.
+  window.__quietMath = { analyzeLine, tokenize, findValidSuffix, parseAndEvaluate, resolveUnitToken, formatExactOrInline };
+  setSuggestions([]); syncMirror();
+  scheduleAnalyze(100);
+})();
+
+  </script>
+</body>
+</html>
