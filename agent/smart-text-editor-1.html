@@ -1,0 +1,1916 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Scratchpad</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #fbfbfa;
+    --ink: #202124;
+    --muted: #85888d;
+    --ghost: #9a9da3;
+    --bar: rgba(246, 247, 248, .97);
+    --line: rgba(30, 35, 40, .12);
+    --chip: #fff;
+    --chip-hover: #f1f3f5;
+    --chip-active: #e8f0fe;
+    --accent: #356ac3;
+    --shadow: 0 1px 4px rgba(20, 30, 40, .09);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #171819;
+      --ink: #e5e7e9;
+      --muted: #8b9097;
+      --ghost: #777d85;
+      --bar: rgba(28, 30, 32, .98);
+      --line: rgba(230, 235, 240, .12);
+      --chip: #242729;
+      --chip-hover: #303437;
+      --chip-active: #26364b;
+      --accent: #8ab4f8;
+      --shadow: 0 1px 5px rgba(0, 0, 0, .28);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--paper); }
+  body { color: var(--ink); }
+  #shell { position: fixed; inset: 0; overflow: hidden; background: var(--paper); }
+  #mirror, #editor {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    padding: 22px 22px calc(76px + env(safe-area-inset-bottom)) 22px;
+    font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    letter-spacing: 0;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    text-align: left;
+  }
+  #mirror {
+    z-index: 1;
+    color: var(--ink);
+    overflow: hidden;
+    pointer-events: none;
+    scrollbar-width: none;
+  }
+  #mirror .ghost { color: var(--ghost); }
+  #editor {
+    z-index: 2;
+    display: block;
+    resize: none;
+    outline: none;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    color: var(--ink);
+    caret-color: var(--ink);
+    -webkit-text-fill-color: currentColor;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted) transparent;
+  }
+  #editor.ghost-active { color: transparent; -webkit-text-fill-color: transparent; }
+  #editor::selection { background: rgba(74, 126, 201, .24); }
+  #suggestion-bar {
+    position: absolute;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    min-height: calc(54px + env(safe-area-inset-bottom));
+    padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--bar);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  #suggestion-bar.visible { display: flex; }
+  #chips {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    min-width: 52px;
+    max-width: min(76vw, 440px);
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 7px 11px;
+    background: var(--chip);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font: 13px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  .chip:hover { background: var(--chip-hover); }
+  .chip.active { border-color: color-mix(in srgb, var(--accent) 64%, transparent); background: var(--chip-active); }
+  .chip-label { white-space: pre; }
+  .chip-dim { color: var(--muted); }
+  .chip-em { color: var(--accent); font-weight: 700; }
+  .chip-tag { flex: 0 0 auto; color: var(--muted); font: 10px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .04em; }
+  #key-hint {
+    flex: 0 0 auto;
+    padding-left: 2px;
+    color: var(--muted);
+    white-space: nowrap;
+    font: 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+  }
+  @media (max-width: 560px) {
+    #mirror, #editor { padding: 16px 15px calc(72px + env(safe-area-inset-bottom)) 15px; font-size: 15px; }
+    #suggestion-bar { gap: 7px; padding-left: 8px; padding-right: 8px; }
+    .chip { max-width: 80vw; min-height: 42px; padding: 9px 10px; }
+    #key-hint { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<main id="shell">
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Scratchpad"></textarea>
+  <div id="suggestion-bar" aria-live="polite">
+    <div id="chips"></div>
+    <div id="key-hint">Tab/Enter accept · ←→ switch</div>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/decimal.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // Exact rational arithmetic is used wherever possible. Decimal.js is used at 50
+  // digits when available; built-in Math remains the offline fallback for transcendentals.
+  const MAX_INPUT = 500, MAX_TOKENS = 200, MAX_DEPTH = 90, MAX_ABS = 1e307;
+  const DecimalJS = typeof window!=='undefined' && typeof window.Decimal==='function' ? window.Decimal : null;
+  if(DecimalJS) DecimalJS.set({precision:50,rounding:DecimalJS.ROUND_HALF_UP,toExpNeg:-1000,toExpPos:1000});
+  const absBig = n => n < 0n ? -n : n;
+  function gcd(a, b) { a = absBig(a); b = absBig(b); while (b) { const t = a % b; a = b; b = t; } return a || 1n; }
+  function pow10Big(n) { if (n < 0 || n > 2000) throw Error('cap'); return 10n ** BigInt(n); }
+  class Rat {
+    constructor(n, d = 1n) {
+      if (d === 0n) throw Error('division by zero');
+      if (d < 0n) { n = -n; d = -d; }
+      const g = gcd(n, d); this.n = n / g; this.d = d / g;
+      if (this.n.toString().length > 4096 || this.d.toString().length > 4096) throw Error('rational cap');
+    }
+    static parse(raw) {
+      const m = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(raw);
+      if (!m || (!m[2] && !m[3])) throw Error('bad number');
+      const exp = Number(m[4] || 0);
+      if (!Number.isFinite(exp) || Math.abs(exp) > 400) throw Error('exponent cap');
+      const digits = (m[2] || '0') + (m[3] || '');
+      let n = BigInt(digits || '0');
+      if (m[1] === '-') n = -n;
+      const scale = (m[3] || '').length - exp;
+      return scale >= 0 ? new Rat(n, pow10Big(scale)) : new Rat(n * pow10Big(-scale), 1n);
+    }
+    add(b) { return new Rat(this.n * b.d + b.n * this.d, this.d * b.d); }
+    sub(b) { return new Rat(this.n * b.d - b.n * this.d, this.d * b.d); }
+    mul(b) { return new Rat(this.n * b.n, this.d * b.d); }
+    div(b) { if (!b.n) throw Error('division by zero'); return new Rat(this.n * b.d, this.d * b.n); }
+    neg() { return new Rat(-this.n, this.d); }
+    pow(k) {
+      if (!Number.isInteger(k) || Math.abs(k) > 1000) throw Error('power cap');
+      if (k < 0) { if (!this.n) throw Error('division by zero'); return new Rat(this.d ** BigInt(-k), this.n ** BigInt(-k)); }
+      return new Rat(this.n ** BigInt(k), this.d ** BigInt(k));
+    }
+    mod(b) {
+      if (!b.n) throw Error('division by zero');
+      const q = (this.n * b.d) / (this.d * b.n);
+      return this.sub(b.mul(new Rat(q)));
+    }
+    toNumber() {
+      if (!this.n) return 0;
+      const sign = this.n < 0n ? -1 : 1;
+      const ns = absBig(this.n).toString(), ds = this.d.toString();
+      const kn = Math.min(15, ns.length), kd = Math.min(15, ds.length);
+      const lead = Number(ns.slice(0, kn)) / Number(ds.slice(0, kd));
+      const exp = (ns.length - kn) - (ds.length - kd);
+      const v = sign * lead * Math.pow(10, exp);
+      return v;
+    }
+    terminatingText() {
+      let d = this.d, twos = 0, fives = 0;
+      while (d % 2n === 0n) { d /= 2n; twos++; }
+      while (d % 5n === 0n) { d /= 5n; fives++; }
+      if (d !== 1n) return null;
+      const places = Math.max(twos, fives);
+      let n = absBig(this.n) * (2n ** BigInt(places - twos)) * (5n ** BigInt(places - fives));
+      let s = n.toString();
+      if (places) {
+        s = s.padStart(places + 1, '0');
+        s = s.slice(0, -places) + '.' + s.slice(-places);
+        s = s.replace(/0+$/, '').replace(/\.$/, '');
+      }
+      if (!s || s === '0') return '0';
+      return (this.n < 0n ? '-' : '') + s;
+    }
+    significantDigits() {
+      const s = this.terminatingText(); if (s == null) return Infinity;
+      const digits = s.replace(/[-.]/g, '').replace(/^0+/, '').replace(/0+$/, '');
+      return digits.length || 1;
+    }
+    isInteger() { return this.d % 1n === 0n; }
+  }
+  class Decimal {
+    constructor(num, rat = null, big = null) {
+      this.num = num;
+      this.rat = rat;
+      this.big = big || (DecimalJS ? new DecimalJS(String(num)) : null);
+      if (!Number.isFinite(num) || Math.abs(num) > MAX_ABS) throw Error('overflow');
+    }
+    static fromRat(r) { const n = r.toNumber(); const big=DecimalJS?new DecimalJS(r.n.toString()).div(r.d.toString()):null; return new Decimal(n, r, big); }
+    static fromNum(n) { return new Decimal(n, null, DecimalJS?new DecimalJS(String(n)):null); }
+    static fromApproxString(s) { return new Decimal(Number(s),null,DecimalJS?new DecimalJS(s):null); }
+    static fromBig(b) { return new Decimal(b.toNumber(),null,b); }
+    static fromLiteral(s) { return Decimal.fromRat(Rat.parse(s)); }
+  }
+  const PI_DECIMAL='3.14159265358979323846264338327950288419716939937510';
+  const E_DECIMAL='2.71828182845904523536028747135266249775724709369995';
+  const PI_VALUE=Decimal.fromApproxString(PI_DECIMAL), E_VALUE=Decimal.fromApproxString(E_DECIMAL);
+  const dInt = n => Decimal.fromRat(new Rat(BigInt(n)));
+  const dFromRatio = (n, d = 1n) => Decimal.fromRat(new Rat(n, d));
+  function rationalOrBig(a,b,op,fallback) {
+    if(a.rat&&b.rat) { try { return Decimal.fromRat(a.rat[op](b.rat)); } catch(_) {} }
+    if(DecimalJS&&a.big&&b.big) { try { return Decimal.fromBig(a.big[op](b.big)); } catch(_) {} }
+    return fallback();
+  }
+  function dAdd(a, b) { return rationalOrBig(a,b,'add',()=>Decimal.fromNum(a.num+b.num)); }
+  function dSub(a, b) { return rationalOrBig(a,b,'sub',()=>Decimal.fromNum(a.num-b.num)); }
+  function dMul(a, b) { return rationalOrBig(a,b,'mul',()=>Decimal.fromNum(a.num*b.num)); }
+  function dIsZero(a) { return a.rat ? a.rat.n===0n : DecimalJS&&a.big ? a.big.isZero() : a.num===0; }
+  function dIsNegative(a) { return a.rat ? a.rat.n<0n : DecimalJS&&a.big ? a.big.isNegative() : a.num<0; }
+  function dIsInteger(a) { return a.rat ? a.rat.d===1n : DecimalJS&&a.big ? a.big.isInteger() : Number.isInteger(a.num); }
+  function dDiv(a, b) { if (dIsZero(b)) throw Error('division by zero'); return rationalOrBig(a,b,'div',()=>Decimal.fromNum(a.num/b.num)); }
+  function dNeg(a) { return a.rat ? Decimal.fromRat(a.rat.neg()) : DecimalJS&&a.big ? Decimal.fromBig(a.big.neg()) : Decimal.fromNum(-a.num); }
+  function dPow(a, b, integer = null) {
+    if (integer != null && a.rat) { try { return Decimal.fromRat(a.rat.pow(integer)); } catch(_) {} }
+    if (dIsNegative(a) && !dIsInteger(b)) throw Error('complex');
+    if(DecimalJS&&a.big&&b.big) { try { return Decimal.fromBig(a.big.pow(b.big)); } catch(_) {} }
+    return Decimal.fromNum(Math.pow(a.num, b.num));
+  }
+  function dMod(a, b) { if (a.rat && b.rat) { try { return Decimal.fromRat(a.rat.mod(b.rat)); } catch(_) {} } if(DecimalJS&&a.big&&b.big) { try { return Decimal.fromBig(a.big.mod(b.big)); } catch(_) {} } return Decimal.fromNum(a.num % b.num); }
+  function cleanDecimal(d) {
+    // Never round a rational: its apparent distance from an integer is exact.
+    if(d.rat) return d;
+    if(DecimalJS&&d.big) {
+      if(d.big.isZero()) return dInt(0);
+      const limit=new DecimalJS('1e-14');
+      const near=d.big.toDecimalPlaces(0,DecimalJS.ROUND_HALF_UP);
+      if(!near.isZero()&&d.big.minus(near).abs().lt(limit)) return Decimal.fromRat(new Rat(BigInt(near.toFixed(0))));
+      return d;
+    }
+    if (d.num===0) return dInt(0);
+    const near = Math.round(d.num);
+    if (near!==0&&Math.abs(d.num - near) < 1e-14) return dInt(near);
+    return d;
+  }
+  function checkDecimal(d) { if (!Number.isFinite(d.num) || Math.abs(d.num) > MAX_ABS) throw Error('overflow'); return d; }
+
+  const DIM_ZERO = [0,0,0,0,0,0,0];
+  const D = { L:0, M:1, T:2, I:3, TEMP:4, DATA:5, ANGLE:6 };
+  const dKey = dims => dims.join(',');
+  const dimsSame = (a,b) => a.length === b.length && a.every((x,i) => Math.abs(x-b[i]) < 1e-10);
+  const dimsAdd = (a,b) => a.map((x,i) => x+b[i]);
+  const dimsSub = (a,b) => a.map((x,i) => x-b[i]);
+  const dimsScale = (a,n) => a.map(x => x*n);
+  const isDimless = dims => dims.every(x => Math.abs(x) < 1e-10);
+  const hasDimension = dims => !isDimless(dims);
+
+  function lineageCombine(a, b, sign = 1) {
+    const out = new Map(a || []);
+    for (const [k,v] of (b || [])) { const n = (out.get(k) || 0) + sign*v; if (Math.abs(n) < 1e-10) out.delete(k); else out.set(k,n); }
+    return out;
+  }
+  function lineageScale(a, n) { const out = new Map(); for (const [k,v] of (a || [])) if (Math.abs(v*n)>1e-10) out.set(k,v*n); return out; }
+  function lineageKey(map) {
+    if (!map || !map.size) return '';
+    return [...map.entries()].sort((a,b)=>String(a[0])<String(b[0])?-1:String(a[0])>String(b[0])?1:0).map(([k,v]) => `${String(k)}^${Number(v.toFixed(8))}`).join('|');
+  }
+  function dedupeUnits(list) { const seen=new Set(); return list.filter(u=>u && !seen.has(u.uid) && seen.add(u.uid)); }
+  let unitUid = 1;
+  function unitObj(spec) {
+    const unit = {
+      uid: unitUid++, id: spec.id, symbol: spec.symbol, names: spec.names || [],
+      singular: spec.singular || (spec.names && spec.names[0]) || spec.symbol,
+      plural: spec.plural || ((spec.names && spec.names[0]) ? spec.names[0]+'s' : spec.symbol),
+      dims: (spec.dims || DIM_ZERO).slice(), factor: spec.factor || dInt(1), offset: spec.offset || dInt(0),
+      prefixable: spec.prefixable || 'none', baseId: spec.baseId || spec.id,
+      baseLineage: new Map(spec.baseLineage || [[spec.baseId || spec.id,1]]),
+      displayLineage: new Map(spec.displayLineage || []),
+      symbols: spec.symbols || [], aliases: spec.aliases || [], isTemperature: !!spec.isTemperature,
+      longDisplay: spec.longDisplay || null, isComposite: !!spec.isComposite
+    };
+    if (!unit.displayLineage.size) unit.displayLineage.set(unit.uid,1);
+    return unit;
+  }
+  class UnitEngine {
+    constructor() {
+      this.bases=[]; this.units=[]; this.byId=new Map(); this.directSymbols=new Map(); this.generatedSymbols=new Map();
+      this.exactSymbols=new Map(); this.foldSymbols=new Map(); this.nameMap=new Map(); this.prefixes=[]; this.popular={};
+      this.derivedMap=new Map(); this.phraseEntries=[]; this._init();
+    }
+    add(spec) {
+      const u=unitObj(spec); this.units.push(u); this.byId.set(u.id,u); this.bases.push(u); return u;
+    }
+    _names(u) {
+      for (const n of u.names) if (n) {
+        const k=n.toLowerCase(); const arr=this.nameMap.get(k)||[]; if(!arr.some(x=>x.uid===u.uid)) arr.push(u); this.nameMap.set(k,arr);
+      }
+    }
+    _symbol(map, key, u) {
+      if (!key) return; const a=map.get(key)||[]; if(!a.some(x=>x.uid===u.uid)) a.push(u); map.set(key,a);
+    }
+    _init() {
+      const P = [
+        ['quetta','Q',30,true],['ronna','R',27,true],['yotta','Y',24,true],['zetta','Z',21,true],['exa','E',18,true],['peta','P',15,true],['tera','T',12,true],['giga','G',9,true],['mega','M',6,true],['kilo','k',3,true],['hecto','h',2,false],['deca','da',1,false],
+        ['deci','d',-1,false],['centi','c',-2,false],['milli','m',-3,false],['micro','µ',-6,false],['nano','n',-9,false],['pico','p',-12,false],['femto','f',-15,false],['atto','a',-18,false],['zepto','z',-21,false],['yocto','y',-24,false],['ronto','r',-27,false],['quecto','q',-30,false]
+      ];
+      this.prefixes=P.map(([name,symbol,power,large])=>({name,symbol,power,large,factor:dInt(10**Math.min(Math.abs(power),20)), exp:power, isBig:power>0}));
+      for (const p of this.prefixes) p.factor = p.exp >= 0 ? dFromRatio(10n**BigInt(p.exp)) : dFromRatio(1n,10n**BigInt(-p.exp));
+      const L=[1,0,0,0,0,0,0], M=[0,1,0,0,0,0,0], T=[0,0,1,0,0,0,0], I=[0,0,0,1,0,0,0], TEMP=[0,0,0,0,1,0,0], DATA=[0,0,0,0,0,1,0], ANG=[0,0,0,0,0,0,1];
+      const powRat=(n,d=1n)=>dFromRatio(n,d);
+      const make=(n,d=1n)=>powRat(BigInt(n),BigInt(d));
+      this.add({id:'m',symbol:'m',symbols:['m'],names:['meter','meters','metre','metres'],singular:'meter',plural:'meters',dims:L,factor:dInt(1),prefixable:'all'});
+      this.add({id:'g',symbol:'g',symbols:['g'],names:['gram','grams','gramme','grammes'],singular:'gram',plural:'grams',dims:M,factor:make(1,1000),prefixable:'all'});
+      this.add({id:'s',symbol:'s',symbols:['s'],names:['second','seconds','sec','secs'],singular:'second',plural:'seconds',dims:T,factor:dInt(1),prefixable:'all'});
+      this.add({id:'A',symbol:'A',symbols:['A'],names:['ampere','amperes','amp','amps'],singular:'ampere',plural:'amperes',dims:I,factor:dInt(1),prefixable:'all'});
+      this.add({id:'K',symbol:'K',symbols:['K'],names:['kelvin','kelvins'],singular:'kelvin',plural:'kelvins',dims:TEMP,factor:dInt(1),offset:dInt(0),isTemperature:true,prefixable:'all'});
+      this.add({id:'rad',symbol:'rad',symbols:['rad'],names:['radian','radians'],singular:'radian',plural:'radians',dims:ANG,factor:dInt(1)});
+      this.add({id:'deg',symbol:'°',symbols:['°'],names:['degree','degrees','deg'],singular:'degree',plural:'degrees',dims:ANG,factor:dDiv(PI_VALUE,dInt(180))});
+      this.add({id:'grad',symbol:'grad',symbols:['grad','gon'],names:['gradian','gradians','grad'],singular:'gradian',plural:'gradians',dims:ANG,factor:dDiv(PI_VALUE,dInt(200))});
+      this.add({id:'J',symbol:'J',symbols:['J'],names:['joule','joules'],singular:'joule',plural:'joules',dims:[2,1,-2,0,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'cal',symbol:'cal',symbols:['cal'],names:['calorie','calories','small calorie'],singular:'calorie',plural:'calories',dims:[2,1,-2,0,0,0,0],factor:make(4184,1000),prefixable:'all'});
+      this.add({id:'Cal',symbol:'Cal',symbols:['Cal'],names:['kilocalorie','kilocalories','large calorie','food calorie'],singular:'kilocalorie',plural:'kilocalories',dims:[2,1,-2,0,0,0,0],factor:dFromRatio(4184n),prefixable:'none'});
+      this.add({id:'Wh',symbol:'Wh',symbols:['Wh'],names:['watt hour','watt-hour','watt hours','watt-hours'],singular:'watt-hour',plural:'watt-hours',dims:[2,1,-2,0,0,0,0],factor:dInt(3600),prefixable:'all'});
+      this.add({id:'Hz',symbol:'Hz',symbols:['Hz'],names:['hertz'],singular:'hertz',plural:'hertz',dims:[0,0,-1,0,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'Pa',symbol:'Pa',symbols:['Pa'],names:['pascal','pascals'],singular:'pascal',plural:'pascals',dims:[-1,1,-2,0,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'bar',symbol:'bar',symbols:['bar'],names:['bar','bars'],singular:'bar',plural:'bars',dims:[-1,1,-2,0,0,0,0],factor:dInt(100000),prefixable:'all'});
+      this.add({id:'atm',symbol:'atm',symbols:['atm'],names:['atmosphere','atmospheres','standard atmosphere'],singular:'atmosphere',plural:'atmospheres',dims:[-1,1,-2,0,0,0,0],factor:dInt(101325)});
+      this.add({id:'PSI',symbol:'PSI',symbols:['PSI'],names:['pounds per square inch','pound per square inch'],singular:'pound per square inch',plural:'pounds per square inch',dims:[-1,1,-2,0,0,0,0],factor:Decimal.fromNum(6894.757293168361)});
+      this.add({id:'L',symbol:'L',symbols:['L','l'],names:['liter','liters','litre','litres'],singular:'liter',plural:'liters',dims:[3,0,0,0,0,0,0],factor:make(1,1000),prefixable:'all'});
+      this.add({id:'W',symbol:'W',symbols:['W'],names:['watt','watts'],singular:'watt',plural:'watts',dims:[2,1,-3,0,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'N',symbol:'N',symbols:['N'],names:['newton','newtons'],singular:'newton',plural:'newtons',dims:[1,1,-2,0,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'V',symbol:'V',symbols:['V'],names:['volt','volts'],singular:'volt',plural:'volts',dims:[2,1,-3,-1,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'ohm',symbol:'Ω',symbols:['Ω','Ω'],names:['ohm','ohms'],singular:'ohm',plural:'ohms',dims:[2,1,-3,-2,0,0,0],factor:dInt(1),prefixable:'all'});
+      this.add({id:'b',symbol:'b',symbols:['b'],names:['bit','bits'],singular:'bit',plural:'bits',dims:DATA,factor:dInt(1),prefixable:'large'});
+      this.add({id:'B',symbol:'B',symbols:['B'],names:['byte','bytes'],singular:'byte',plural:'bytes',dims:DATA,factor:dInt(8),prefixable:'large'});
+      this.add({id:'oz',symbol:'oz',symbols:['oz'],names:['ounce','ounces','oz'],singular:'ounce',plural:'ounces',dims:M,factor:make(28349523125n,1000000000000n)});
+      this.add({id:'lb',symbol:'lb',symbols:['lb','lbs'],names:['pound','pounds','lbm'],singular:'pound',plural:'pounds',dims:M,factor:make(45359237n,100000000n)});
+      this.add({id:'mi',symbol:'mi',symbols:['mi'],names:['mile','miles'],singular:'mile',plural:'miles',dims:L,factor:make(1609344n,1000n)});
+      this.add({id:'yd',symbol:'yd',symbols:['yd'],names:['yard','yards'],singular:'yard',plural:'yards',dims:L,factor:make(9144n,10000n)});
+      this.add({id:'ft',symbol:'ft',symbols:['ft'],names:['foot','feet'],singular:'foot',plural:'feet',dims:L,factor:make(3048n,10000n)});
+      this.add({id:'in',symbol:'in',symbols:['in'],names:['inch','inches'],singular:'inch',plural:'inches',dims:L,factor:make(254n,10000n)});
+      this.add({id:'min',symbol:'min',symbols:['min'],names:['minute','minutes','mins'],singular:'minute',plural:'minutes',dims:T,factor:dInt(60)});
+      this.add({id:'h',symbol:'h',symbols:['h'],names:['hour','hours','hr','hrs'],singular:'hour',plural:'hours',dims:T,factor:dInt(3600)});
+      this.add({id:'day',symbol:'d',symbols:['d'],names:['day','days'],singular:'day',plural:'days',dims:T,factor:dInt(86400)});
+      this.add({id:'week',symbol:'wk',symbols:['wk'],names:['week','weeks'],singular:'week',plural:'weeks',dims:T,factor:dInt(604800)});
+      this.add({id:'month',symbol:'mo',symbols:['mo'],names:['month','months'],singular:'month',plural:'months',dims:T,factor:Decimal.fromNum(365.25*86400/12)});
+      this.add({id:'year',symbol:'yr',symbols:['yr','y'],names:['year','years'],singular:'year',plural:'years',dims:T,factor:make(31557600n)});
+      this.add({id:'decade',symbol:'decade',symbols:['dec'],names:['decade','decades'],singular:'decade',plural:'decades',dims:T,factor:make(315576000n)});
+      this.add({id:'century',symbol:'century',symbols:['cent'],names:['century','centuries'],singular:'century',plural:'centuries',dims:T,factor:make(3155760000n)});
+      // Affine temperature units use SI = (value + offset) * factor.
+      this.add({id:'degC',symbol:'°C',symbols:['°C'],names:['celsius','degree celsius','degrees celsius'],singular:'degree Celsius',plural:'degrees Celsius',dims:TEMP,factor:dInt(1),offset:make(27315,100),isTemperature:true});
+      this.add({id:'degF',symbol:'°F',symbols:['°F'],names:['fahrenheit','degree fahrenheit','degrees fahrenheit'],singular:'degree Fahrenheit',plural:'degrees Fahrenheit',dims:TEMP,factor:make(5,9),offset:make(45967,100),isTemperature:true});
+      // Area units.
+      const areaDefs=[
+        ['m2','m^2',['m²','m2'],'square meter','square meters',dInt(1),['sq m','sq meter','sq meters']],
+        ['km2','km^2',['km²','km2'],'square kilometer','square kilometers',dInt(1000000),['sq km','sq kilometer','sq kilometers']],
+        ['mi2','mi^2',['mi²','mi2'],'square mile','square miles',this.byId.get('mi').factor.rat ? Decimal.fromRat(this.byId.get('mi').factor.rat.pow(2)) : Decimal.fromNum(1609.344**2),['sq mi','sq mile','sq miles']],
+        ['yd2','yd^2',['yd²','yd2'],'square yard','square yards',make(83612736n,100000000n),['sq yd','sq yard','sq yards']],
+        ['ft2','ft^2',['ft²','ft2'],'square foot','square feet',make(9290304n,100000000n),['sq ft','sq foot','sq feet']],
+        ['in2','in^2',['in²','in2'],'square inch','square inches',make(64516n,100000000n),['sq in','sq inch','sq inches']],
+        ['acre','acre',['ac'],'acre','acres',make(40468564224n,10000000n),[]]
+      ];
+      for(const [id,symbol,symbols,sing,plur,factor,aliases] of areaDefs) this.add({id,symbol,symbols,names:[sing,plur,...aliases],singular:sing,plural:plur,dims:[2,0,0,0,0,0,0],factor,baseId:id,baseLineage:[[id,1]],aliases});
+      // Volume (US customary by default) and imperial variants.
+      this.add({id:'gal',symbol:'gal',symbols:['gal'],names:['gallon','gallons','US gallon','US gallons'],singular:'gallon',plural:'gallons',dims:[3,0,0,0,0,0,0],factor:make(3785411784n,1000000000000n)});
+      this.add({id:'pt',symbol:'pt',symbols:['pt'],names:['pint','pints'],singular:'pint',plural:'pints',dims:[3,0,0,0,0,0,0],factor:make(473176473n,1000000000000n)});
+      this.add({id:'qt',symbol:'qt',symbols:['qt'],names:['quart','quarts'],singular:'quart',plural:'quarts',dims:[3,0,0,0,0,0,0],factor:make(946352946n,1000000000000n)});
+      this.add({id:'cup',symbol:'cup',symbols:['cup'],names:['cup','cups'],singular:'cup',plural:'cups',dims:[3,0,0,0,0,0,0],factor:make(2365882365n,10000000000000n)});
+      this.add({id:'tbsp',symbol:'tbsp',symbols:['tbsp'],names:['tablespoon','tablespoons','tbsp'],singular:'tablespoon',plural:'tablespoons',dims:[3,0,0,0,0,0,0],factor:make(1478676478125n,100000000000000n)});
+      this.add({id:'tsp',symbol:'tsp',symbols:['tsp'],names:['teaspoon','teaspoons'],singular:'teaspoon',plural:'teaspoons',dims:[3,0,0,0,0,0,0],factor:make(492892159375n,100000000000000n)});
+      this.add({id:'floz',symbol:'fl oz',symbols:['fl oz'],names:['fluid ounce','fluid ounces','fl oz'],singular:'fluid ounce',plural:'fluid ounces',dims:[3,0,0,0,0,0,0],factor:make(295735295625n,10000000000000n)});
+      this.add({id:'igal',symbol:'imp gal',symbols:['imp gal'],names:['imperial gallon','imperial gallons'],singular:'imperial gallon',plural:'imperial gallons',dims:[3,0,0,0,0,0,0],factor:make(454609n,100000000n)});
+      this.add({id:'ipt',symbol:'imp pt',symbols:['imp pt'],names:['imperial pint','imperial pints'],singular:'imperial pint',plural:'imperial pints',dims:[3,0,0,0,0,0,0],factor:make(56826125n,10000000000n)});
+      this.add({id:'iqt',symbol:'imp qt',symbols:['imp qt'],names:['imperial quart','imperial quarts'],singular:'imperial quart',plural:'imperial quarts',dims:[3,0,0,0,0,0,0],factor:make(11365225n,10000000000n)});
+      this.add({id:'icup',symbol:'imp cup',symbols:['imp cup'],names:['imperial cup','imperial cups'],singular:'imperial cup',plural:'imperial cups',dims:[3,0,0,0,0,0,0],factor:make(284130625n,1000000000000n)});
+      this.add({id:'ifloz',symbol:'imp fl oz',symbols:['imp fl oz'],names:['imperial fluid ounce','imperial fluid ounces'],singular:'imperial fluid ounce',plural:'imperial fluid ounces',dims:[3,0,0,0,0,0,0],factor:make(284130625n,10000000000000n)});
+      this.add({id:'m3',symbol:'m^3',symbols:['m³','m3'],names:['cubic meter','cubic meters','cubic metre','cubic metres'],singular:'cubic meter',plural:'cubic meters',dims:[3,0,0,0,0,0,0],factor:dInt(1),baseLineage:[['m',3]],aliases:['cubic meter','cubic meters']});
+      this.add({id:'ft3',symbol:'ft^3',symbols:['ft³','ft3'],names:['cubic foot','cubic feet'],singular:'cubic foot',plural:'cubic feet',dims:[3,0,0,0,0,0,0],factor:Decimal.fromRat(this.byId.get('ft').factor.rat.pow(3)),baseLineage:[['ft',3]]});
+      this.add({id:'in3',symbol:'in^3',symbols:['in³','in3'],names:['cubic inch','cubic inches'],singular:'cubic inch',plural:'cubic inches',dims:[3,0,0,0,0,0,0],factor:Decimal.fromRat(this.byId.get('in').factor.rat.pow(3)),baseLineage:[['in',3]]});
+      // Speed, fuel economy and derived power units.
+      this.add({id:'mph',symbol:'mph',symbols:['mph'],names:['mile per hour','miles per hour'],singular:'mile per hour',plural:'miles per hour',dims:[1,0,-1,0,0,0,0],factor:make(1609344n,3600000n),baseLineage:[['mph',1]]});
+      this.add({id:'kph',symbol:'kph',symbols:['kph'],names:['kilometer per hour','kilometers per hour','kilometre per hour','kilometres per hour'],singular:'kilometer per hour',plural:'kilometers per hour',dims:[1,0,-1,0,0,0,0],factor:make(1000n,3600n),baseLineage:[['kph',1]]});
+      this.add({id:'mps',symbol:'m/s',symbols:['m/s'],names:['meter per second','meters per second'],singular:'meter per second',plural:'meters per second',dims:[1,0,-1,0,0,0,0],factor:dInt(1),baseLineage:[['m',1],['s',-1]],isComposite:true});
+      this.add({id:'ftps',symbol:'ft/s',symbols:['ft/s'],names:['foot per second','feet per second'],singular:'foot per second',plural:'feet per second',dims:[1,0,-1,0,0,0,0],factor:this.byId.get('ft').factor,baseLineage:[['ft',1],['s',-1]],isComposite:true});
+      this.add({id:'knot',symbol:'kn',symbols:['kn','knot'],names:['knot','knots'],singular:'knot',plural:'knots',dims:[1,0,-1,0,0,0,0],factor:make(1852n,3600n),baseLineage:[['knot',1]]});
+      this.add({id:'mpg',symbol:'mpg',symbols:['mpg'],names:['mile per gallon','miles per gallon'],singular:'mile per gallon',plural:'miles per gallon',dims:[-2,0,0,0,0,0,0],factor:Decimal.fromNum(1609.344/0.003785411784),baseLineage:[['mpg',1]]});
+      this.add({id:'kmL',symbol:'km/L',symbols:['km/L'],names:['kilometer per liter','kilometers per liter'],singular:'kilometer per liter',plural:'kilometers per liter',dims:[-2,0,0,0,0,0,0],factor:Decimal.fromNum(1000000),baseLineage:[['kmL',1]],isComposite:true});
+      this.add({id:'hp',symbol:'hp',symbols:['hp'],names:['horsepower','mechanical horsepower'],singular:'horsepower',plural:'horsepower',dims:[2,1,-3,0,0,0,0],factor:Decimal.fromNum(745.6998715822702)});
+      this.add({id:'PS',symbol:'PS',symbols:['PS'],names:['metric horsepower','pferdestarke','pferdestärke'],singular:'metric horsepower',plural:'metric horsepower',dims:[2,1,-3,0,0,0,0],factor:Decimal.fromNum(735.49875)});
+      this.add({id:'lbf',symbol:'lbf',symbols:['lbf'],names:['pound force','pounds force','pound-force','pounds-force'],singular:'pound-force',plural:'pounds-force',dims:[1,1,-2,0,0,0,0],factor:Decimal.fromNum(4.4482216152605)});
+      this.add({id:'m3s',symbol:'m^3/s',symbols:['m^3/s'],names:['cubic meter per second','cubic meters per second'],singular:'cubic meter per second',plural:'cubic meters per second',dims:[3,0,-1,0,0,0,0],factor:dInt(1),baseLineage:[['m',3],['s',-1]],isComposite:true});
+      // Prefix-enabled records are expanded into case-sensitive symbols.
+      for (const u of [...this.bases]) {
+        this._names(u);
+        for (const s of [...u.symbols, ...u.aliases]) this._symbol(this.directSymbols,s,u);
+      }
+      for (const base of [...this.bases]) {
+        if (base.prefixable==='none') continue;
+        for (const p of this.prefixes) {
+          if (base.prefixable==='large' && !p.large) continue;
+          const canonicalSymbol=p.symbol+base.symbol;
+          const names=[];
+          for(const name of base.names.slice(0,4)) {
+            const stem=name.replace(/s$/,'');
+            names.push(p.name+stem);
+            if(base.plural!==base.singular) names.push(p.name+base.plural);
+          }
+          const dyn=unitObj({id:`${p.symbol}:${base.id}`,symbol:canonicalSymbol,symbols:[canonicalSymbol],names:[...new Set(names)],singular:p.name+base.singular,plural:p.name+base.plural,dims:base.dims,factor:dMul(base.factor,p.factor),prefixable:'none',baseId:base.baseId,baseLineage:[...base.baseLineage],displayLineage:[],isTemperature:base.isTemperature});
+          this.units.push(dyn); this.byId.set(dyn.id,dyn);
+          this.generatedSymbols.set(canonicalSymbol,dyn);
+          this._names(dyn); this._symbol(this.foldSymbols,canonicalSymbol.toLowerCase(),dyn);
+          // u and Greek mu are accepted spellings for the canonical micro prefix.
+          if (p.symbol==='µ') {
+            for(const alias of ['u'+base.symbol,'μ'+base.symbol]) { this.generatedSymbols.set(alias,dyn); this._symbol(this.foldSymbols,alias.toLowerCase(),dyn); }
+          }
+        }
+      }
+      // Direct symbols always beat a prefix+unit spelling (for example min and mi).
+      for (const [s,arr] of this.directSymbols) this.exactSymbols.set(s,arr.slice());
+      for (const [s,u] of this.generatedSymbols) if (!this.exactSymbols.has(s)) this.exactSymbols.set(s,[u]);
+      for (const [s,arr] of this.directSymbols) this._symbol(this.foldSymbols,s.toLowerCase(),arr[0]);
+      for (const [s,arr] of this.exactSymbols) for(const u of arr) this._symbol(this.foldSymbols,s.toLowerCase(),u);
+      this.derivedMap.set('A^1|V^1',this.byId.get('W'));
+      this.derivedMap.set('W^1|s^1',this.byId.get('J'));
+      this.derivedMap.set('J^1|s^-1',this.byId.get('W'));
+      this.derivedMap.set('N^1|m^-2',this.byId.get('Pa'));
+      this.derivedMap.set('s^-1',this.byId.get('Hz'));
+      this.derivedMap.set('PSI^1|in^2',this.byId.get('lbf'));
+      this.derivedMap.set('A^-1|V^1',this.byId.get('ohm'));
+      this.derivedMap.set('g^1|m^1|s^-2',this.byId.get('N'));
+      this._buildPhrases();
+      this.popular={
+        length:['mi','km','m','ft','yd','in'], mass:['kg','g','lb','oz'], area:['km2','acre','ft2','m2','mi2','yd2','in2'],
+        speed:['mph','kph','ft/s','m/s','kn'], force:['lbf','N'], power:['W','kW','hp','PS'], energy:['kJ','J','kWh','cal','kcal'],
+        pressure:['PSI','bar','Pa','atm'], volume:['L','gal','qt','pt','cup','fl oz','m^3','ft^3'], time:['s','min','h','d','wk','yr'],
+        current:['A'], voltage:['V'], resistance:['Ω'], frequency:['Hz','kHz','MHz','GHz'], data:['MB','Mb','GB','Gb','B','b'],
+        temperature:['°C','°F','K'], angle:['rad','°','grad'], fuel:['mpg','km/L']
+      };
+    }
+    _buildPhrases() {
+      const phrases=[];
+      for(const u of this.units) for(const n of u.names) if(/\s/.test(n)) phrases.push({text:n.toLowerCase(),unit:u});
+      for(const [key, baseNames] of Object.entries({
+        'square meter':['m2'],'square meters':['m2'],'square metre':['m2'],'square metres':['m2'], 'sq m':['m2'],'sq meter':['m2'],'sq meters':['m2'],
+        'square kilometer':['km2'],'square kilometers':['km2'],'square kilometre':['km2'],'square kilometres':['km2'],'sq km':['km2'],'sq kilometers':['km2'],
+        'square mile':['mi2'],'square miles':['mi2'],'sq mi':['mi2'],'square foot':['ft2'],'square feet':['ft2'],'sq ft':['ft2'],
+        'square yard':['yd2'],'square yards':['yd2'],'sq yd':['yd2'],'square inch':['in2'],'square inches':['in2'],'sq in':['in2'],
+        'cubic meter':['m3'],'cubic meters':['m3'],'cubic metre':['m3'],'cubic metres':['m3'], 'cubic foot':['ft3'],'cubic feet':['ft3'],
+        'cubic inch':['in3'],'cubic inches':['in3'],
+        'meters squared':['m2'],'meter squared':['m2'],'metres squared':['m2'],'metre squared':['m2'],
+        'kilometers squared':['km2'],'kilometer squared':['km2'],'kilometres squared':['km2'],'kilometre squared':['km2'],
+        'miles squared':['mi2'],'mile squared':['mi2'],'feet squared':['ft2'],'foot squared':['ft2'],
+        'yards squared':['yd2'],'yard squared':['yd2'],'inches squared':['in2'],'inch squared':['in2']
+      })) for(const id of baseNames) { const u=this.byId.get(id); if(u) phrases.push({text:key,unit:u}); }
+      this.phraseEntries=[...new Map(phrases.map(x=>[x.text+'|'+x.unit.uid,x])).values()].sort((a,b)=>b.text.length-a.text.length);
+    }
+    matchPhrase(text, at) {
+      const rest=text.slice(at).toLowerCase();
+      for(const p of this.phraseEntries) {
+        if(!rest.startsWith(p.text)) continue;
+        const c=text[at+p.text.length]||'';
+        if(!c || /[\s+*/^%!,)\-]/.test(c)) return {unit:p.unit,end:at+p.text.length};
+      }
+      // Explicit imperial selector: "imp gal" / "uk pint".
+      const im=/^(?:imp|uk)\s+(gal(?:lon)?s?|pt|pints?|qt|quarts?|cups?|fl\s*oz)/i.exec(text.slice(at));
+      if(im) {
+        const t=im[1].toLowerCase(); const id=t.startsWith('gal')?'igal':t.startsWith('pt')?'ipt':t.startsWith('qt')?'iqt':t.startsWith('cup')?'icup':'ifloz';
+        return {unit:this.byId.get(id),end:at+im[0].length};
+      }
+      return null;
+    }
+    resolve(token) {
+      if(!token) return [];
+      const byName=this.nameMap.get(token.toLowerCase());
+      if(byName && byName.length) return dedupeUnits(byName);
+      const exact=this.exactSymbols.get(token);
+      if(exact && exact.length) return dedupeUnits(exact);
+      const folded=this.foldSymbols.get(token.toLowerCase()) || [];
+      return dedupeUnits(folded);
+    }
+    getSymbol(s) {
+      const x=this.resolve(s); return x.length===1 ? x[0] : x;
+    }
+    get(idOrSymbol) {
+      if(this.byId.has(idOrSymbol)) return this.byId.get(idOrSymbol);
+      const x=this.resolve(idOrSymbol); return x[0] || null;
+    }
+    unitFromLineage(baseLineage, displayLineage, dims) {
+      const key=lineageKey(baseLineage);
+      if(key && this.derivedMap.has(key)) return this.derivedMap.get(key);
+      const compound=this.compound(displayLineage,dims);
+      // Give exact named powers (m^2, km^2, etc.) their canonical display unit.
+      for(const u of this.units) if(dimsSame(u.dims,dims) && u.factor.rat && compound.factor.rat && u.factor.rat.n===compound.factor.rat.n && u.factor.rat.d===compound.factor.rat.d) {
+        if(u.id.endsWith('2') || u.id.endsWith('3') || u.isComposite) return u;
+      }
+      return compound;
+    }
+    compound(displayLineage, dims) {
+      const entries=[...(displayLineage||new Map())].filter(([,v])=>Math.abs(v)>1e-10);
+      if(!entries.length) return null;
+      let factor=dInt(1); let valid=true;
+      const top=[],bottom=[];
+      for(const [uid,pow] of entries) {
+        const u=this.units.find(x=>x.uid===uid);
+        if(!u || u.isTemperature || !Number.isInteger(pow)) { valid=false; continue; }
+        factor=dMul(factor,dPow(u.factor,dInt(pow),pow));
+        const label=(u.symbol.includes(' ') ? `(${u.symbol})` : u.symbol) + (Math.abs(pow)===1?'':`^${Math.abs(pow)}`);
+        (pow>0?top:bottom).push(label);
+      }
+      let symbol=(top.length?top.join('·'):'1')+(bottom.length?'/'+bottom.join('·'):'');
+      if(bottom.length>1) symbol=(top.length?top.join('·'):'1')+'/'+bottom.map(x=>x.includes('·')?'('+x+')':x).join('·');
+      const names=[];
+      return unitObj({id:`compound:${lineageKey(displayLineage)}`,symbol,symbols:[symbol],names,singular:symbol,plural:symbol,dims,factor,baseId:`compound:${lineageKey(displayLineage)}`,baseLineage:[...displayLineage].map(([uid,v])=>[String(uid),v]),displayLineage:[...displayLineage],isComposite:true});
+    }
+    derived(baseLineage) { return this.derivedMap.get(lineageKey(baseLineage)) || null; }
+    prefixVariants(unit) {
+      if(!unit || unit.prefixable==='none' || unit.prefixable==='large') return [];
+      return this.units.filter(u=>u.id.includes(':') && u.baseId===unit.baseId && dimsSame(u.dims,unit.dims));
+    }
+    allForDims(dims) { return this.units.filter(u=>dimsSame(u.dims,dims)); }
+    popularForDims(dims) {
+      let key='';
+      for(const [k,ids] of Object.entries(this.popular)) {
+        if(ids.some(id=>{const u=this.get(id); return u && dimsSame(u.dims,dims);})) { key=k; break; }
+      }
+      return key ? this.popular[key].map(id=>this.get(id)).filter(u=>u&&dimsSame(u.dims,dims)) : this.allForDims(dims).filter(u=>!u.id.includes(':')).slice(0,8);
+    }
+    autocomplete(prefix, limit=9) {
+      const p=prefix.toLowerCase(); const out=[]; const seen=new Set();
+      for(const u of this.units) {
+        for(const n of u.names) {
+          if(n.toLowerCase().startsWith(p) && n.length>prefix.length && !/\s/.test(n) && !(n===u.plural && u.plural!==u.singular)) {
+            const key=n.toLowerCase(); if(!seen.has(key)) { seen.add(key); out.push({text:n,kind:'unit'}); }
+          }
+        }
+      }
+      // Symbols are offered only when the typed prefix is symbol-like, not a prose word.
+      if(prefix.length<=3 && /^[A-Za-zµμΩ°]+$/.test(prefix)) {
+        for(const u of this.units) for(const s of [...u.symbols]) if(s.startsWith(prefix) && s.length>prefix.length) {
+          const key='sym:'+s; if(!seen.has(key)) { seen.add(key); out.push({text:s,kind:'unit'}); }
+        }
+      }
+      return out.slice(0,limit);
+    }
+  }
+  const UNITS = new UnitEngine();
+
+  function sortUnitReadings(units, typed) {
+    const score=u=>{ let n=0; const a=String(typed),b=String(u.symbol); for(let i=0;i<Math.min(a.length,b.length);i++) if(/[A-Za-z]/.test(a[i])&&/[A-Za-z]/.test(b[i])&&a[i]!==b[i]&&a[i].toLowerCase()===b[i].toLowerCase()) n++; return n; };
+    return dedupeUnits(units||[]).slice().sort((a,b)=>score(a)-score(b)||a.symbol.localeCompare(b.symbol));
+  }
+  const FUNCTION_NAMES = new Map([
+    ['sqrt',{fn:'sqrt'}],['cbrt',{fn:'cbrt'}],['log',{fn:'log10'}],['ln',{fn:'ln'}],['log2',{fn:'logbase',base:2}],['log_2',{fn:'logbase',base:2}],
+    ['sin',{fn:'sin'}],['cos',{fn:'cos'}],['tan',{fn:'tan'}],['csc',{fn:'csc'}],['sec',{fn:'sec'}],['cot',{fn:'cot'}],
+    ['asin',{fn:'asin'}],['arcsin',{fn:'asin'}],['sin⁻¹',{fn:'asin'}],['acos',{fn:'acos'}],['arccos',{fn:'acos'}],
+    ['atan',{fn:'atan'}],['arctan',{fn:'atan'}],['acsc',{fn:'acsc'}],['asec',{fn:'asec'}],['acot',{fn:'acot'}]
+  ]);
+  const INVERSE_OF = {sin:'asin',cos:'acos',tan:'atan',csc:'acsc',sec:'asec',cot:'acot'};
+  const FUNC_WORDS = [...FUNCTION_NAMES.keys(), 'log5','log3','log4','log6','log7','log8','log9'];
+  function isWordBoundary(ch) { return !ch || !/[A-Za-z0-9_µμΩ]/u.test(ch); }
+  function token(type, props={}) { return Object.assign({type},props); }
+  function scanTokens(text, scientific=true) {
+    const out=[]; let i=0;
+    const push=(type,props,start,end)=>out.push(token(type,{...props,start,end}));
+    while(i<text.length) {
+      const ch=text[i];
+      if(/\s/.test(ch)) { i++; continue; }
+      if(text.slice(i,i+2)==='**') { push('OP',{op:'^'},i,i+2); i+=2; continue; }
+      const phrase=UNITS.matchPhrase(text,i);
+      if(phrase) { const start=i; i=phrase.end; push('UNIT',{options:[phrase.unit],unit:phrase.unit,ambiguous:false,spelling:text.slice(start,i)},start,i); continue; }
+      // Affine and angular symbols need to be consumed before the generic identifier path.
+      const degreeTemp=/^°[cCfF]/.exec(text.slice(i));
+      if(degreeTemp) { const start=i; i+=degreeTemp[0].length; const opts=sortUnitReadings(UNITS.resolve(degreeTemp[0]),degreeTemp[0]); push(opts.length?'UNIT':'UNKNOWN',{options:opts,unit:opts[0],ambiguous:opts.length>1,spelling:degreeTemp[0]},start,i); continue; }
+      // Inverse-trig spellings, including the unspaced sin-1 form.
+      const inv=/^(sin|cos|tan|csc|sec|cot)(?:\*\*|\^)\s*-1(?=\s*(?:\(|\d|\.\d))/i.exec(text.slice(i));
+      const invSup=/^(sin|cos|tan|csc|sec|cot)⁻¹(?=\s*(?:\(|\d|\.\d))/i.exec(text.slice(i));
+      const invDash=/^(sin|cos|tan|csc|sec|cot)-1(?=\s*(?:\(|\d|\.\d))/i.exec(text.slice(i));
+      const im=inv||invSup||invDash;
+      if(im) { const start=i; i+=im[0].length; push('FUNC',{fn:INVERSE_OF[im[1].toLowerCase()],name:INVERSE_OF[im[1].toLowerCase()],trigPower:null},start,i); continue; }
+      const fnPowSup=/^(sin|cos|tan|csc|sec|cot)([²³])/i.exec(text.slice(i));
+      if(fnPowSup) { const start=i; i+=fnPowSup[0].length; push('FUNC',{fn:fnPowSup[1].toLowerCase(),name:fnPowSup[1].toLowerCase(),trigPower:fnPowSup[2]==='²'?2:3},start,i); continue; }
+      const logBase=/^log_?(\d+)(?=\s*(?:\(|\d|\.|[A-Za-zµμ]))/i.exec(text.slice(i));
+      if(logBase) { const start=i; i+=logBase[0].length; push('FUNC',{fn:'logbase',name:`log_${logBase[1]}`,base:Number(logBase[1])},start,i); continue; }
+      const trigDigit=/^(sin|cos|tan|csc|sec|cot)(\d+)/i.exec(text.slice(i));
+      if(trigDigit) {
+        const after=text.slice(i+trigDigit[0].length); const next=after.match(/\S/); const start=i; i+=trigDigit[0].length;
+        const hasFollowingArg=!!next && (next[0]==='(' || /[A-Za-zµμΩ°π]/u.test(next[0]));
+        if(hasFollowingArg) push('FUNC',{fn:trigDigit[1].toLowerCase(),name:trigDigit[1].toLowerCase(),trigPower:Number(trigDigit[2])},start,i);
+        else {
+          push('FUNC',{fn:trigDigit[1].toLowerCase(),name:trigDigit[1].toLowerCase(),trigPower:null},start,start+trigDigit[1].length);
+          push('NUM',{raw:trigDigit[2],value:Decimal.fromLiteral(trigDigit[2])},start+trigDigit[1].length,i);
+        }
+        continue;
+      }
+      const sciRe=scientific ? /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/ : /^(?:\d+(?:\.\d*)?|\.\d+)/;
+      const nm=sciRe.exec(text.slice(i));
+      if(nm) { const start=i; i+=nm[0].length; push('NUM',{raw:nm[0],value:Decimal.fromLiteral(nm[0]),scientific:/[eE][+-]?\d+$/.test(nm[0])},start,i); continue; }
+      if(ch==='π') { push('CONST',{name:'pi',raw:'π'},i,i+1); i++; continue; }
+      if(ch==='°') { const opts=UNITS.resolve('°'); push(opts.length?'UNIT':'UNKNOWN',{options:opts,unit:opts[0],ambiguous:opts.length>1,spelling:'°'},i,i+1); i++; continue; }
+      if(ch==='²'||ch==='³') { const start=i; const n=ch==='²'?'2':'3'; i++; push('OP',{op:'^'},start,start+1); push('NUM',{raw:n,value:Decimal.fromLiteral(n)},start,start+1); continue; }
+      if(ch==='⁻' && text[i+1]==='¹') { push('OP',{op:'^'},i,i+2); push('OP',{op:'-'},i,i+2); push('NUM',{raw:'1',value:dInt(1)},i,i+2); i+=2; continue; }
+      if(ch==='×') { push('OP',{op:'*'},i,i+1); i++; continue; }
+      if(ch==='÷') { push('OP',{op:'/'},i,i+1); i++; continue; }
+      if(ch==='−') { push('OP',{op:'-'},i,i+1); i++; continue; }
+      if(ch==='µ'||ch==='μ') {
+        const m=/^[µμ][A-Za-z0-9µμΩ]*/u.exec(text.slice(i)); const start=i; i+=m[0].length; const opts=sortUnitReadings(UNITS.resolve(m[0]),m[0]);
+        push(opts.length?'UNIT':'UNKNOWN',{options:opts,unit:opts[0],ambiguous:opts.length>1,spelling:m[0]},start,i); continue;
+      }
+      if(/[A-Za-z_ΩΩ]/u.test(ch)) {
+        const m=/^[A-Za-z_ΩΩ][A-Za-z0-9_ΩΩ]*/u.exec(text.slice(i)); const word=m[0]; const lower=word.toLowerCase(); const start=i; i+=word.length;
+        if(lower==='pi') { push('CONST',{name:'pi',raw:word},start,i); continue; }
+        if(lower==='e') { push('CONST',{name:'e',raw:word},start,i); continue; }
+        if(lower==='npr'||lower==='ncr') {
+          const followed=/^\s*\(/.test(text.slice(i)); push(followed?'COMB_FUNC':'COMB_OP',{op:lower==='npr'?'nPr':'nCr',name:lower},start,i); continue;
+        }
+        if((lower==='p'||lower==='c') && /^\s*\(/.test(text.slice(i))) { push('COMB_FUNC',{op:lower==='p'?'nPr':'nCr',name:lower},start,i); continue; }
+        if(FUNCTION_NAMES.has(lower)) { const f=FUNCTION_NAMES.get(lower); push('FUNC',{...f,name:lower,trigPower:null},start,i); continue; }
+        const opts=sortUnitReadings(UNITS.resolve(word),word);
+        if(opts.length) { push('UNIT',{options:opts,unit:opts[0],ambiguous:opts.length>1,spelling:word},start,i); continue; }
+        push('UNKNOWN',{word},start,i); continue;
+      }
+      const start=i; i++;
+      if(ch==='(') push('LPAREN',{},start,i);
+      else if(ch===')') push('RPAREN',{},start,i);
+      else if(ch===',') push('COMMA',{},start,i);
+      else if(ch==='+'||ch==='-'||ch==='*'||ch==='/'||ch==='%'||ch==='^'||ch==='!') push(ch==='!'?'POSTFIX':'OP',{op:ch},start,i);
+      else if(ch==='*' && text[i]==='*') { i++; out.pop(); push('OP',{op:'^'},start,i); }
+      else push('UNKNOWN',{word:ch},start,i);
+    }
+    return out;
+  }
+
+  const BP={ADD:20,MUL:40,COMB:50,IMPLICIT:60,UNARY:70,POWER:80,POSTFIX:90};
+  class Parser {
+    constructor(tokens) { this.tokens=tokens; this.i=0; this.depth=0; }
+    peek(n=0) { return this.tokens[this.i+n] || null; }
+    take() { return this.tokens[this.i++] || null; }
+    parse() {
+      if(!this.tokens.length) throw Error('empty');
+      const ast=this.expr(0);
+      if(this.i!==this.tokens.length) throw Error('trailing token');
+      return ast;
+    }
+    expr(min=0) {
+      if(++this.depth>MAX_DEPTH) throw Error('depth cap');
+      let left=this.prefix();
+      while(this.i<this.tokens.length) {
+        const t=this.peek();
+        if(t.type==='POSTFIX') {
+          if(BP.POSTFIX<min) break;
+          this.take(); left={type:'post',op:t.op,arg:left}; continue;
+        }
+        if(t.type==='OP' && (t.op==='^')) {
+          const bp=BP.POWER; if(bp<min) break; this.take(); const right=this.expr(bp); left={type:'binary',op:'^',left,right}; continue;
+        }
+        if(t.type==='OP' && t.op==='%' && !this.canStartOperand(this.peek(1))) {
+          if(BP.POSTFIX<min) break; this.take(); left={type:'post',op:'percent',arg:left}; continue;
+        }
+        if(t.type==='OP' && t.op==='%' && this.canStartOperand(this.peek(1))) {
+          if(BP.MUL<min) break; this.take(); const right=this.expr(BP.MUL+1); left={type:'binary',op:'%',left,right}; continue;
+        }
+        if(t.type==='COMB_OP') {
+          if(BP.COMB<min) break; this.take(); const right=this.expr(BP.COMB+1); left={type:'binary',op:t.op,left,right}; continue;
+        }
+        if(t.type==='OP' && (t.op==='*'||t.op==='/')) {
+          if(BP.MUL<min) break; this.take(); const right=this.expr(BP.MUL+1); left={type:'binary',op:t.op,left,right}; continue;
+        }
+        if(t.type==='OP' && (t.op==='+'||t.op==='-')) {
+          if(BP.ADD<min) break; this.take(); const right=this.expr(BP.ADD+1); left={type:'binary',op:t.op,left,right}; continue;
+        }
+        if(this.canStartOperand(t)) {
+          if(BP.IMPLICIT<min) break;
+          const leftBareNum=this.isBareNumNode(left), rightBareNum=t.type==='NUM';
+          if(leftBareNum && rightBareNum) break;
+          const right=this.expr(BP.IMPLICIT+1); left={type:'binary',op:'implicit',left,right}; continue;
+        }
+        break;
+      }
+      this.depth--; return left;
+    }
+    canStartOperand(t) { return !!t && ['NUM','CONST','UNIT','FUNC','COMB_FUNC','LPAREN'].includes(t.type); }
+    canStartFunctionArg(t) { return this.canStartOperand(t) || !!(t && t.type==='OP' && (t.op==='+'||t.op==='-')); }
+    isBareNumNode(n) { return n.type==='number' || (n.type==='group'&&this.isBareNumNode(n.expr)) || (n.type==='unary'&&this.isBareNumNode(n.arg)); }
+    prefix() {
+      const t=this.take(); if(!t) throw Error('missing operand');
+      if(t.type==='NUM') return {type:'number',value:t.value,raw:t.raw,scientific:t.scientific||false};
+      if(t.type==='CONST') return {type:'constant',name:t.name,raw:t.raw};
+      if(t.type==='UNIT') return {type:'unit',unit:t.unit,spelling:t.spelling,ambiguous:!!t.ambiguous};
+      if(t.type==='UNKNOWN') throw Error('unknown identifier');
+      if(t.type==='OP' && (t.op==='-'||t.op==='+')) return {type:'unary',op:t.op,arg:this.expr(BP.UNARY)};
+      if(t.type==='LPAREN') { const inside=this.expr(0); if(!this.peek()||this.peek().type!=='RPAREN') throw Error('missing )'); this.take(); return {type:'group',expr:inside}; }
+      if(t.type==='FUNC' || t.type==='COMB_FUNC') {
+        let pow=t.trigPower||null;
+        if(!pow && t.type==='FUNC' && this.peek() && this.peek().type==='OP' && this.peek().op==='^' && this.peek(1) && this.peek(1).type==='NUM' && this.peek(1).value.rat && this.peek(1).value.rat.d===1n) {
+          this.take(); const pt=this.take(); if(Math.abs(pt.value.num)>100) throw Error('power cap'); pow=pt.value.num;
+        }
+        let args=[];
+        if(this.peek() && this.peek().type==='LPAREN') {
+          this.take();
+          if(!this.peek()||this.peek().type==='RPAREN') throw Error('empty call');
+          args.push(this.expr(0));
+          while(this.peek()&&this.peek().type==='COMMA') { this.take(); args.push(this.expr(0)); }
+          if(!this.peek()||this.peek().type!=='RPAREN') throw Error('missing )'); this.take();
+        } else {
+          if(!this.canStartFunctionArg(this.peek())) throw Error('missing function argument');
+          args=[this.expr(BP.IMPLICIT)];
+        }
+        const node={type:'call',fn:t.fn||t.op,name:t.name||t.fn||t.op,args,base:t.base,trigPower:pow};
+        if(t.type==='COMB_FUNC' && args.length!==2) throw Error('two arguments required');
+        if(t.type==='FUNC' && args.length!==1) throw Error('one argument required');
+        return node;
+      }
+      throw Error('unexpected token');
+    }
+  }
+
+  function expandTokenVariants(tokens) {
+    let rows=[{tokens:[],choices:[]}];
+    for(const t of tokens) {
+      if(t.type==='UNIT' && t.options && t.options.length>1) {
+        const next=[]; for(const row of rows) for(const u of t.options) {
+          const copied={...t,unit:u,options:[u],ambiguous:false}; next.push({tokens:[...row.tokens,copied],choices:[...row.choices,u]});
+          if(next.length>=16) break;
+        }
+        rows=next.slice(0,16);
+      } else rows=rows.map(row=>({tokens:[...row.tokens,t],choices:row.choices}));
+    }
+    return rows;
+  }
+  function findParsedSuffix(text, scientific=true) {
+    if(!text || text.length>MAX_INPUT) return null;
+    let toks; try { toks=scanTokens(text,scientific); } catch(_) { return null; }
+    if(!toks.length || toks.length>MAX_TOKENS) return null;
+    // Bare-number adjacency is never implicit multiplication and must not be
+    // rescued by dropping the first number as a shorter suffix.
+    for(let j=1;j<toks.length;j++) if(toks[j-1].type==='NUM'&&toks[j].type==='NUM') return null;
+    for(let start=0;start<toks.length;start++) {
+      if(toks[start].type==='UNKNOWN') continue;
+      const runs=expandTokenVariants(toks.slice(start)); const parsed=[];
+      for(const row of runs) {
+        try { parsed.push({ast:new Parser(row.tokens).parse(),choices:row.choices,tokens:row.tokens}); } catch(_) {}
+      }
+      if(parsed.length) {
+        const suffixStart=toks[start].start;
+        return {variants:parsed, tokens:toks.slice(start), start:suffixStart, raw:text.slice(suffixStart).trim(), allTokens:toks};
+      }
+    }
+    return null;
+  }
+
+  function makeQ(dec, dims=DIM_ZERO, opts={}) {
+    return {d:dec,dims:dims.slice(),unitHint:opts.unitHint||null,sourceUnits:dedupeUnits(opts.sourceUnits||[]),
+      lineage:new Map(opts.lineage||[]),displayLineage:new Map(opts.displayLineage||[]),absoluteTemp:!!opts.absoluteTemp};
+  }
+  function isUnitAtom(x) { return x && x.kind==='unitAtom'; }
+  function atomQ(atom) {
+    const u=atom.unit;
+    if(u.isTemperature) return makeQ(dAdd(dInt(1),u.offset).num===NaN?dInt(1):dMul(dAdd(dInt(1),u.offset),u.factor),u.dims,{unitHint:u,sourceUnits:[u],lineage:u.baseLineage,displayLineage:u.displayLineage,absoluteTemp:true});
+    return makeQ(u.factor,u.dims,{unitHint:u,sourceUnits:[u],lineage:u.baseLineage,displayLineage:u.displayLineage});
+  }
+  function materialize(x) { return isUnitAtom(x) ? atomQ(x) : x; }
+  function unitCoordinateToSI(coord,unit) { return dMul(dAdd(coord,unit.offset),unit.factor); }
+  function unitSIToCoordinate(si,unit) { return dSub(dDiv(si,unit.factor),unit.offset); }
+  function quantityFromCoordinate(coord,unit) {
+    return makeQ(unitCoordinateToSI(coord,unit),unit.dims,{unitHint:unit,sourceUnits:[unit],lineage:unit.baseLineage,displayLineage:unit.displayLineage,absoluteTemp:unit.isTemperature});
+  }
+  function dimless(q) { return isDimless(q.dims); }
+  function listUnits(a,b) { return dedupeUnits([...(a||[]),...(b||[])]); }
+  function addQ(a0,b0,op) {
+    const a=materialize(a0), b=materialize(b0);
+    if(!dimsSame(a.dims,b.dims)) throw Error('dimension mismatch');
+    if(a.dims[D.TEMP]===1) {
+      const u=a.unitHint && a.unitHint.isTemperature ? a.unitHint : (b.unitHint && b.unitHint.isTemperature ? b.unitHint : UNITS.get('K'));
+      const av=unitSIToCoordinate(a.d,u), bv=unitSIToCoordinate(b.d,u);
+      const v=op==='+'?dAdd(av,bv):dSub(av,bv);
+      return makeQ(unitCoordinateToSI(v,u),a.dims,{unitHint:u,sourceUnits:listUnits(a.sourceUnits,b.sourceUnits),lineage:a.lineage.size?a.lineage:b.lineage,displayLineage:a.displayLineage.size?a.displayLineage:b.displayLineage,absoluteTemp:true});
+    }
+    const v=op==='+'?dAdd(a.d,b.d):dSub(a.d,b.d);
+    let hintA=a.unitHint&&dimsSame(a.unitHint.dims,a.dims)?a.unitHint:null;
+    let hintB=b.unitHint&&dimsSame(b.unitHint.dims,b.dims)?b.unitHint:null;
+    const popular=UNITS.popularForDims(a.dims);
+    const rank=u=>u?(((()=>{try{return inComfortRange(unitSIToCoordinate(v,u));}catch(_){return false;}})()?2:0)+(popular.some(p=>p.uid===u.uid)?1:0)): -1;
+    const hint=hintA&&hintB?(rank(hintB)>rank(hintA)?hintB:hintA):(hintA||hintB||null);
+    return makeQ(v,a.dims,{unitHint:hint,sourceUnits:listUnits(a.sourceUnits,b.sourceUnits),lineage:a.lineage.size?a.lineage:b.lineage,displayLineage:a.displayLineage.size?a.displayLineage:b.displayLineage});
+  }
+  function multiplyQ(a0,b0,divide=false) {
+    if(isUnitAtom(a0)&&!isUnitAtom(b0)&&dimless(materialize(b0))) { if(a0.unit.isTemperature) throw Error('absolute temperature product'); return quantityFromCoordinate(divide?dDiv(dInt(1),materialize(b0).d):materialize(b0).d,a0.unit); }
+    if(isUnitAtom(b0)&&!isUnitAtom(a0)&&dimless(materialize(a0))) {
+      if(divide) return multiplyQ(materialize(a0),atomQ(b0),true);
+      return quantityFromCoordinate(materialize(a0).d,b0.unit);
+    }
+    const a=materialize(a0), b=materialize(b0);
+    if(a.absoluteTemp||b.absoluteTemp) throw Error('absolute temperature product');
+    const val=divide?dDiv(a.d,b.d):dMul(a.d,b.d);
+    const dims=divide?dimsSub(a.dims,b.dims):dimsAdd(a.dims,b.dims);
+    const lineage=lineageCombine(a.lineage,b.lineage,divide?-1:1);
+    const displayLineage=lineageCombine(a.displayLineage,b.displayLineage,divide?-1:1);
+    const hint=hasDimension(dims)?UNITS.unitFromLineage(lineage,displayLineage,dims):null;
+    return makeQ(val,dims,{unitHint:hint,sourceUnits:listUnits(a.sourceUnits,b.sourceUnits),lineage,displayLineage});
+  }
+  function powerQ(a0,b0) {
+    const a=materialize(a0),b=materialize(b0);
+    if(!dimless(b)) throw Error('unit exponent');
+    if(a.absoluteTemp) throw Error('temperature power');
+    if(Math.abs(b.d.num)>1000) throw Error('exponent cap');
+    if(dIsNegative(a.d) && !dIsInteger(b.d)) throw Error('complex');
+    const dims=dimsScale(a.dims,b.d.num);
+    if(dims.some(x=>Math.abs(x-Math.round(x))>1e-10)) throw Error('fractional unit dimensions');
+    let val;
+    const integer=b.d.rat&&b.d.rat.d===1n?Number(b.d.rat.n):Number.isInteger(b.d.num)?b.d.num:null;
+    if(integer!==null) val=dPow(a.d,b.d,integer);
+    else val=Decimal.fromNum(Math.pow(a.d.num,b.d.num));
+    if(!Number.isFinite(val.num)||Math.abs(val.num)>MAX_ABS) throw Error('overflow');
+    const lin=lineageScale(a.lineage,b.d.num), dlin=lineageScale(a.displayLineage,b.d.num);
+    const hint=hasDimension(dims)?UNITS.unitFromLineage(lin,dlin,dims):null;
+    return makeQ(val,dims,{unitHint:hint,sourceUnits:a.sourceUnits,lineage:lin,displayLineage:dlin});
+  }
+  function sqrtRatIfExact(d,degree) {
+    if(!d.rat || d.rat.n<0n) return null;
+    function rootFloor(n,k) { if(n<2n) return n; let x=1n<<BigInt(Math.ceil(n.toString(2).length/k)); while(true){const y=((BigInt(k-1)*x)+(n/(x**BigInt(k-1))))/BigInt(k); if(y>=x)return x; x=y;} }
+    const n=rootFloor(d.rat.n,degree), den=rootFloor(d.rat.d,degree);
+    if(n**BigInt(degree)===d.rat.n && den**BigInt(degree)===d.rat.d) return Decimal.fromRat(new Rat(n,den));
+    return null;
+  }
+  function factorialInt(n) { let r=dInt(1); for(let i=2;i<=n;i++) r=dMul(r,dInt(i)); return r; }
+  function gamma(z) {
+    // Lanczos approximation, g=7; real inputs only.
+    const p=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+    if(z<0.5) { const s=Math.sin(Math.PI*z); if(Math.abs(s)<1e-15) throw Error('gamma pole'); return Math.PI/(s*gamma(1-z)); }
+    z-=1; let x=p[0]; for(let i=1;i<p.length;i++) x+=p[i]/(z+i);
+    const t=z+7.5; return Math.sqrt(2*Math.PI)*Math.pow(t,z+0.5)*Math.exp(-t)*x;
+  }
+  function combQ(a0,b0,op) {
+    const a=materialize(a0),b=materialize(b0);
+    if(!dimless(a)||!dimless(b)||!Number.isInteger(a.d.num)||!Number.isInteger(b.d.num)) throw Error('integer combinatorics required');
+    const n=a.d.num,r=b.d.num; if(n<0||r<0||r>n||n>170) throw Error('combinatoric cap');
+    let result=dInt(1);
+    if(op==='nPr') for(let i=0;i<r;i++) result=dMul(result,dInt(n-i));
+    else { const k=Math.min(r,n-r); for(let i=1;i<=k;i++) result=dDiv(dMul(result,dInt(n-k+i)),dInt(i)); }
+    return makeQ(result);
+  }
+  function factorialQ(a0) {
+    const a=materialize(a0); if(!dimless(a)) throw Error('factorial needs number');
+    const x=a.d.num;
+    if(Number.isInteger(x)) { if(x<0||x>170) throw Error('factorial cap'); return makeQ(factorialInt(x)); }
+    const y=gamma(x+1); if(!Number.isFinite(y)||Math.abs(y)>MAX_ABS) throw Error('gamma overflow'); return makeQ(cleanDecimal(Decimal.fromNum(y)));
+  }
+  function modQ(a0,b0) {
+    const a=materialize(a0),b=materialize(b0);
+    if(!dimsSame(a.dims,b.dims) && !(dimless(a)&&dimless(b))) throw Error('modulo dimensions');
+    if(dIsZero(b.d)) throw Error('division by zero');
+    return makeQ(dMod(a.d,b.d),a.dims,{unitHint:a.unitHint,sourceUnits:listUnits(a.sourceUnits,b.sourceUnits),lineage:a.lineage,displayLineage:a.displayLineage});
+  }
+  function naturalLogValue(d) {
+    if(dIsNegative(d)||dIsZero(d)) throw Error('log domain');
+    if(DecimalJS&&d.big) return d.big.ln().toNumber();
+    if(d.rat) {
+      const n=absBig(d.rat.n).toString(), den=d.rat.d.toString();
+      const lead=s=>{const k=Math.min(16,s.length);return Number(s.slice(0,k))/Math.pow(10,k-1);};
+      return Math.log(lead(n))-Math.log(lead(den))+(n.length-den.length)*Math.LN10;
+    }
+    return Math.log(d.num);
+  }
+  function rootApprox(d,degree) {
+    if(d.rat) {
+      const sign=d.rat.n<0n?-1:1;
+      const positive=Decimal.fromRat(new Rat(absBig(d.rat.n),d.rat.d));
+      return sign*Math.exp(naturalLogValue(positive)/degree);
+    }
+    return degree===2?Math.sqrt(d.num):Math.cbrt(d.num);
+  }
+  const TRIG_FORWARD=new Set(['sin','cos','tan','csc','sec','cot']);
+  const TRIG_INVERSE=new Set(['asin','acos','atan','acsc','asec','acot']);
+  function callQ(node,mode) {
+    if(node.fn==='nPr'||node.fn==='nCr') return combQ(evaluate(node.args[0],mode),evaluate(node.args[1],mode),node.fn);
+    const arg=materialize(evaluate(node.args[0],mode));
+    if(node.fn==='sqrt'||node.fn==='cbrt') {
+      if(dIsNegative(arg.d) && node.fn==='sqrt') throw Error('complex');
+      const degree=node.fn==='sqrt'?2:3; const dims=arg.dims.map(x=>x/degree);
+      if(dims.some(x=>Math.abs(x-Math.round(x))>1e-10)) throw Error('fractional unit dimensions');
+      let val=sqrtRatIfExact(arg.d,degree);
+      if(!val&&DecimalJS&&arg.d.big) {
+        if(node.fn==='sqrt') val=Decimal.fromBig(arg.d.big.sqrt());
+        else { const root=arg.d.big.abs().pow(new DecimalJS(1).div(3)); val=Decimal.fromBig(dIsNegative(arg.d)?root.neg():root); }
+      }
+      if(!val) val=Decimal.fromNum(rootApprox(arg.d,degree));
+      if(!Number.isFinite(val.num)) throw Error('domain');
+      const lin=lineageScale(arg.lineage,1/degree), dlin=lineageScale(arg.displayLineage,1/degree);
+      return makeQ(val,dims,{unitHint:hasDimension(dims)?UNITS.unitFromLineage(lin,dlin,dims):null,sourceUnits:arg.sourceUnits,lineage:lin,displayLineage:dlin});
+    }
+    if(node.fn==='factorial') return factorialQ(arg);
+    if(TRIG_FORWARD.has(node.fn)) {
+      if(!isDimless(arg.dims)&&!dimsSame(arg.dims,[0,0,0,0,0,0,1])) throw Error('trig dimensions');
+      let angle=arg.d.num;
+      if(isDimless(arg.dims) && mode==='deg') angle=angle*Math.PI/180;
+      let value;
+      if(node.fn==='sin') value=Math.sin(angle);
+      else if(node.fn==='cos') value=Math.cos(angle);
+      else if(node.fn==='tan') value=Math.tan(angle);
+      else if(node.fn==='csc') value=1/Math.sin(angle);
+      else if(node.fn==='sec') value=1/Math.cos(angle);
+      else value=1/Math.tan(angle);
+      const turns=angle/Math.PI;
+      const nearLattice=offset=>{const lattice=Math.round(turns-offset)+offset;return lattice===0?angle===0:Math.abs(turns-lattice)<=2e-15*Math.max(1,Math.abs(turns));};
+      if((node.fn==='sin'||node.fn==='tan')&&nearLattice(0)) value=0;
+      if((node.fn==='cos'||node.fn==='cot')&&nearLattice(0.5)) value=0;
+      if(!Number.isFinite(value)||Math.abs(value)>1e15) throw Error('trig pole');
+      let result=makeQ(cleanDecimal(Decimal.fromNum(value)));
+      if(node.trigPower!=null) result=powerQ(result,makeQ(dInt(node.trigPower)));
+      return result;
+    }
+    if(TRIG_INVERSE.has(node.fn)) {
+      if(!dimless(arg)) throw Error('inverse trig dimensions');
+      let x=arg.d.num, value;
+      if(node.fn==='asin'||node.fn==='acsc') { if(node.fn==='acsc') x=1/x; if(Math.abs(x)>1) throw Error('domain'); value=Math.asin(x); }
+      else if(node.fn==='acos'||node.fn==='asec') { if(node.fn==='asec') x=1/x; if(Math.abs(x)>1) throw Error('domain'); value=Math.acos(x); }
+      else if(node.fn==='atan') value=Math.atan(x);
+      else value=x===0?Math.PI/2:Math.atan(1/x);
+      if(mode==='deg' && false) value=value;
+      const q=makeQ(cleanDecimal(Decimal.fromNum(value)),[0,0,0,0,0,0,1],{unitHint:UNITS.get('rad')});
+      return node.trigPower!=null ? powerQ(q,makeQ(dInt(node.trigPower))) : q;
+    }
+    if(!dimless(arg)) throw Error('function needs dimensionless input');
+    let value;
+    if(node.fn==='log10') value=naturalLogValue(arg.d)/Math.LN10;
+    else if(node.fn==='ln') value=naturalLogValue(arg.d);
+    else if(node.fn==='logbase') { const base=node.base||10; if(base<=0||base===1) throw Error('log domain'); value=naturalLogValue(arg.d)/Math.log(base); }
+    else throw Error('unknown function');
+    if(!Number.isFinite(value)) throw Error('function domain');
+    let result=makeQ(cleanDecimal(Decimal.fromNum(value)));
+    if(node.trigPower!=null) result=powerQ(result,makeQ(dInt(node.trigPower)));
+    return result;
+  }
+  function evaluate(node,mode='rad') {
+    if(node.type==='number') return makeQ(node.value);
+    if(node.type==='constant') return makeQ(node.name==='pi'?PI_VALUE:E_VALUE);
+    if(node.type==='unit') return {kind:'unitAtom',unit:node.unit};
+    if(node.type==='group') return evaluate(node.expr,mode);
+    if(node.type==='unary') { const q=materialize(evaluate(node.arg,mode)); if(node.op==='+') return q; return makeQ(dNeg(q.d),q.dims,{unitHint:q.unitHint,sourceUnits:q.sourceUnits,lineage:q.lineage,displayLineage:q.displayLineage,absoluteTemp:q.absoluteTemp}); }
+    if(node.type==='post') { const q=materialize(evaluate(node.arg,mode)); if(node.op==='!') return factorialQ(q); return makeQ(dDiv(q.d,dInt(100)),q.dims,{unitHint:q.unitHint,sourceUnits:q.sourceUnits,lineage:q.lineage,displayLineage:q.displayLineage,absoluteTemp:q.absoluteTemp}); }
+    if(node.type==='binary') {
+      if(node.op==='+') return addQ(evaluate(node.left,mode),evaluate(node.right,mode),'+');
+      if(node.op==='-') return addQ(evaluate(node.left,mode),evaluate(node.right,mode),'-');
+      if(node.op==='*'||node.op==='implicit') return multiplyQ(evaluate(node.left,mode),evaluate(node.right,mode),false);
+      if(node.op==='/') return multiplyQ(evaluate(node.left,mode),evaluate(node.right,mode),true);
+      if(node.op==='%') return modQ(evaluate(node.left,mode),evaluate(node.right,mode));
+      if(node.op==='^') return powerQ(evaluate(node.left,mode),evaluate(node.right,mode));
+      if(node.op==='nPr'||node.op==='nCr') return combQ(evaluate(node.left,mode),evaluate(node.right,mode),node.op);
+    }
+    if(node.type==='call') return callQ(node,mode);
+    throw Error('bad AST');
+  }
+  function staticDims(node) {
+    if(!node) return null;
+    if(node.type==='number'||node.type==='constant') return DIM_ZERO.slice();
+    if(node.type==='unit') return node.unit.dims.slice();
+    if(node.type==='group') return staticDims(node.expr);
+    if(node.type==='unary'||node.type==='post') return staticDims(node.arg);
+    if(node.type==='binary') {
+      const a=staticDims(node.left),b=staticDims(node.right); if(!a||!b)return null;
+      if(node.op==='+'||node.op==='-'||node.op==='%'||node.op==='nPr'||node.op==='nCr') return dimsSame(a,b)?a:null;
+      if(node.op==='*'||node.op==='implicit') return dimsAdd(a,b);
+      if(node.op==='/') return dimsSub(a,b);
+      if(node.op==='^' && node.right.type==='number') return dimsScale(a,node.right.value.num);
+    }
+    if(node.type==='call') {
+      if(TRIG_INVERSE.has(node.fn)) return [0,0,0,0,0,0,1];
+      if(TRIG_FORWARD.has(node.fn)||node.fn==='log10'||node.fn==='ln'||node.fn==='logbase') return DIM_ZERO.slice();
+      if(node.fn==='sqrt'||node.fn==='cbrt') { const a=staticDims(node.args[0]); return a?dimsScale(a,node.fn==='sqrt'?.5:1/3):null; }
+    }
+    return null;
+  }
+  function hasBareTrig(node) {
+    if(!node) return false;
+    if(node.type==='call' && (TRIG_FORWARD.has(node.fn)||TRIG_INVERSE.has(node.fn))) {
+      const d=staticDims(node.args[0]); if(!d || isDimless(d)) return true;
+    }
+    if(node.type==='binary') return hasBareTrig(node.left)||hasBareTrig(node.right);
+    if(node.type==='unary'||node.type==='post'||node.type==='group') return hasBareTrig(node.arg||node.expr);
+    if(node.type==='call') return (node.args||[]).some(hasBareTrig);
+    return false;
+  }
+  function isLoneLiteral(node) {
+    if(node.type==='group') return isLoneLiteral(node.expr);
+    if(node.type==='unary') return (node.op==='+'||node.op==='-')&&isLoneLiteral(node.arg);
+    return node.type==='number';
+  }
+  function isLonePercent(node) {
+    if(node.type==='group') return isLonePercent(node.expr);
+    return node.type==='post'&&node.op==='percent'&&isLoneLiteral(node.arg);
+  }
+  function containsUnitNode(node) {
+    if(!node)return false;
+    if(node.type==='unit') return true;
+    if(node.type==='binary') return containsUnitNode(node.left)||containsUnitNode(node.right);
+    if(node.type==='unary'||node.type==='post'||node.type==='group') return containsUnitNode(node.arg||node.expr);
+    if(node.type==='call') return node.args.some(containsUnitNode);
+    return false;
+  }
+  function countNumbers(node) {
+    if(node.type==='number') return 1;
+    if(node.type==='binary' && node.op==='^' && containsUnitNode(node.left) && node.right.type==='number') return countNumbers(node.left);
+    if(node.type==='binary') return countNumbers(node.left)+countNumbers(node.right);
+    if(node.type==='unary'||node.type==='post'||node.type==='group') return countNumbers(node.arg||node.expr);
+    if(node.type==='call') return node.args.reduce((n,x)=>n+countNumbers(x),0);
+    return 0;
+  }
+  function isNumberCoefficient(node) {
+    if(node.type==='number') return true;
+    if(node.type==='group') return isNumberCoefficient(node.expr);
+    if(node.type==='unary') return (node.op==='+'||node.op==='-')&&isNumberCoefficient(node.arg);
+    return false;
+  }
+  function simpleUnitQuantity(node) {
+    return containsUnitNode(node) && countNumbers(node)===1 && !hasFunction(node);
+  }
+  function hasFunction(node) {
+    if(node.type==='call') return true;
+    if(node.type==='binary') return hasFunction(node.left)||hasFunction(node.right);
+    if(node.type==='unary'||node.type==='post'||node.type==='group') return hasFunction(node.arg||node.expr);
+    return false;
+  }
+
+  function superscript(n) { return String(n).replace(/[0-9+-]/g,c=>({'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻','+':'⁺'}[c])); }
+  function numberRawDisplay(node) {
+    if(node.scientific && /[eE]/.test(node.raw)) {
+      const [mant,ex]=node.raw.toLowerCase().split('e'); const exp=Number(ex);
+      return Number(mant)===1 ? `10${superscript(exp)}` : `${mant}·10${superscript(exp)}`;
+    }
+    return node.raw;
+  }
+  function isUnitAst(node) {
+    if(!node)return false;
+    if(node.type==='unit') return true;
+    if(node.type==='group') return isUnitAst(node.expr);
+    if(node.type==='binary' && (node.op==='^'||node.op==='/'||node.op==='*'||node.op==='implicit')) return isUnitAst(node.left)&&((node.op==='^'&&node.right.type==='number')||isUnitAst(node.right));
+    return false;
+  }
+  function formatAst(node, parent=0) {
+    if(node.type==='number') return numberRawDisplay(node);
+    if(node.type==='constant') return node.name==='pi'?'π':'e';
+    if(node.type==='unit') return node.unit.symbol;
+    if(node.type==='group') return `(${formatAst(node.expr)})`;
+    if(node.type==='unary') return node.op==='-'?`−${formatAst(node.arg,BP.UNARY)}`:`+${formatAst(node.arg,BP.UNARY)}`;
+    if(node.type==='post') return `${formatAst(node.arg,BP.POSTFIX)}${node.op==='percent'?'%':'!'}`;
+    if(node.type==='call') {
+      let name=node.fn;
+      if(node.fn==='logbase') name=`log_${node.base||10}`;
+      if(node.fn==='nPr') name='nPr'; if(node.fn==='nCr') name='nCr';
+      const inside=node.args.map(formatAst).join(', ');
+      const base=`${name}(${inside})`;
+      return node.trigPower!=null ? `${name}^${node.trigPower}(${inside})` : base;
+    }
+    if(node.type==='binary') {
+      const prec=node.op==='+'||node.op==='-'?BP.ADD:node.op==='nPr'||node.op==='nCr'?BP.COMB:node.op==='*'||node.op==='/'||node.op==='%'?BP.MUL:node.op==='implicit'?BP.IMPLICIT:BP.POWER;
+      let left=formatAst(node.left,prec), right=formatAst(node.right,prec+(node.op==='^'?0:1));
+      let out;
+      if(node.op==='implicit') {
+        if((node.left.type==='number'||(node.left.type==='unary'&&isLoneLiteral(node.left))) && isUnitAst(node.right)) out=left+right;
+        else if(isUnitAst(node.left)&&node.right.type==='number') out=left+right;
+        else out=left+'·'+right;
+      } else if(node.op==='+') out=`${left} + ${right}`;
+      else if(node.op==='-') out=`${left} − ${right}`;
+      else if(node.op==='nPr'||node.op==='nCr') out=`${left} ${node.op} ${right}`;
+      else if(node.op==='^') out=`${left}^${right}`;
+      else if(node.op==='/' && node.right.type==='binary' && node.right.op==='implicit') out=`${left}/(${right})`;
+      else out=`${left}${node.op}${right}`;
+      return prec<parent?`(${out})`:out;
+    }
+    return '?';
+  }
+
+  function exactDecimal(d) {
+    if(!d || !d.rat) return null;
+    const text=d.rat.terminatingText();
+    if(text==null || d.rat.significantDigits()>20) return null;
+    return text;
+  }
+  function trimFixed(s) { return s.includes('.') ? s.replace(/0+$/,'').replace(/\.$/,'') : s; }
+  function expandScientific(s) {
+    const m=/^([+-]?)(\d+)(?:\.(\d*))?[eE]([+-]?\d+)$/.exec(s);
+    if(!m) return s;
+    const sign=m[1], digits=m[2]+(m[3]||''), point=m[2].length+Number(m[4]);
+    if(point<=0) return sign+'0.'+'0'.repeat(-point)+digits;
+    if(point>=digits.length) return sign+digits+'0'.repeat(point-digits.length);
+    return sign+digits.slice(0,point)+'.'+digits.slice(point);
+  }
+  function scientificSig(x,sig) {
+    if(x===0) return '0';
+    let e=Math.floor(Math.log10(Math.abs(x)));
+    let m=x/Math.pow(10,e);
+    let rounded=Number(m.toPrecision(sig));
+    if(Math.abs(rounded)>=10) { rounded/=10; e++; }
+    const mantissa=rounded.toPrecision(sig);
+    return `${mantissa}e${e>=0?'+':''}${e}`;
+  }
+  function fixedSig(x,sig) {
+    if(x===0) return '0';
+    const a=Math.abs(x);
+    if(a>=1e15||a<1e-6) return scientificSig(x,sig);
+    return expandScientific(x.toPrecision(sig));
+  }
+  function integerPartKey(x) {
+    const a=Math.abs(x); if(!a) return 0;
+    if(a>=1e15||a<1e-6) { const e=Math.floor(Math.log10(a)); return Math.floor(Math.abs(x/Math.pow(10,e))); }
+    return Math.floor(a);
+  }
+  function sameIntegerPart(a,b) { return integerPartKey(a)===integerPartKey(b); }
+  function approximateFixed(s) {
+    if(!s.includes('.')) return s+'.0';
+    const parts=s.split('.'); const tail=parts[1].replace(/0+$/,'');
+    return parts[0]+'.'+(tail||'0');
+  }
+  function inlineApprox(x,minDecimals=1) {
+    if(x===0) return '0';
+    const abs=Math.abs(x);
+    if(abs>=1e15||abs<1e-6) {
+      let e=Math.floor(Math.log10(abs)), mant=x/Math.pow(10,e);
+      const boundary=Number(mant.toFixed(Math.max(1,minDecimals)));
+      if(Math.abs(boundary)===10&&Math.abs((boundary-mant)/mant)<=0.05) return `${approximateFixed((boundary/10).toFixed(Math.max(1,minDecimals)))}e${e+1>=0?'+':''}${e+1}`;
+      const ip=Math.floor(Math.abs(mant));
+      for(let d=Math.max(1,minDecimals);d<=14;d++) {
+        const r=Number(mant.toFixed(d));
+        if(r!==0&&Math.floor(Math.abs(r))===ip&&Math.abs((r-mant)/mant)<=0.05) return `${approximateFixed(r.toFixed(d))}e${e>=0?'+':''}${e}`;
+      }
+      return `${Number(mant.toPrecision(14))}e${e>=0?'+':''}${e}`;
+    }
+    const intPart=Math.floor(abs);
+    for(let d=Math.max(1,minDecimals);d<=15;d++) {
+      const s=x.toFixed(d), r=Number(s);
+      if(r!==0&&sameIntegerPart(x,r)&&Math.abs((r-x)/x)<=0.05) return approximateFixed(s);
+    }
+    return approximateFixed(x.toFixed(15));
+  }
+  function altApprox(x) {
+    if(x===0) return '0';
+    const abs=Math.abs(x);
+    if(abs>=1e15||abs<1e-6) return fixedSig(x,3).replace(/\.0+(?=e)/,'');
+    let s=fixedSig(x,3), n=Number(s);
+    for(let sig=4; sig<=14 && !sameIntegerPart(x,n); sig++) { s=fixedSig(x,sig); n=Number(s); }
+    return s;
+  }
+  function ladderValues(x, inlineText) {
+    if(!Number.isFinite(x)||x===0) return [];
+    const out=[], seen=new Set([Number(inlineText)]), intPart=Math.floor(Math.abs(x));
+    for(const sig of [3,5,8]) {
+      let s=fixedSig(x,sig), n=Number(s);
+      if(!Number.isFinite(n)||!sameIntegerPart(x,n)||n===0) continue;
+      const k=String(n);
+      if(seen.has(n)) continue;
+      // Values must genuinely contain more precision than the inline candidate.
+      if(Math.abs(n-Number(inlineText))<=Math.max(1e-16,Math.abs(x)*1e-15)) continue;
+      seen.add(n); out.push(s);
+    }
+    return out;
+  }
+  function bigScientific(value,sig=8) {
+    if(!DecimalJS||!value||value.isZero()) return '0';
+    const parts=value.toExponential(Math.max(0,sig-1)).toLowerCase().split('e');
+    let mant=parts[0].replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'');
+    const exp=Number(parts[1]);
+    return `${mant}e${exp>=0?'+':''}${exp}`;
+  }
+  function formatDecimal(d, style='inline', options={}) {
+    d=cleanDecimal(d);
+    const exact=exactDecimal(d);
+    if(exact!=null) {
+      const m=/^(-?)(\d+)(?:\.(\d+))?$/.exec(exact);
+      if(m) {
+        const sign=m[1],whole=m[2],frac=m[3]||'';
+        const firstWhole=whole.search(/[1-9]/);
+        const firstFrac=frac.search(/[1-9]/);
+        const exponent=firstWhole>=0?whole.length-firstWhole-1:firstFrac>=0?-(firstFrac+1):0;
+        if(firstWhole>=0&&(exponent>=15||exponent<=-7) || firstWhole<0&&firstFrac>=0&&exponent<=-7) {
+          const all=whole+frac,first=all.search(/[1-9]/);
+          let sig=all.slice(first).replace(/0+$/,''); if(!sig) sig='0';
+          const mantissa=sig.length>1?sig[0]+'.'+sig.slice(1):sig;
+          const text=`${sign}${mantissa}e${exponent>=0?'+':''}${exponent}`;
+          return {text,exact:true,inline:text,ladder:[]};
+        }
+      }
+      return {text:exact,exact:true,inline:exact,ladder:[]};
+    }
+    if(d.num===0&&DecimalJS&&d.big&&!d.big.isZero()) {
+      const text=bigScientific(d.big,style==='alternate'?3:8);
+      return {text,exact:false,inline:text,ladder:[]};
+    }
+    if(style==='alternate') return {text:altApprox(d.num),exact:false,inline:altApprox(d.num),ladder:[]};
+    const inline=inlineApprox(d.num,options.minDecimals||1);
+    return {text:inline,exact:false,inline,ladder:ladderValues(d.num,inline)};
+  }
+  function formatForSig(d,sig) {
+    d=cleanDecimal(d); const exact=exactDecimal(d);
+    if(exact!=null) return exact;
+    const a=Math.abs(d.num);
+    if(a===0&&DecimalJS&&d.big&&!d.big.isZero()) return bigScientific(d.big,sig);
+    return fixedSig(d.num,sig);
+  }
+  function unitCoordinate(q,u) { return unitSIToCoordinate(q.d,u); }
+  function isLongUnitInput(raw) {
+    const low=raw.toLowerCase();
+    return [...UNITS.nameMap.keys()].some(n=>n.length>3&&!n.includes(' ')&&new RegExp(`(^|[^a-z])${n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}s?([^a-z]|$)`,'i').test(low));
+  }
+  function numberIsOne(d) { return Math.abs(d.num-1)<1e-12; }
+  function unitText(u, value, longNames=false, explicitName=null) {
+    if(explicitName) return explicitName;
+    if(longNames && u.singular && u.singular!==u.symbol) return numberIsOne(value)?u.singular:u.plural;
+    return u.symbol;
+  }
+  function formatQuantity(q,u,style='inline',opts={}) {
+    if(!u) return formatDecimal(q.d,style);
+    const value=unitCoordinate(q,u);
+    const nf=formatDecimal(value,style);
+    const long=!!opts.longNames;
+    const label=unitText(u,value,long,opts.explicitName||null);
+    const sep=long||opts.spaceUnits?' ':'';
+    return {...nf,text:nf.text+sep+label,unitValue:value,numberText:nf.text};
+  }
+  function inComfortRange(d) { const a=Math.abs(d.num); return a>=1 && a<1000; }
+  function chooseUnit(q, raw='') {
+    if(!hasDimension(q.dims)) return null;
+    const hint=q.unitHint&&dimsSame(q.unitHint.dims,q.dims)?q.unitHint:null;
+    if(hint) {
+      const family=UNITS.units.filter(u=>u.baseId===hint.baseId && dimsSame(u.dims,q.dims) && u.id.includes(':'));
+      const candidates=dedupeUnits([hint,UNITS.units.find(u=>u.id===hint.baseId),...family]);
+      const fitting=candidates.find(u=>{try{return inComfortRange(unitCoordinate(q,u));}catch(_){return false;}});
+      if(fitting)return fitting;
+      if(inComfortRange(unitCoordinate(q,hint)))return hint;
+    }
+    for(const u of q.sourceUnits||[]) if(dimsSame(u.dims,q.dims)) { try { if(inComfortRange(unitCoordinate(q,u))) return u; } catch(_){} }
+    const popular=UNITS.popularForDims(q.dims);
+    for(const u of popular) { try { if(inComfortRange(unitCoordinate(q,u))) return u; } catch(_){} }
+    if(hint)return hint;
+    for(const u of q.sourceUnits||[]) if(dimsSame(u.dims,q.dims)) return u;
+    return popular[0]||null;
+  }
+  function candidatesForAlternates(q,primary) {
+    const source=(q.sourceUnits||[]).filter(u=>dimsSame(u.dims,q.dims));
+    return dedupeUnits([...source,...UNITS.popularForDims(q.dims)]).filter(u=>u&&u.uid!==primary?.uid);
+  }
+  function unitSpaceFromRaw(raw) { return /\d\s+[A-Za-zµμ°]/u.test(raw); }
+  function eqPrefix(config, raw) {
+    if(config.explicitEquals) return '';
+    if(/\s$/.test(raw)) return '= ';
+    const s=raw.trim();
+    if(/(?:\s[+*/%]\s|\s[+*/%](?=\S)|(?<=\S)[+*/%]\s)/.test(s)) return ' = ';
+    if(/(?:\d|\)|°)\s*[+\-]\s*(?=\S)/.test(s) && /\s[+\-]|[+\-]\s/.test(s)) return ' = ';
+    return '=';
+  }
+  function makeChip(insertText, equation, opts={}) {
+    return {insertText,displayEquation:equation,typedPrefixLen:opts.typedPrefixLen||0,tag:opts.tag||null,
+      inlineEligible:!!opts.inlineEligible,kind:opts.kind||'primary',highlightStart:opts.highlightStart??Math.max(0,equation.length-(opts.highlightLength||0)),
+      highlightEnd:opts.highlightEnd??equation.length,replaceRange:opts.replaceRange||null,fullEquation:equation};
+  }
+  function equationChip(expression,result,config,opts={}) {
+    const equation=`${expression} = ${result}`;
+    const hs=expression.length+3+(opts.typedResultLength||0);
+    return makeChip((opts.insertPrefix??eqPrefix(config,config.rawExpr))+result,equation,{...opts,highlightStart:hs,highlightEnd:equation.length});
+  }
+  function getLaddersForQuantity(q,u,mode='inline',opts={}) {
+    const f=formatQuantity(q,u,'inline',opts);
+    if(f.exact) return [];
+    const v=f.unitValue||q.d;
+    return ladderValues(v.num,f.numberText||f.text).map(text=> {
+      const label=u?unitText(u,v,!!opts.longNames,opts.explicitName||null):'';
+      const sep=u?(opts.longNames||opts.spaceUnits?' ':''):'';
+      return text+sep+label;
+    });
+  }
+  function formatExpressionResult(q,primary,style,raw, explicitName=null) {
+    const longNames=isLongUnitInput(raw);
+    const spaceUnits=unitSpaceFromRaw(raw);
+    const fmt=formatQuantity(q,primary,style,{longNames,spaceUnits,explicitName});
+    return {fmt,longNames,spaceUnits};
+  }
+  function makeQuantityOptions(q,ast,exprText,config,opts={}) {
+    const raw=opts.rawExpr||config.rawExpr||exprText;
+    const longNames=isLongUnitInput(raw), spaceUnits=unitSpaceFromRaw(raw);
+    if(!hasDimension(q.dims)) {
+      const fmt=formatDecimal(q.d,'inline');
+      const primary=equationChip(exprText,fmt.text,config,{inlineEligible:opts.primaryEligible,tag:opts.tag,kind:'primary'});
+      const ladders=fmt.ladder.map(x=>equationChip(exprText,x,config,{inlineEligible:false,tag:opts.tag,kind:'ladder'}));
+      return {primary,alternates:[],ladders,matchValues:[{text:fmt.text,exact:fmt.exact,kind:'primary',tag:opts.tag},...fmt.ladder.map(text=>({text,exact:false,kind:'ladder',tag:opts.tag}))],selectedUnit:null};
+    }
+    const primaryUnit=opts.forceUnit||chooseUnit(q,raw);
+    const primaryFmt=formatQuantity(q,primaryUnit,opts.primaryStyle||'inline',{longNames,spaceUnits,explicitName:opts.explicitName||null});
+    const primary=equationChip(exprText,primaryFmt.text,config,{inlineEligible:opts.primaryEligible,tag:opts.tag,kind:'primary'});
+    const matchValues=[{text:primaryFmt.text,exact:primaryFmt.exact,kind:'primary',unit:primaryUnit,tag:opts.tag}];
+    const alternates=[];
+    if(!opts.onlyPrimary) {
+      for(const u of candidatesForAlternates(q,primaryUnit)) {
+        try {
+          const f=formatQuantity(q,u,'alternate',{longNames,spaceUnits});
+          const alt=equationChip(exprText,f.text,config,{inlineEligible:false,tag:opts.tag,kind:'alternate'});
+          alternates.push(alt); matchValues.push({text:f.text,exact:f.exact,kind:'alternate',unit:u,tag:opts.tag});
+        } catch(_) {}
+      }
+    }
+    const ladderTexts=opts.includeLadder===false?[]:getLaddersForQuantity(q,primaryUnit,'inline',{longNames,spaceUnits});
+    const ladders=ladderTexts.map(x=>equationChip(exprText,x,config,{inlineEligible:false,tag:opts.tag,kind:'ladder'}));
+    for(const text of ladderTexts) matchValues.push({text,exact:false,kind:'ladder',unit:primaryUnit,tag:opts.tag});
+    return {primary,alternates,ladders,matchValues,selectedUnit:primaryUnit};
+  }
+  function bareUnitConversions(q,ast,exprText,config,opts={}) {
+    const source=q.sourceUnits.filter(u=>dimsSame(u.dims,q.dims));
+    let units=dedupeUnits([...UNITS.popularForDims(q.dims),...source]).filter(u=>!source.some(s=>s.uid===u.uid));
+    const decorated=units.map((u,i)=>({u,i,fit:(()=>{try{return inComfortRange(unitCoordinate(q,u));}catch(_){return false;}})()}));
+    decorated.sort((a,b)=>(b.fit?1:0)-(a.fit?1:0)||a.i-b.i);
+    const longNames=isLongUnitInput(opts.rawExpr||config.rawExpr||''), spaceUnits=unitSpaceFromRaw(opts.rawExpr||config.rawExpr||'');
+    const chips=[],matchValues=[];
+    for(const {u} of decorated.slice(0,8)) {
+      try {
+        const f=formatQuantity(q,u,'alternate',{longNames,spaceUnits});
+        chips.push(equationChip(exprText,f.text,config,{inlineEligible:false,kind:'conversion'}));
+        matchValues.push({text:f.text,exact:f.exact,kind:'conversion',unit:u});
+      } catch(_) {}
+    }
+    return {chips,matchValues};
+  }
+
+  function parseUnitTarget(text) {
+    const trimmed=text.trim();
+    const direct=UNITS.resolve(trimmed);
+    if(direct.length) return direct;
+    if(trimmed.length>MAX_INPUT) return [];
+    let toks; try { toks=scanTokens(trimmed,true); } catch(_) { return []; }
+    if(!toks.length || toks.length>40) return [];
+    // Unit targets may contain powers and quotients but no numeric coefficient.
+    const rows=expandTokenVariants(toks); const out=[];
+    for(const row of rows) {
+      try {
+        const ast=new Parser(row.tokens).parse();
+        if(!isUnitAst(ast)) continue;
+        const val=materialize(evaluate(ast,'rad'));
+        const label=formatAst(ast);
+        const custom=unitObj({id:`target:${label}:${Math.random().toString(36).slice(2)}`,symbol:label,symbols:[label],names:[],singular:label,plural:label,dims:val.dims,factor:val.d,baseId:`target:${label}`,baseLineage:[...val.lineage],displayLineage:[...val.displayLineage],isComposite:true});
+        out.push(custom);
+      } catch(_) {}
+    }
+    return dedupeUnits(out);
+  }
+
+  function normalizedResultText(s) { return String(s).trim().replace(/\s+/g,'').replace(/−/g,'-'); }
+  function isPhoneOrDate(s) {
+    const x=s.trim();
+    return /^\d{3}-\d{4}$/.test(x) || /^\d{3}-\d{3}-\d{4}$/.test(x) || /^\(?\d{3}\)?[ -]?\d{3}-\d{4}$/.test(x) || /^(?:\+?1[ .-]?)?(?:\(\d{3}\)|\d{3})[ .-]?\d{3}[ .-]?\d{4}$/.test(x) || /^\d{4}-\d{1,2}-\d{1,2}$/.test(x) || /^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}$/.test(x);
+  }
+  function partialResultPattern(s) {
+    const x=s.trim();
+    if(!x) return false;
+    return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*[A-Za-zµμΩ°][A-Za-z0-9_µμΩ°²³/^ -]*)?$/.test(x);
+  }
+  function isCompleteUnitAst(node) {
+    if(node.type==='unit') return true;
+    if(node.type==='group') return isCompleteUnitAst(node.expr);
+    if(node.type==='binary') {
+      if(node.op==='^') return isCompleteUnitAst(node.left)&&node.right.type==='number';
+      if(node.op==='implicit'||node.op==='*'||node.op==='/') return isCompleteUnitAst(node.left)&&isCompleteUnitAst(node.right);
+    }
+    return false;
+  }
+  function findExplicitConversion(text) {
+    const m=/^(.*?)(?:\s+(to|in)\s+|\s*->\s*)(.+)$/i.exec(text);
+    if(!m) return null;
+    return {base:m[1].trimEnd(),keyword:(m[2]||'->').toLowerCase(),target:m[3].trim(),at:m.index};
+  }
+  function findPartialConversion(text) {
+    const arrow=/^(.*?)(?:\s*->\s*)([A-Za-zµμΩ°/ ^0-9]*)$/i.exec(text);
+    if(arrow) return {base:arrow[1].trimEnd(),target:arrow[2],start:arrow[1].length,keyword:'->'};
+    const to=/^(.*?)(?:\s+to\s+)([A-Za-zµμΩ°/ ^0-9]*)$/i.exec(text);
+    if(to) return {base:to[1].trimEnd(),target:to[2],start:to[1].length,keyword:'to'};
+    const inside=/^(.*?)(?:\s+in\s+)([A-Za-zµμΩ°/ ^0-9]+)$/i.exec(text);
+    if(inside) return {base:inside[1].trimEnd(),target:inside[2],start:inside[1].length,keyword:'in'};
+    const bare=/^(.*?)(?:\s+(to|in)|\s*->)\s*$/i.exec(text);
+    if(bare) {
+      const keyword=(bare[2]||'->').toLowerCase(), base=bare[1].trimEnd();
+      if(keyword!=='in' || /[A-Za-zµμΩ°]/.test(base)) return {base,target:'',start:bare[1].length,keyword};
+    }
+    return null;
+  }
+  function partialIdentifierInfo(text) {
+    const m=/([A-Za-zµμΩ°_]+)$/.exec(text);
+    if(!m) return null;
+    const prefix=m[1], start=text.length-prefix.length;
+    return {prefix,start,before:text.slice(0,start)};
+  }
+  const FUNCTION_COMPLETIONS=['sqrt(','cbrt(','sin(','cos(','tan(','csc(','sec(','cot(','log(','ln(','log2(','log_2(','asin(','acos(','atan(','arcsin(','nPr(','nCr('];
+  function conversionTargetCompletions(conversion,limit=8) {
+    const prefix=conversion.target||'';
+    let dims=null;
+    const baseParsed=conversion.base?findParsedSuffix(conversion.base):null;
+    if(baseParsed) { try { const q=evaluate(baseParsed.variants[0].ast,'rad'); if(hasDimension(q.dims)) dims=q.dims; } catch(_){} }
+    const all=dims?UNITS.units.filter(u=>dimsSame(u.dims,dims)):UNITS.units.filter(u=>!u.id.includes(':'));
+    const preferred=dims?UNITS.popularForDims(dims):[];
+    const ordered=[...preferred,...all.filter(u=>!preferred.some(p=>p.uid===u.uid))];
+    const candidates=[];
+    const add=(text,u,symbol=false)=>{ if(text&&text.length>prefix.length) candidates.push({text,u,symbol}); };
+    // Offer concise, familiar symbols first when the target is still empty.
+    for(const u of preferred) add(u.symbol,u,true);
+    for(const u of ordered) {
+      add(u.symbol,u,true);
+      for(const name of u.names) if(!/\s/.test(name) && !(name===u.plural&&u.plural!==u.singular)) add(name,u,false);
+    }
+    for(const item of UNITS.autocomplete(prefix,500)) {
+      const resolved=UNITS.resolve(item.text);
+      for(const u of resolved) add(item.text,u,false);
+    }
+    const seen=new Set(),out=[];
+    for(const c of candidates) {
+      const matches=c.symbol?c.text.startsWith(prefix):c.text.toLowerCase().startsWith(prefix.toLowerCase());
+      if(!matches || (dims&&!dimsSame(c.u.dims,dims))) continue;
+      const key=c.text+'|'+c.u.uid; if(seen.has(key)) continue; seen.add(key);
+      out.push({text:c.text,kind:'unit'});
+    }
+    return out.slice(0,!prefix&&dims?Math.min(6,limit):limit);
+  }
+  function autocompleteChips(text, lineStart, caret, lineRaw) {
+    const conversion=findPartialConversion(text);
+    if(conversion) {
+      const options=conversionTargetCompletions(conversion,8);
+      if(options.length) {
+        const chips=[];
+        for(const o of options) {
+          const rem=o.text.slice(conversion.target.length); if(!rem) continue;
+          const spacer=!conversion.target && !/\s$/.test(text)?' ':'';
+          const eq=o.text;
+          chips.push(makeChip(spacer+rem,eq,{inlineEligible:true,kind:'autocomplete',typedPrefixLen:conversion.target.length,highlightStart:conversion.target.length,highlightEnd:eq.length}));
+        }
+        if(chips.length) return chips;
+      }
+    }
+    const info=partialIdentifierInfo(text); if(!info) return [];
+    const p=info.prefix;
+    const resolved=UNITS.resolve(p);
+    const functionExact=FUNCTION_NAMES.has(p.toLowerCase()) || /^(npr|ncr)$/i.test(p);
+    const constantExact=['pi','e'].includes(p.toLowerCase());
+    if(resolved.length||functionExact||constantExact) return [];
+    const found=[];
+    for(const f of FUNCTION_COMPLETIONS) if(f.toLowerCase().startsWith(p.toLowerCase()) && f.length>p.length) found.push({text:f,kind:'function'});
+    for(const f of UNITS.autocomplete(p,12)) found.push(f);
+    const seen=new Set(), chips=[];
+    for(const item of found) {
+      const key=item.text.toLowerCase(); if(seen.has(key)) continue; seen.add(key);
+      if(!item.text.toLowerCase().startsWith(p.toLowerCase())) continue;
+      const remainder=item.text.slice(p.length); if(!remainder) continue;
+      chips.push(makeChip(remainder,item.text,{inlineEligible:true,kind:'autocomplete',typedPrefixLen:p.length,highlightStart:p.length,highlightEnd:item.text.length}));
+      if(chips.length>=9) break;
+    }
+    return chips;
+  }
+  function addVariantGroup(chips, values, ast, exprText, config, opts={}) {
+    const group={ast,exprText,values:[],kind:opts.kind||'primary',ambiguous:!!opts.ambiguous};
+    const eligible=!!opts.primaryEligible;
+    if(opts.bareUnit) {
+      const q=values;
+      const result=bareUnitConversions(q,ast,exprText,config,{rawExpr:opts.rawExpr});
+      chips.push(...result.chips); group.values.push(...result.matchValues.map(v=>({...v,expression:exprText,groupKind:group.kind})));
+      return group;
+    }
+    if(opts.angleMode) {
+      const q=values;
+      const target=opts.angleMode==='deg'?UNITS.get('deg'):UNITS.get('rad');
+      const d=target?unitCoordinate(q,target):q.d;
+      const fmt=formatDecimal(d,'inline',{minDecimals:2});
+      const tag=opts.tag||opts.angleMode;
+      const main=equationChip(exprText,fmt.text,config,{inlineEligible:eligible,tag,kind:opts.kind||'primary'});
+      chips.push(main);
+      group.values.push({text:fmt.text,exact:fmt.exact,kind:'primary',tag,expression:exprText,groupKind:group.kind});
+      const ls=fmt.ladder;
+      for(const v of ls) { chips.push(equationChip(exprText,v,config,{inlineEligible:false,tag,kind:'ladder'})); group.values.push({text:v,exact:false,kind:'ladder',tag,expression:exprText,groupKind:group.kind}); }
+      return group;
+    }
+    const data=makeQuantityOptions(values,ast,exprText,config,{primaryEligible:eligible,tag:opts.tag,onlyPrimary:opts.onlyPrimary,includeLadder:opts.includeLadder,rawExpr:opts.rawExpr});
+    chips.push(data.primary,...data.alternates,...data.ladders);
+    group.values.push(...data.matchValues.map(v=>({...v,expression:exprText,groupKind:group.kind})));
+    return group;
+  }
+  function dedupeChips(chips) {
+    const out=[],seen=new Set();
+    for(const c of chips) {
+      const key=String(c.insertText).trim().replace(/\s+/g,'').replace(/−/g,'-')+'|'+String(c.tag||'');
+      if(seen.has(key)) continue;
+      seen.add(key); out.push(c);
+    }
+    return out;
+  }
+  function buildResultForAst(ast,parsed,exprText,config,flags={}) {
+    const chips=[], groups=[];
+    const modeAware=hasBareTrig(ast);
+    const parsedVariants=parsed?.variants||[{ast,choices:[]}];
+    const unitAmbiguous=!!flags.unitAmbiguous;
+    const modes=modeAware?['rad','deg']:['rad'];
+    for(const variant of parsedVariants) {
+      const vAst=variant.ast||ast;
+      const vExpr=unitAmbiguous||flags.forceVariantDisplay ? formatAst(vAst) : exprText;
+      if(unitAmbiguous) {
+        try {
+          const q=cleanQ(evaluate(vAst,'rad'));
+          const bq=simpleUnitQuantity(vAst);
+          let value=q;
+          if(bq) value=q;
+          const group=addVariantGroup(chips, bq?value:q,vAst,vExpr,config,{primaryEligible:false,onlyPrimary:true,includeLadder:false,rawExpr:flags.rawExpr,kind:'ambiguous'});
+          groups.push(group);
+        } catch(_) {}
+        continue;
+      }
+      if(modeAware) {
+        const rows=[];
+        for(const mode of modes) {
+          try {
+            const q=cleanQ(evaluate(vAst,mode));
+            const local=[]; const tag=modes.length>1?mode:null;
+            const g=addVariantGroup(local,q,vAst,vExpr,config,{primaryEligible:!!flags.primaryEligible,angleMode:dimsSame(q.dims,[0,0,0,0,0,0,1])?mode:null,tag,rawExpr:flags.rawExpr,kind:'primary'});
+            groups.push(g); rows.push({mode,local});
+          } catch(_) {}
+        }
+        // Trigonometric ordering is rad primary, deg primary, then each mode's ladder.
+        // If one mode is undefined (for example tan(pi/2) in radians), keep only
+        // the surviving primary chip, matching the calculator's pole behavior.
+        const loneSurvivor=rows.length===1 && modes.length>1;
+        for(const row of rows) chips.push(...row.local.filter(c=>c.kind==='primary'));
+        for(const row of rows) chips.push(...row.local.filter(c=>c.kind==='alternate'));
+        if(!loneSurvivor) for(const row of rows) chips.push(...row.local.filter(c=>c.kind==='ladder'));
+        if(loneSurvivor && groups.length) groups[groups.length-1].values=groups[groups.length-1].values.filter(v=>v.kind!=='ladder');
+        continue;
+      }
+      try {
+        const q=cleanQ(evaluate(vAst,'rad'));
+        if(flags.bareUnit) {
+          const g=addVariantGroup(chips,q,vAst,vExpr,config,{bareUnit:true,primaryEligible:false,rawExpr:flags.rawExpr,kind:'conversion'}); groups.push(g);
+        } else {
+          const g=addVariantGroup(chips,q,vAst,vExpr,config,{primaryEligible:!!flags.primaryEligible,onlyPrimary:!!flags.onlyPrimary,includeLadder:flags.includeLadder,rawExpr:flags.rawExpr,kind:flags.groupKind||'primary'}); groups.push(g);
+        }
+      } catch(_) {}
+    }
+    return {chips:dedupeChips(chips),groups,matchValues:groups.flatMap(g=>g.values),modeAware};
+  }
+  function cleanQ(q) {
+    if(isUnitAtom(q)) return q;
+    q={...q,d:cleanDecimal(q.d)};
+    if(!Number.isFinite(q.d.num)||Math.abs(q.d.num)>MAX_ABS) throw Error('overflow');
+    return q;
+  }
+  function buildExplicitConversion(baseParsed,baseText,conversion,config,flags={}) {
+    const chips=[],values=[];
+    const targetUnits=parseUnitTarget(conversion.target);
+    if(!targetUnits.length) return {chips,groups:[],matchValues:[]};
+    for(const variant of baseParsed.variants) {
+      let q; try { q=cleanQ(evaluate(variant.ast,'rad')); } catch(_) { continue; }
+      for(const target of targetUnits) {
+        if(!dimsSame(q.dims,target.dims)) continue;
+        const eqText=`${formatAst(variant.ast)} ${conversion.keyword==='->'?'->':conversion.keyword} ${target.symbol}`;
+        const long=isLongUnitInput(conversion.target);
+        const main=makeQuantityOptions(q,variant.ast,eqText,config,{primaryEligible:flags.primaryEligible&&targetUnits.length===1,forceUnit:target,explicitName:long&&String(target.id).startsWith('target:')?conversion.target:null,onlyPrimary:true,includeLadder:false,primaryStyle:'alternate',rawExpr:flags.rawExpr});
+        chips.push(main.primary,...main.ladders);
+        values.push(...main.matchValues.map(x=>({...x,expression:eqText,groupKind:'conversion'})));
+      }
+    }
+    return {chips:dedupeChips(chips),groups:[],matchValues:values};
+  }
+  function cleanTypedSegment(s) { return s.trim(); }
+  function makePartialResultChips(resultData,typed,replaceRange,config) {
+    const t=normalizedResultText(typed);
+    if(!t) return [];
+    const values=resultData.matchValues||[];
+    const normalized=values.map(v=>({...v,norm:normalizedResultText(v.text)}));
+    const exactComplete=normalized.some(v=>v.norm===t&&v.exact);
+    if(exactComplete) return [];
+    const matching=normalized.filter(v=>v.norm.startsWith(t)&&v.norm.length>t.length);
+    const exactOrAnyComplete=normalized.some(v=>v.norm===t);
+    const chips=[];
+    for(const v of matching) {
+      const remainder=v.norm.slice(t.length); if(!remainder) continue;
+      const expr=v.expression||resultData.expression||'';
+      const equation=`${expr} = ${v.text}`;
+      const hs=expr.length+3+t.length;
+      chips.push(makeChip(remainder,equation,{typedPrefixLen:typed.trim().length,inlineEligible:false,kind:'partial',tag:v.tag,highlightStart:hs,highlightEnd:equation.length}));
+    }
+    if(chips.length) return dedupeChips(chips);
+    if(exactOrAnyComplete) return [];
+    const primary=values.find(v=>v.kind==='primary')||values[0];
+    if(!primary) return [];
+    const expr=primary.expression||resultData.expression||'';
+    const equation=`${expr} = ${primary.text}`;
+    const hs=expr.length+3;
+    return [makeChip(primary.text,equation,{inlineEligible:false,kind:'replace',replaceRange,highlightStart:hs,highlightEnd:equation.length})];
+  }
+
+  function analyzeCurrentLine(value,caret) {
+    const lineStart=value.lastIndexOf('\n',caret-1)+1;
+    const lineEnd0=value.indexOf('\n',caret); const lineEnd=lineEnd0<0?value.length:lineEnd0;
+    const afterCaret=value.slice(caret,lineEnd);
+    if(afterCaret.trim()) return {chips:[],ghost:null};
+    const originalBefore=value.slice(lineStart,caret);
+    let content=originalBefore, bullet=false, bulletPrefix='';
+    const bm=/^([ \t]*)([-*+•–])[ \t]+/.exec(content);
+    if(bm) { bullet=true; bulletPrefix=bm[0]; content=content.slice(bm[0].length); }
+    if(content.length>MAX_INPUT) return {chips:[],ghost:null};
+    const parts=content.split('=');
+    const explicitEquals=content.trimEnd().endsWith('=');
+    const lastEq=content.lastIndexOf('=');
+    const config={explicitEquals,rawExpr:'',lineStart,caret,rawLine:originalBefore,bulletPrefix,insertAt:caret};
+    // Shape B: typed partial result after an equals.
+    if(!explicitEquals && parts.length>1) {
+      const typed=parts[parts.length-1]; const previous=parts[parts.length-2];
+      if(partialResultPattern(typed)) {
+        const parsedPrev=findParsedSuffix(previous);
+        if(parsedPrev) {
+          const first=parsedPrev.variants[0]; let validQ=null;
+          try { validQ=cleanQ(evaluate(first.ast,'rad')); } catch(_) {}
+          if(validQ) {
+            const expr=formatAst(first.ast);
+            const result=buildResultForAst(first.ast,parsedPrev,expr,{...config,explicitEquals:true,rawExpr:previous},{unitAmbiguous:parsedPrev.variants.length>1,rawExpr:previous,onlyPrimary:false});
+            result.expression=expr;
+            const leading=(typed.match(/^\s*/)||[''])[0].length;
+            const trailing=(typed.match(/\s*$/)||[''])[0].length;
+            const start=lineStart+bulletPrefix.length+lastEq+1+leading;
+            const end=lineStart+bulletPrefix.length+lastEq+1+typed.length-trailing;
+            const chips=makePartialResultChips(result,typed,{start,end},config);
+            return {chips,ghost:null,partial:true};
+          }
+        }
+      }
+    }
+    let exprSegment, rawExpr;
+    if(explicitEquals) {
+      exprSegment=parts.length>=2?parts[parts.length-2]:''; rawExpr=exprSegment;
+      if(!exprSegment.trim()) return {chips:[],ghost:null};
+    } else {
+      exprSegment=parts[parts.length-1]||''; rawExpr=exprSegment;
+    }
+    const conversion=explicitEquals?null:findExplicitConversion(exprSegment);
+    let mathSegment=conversion?conversion.base:exprSegment;
+    if(!mathSegment.trim()) {
+      const ac=autocompleteChips(exprSegment,lineStart,caret,originalBefore);
+      return {chips:ac,ghost:null};
+    }
+    const parsed=findParsedSuffix(mathSegment);
+    if(!parsed) {
+      const ac=autocompleteChips(exprSegment,lineStart,caret,originalBefore);
+      return {chips:ac,ghost:null};
+    }
+    const firstAst=parsed.variants[0].ast;
+    const exprDisplay=formatAst(firstAst);
+    if(isLoneLiteral(firstAst)||isLonePercent(firstAst)) return {chips:[],ghost:null};
+    const suffix=parsed.raw;
+    const bareUnit=simpleUnitQuantity(firstAst);
+    const phoneDate=isPhoneOrDate(suffix);
+    const unitAmbiguous=parsed.variants.length>1;
+    let category='inline';
+    if(unitAmbiguous) category='ambiguous';
+    else if(bareUnit&&!conversion) category='bareUnit';
+    else if(!explicitEquals&&bullet) category='bullet';
+    else if(!explicitEquals&&phoneDate) category='phoneDate';
+    const primaryEligible=category==='inline' && !unitAmbiguous;
+    config.rawExpr=rawExpr;
+    if(conversion) {
+      const baseParsed=parsed;
+      const conversionDisplay={...conversion,target:conversion.target};
+      const data=buildExplicitConversion(baseParsed,mathSegment,conversionDisplay,config,{primaryEligible:primaryEligible||!bareUnit,rawExpr});
+      if(data.chips.length) return {chips:data.chips,ghost:null,inlineShape:true};
+      return {chips:autocompleteChips(exprSegment,lineStart,caret,originalBefore),ghost:null};
+    }
+    // Longest valid suffix is selected before semantic evaluation. An evaluator
+    // error here is deliberately silent; it never retries a shorter suffix.
+    const scientificAmbiguous=/\d+(?:\.\d+)?[eE]-\d+(?![A-Za-z0-9_])/.test(mathSegment);
+    const hasAnyUnitAmbiguity=unitAmbiguous;
+    const normalFlags={unitAmbiguous:hasAnyUnitAmbiguity,bareUnit:category==='bareUnit',primaryEligible,rawExpr};
+    const data=buildResultForAst(firstAst,parsed,exprDisplay,config,normalFlags);
+    let chips=data.chips.slice();
+    // A negative-exponent e token also has a valid ordinary-constant reading.
+    // Scientific notation stays first; the alternate is a bar-only chip.
+    if(scientificAmbiguous&&!unitAmbiguous) {
+      const alt=findParsedSuffix(mathSegment,false);
+      if(alt && alt.variants.length && !isLoneLiteral(firstAst)) {
+        const altAst=alt.variants[0].ast;
+        try {
+          const altQ=cleanQ(evaluate(altAst,'rad'));
+          const altExpr=formatAst(altAst);
+          let altChip=null;
+          if(!hasDimension(altQ.dims)) {
+            const f=formatDecimal(altQ.d,'inline',{minDecimals:2});
+            altChip=equationChip(altExpr,f.text,config,{inlineEligible:false,kind:'ambiguity'});
+          } else {
+            const altData=buildResultForAst(altAst,{variants:[{ast:altAst}]},altExpr,config,{onlyPrimary:true,primaryEligible:false,rawExpr,groupKind:'ambiguity'});
+            altChip=altData.chips[0]||null;
+          }
+          if(altChip) { altChip.kind='ambiguity'; altChip.inlineEligible=false; chips.push(altChip); }
+        } catch(_) {}
+      }
+    }
+    return {chips:dedupeChips(chips),ghost:null,category};
+  }
+
+  const editor=document.getElementById('editor');
+  const mirror=document.getElementById('mirror');
+  const bar=document.getElementById('suggestion-bar');
+  const chipsBox=document.getElementById('chips');
+  let suggestions=[],activeIndex=0,movedHighlight=false,ghostVisible=false,dismissed=false,composing=false,evalTimer=0,saveTimer=0,edgeCaret=null;
+  const STORAGE_KEY='arena.scratchpad.calc.v1';
+  try { const saved=localStorage.getItem(STORAGE_KEY); if(saved!==null) editor.value=saved; } catch(_) {}
+
+  function clearSuggestions() {
+    suggestions=[]; activeIndex=0; movedHighlight=false; ghostVisible=false;
+    renderBar(); renderGhost();
+  }
+  function clippedEquation(chip,max=72) {
+    const text=chip.displayEquation||'';
+    if(text.length<=max) return {text,start:0,end:text.length,left:false,right:false};
+    const hs=Math.max(0,Math.min(text.length,chip.highlightStart||0));
+    const he=Math.max(hs,Math.min(text.length,chip.highlightEnd||text.length));
+    let leftBudget=20,rightBudget=30;
+    if(he-hs>max-4) { leftBudget=1; rightBudget=max-5; }
+    let start=Math.max(0,hs-leftBudget), end=Math.min(text.length,he+rightBudget);
+    const budget=max-(start>0?1:0)-(end<text.length?1:0);
+    if(end-start>budget) end=start+budget;
+    if(he>end) { end=Math.min(text.length,he); start=Math.max(0,end-budget); }
+    if(hs<start) start=hs;
+    return {text,start,end,left:start>0,right:end<text.length};
+  }
+  function appendChipText(container,text,chip,visStart,visEnd,leftEllipsis,rightEllipsis) {
+    if(leftEllipsis) container.appendChild(document.createTextNode('…'));
+    const a=Math.max(visStart,chip.highlightStart||0), b=Math.min(visEnd,chip.highlightEnd||chip.displayEquation.length);
+    if(a>=b) container.appendChild(document.createTextNode(text.slice(visStart,visEnd)));
+    else {
+      if(a>visStart) container.appendChild(document.createTextNode(text.slice(visStart,a)));
+      const em=document.createElement('span'); em.className='chip-em'; em.textContent=text.slice(a,b); container.appendChild(em);
+      if(b<visEnd) container.appendChild(document.createTextNode(text.slice(b,visEnd)));
+    }
+    if(rightEllipsis) container.appendChild(document.createTextNode('…'));
+  }
+  function renderBar() {
+    chipsBox.replaceChildren();
+    if(!suggestions.length) { bar.classList.remove('visible'); return; }
+    bar.classList.add('visible');
+    suggestions.forEach((chip,index)=>{
+      const button=document.createElement('button'); button.type='button'; button.className='chip'+(index===activeIndex?' active':'');
+      button.setAttribute('aria-label',chip.displayEquation||chip.insertText);
+      const label=document.createElement('span'); label.className='chip-label';
+      const clip=clippedEquation(chip);
+      appendChipText(label,chip.displayEquation||'',chip,clip.start,clip.end,clip.left,clip.right);
+      button.appendChild(label);
+      if(chip.tag) { const tag=document.createElement('span'); tag.className='chip-tag'; tag.textContent=chip.tag; button.appendChild(tag); }
+      button.addEventListener('mousedown',e=>e.preventDefault());
+      let touchStart=null,touchHandled=false,touchMoved=false;
+      button.addEventListener('pointerdown',e=>{ if(e.pointerType==='touch') { touchStart={id:e.pointerId,x:e.clientX,y:e.clientY}; touchHandled=false; touchMoved=false; } });
+      button.addEventListener('pointermove',e=>{ if(touchStart&&e.pointerId===touchStart.id&&Math.hypot(e.clientX-touchStart.x,e.clientY-touchStart.y)>9) { touchStart=null; touchMoved=true; } });
+      button.addEventListener('pointerup',e=>{ if(touchStart&&e.pointerId===touchStart.id) { touchStart=null; touchHandled=true; e.preventDefault(); acceptChip(index); } });
+      button.addEventListener('pointercancel',()=>{ touchStart=null; touchMoved=true; });
+      button.addEventListener('click',e=>{ e.preventDefault(); if(touchHandled||touchMoved) { touchHandled=false; touchMoved=false; return; } acceptChip(index); });
+      chipsBox.appendChild(button);
+    });
+    const active=chipsBox.children[activeIndex];
+    if(active && active.scrollIntoView) active.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+  function syncMirrorBox() {
+    const w=editor.clientWidth,h=editor.clientHeight;
+    if(w>0) { mirror.style.width=w+'px'; mirror.style.right='auto'; }
+    if(h>0) mirror.style.height=h+'px';
+  }
+  function renderGhost() {
+    syncMirrorBox();
+    const caret=editor.selectionStart;
+    const chip=suggestions[activeIndex];
+    ghostVisible=!!(!dismissed && chip && chip.inlineEligible && editor.selectionStart===editor.selectionEnd && !composing);
+    if(!ghostVisible) {
+      editor.classList.remove('ghost-active');
+      mirror.replaceChildren();
+      return;
+    }
+    editor.classList.add('ghost-active');
+    const before=editor.value.slice(0,caret), after=editor.value.slice(caret);
+    const ghost=document.createElement('span'); ghost.className='ghost'; ghost.textContent=chip.insertText;
+    mirror.replaceChildren(document.createTextNode(before),ghost,document.createTextNode(after));
+    mirror.scrollTop=editor.scrollTop; mirror.scrollLeft=editor.scrollLeft;
+  }
+  function setSuggestions(items) {
+    suggestions=items||[]; activeIndex=0; movedHighlight=false;
+    renderBar(); renderGhost();
+  }
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{ try { localStorage.setItem(STORAGE_KEY,editor.value); } catch(_){} },120);
+  }
+  function scheduleAnalysis() {
+    clearTimeout(evalTimer);
+    evalTimer=setTimeout(()=>analyzeAndRender(),30);
+  }
+  function analyzeAndRender() {
+    if(composing||dismissed) { renderGhost(); return; }
+    if(editor.selectionStart!==editor.selectionEnd) { clearSuggestions(); return; }
+    try {
+      const result=analyzeCurrentLine(editor.value,editor.selectionStart);
+      setSuggestions(result.chips||[]);
+    } catch(_) { clearSuggestions(); }
+  }
+  function insertTextAtRange(text,start=editor.selectionStart,end=editor.selectionEnd) {
+    try { editor.focus({preventScroll:true}); } catch(_) { editor.focus(); }
+    start=Math.max(0,Math.min(editor.value.length,start)); end=Math.max(start,Math.min(editor.value.length,end));
+    editor.setSelectionRange(start,end);
+    const before=editor.value;
+    try { document.execCommand('insertText',false,text); } catch(_) {}
+    if(editor.value===before) {
+      editor.setRangeText(text,start,end,'end');
+      try { editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text})); }
+      catch(_) { editor.dispatchEvent(new Event('input',{bubbles:true})); }
+    }
+    const caret=start+text.length;
+    editor.setSelectionRange(caret,caret);
+    dismissed=false; movedHighlight=false;
+    saveSoon(); scheduleAnalysis(); renderGhost();
+  }
+  function acceptChip(index=activeIndex) {
+    const chip=suggestions[index]; if(!chip) return;
+    const range=chip.replaceRange||{start:editor.selectionStart,end:editor.selectionStart};
+    clearTimeout(evalTimer);
+    setSuggestions([]);
+    insertTextAtRange(chip.insertText,range.start,range.end);
+  }
+  function acceptableChip() { return !!(suggestions[activeIndex] && (ghostVisible||movedHighlight)); }
+  editor.addEventListener('input',()=>{ dismissed=false; saveSoon(); scheduleAnalysis(); });
+  editor.addEventListener('keyup',()=>{ if(edgeCaret!==null) { const moved=editor.selectionStart!==edgeCaret; edgeCaret=null; if(moved) clearSuggestions(); } scheduleAnalysis(); });
+  editor.addEventListener('click',()=>{ dismissed=false; scheduleAnalysis(); });
+  editor.addEventListener('select',()=>{ if(editor.selectionStart!==editor.selectionEnd) clearSuggestions(); else scheduleAnalysis(); });
+  editor.addEventListener('scroll',()=>{ mirror.scrollTop=editor.scrollTop; mirror.scrollLeft=editor.scrollLeft; });
+  if(typeof window!=='undefined') {
+    window.addEventListener('resize',()=>{ syncMirrorBox(); renderGhost(); });
+    window.addEventListener('pagehide',()=>{ try { localStorage.setItem(STORAGE_KEY,editor.value); } catch(_){} });
+  }
+  editor.addEventListener('compositionstart',()=>{ composing=true; clearSuggestions(); });
+  editor.addEventListener('compositionend',()=>{ composing=false; dismissed=false; scheduleAnalysis(); });
+  editor.addEventListener('keydown',e=>{
+    if(e.key==='Escape') { dismissed=true; clearSuggestions(); e.preventDefault(); return; }
+    if(dismissed && !e.ctrlKey && !e.metaKey && !e.altKey) dismissed=false;
+    if(composing) return;
+    if(e.altKey && /^[1-9]$/.test(e.key)) {
+      const n=Number(e.key)-1;
+      if(suggestions[n]) { e.preventDefault(); acceptChip(n); }
+      return;
+    }
+    if(e.key==='Tab') {
+      if(acceptableChip()) { e.preventDefault(); acceptChip(activeIndex); }
+      else { e.preventDefault(); insertTextAtRange('\t'); }
+      return;
+    }
+    if(e.key==='Enter' && acceptableChip()) { e.preventDefault(); acceptChip(activeIndex); return; }
+    if(suggestions.length) {
+      if((e.key==='ArrowLeft'||e.key==='ArrowUp') && activeIndex>0) {
+        e.preventDefault(); activeIndex--; movedHighlight=true; renderBar(); renderGhost(); return;
+      }
+      if((e.key==='ArrowLeft'||e.key==='ArrowUp') && activeIndex===0) { dismissed=true; edgeCaret=editor.selectionStart; renderGhost(); return; }
+      if((e.key==='ArrowRight'||e.key==='ArrowDown') && activeIndex<suggestions.length-1) {
+        e.preventDefault(); activeIndex++; movedHighlight=true; renderBar(); renderGhost(); return;
+      }
+      if((e.key==='ArrowRight'||e.key==='ArrowDown') && activeIndex===suggestions.length-1) { dismissed=true; edgeCaret=editor.selectionStart; renderGhost(); return; }
+    }
+  });
+  document.addEventListener('selectionchange',()=>{
+    if(document.activeElement===editor && !composing) {
+      if(editor.selectionStart!==editor.selectionEnd) clearSuggestions(); else scheduleAnalysis();
+    }
+  });
+  // The bar is intentionally the only auxiliary UI; no toolbar, title, or controls are present.
+  scheduleAnalysis();
+})();
+</script>
+</body>
+</html>
