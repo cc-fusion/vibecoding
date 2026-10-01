@@ -250,7 +250,7 @@ export function bareInfo(root) {
   })(root);
   return ok && units > 0 ? { nums } : null;
 }
-// expression built only from numbers, arithmetic and the constants pi / e
+// expression built only from numbers, arithmetic and constants (pi, e), with at least one constant
 export function isConstExpr(root) {
   let consts = 0, ok = true;
   (function w(n) {

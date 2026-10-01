@@ -47,6 +47,7 @@ export function createEditor({ ta, mirror, mi, bar, chipsEl }) {
       if (i < 9) { const n = document.createElement('span'); n.className = 'num'; n.textContent = String(i + 1); el.appendChild(n); }
       const d = document.createElement('span'); d.className = 'dim'; d.textContent = mid(c.dim, 44); el.appendChild(d);
       const s = document.createElement('span'); s.className = 'ins'; s.textContent = mid(c.ins, 34); el.appendChild(s);
+      if (c.ins.length > 34 || c.dim.length > 44) el.title = c.dim + c.ins;   // clipped: full text on hover
       if (c.tag) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = c.tag; el.appendChild(t); }
       if (c.kind === 'replace') { const t = document.createElement('span'); t.className = 'kind'; t.textContent = 'replace'; el.appendChild(t); }
       chipsEl.appendChild(el);

@@ -1,5 +1,5 @@
 // Suggestion engine: turns an analyzed line into chips (cells + optional inline ghost text).
-import { D } from './numeric.js';
+import { D, setPrecision, precisionFor } from './numeric.js';
 import { UNITS, PREFIXES, pfOK } from './units.js';
 import { isExact } from './format.js';
 import { analyzeLine } from './analyze.js';
@@ -7,7 +7,7 @@ import { targetChips } from './target.js';
 import { getAnglePref } from './prefs.js';
 
 const NUM_ONLY = /^-?(?:\d+\.?\d*|\.\d+)$/;
-const MAX_SIG = 20;          // never extend beyond this many significant digits
+const MAX_SIG = 20;          // default cap on extended digits; grows when the user types more than this
 
 /* ---- progressive digits ----
    Typed "3.1" for pi -> inline "4" (3.14), cells "41" (3.141), ...
@@ -40,7 +40,11 @@ function ladderRungs(x, typedNum) {
   }
 
   const intDigits = ax.gte(1) ? ax.toDecimalPlaces(0, D.ROUND_DOWN).toFixed().length : 0;
-  const maxDec = intDigits ? Math.max(0, MAX_SIG - intDigits) : MAX_SIG + (-x.e - 1);
+  // "pi = 3.14" stops at 20 significant digits, but "pi = 3.1415926535897932384" (a user who
+  // already wants more) keeps going, as far as the working precision allows.
+  const sigTypedAll = typedNum.replace('-', '').replace('.', '').replace(/^0+/, '').length;
+  const maxSig = sigTypedAll < 14 ? MAX_SIG : Math.min(D.precision - 8, Math.max(MAX_SIG, sigTypedAll + 24));
+  const maxDec = intDigits ? Math.max(0, maxSig - intDigits) : maxSig + (-x.e - 1);
   const base = d === 0 ? [2, 5, 8, 12]
     : d === 1 ? [2, 3, 5, 8, 12]
     : [d + 2, d + 3, d + 5, d + 8, d + 12];
@@ -189,10 +193,12 @@ function nameSuggest(value, caret) {
   return out;
 }
 
-export function suggestFor(text, caret) {
-  const a = analyzeLine(text, caret);
+export function suggestFor(value, caret) {
+  // working precision follows what the user typed on this line (default 50 digits)
+  const ls = value.lastIndexOf('\n', caret - 1) + 1;
+  setPrecision(precisionFor(value.slice(ls, caret)));
+  const a = analyzeLine(value, caret);
   if (a) return buildChips(a);
-  const t = targetChips(text, caret);
-  if (t.length) return t;
-  return nameSuggest(text, caret);
+  const t = targetChips(value, caret);
+  return t.length ? t : nameSuggest(value, caret);
 }
