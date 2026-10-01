@@ -1,0 +1,2250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Quiet Calc</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #fbfbfa;
+    --ink: #202124;
+    --muted: #858991;
+    --chip: rgba(127, 132, 143, .10);
+    --chip-hover: rgba(127, 132, 143, .18);
+    --line: rgba(127, 132, 143, .18);
+    --accent: #5278da;
+    --selection: rgba(82, 120, 218, .22);
+    --ghost: #969aa3;
+    --editor-pad-x: 26px;
+    --editor-pad-top: 22px;
+    --editor-pad-bottom: 88px;
+    --bar-height: 62px;
+    font-synthesis: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #111214;
+      --ink: #e7e8eb;
+      --muted: #9297a1;
+      --chip: rgba(255, 255, 255, .075);
+      --chip-hover: rgba(255, 255, 255, .14);
+      --line: rgba(255, 255, 255, .13);
+      --accent: #8aa9ff;
+      --selection: rgba(116, 151, 255, .28);
+      --ghost: #777d88;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--paper); }
+  body { color: var(--ink); }
+  #editorLayer { position: fixed; inset: 0; overflow: hidden; background: var(--paper); }
+  #mirror, #editor {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    padding: var(--editor-pad-top) var(--editor-pad-x) var(--editor-pad-bottom);
+    font: 400 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    letter-spacing: 0;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    text-align: left;
+    direction: ltr;
+  }
+  #mirror {
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+    color: var(--ink);
+    scrollbar-width: none;
+  }
+  #mirror .ghost { color: var(--ghost); opacity: .66; }
+  #editor {
+    z-index: 2;
+    display: block;
+    resize: none;
+    overflow: auto;
+    outline: none;
+    background: transparent;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    caret-color: var(--accent);
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 0;
+    box-shadow: none;
+    spellcheck: false;
+    scrollbar-color: rgba(130, 135, 145, .35) transparent;
+  }
+  #editor:focus { outline: none; }
+  #editor::selection { background: var(--selection); color: transparent; -webkit-text-fill-color: transparent; }
+  #suggestionBar {
+    position: fixed;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-height: var(--bar-height);
+    padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  #suggestionBar[hidden] { display: none; }
+  #chipStrip {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  #chipStrip::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    min-width: 54px;
+    max-width: min(440px, 74vw);
+    min-height: 42px;
+    padding: 8px 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--ink);
+    background: var(--chip);
+    font: 400 13px/1.25 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .chip:hover { background: var(--chip-hover); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chip.highlighted { border-color: color-mix(in srgb, var(--accent) 62%, transparent); background: color-mix(in srgb, var(--accent) 12%, var(--chip)); }
+  .equation { display: flex; align-items: baseline; min-width: 0; white-space: nowrap; }
+  .eq-left { min-width: 0; max-width: 195px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .eq-equals { flex: 0 0 auto; color: var(--muted); padding: 0 .28em; }
+  .eq-result { flex: 0 0 auto; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+  .typed-result { color: var(--muted); }
+  .inserted-result { color: var(--ink); font-weight: 600; }
+  .chip-tag { margin-left: 9px; color: var(--muted); opacity: .72; font: 11px/1 ui-sans-serif, system-ui, sans-serif; }
+  .chip-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #keyHint {
+    flex: 0 0 auto;
+    color: var(--muted);
+    opacity: .62;
+    font: 11px/1.2 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    white-space: nowrap;
+    user-select: none;
+  }
+  @media (max-width: 560px) {
+    :root { --editor-pad-x: 17px; --editor-pad-top: 18px; --editor-pad-bottom: 82px; --bar-height: 59px; }
+    #suggestionBar { gap: 8px; }
+    .chip { min-height: 40px; padding: 8px 10px; }
+    .eq-left { max-width: 120px; }
+    .eq-result { max-width: 145px; }
+    #keyHint { font-size: 10px; }
+  }
+</style>
+<!-- Decimal.js is used for 50-digit arithmetic when online; the exact-rational and Number fallbacks keep this file usable offline. -->
+<script src="https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/decimal.min.js"></script>
+</head>
+<body>
+  <main id="editorLayer">
+    <div id="mirror" aria-hidden="true"></div>
+    <textarea id="editor" aria-label="Notes" autocomplete="off" autocapitalize="off" spellcheck="false" wrap="soft"></textarea>
+  </main>
+  <div id="suggestionBar" hidden>
+    <div id="chipStrip" role="listbox" aria-label="Suggestions"></div>
+    <div id="keyHint">Tab/Enter accept · ←→ switch</div>
+  </div>
+<script>
+(() => {
+  'use strict';
+
+  /* -----------------------------------------------------------------------
+     Numeric core: terminating inputs and ordinary arithmetic retain exact
+     BigInt rationals; Decimal.js carries 50-digit values when it is available.
+     ----------------------------------------------------------------------- */
+  const DECIMAL = (typeof window !== 'undefined' && window.Decimal) ? window.Decimal : null;
+  if (DECIMAL) { try { DECIMAL.set({ precision: 50, rounding: DECIMAL.ROUND_HALF_UP, toExpNeg: -7, toExpPos: 21 }); } catch (_) {} }
+  const MAX_VALUE = 1e308;
+  const MAX_RAT_DIGITS = 420;
+  const PI = Math.PI;
+  const abs = Math.abs;
+  const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+  function gcd(a, b) {
+    a = a < 0n ? -a : a; b = b < 0n ? -b : b;
+    while (b) { const t = a % b; a = b; b = t; }
+    return a || 1n;
+  }
+  class Rat {
+    constructor(n, d = 1n) {
+      if (d === 0n) throw new Error('zero denominator');
+      if (d < 0n) { n = -n; d = -d; }
+      const g = gcd(n, d); this.n = n / g; this.d = d / g;
+    }
+    static fromDecimal(text) {
+      const s = String(text).trim().replace(/_/g, '');
+      const m = s.match(/^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/);
+      if (!m) return null;
+      const sign = m[1] === '-' ? -1n : 1n;
+      const whole = m[2] || '0';
+      const frac = m[3] !== undefined ? m[3] : (m[4] || '');
+      const exp = Number(m[5] || 0);
+      if (!Number.isFinite(exp) || Math.abs(exp) > 250) return null;
+      let n;
+      try { n = BigInt((whole + frac).replace(/^0+(?=\d)/, '') || '0') * sign; } catch (_) { return null; }
+      let scale = frac.length - exp;
+      if (scale < 0) { n *= 10n ** BigInt(-scale); scale = 0; }
+      let d = 10n ** BigInt(scale);
+      if (n.toString().length + d.toString().length > MAX_RAT_DIGITS) return null;
+      return new Rat(n, d);
+    }
+    static fromInteger(n) { return new Rat(BigInt(n), 1n); }
+    add(b) { return ratGuard(new Rat(this.n * b.d + b.n * this.d, this.d * b.d)); }
+    sub(b) { return ratGuard(new Rat(this.n * b.d - b.n * this.d, this.d * b.d)); }
+    mul(b) { return ratGuard(new Rat(this.n * b.n, this.d * b.d)); }
+    div(b) { if (b.n === 0n) throw new Error('division by zero'); return ratGuard(new Rat(this.n * b.d, this.d * b.n)); }
+    neg() { return new Rat(-this.n, this.d); }
+    pow(k) {
+      if (!Number.isInteger(k) || Math.abs(k) > 200) return null;
+      if (k < 0) { if (this.n === 0n) throw new Error('division by zero'); return ratGuard(new Rat(this.d ** BigInt(-k), this.n ** BigInt(-k))); }
+      return ratGuard(new Rat(this.n ** BigInt(k), this.d ** BigInt(k)));
+    }
+    toNumber() { return Number(this.n) / Number(this.d); }
+    terminatingString() {
+      let d = this.d, twos = 0, fives = 0;
+      while (d % 2n === 0n) { d /= 2n; twos++; }
+      while (d % 5n === 0n) { d /= 5n; fives++; }
+      if (d !== 1n) return null;
+      const scale = Math.max(twos, fives);
+      let n = this.n * (2n ** BigInt(scale - twos)) * (5n ** BigInt(scale - fives));
+      const neg = n < 0n; if (neg) n = -n;
+      let digits = n.toString();
+      if (scale) {
+        if (digits.length <= scale) digits = '0'.repeat(scale + 1 - digits.length) + digits;
+        const p = digits.length - scale;
+        digits = digits.slice(0, p) + '.' + digits.slice(p);
+      }
+      if (digits.includes('.')) digits = digits.replace(/0+$/, '').replace(/\.$/, '');
+      return (neg ? '-' : '') + (digits || '0');
+    }
+    significantDigits() {
+      const s = this.terminatingString(); if (s === null) return Infinity;
+      const digits = s.replace(/^[+-]/, '').replace('.', '').replace(/^0+/, '').replace(/0+$/, '');
+      return digits.length || 1;
+    }
+  }
+  function ratGuard(r) {
+    if (!r || r.n.toString().length > MAX_RAT_DIGITS || r.d.toString().length > MAX_RAT_DIGITS) return null;
+    return r;
+  }
+  function powBigIntRoot(n, degree) {
+    if (n < 0n || degree < 2) return null;
+    if (n < 2n) return n;
+    let lo = 1n, hi = n, d = BigInt(degree);
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1n;
+      let p = 1n; for (let i = 0; i < degree && p <= n; i++) p *= mid;
+      if (p === n) return mid;
+      if (p < n) lo = mid + 1n; else hi = mid - 1n;
+    }
+    return null;
+  }
+  function ratRoot(r, degree) {
+    if (!r || !Number.isInteger(degree) || degree < 2) return null;
+    const negative = r.n < 0n;
+    if (negative && degree % 2 === 0) return null;
+    const n = powBigIntRoot(negative ? -r.n : r.n, degree);
+    const d = powBigIntRoot(r.d, degree);
+    return n === null || d === null ? null : new Rat(negative ? -n : n, d);
+  }
+  function decFromRat(r) {
+    if (!DECIMAL || !r) return null;
+    try { return new DECIMAL(r.n.toString()).div(new DECIMAL(r.d.toString())); } catch (_) { return null; }
+  }
+  function decFromString(s) {
+    if (!DECIMAL) return null;
+    try { return new DECIMAL(String(s)); } catch (_) { return null; }
+  }
+  function decPi() {
+    if (!DECIMAL) return null;
+    try { return DECIMAL.acos(-1); } catch (_) { return new DECIMAL(String(PI)); }
+  }
+  function dnum(d, fallback = NaN) {
+    if (!d) return fallback;
+    try { return d.toNumber(); } catch (_) { return fallback; }
+  }
+  function decBinary(op, a, b) {
+    if (!DECIMAL || !a || !b) return null;
+    try {
+      if (op === '+') return a.plus(b);
+      if (op === '-') return a.minus(b);
+      if (op === '*') return a.times(b);
+      if (op === '/') return a.div(b);
+      if (op === '%') return a.mod(b);
+      if (op === '^') return a.pow(b);
+    } catch (_) {}
+    return null;
+  }
+  function ratBinary(op, a, b) {
+    if (!a || !b) return null;
+    try {
+      if (op === '+') return a.add(b);
+      if (op === '-') return a.sub(b);
+      if (op === '*') return a.mul(b);
+      if (op === '/') return a.div(b);
+    } catch (_) { return null; }
+    return null;
+  }
+
+  /* -----------------------------------------------------------------------
+     Unit engine: dimensions, canonical SI factors, names, prefixes, variants.
+     ----------------------------------------------------------------------- */
+  const DIM_COUNT = 7;
+  const DIM = { L: 0, M: 1, T: 2, I: 3, TEMP: 4, DATA: 5, ANGLE: 6 };
+  const zeroDims = () => [0, 0, 0, 0, 0, 0, 0];
+  const dim = (pairs) => { const a = zeroDims(); for (const [k, v] of pairs) a[DIM[k]] = v; return a; };
+  const sameDims = (a, b) => a.every((v, i) => v === b[i]);
+  const addDims = (a, b, sign = 1) => a.map((v, i) => v + sign * b[i]);
+  const dimsKey = (a) => a.join(',');
+  const isDimensionless = (d) => d.every(v => v === 0);
+
+  const units = [];
+  const symbolMap = new Map();
+  const foldedSymbols = new Map();
+  const nameMap = new Map();
+  const powerUnits = new Map();
+  const PREFIXES = [
+    { symbol: 'q', name: 'quecto', factor: '1e-30' }, { symbol: 'r', name: 'ronto', factor: '1e-27' },
+    { symbol: 'y', name: 'yocto', factor: '1e-24' }, { symbol: 'z', name: 'zepto', factor: '1e-21' },
+    { symbol: 'a', name: 'atto', factor: '1e-18' }, { symbol: 'f', name: 'femto', factor: '1e-15' },
+    { symbol: 'p', name: 'pico', factor: '1e-12' }, { symbol: 'n', name: 'nano', factor: '1e-9' },
+    { symbol: 'µ', name: 'micro', factor: '1e-6' }, { symbol: 'm', name: 'milli', factor: '1e-3' },
+    { symbol: 'c', name: 'centi', factor: '1e-2' }, { symbol: 'd', name: 'deci', factor: '1e-1' },
+    { symbol: 'da', name: 'deca', factor: '1e1' }, { symbol: 'h', name: 'hecto', factor: '1e2' },
+    { symbol: 'k', name: 'kilo', factor: '1e3' }, { symbol: 'M', name: 'mega', factor: '1e6' },
+    { symbol: 'G', name: 'giga', factor: '1e9' }, { symbol: 'T', name: 'tera', factor: '1e12' },
+    { symbol: 'P', name: 'peta', factor: '1e15' }, { symbol: 'E', name: 'exa', factor: '1e18' },
+    { symbol: 'Z', name: 'zetta', factor: '1e21' }, { symbol: 'Y', name: 'yotta', factor: '1e24' },
+    { symbol: 'R', name: 'ronna', factor: '1e27' }, { symbol: 'Q', name: 'quetta', factor: '1e30' }
+  ];
+  const LARGE_PREFIXES = new Set(['k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 'R', 'Q']);
+
+  function normalizeUnitName(s) {
+    return String(s).toLowerCase().replace(/[µμ]/g, 'u').replace(/[._]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  function pluralOf(name) {
+    if (!name || /\s/.test(name)) {
+      if (/\bfoot$/.test(name)) return name.replace(/foot$/, 'feet');
+      if (/\binch$/.test(name)) return name + 'es';
+      return /s$/.test(name) ? name : name + 's';
+    }
+    if (/[^aeiou]y$/i.test(name)) return name.slice(0, -1) + 'ies';
+    if (/(s|x|ch|sh)$/i.test(name)) return name + 'es';
+    if (/foot$/i.test(name)) return name.replace(/foot$/i, 'feet');
+    return name + 's';
+  }
+  function addNameAliases(unit, names) {
+    const all = new Set();
+    for (const item of names || []) {
+      if (!item) continue;
+      all.add(item);
+      all.add(pluralOf(item));
+      if (item.endsWith('s')) all.add(item.slice(0, -1));
+    }
+    unit.names = Array.from(all);
+    for (const n of unit.names) {
+      const k = normalizeUnitName(n);
+      if (!nameMap.has(k)) nameMap.set(k, []);
+      const arr = nameMap.get(k); if (!arr.includes(unit)) arr.push(unit);
+    }
+  }
+  function addSymbol(unit, symbol) {
+    if (!symbol) return;
+    if (!symbolMap.has(symbol)) symbolMap.set(symbol, unit);
+    const f = symbol.toLowerCase().replace(/[µμ]/g, 'u');
+    if (!foldedSymbols.has(f)) foldedSymbols.set(f, []);
+    const arr = foldedSymbols.get(f); if (!arr.includes(unit)) arr.push(unit);
+  }
+  function registerUnit(spec) {
+    const factorRat = (spec.factorRat !== undefined) ? spec.factorRat : Rat.fromDecimal(spec.factor === undefined ? '1' : String(spec.factor));
+    const factor = spec.factor !== undefined ? Number(spec.factor) : (factorRat ? factorRat.toNumber() : 1);
+    const unit = {
+      key: spec.key || `u${units.length}`,
+      symbol: spec.symbol || '',
+      dims: spec.dims || zeroDims(),
+      factor,
+      factorRat: factorRat || null,
+      factorDec: spec.factorDec || decFromRat(factorRat) || decFromString(factor),
+      offset: Number(spec.offset || 0),
+      offsetRat: (spec.offsetRat !== undefined) ? spec.offsetRat : Rat.fromDecimal(String(spec.offset || 0)),
+      offsetDec: spec.offsetDec || decFromRat(spec.offsetRat !== undefined ? spec.offsetRat : Rat.fromDecimal(String(spec.offset || 0))) || decFromString(spec.offset || 0),
+      prefixable: spec.prefixable || 'none',
+      aliases: spec.aliasSymbols || [],
+      longName: spec.longName || ((spec.names || [])[0] || spec.symbol || ''),
+      longPlural: spec.longPlural || pluralOf(spec.longName || ((spec.names || [])[0] || spec.symbol || '')),
+      custom: !!spec.custom,
+      derivedEligible: !!spec.derivedEligible,
+      priority: spec.priority || 0,
+      temperature: !!spec.temperature,
+      variants: spec.variants || null
+    };
+    units.push(unit);
+    addSymbol(unit, unit.symbol);
+    for (const a of unit.aliases) addSymbol(unit, a);
+    addNameAliases(unit, spec.names || []);
+    return unit;
+  }
+  const D = {
+    length: dim([['L', 1]]), mass: dim([['M', 1]]), time: dim([['T', 1]]), current: dim([['I', 1]]),
+    temp: dim([['TEMP', 1]]), data: dim([['DATA', 1]]), angle: dim([['ANGLE', 1]]),
+    area: dim([['L', 2]]), volume: dim([['L', 3]]), speed: dim([['L', 1], ['T', -1]]),
+    fuel: dim([['L', -2]]), energy: dim([['M', 1], ['L', 2], ['T', -2]]),
+    power: dim([['M', 1], ['L', 2], ['T', -3]]), force: dim([['M', 1], ['L', 1], ['T', -2]]),
+    pressure: dim([['M', 1], ['L', -1], ['T', -2]]), voltage: dim([['M', 1], ['L', 2], ['T', -3], ['I', -1]]),
+    resistance: dim([['M', 1], ['L', 2], ['T', -3], ['I', -2]]), dataRate: dim([['DATA', 1], ['T', -1]])
+  };
+
+  // Prefixable SI bases and standalone units.
+  const U = {};
+  U.g = registerUnit({ key: 'g', symbol: 'g', names: ['gram'], dims: D.mass, factor: '0.001', prefixable: 'all', longName: 'gram' });
+  U.m = registerUnit({ key: 'm', symbol: 'm', names: ['meter', 'metre'], dims: D.length, factor: '1', prefixable: 'all', longName: 'meter' });
+  U.s = registerUnit({ key: 's', symbol: 's', names: ['second', 'sec'], dims: D.time, factor: '1', prefixable: 'all', longName: 'second' });
+  U.Hz = registerUnit({ key: 'Hz', symbol: 'Hz', names: ['hertz'], dims: dim([['T', -1]]), factor: '1', prefixable: 'all', longName: 'hertz', longPlural: 'hertz', derivedEligible: true, priority: 10 });
+  U.J = registerUnit({ key: 'J', symbol: 'J', names: ['joule'], dims: D.energy, factor: '1', prefixable: 'all', longName: 'joule', derivedEligible: true, priority: 10 });
+  U.Wh = registerUnit({ key: 'Wh', symbol: 'Wh', names: ['watt hour', 'watt-hour'], dims: D.energy, factor: '3600', prefixable: 'all', longName: 'watt-hour' });
+  U.cal = registerUnit({ key: 'cal', symbol: 'cal', names: ['calorie', 'small calorie'], dims: D.energy, factor: '4.184', prefixable: 'all', longName: 'calorie' });
+  U.Pa = registerUnit({ key: 'Pa', symbol: 'Pa', names: ['pascal'], dims: D.pressure, factor: '1', prefixable: 'all', longName: 'pascal', derivedEligible: true, priority: 10 });
+  U.bar = registerUnit({ key: 'bar', symbol: 'bar', names: ['bar'], dims: D.pressure, factor: '100000', prefixable: 'all', longName: 'bar', longPlural: 'bar' });
+  U.L = registerUnit({ key: 'L', symbol: 'L', aliasSymbols: ['l'], names: ['liter', 'litre'], dims: D.volume, factor: '0.001', prefixable: 'all', longName: 'liter' });
+  U.W = registerUnit({ key: 'W', symbol: 'W', names: ['watt'], dims: D.power, factor: '1', prefixable: 'all', longName: 'watt', derivedEligible: true, priority: 10 });
+  U.A = registerUnit({ key: 'A', symbol: 'A', names: ['ampere', 'amp'], dims: D.current, factor: '1', prefixable: 'all', longName: 'ampere' });
+  U.V = registerUnit({ key: 'V', symbol: 'V', names: ['volt'], dims: D.voltage, factor: '1', prefixable: 'all', longName: 'volt', derivedEligible: true, priority: 10 });
+  U.N = registerUnit({ key: 'N', symbol: 'N', names: ['newton'], dims: D.force, factor: '1', prefixable: 'all', longName: 'newton', derivedEligible: true, priority: 10 });
+  U.ohm = registerUnit({ key: 'ohm', symbol: 'Ω', aliasSymbols: ['Ω'], names: ['ohm'], dims: D.resistance, factor: '1', prefixable: 'all', longName: 'ohm', derivedEligible: true, priority: 10 });
+  U.K = registerUnit({ key: 'K', symbol: 'K', names: ['kelvin'], dims: D.temp, factor: '1', prefixable: 'all', longName: 'kelvin', temperature: true });
+  U.bit = registerUnit({ key: 'bit', symbol: 'b', names: ['bit'], dims: D.data, factor: '1', prefixable: 'large', longName: 'bit' });
+  U.byte = registerUnit({ key: 'byte', symbol: 'B', names: ['byte'], dims: D.data, factor: '8', prefixable: 'large', longName: 'byte' });
+
+  // Prefix expansion. The exact unprefixed symbol/name is already registered and wins.
+  const prefixUnits = [];
+  for (const base of [U.g, U.m, U.s, U.Hz, U.J, U.Wh, U.cal, U.Pa, U.bar, U.L, U.W, U.A, U.V, U.N, U.ohm, U.K, U.bit, U.byte]) {
+    for (const p of PREFIXES) {
+      if (base.prefixable === 'none' || (base.prefixable === 'large' && !LARGE_PREFIXES.has(p.symbol))) continue;
+      const pr = Rat.fromDecimal(p.factor);
+      const fr = base.factorRat && pr ? base.factorRat.mul(pr) : null;
+      const symbol = p.symbol + base.symbol;
+      const baseNames = base.names.filter(n => n === base.longName || n === 'metre' || n === 'liter' || n === 'litre' || n === 'amp' || n === 'sec');
+      const names = baseNames.map(n => p.name + n);
+      const u = registerUnit({
+        key: `${p.symbol}${base.key}`, symbol, aliasSymbols: p.symbol === 'µ' ? [`μ${base.symbol}`, `u${base.symbol}`] : [],
+        names, dims: base.dims, factor: fr ? fr.toNumber() : base.factor * Number(p.factor), factorRat: fr,
+        prefixable: 'none', longName: names[0] || (p.name + base.longName), derivedEligible: base.derivedEligible,
+        priority: base.priority
+      });
+      prefixUnits.push(u);
+    }
+  }
+  // Explicit aliases and non-SI units.
+  U.oz = registerUnit({ key: 'oz', symbol: 'oz', names: ['ounce', 'avoirdupois ounce'], dims: D.mass, factor: '0.028349523125', longName: 'ounce' });
+  U.lb = registerUnit({ key: 'lb', symbol: 'lb', aliasSymbols: ['lbs'], names: ['pound', 'pound mass'], dims: D.mass, factor: '0.45359237', longName: 'pound' });
+  U.mi = registerUnit({ key: 'mi', symbol: 'mi', names: ['mile', 'statute mile'], dims: D.length, factor: '1609.344', longName: 'mile' });
+  U.yd = registerUnit({ key: 'yd', symbol: 'yd', names: ['yard'], dims: D.length, factor: '0.9144', longName: 'yard' });
+  U.ft = registerUnit({ key: 'ft', symbol: 'ft', names: ['foot', 'feet'], dims: D.length, factor: '0.3048', longName: 'foot', longPlural: 'feet' });
+  U.in = registerUnit({ key: 'in', symbol: 'in', names: ['inch', 'inches'], dims: D.length, factor: '0.0254', longName: 'inch', longPlural: 'inches' });
+  U.acre = registerUnit({ key: 'acre', symbol: 'acre', names: ['acre'], dims: D.area, factor: '4046.8564224', longName: 'acre' });
+
+  const makeArea = (key, symbol, nameList, factor) => registerUnit({ key, symbol, names: nameList, dims: D.area, factor, longName: nameList[0], custom: true });
+  U.m2 = makeArea('m^2', 'm^2', ['square meter', 'square metre'], '1');
+  U.km2 = makeArea('km^2', 'km^2', ['square kilometer', 'square kilometre'], '1000000');
+  U.mi2 = makeArea('mi^2', 'mi^2', ['square mile'], '2589988.110336');
+  U.yd2 = makeArea('yd^2', 'yd^2', ['square yard'], '0.83612736');
+  U.ft2 = makeArea('ft^2', 'ft^2', ['square foot', 'square feet'], '0.09290304');
+  U.in2 = makeArea('in^2', 'in^2', ['square inch', 'square inches'], '0.00064516');
+  for (const [u, syms] of [[U.m2, ['m²', 'm2']], [U.km2, ['km²', 'km2']], [U.mi2, ['mi²', 'mi2']], [U.yd2, ['yd²', 'yd2']], [U.ft2, ['ft²', 'ft2']], [U.in2, ['in²', 'in2']]]) {
+    for (const s of syms) addSymbol(u, s);
+  }
+  function registerPowerAlias(base, power, unit) { powerUnits.set(`${base.key}^${power}`, unit); }
+  registerPowerAlias(U.m, 2, U.m2); registerPowerAlias(symbolMap.get('km'), 2, U.km2);
+  registerPowerAlias(U.mi, 2, U.mi2); registerPowerAlias(U.yd, 2, U.yd2);
+  registerPowerAlias(U.ft, 2, U.ft2); registerPowerAlias(U.in, 2, U.in2);
+
+  U.gal = registerUnit({ key: 'gal-us', symbol: 'gal', names: ['gallon', 'us gallon', 'us liquid gallon'], dims: D.volume, factor: '0.003785411784', longName: 'gallon' });
+  U.galImp = registerUnit({ key: 'gal-imp', symbol: 'imp gal', names: ['imperial gallon', 'uk gallon'], dims: D.volume, factor: '0.00454609', longName: 'imperial gallon' });
+  U.pt = registerUnit({ key: 'pt-us', symbol: 'pt', names: ['pint', 'us pint'], dims: D.volume, factor: '0.000473176473', longName: 'pint' });
+  U.ptImp = registerUnit({ key: 'pt-imp', symbol: 'imp pt', names: ['imperial pint', 'uk pint'], dims: D.volume, factor: '0.00056826125', longName: 'imperial pint' });
+  U.qt = registerUnit({ key: 'qt-us', symbol: 'qt', names: ['quart', 'us quart'], dims: D.volume, factor: '0.000946352946', longName: 'quart' });
+  U.qtImp = registerUnit({ key: 'qt-imp', symbol: 'imp qt', names: ['imperial quart', 'uk quart'], dims: D.volume, factor: '0.0011365225', longName: 'imperial quart' });
+  U.cup = registerUnit({ key: 'cup-us', symbol: 'cup', names: ['cup', 'us cup'], dims: D.volume, factor: '0.0002365882365', longName: 'cup' });
+  U.cupImp = registerUnit({ key: 'cup-imp', symbol: 'imp cup', names: ['imperial cup', 'uk cup'], dims: D.volume, factor: '0.000284130625', longName: 'imperial cup' });
+  U.tbsp = registerUnit({ key: 'tbsp', symbol: 'tbsp', names: ['tablespoon', 'tablespoons', 'tbsp'], dims: D.volume, factor: '0.00001478676478125', longName: 'tablespoon' });
+  U.tsp = registerUnit({ key: 'tsp', symbol: 'tsp', names: ['teaspoon', 'teaspoons', 'tsp'], dims: D.volume, factor: '0.00000492892159375', longName: 'teaspoon' });
+  U.flOz = registerUnit({ key: 'fl-oz-us', symbol: 'fl oz', aliasSymbols: ['floz'], names: ['fluid ounce', 'us fluid ounce'], dims: D.volume, factor: '0.0000295735295625', longName: 'fluid ounce' });
+  U.flOzImp = registerUnit({ key: 'fl-oz-imp', symbol: 'imp fl oz', names: ['imperial fluid ounce', 'uk fluid ounce'], dims: D.volume, factor: '0.0000284130625', longName: 'imperial fluid ounce' });
+  for (const [u, aliases] of [[U.galImp,['impgal','ukgal']], [U.ptImp,['imppt','ukpt']], [U.qtImp,['impqt','ukqt']], [U.cupImp,['impcup','ukcup']], [U.flOzImp,['impfloz','ukfloz']]]) {
+    for (const a of aliases) addSymbol(u,a);
+  }
+  U.m3 = registerUnit({ key: 'm^3', symbol: 'm^3', names: ['cubic meter', 'cubic metre'], dims: D.volume, factor: '1', custom: true, longName: 'cubic meter' });
+  U.ft3 = registerUnit({ key: 'ft^3', symbol: 'ft^3', names: ['cubic foot', 'cubic feet'], dims: D.volume, factor: '0.028316846592', custom: true, longName: 'cubic foot', longPlural: 'cubic feet' });
+  U.in3 = registerUnit({ key: 'in^3', symbol: 'in^3', names: ['cubic inch', 'cubic inches'], dims: D.volume, factor: '0.000016387064', custom: true, longName: 'cubic inch' });
+  for (const [u, syms] of [[U.m3,['m³','m3']], [U.ft3,['ft³','ft3']], [U.in3,['in³','in3']]]) for (const s of syms) addSymbol(u,s);
+  registerPowerAlias(U.m, 3, U.m3); registerPowerAlias(U.ft, 3, U.ft3); registerPowerAlias(U.in, 3, U.in3);
+
+  U.min = registerUnit({ key: 'min', symbol: 'min', names: ['minute', 'min'], dims: D.time, factor: '60', longName: 'minute' });
+  U.h = registerUnit({ key: 'h', symbol: 'h', aliasSymbols: ['hr'], names: ['hour', 'hr'], dims: D.time, factor: '3600', longName: 'hour' });
+  U.day = registerUnit({ key: 'day', symbol: 'd', names: ['day'], dims: D.time, factor: '86400', longName: 'day' });
+  U.week = registerUnit({ key: 'week', symbol: 'wk', names: ['week'], dims: D.time, factor: '604800', longName: 'week' });
+  U.month = registerUnit({ key: 'month', symbol: 'mo', names: ['month'], dims: D.time, factor: '2629800', longName: 'month' });
+  U.year = registerUnit({ key: 'year', symbol: 'yr', aliasSymbols: ['y'], names: ['year', 'annum'], dims: D.time, factor: '31557600', longName: 'year' });
+  U.decade = registerUnit({ key: 'decade', symbol: 'decade', names: ['decade'], dims: D.time, factor: '315576000', longName: 'decade' });
+  U.century = registerUnit({ key: 'century', symbol: 'century', names: ['century'], dims: D.time, factor: '3155760000', longName: 'century' });
+  // Remove the year alias y from symbol matching: y is also the yocto prefix; keep full-name year.
+  symbolMap.delete('y');
+  const foldedY = foldedSymbols.get('y'); if (foldedY) foldedSymbols.set('y', foldedY.filter(x => x !== U.year));
+
+  U.rad = registerUnit({ key: 'rad', symbol: 'rad', names: ['radian', 'radians'], dims: D.angle, factor: '1', longName: 'radian' });
+  U.deg = registerUnit({ key: 'deg', symbol: '°', aliasSymbols: ['deg'], names: ['degree', 'degrees'], dims: D.angle, factor: PI / 180, factorRat: null, factorDec: DECIMAL ? decPi().div(180) : null, longName: 'degree' });
+  U.grad = registerUnit({ key: 'grad', symbol: 'grad', aliasSymbols: ['gon'], names: ['gradian', 'grad'], dims: D.angle, factor: PI / 200, factorRat: null, factorDec: DECIMAL ? decPi().div(200) : null, longName: 'gradian' });
+  U.C = registerUnit({ key: 'degC', symbol: '°C', aliasSymbols: ['degC', '℃'], names: ['degree Celsius', 'degrees Celsius', 'celsius'], dims: D.temp, factor: '1', offset: '273.15', offsetRat: Rat.fromDecimal('273.15'), longName: 'degree Celsius', longPlural: 'degrees Celsius', temperature: true });
+  U.F = registerUnit({ key: 'degF', symbol: '°F', aliasSymbols: ['degF', '℉'], names: ['degree Fahrenheit', 'degrees Fahrenheit', 'fahrenheit'], dims: D.temp, factorRat: new Rat(5n,9n), factor: 5/9, offsetRat: new Rat(45967n,100n).mul(new Rat(5n,9n)), offset: (459.67 * 5 / 9), longName: 'degree Fahrenheit', longPlural: 'degrees Fahrenheit', temperature: true });
+  U.atm = registerUnit({ key: 'atm', symbol: 'atm', names: ['atmosphere', 'standard atmosphere'], dims: D.pressure, factor: '101325', longName: 'atmosphere' });
+  U.psi = registerUnit({ key: 'psi', symbol: 'PSI', aliasSymbols: ['lbf/in^2'], names: ['psi', 'pound per square inch'], dims: D.pressure, factor: '6894.757293168', longName: 'psi', longPlural: 'psi' });
+  U.mph = registerUnit({ key: 'mph', symbol: 'mph', names: ['mile per hour', 'miles per hour'], dims: D.speed, factor: '0.44704', longName: 'mile per hour', longPlural: 'miles per hour', derivedEligible: true, priority: 5 });
+  U.kph = registerUnit({ key: 'kph', symbol: 'kph', aliasSymbols: ['kmph'], names: ['kilometer per hour', 'kilometers per hour', 'kilometre per hour', 'kilometres per hour'], dims: D.speed, factorRat: new Rat(5n,18n), factor: 5/18, longName: 'kilometer per hour', longPlural: 'kilometers per hour', derivedEligible: true, priority: 5 });
+  U.knot = registerUnit({ key: 'knot', symbol: 'kn', names: ['knot', 'nautical mile per hour'], dims: D.speed, factorRat: new Rat(463n,900n), factor: 463/900, longName: 'knot' });
+  U.mps = registerUnit({ key: 'm/s', symbol: 'm/s', names: ['meter per second', 'meters per second'], dims: D.speed, factor: '1', longName: 'meter per second', longPlural: 'meters per second', derivedEligible: true, priority: 10 });
+  U.fts = registerUnit({ key: 'ft/s', symbol: 'ft/s', names: ['foot per second', 'feet per second'], dims: D.speed, factor: '0.3048', longName: 'foot per second', longPlural: 'feet per second', derivedEligible: true });
+  U.psiForce = registerUnit({ key: 'lbf', symbol: 'lbf', names: ['pound force', 'pound-force'], dims: D.force, factor: '4.4482216152605', longName: 'pound force', derivedEligible: true, priority: 10 });
+  // Define PSI consistently with lbf/in^2 so the named derived-unit identity is exact.
+  U.psi.factorRat=U.psiForce.factorRat.div(U.in2.factorRat);
+  U.psi.factor=U.psi.factorRat.toNumber();
+  U.psi.factorDec=decFromRat(U.psi.factorRat);
+  U.hp = registerUnit({ key: 'hp-mech', symbol: 'hp', names: ['mechanical horsepower', 'horsepower'], dims: D.power, factor: '745.6998715822702', longName: 'horsepower' });
+  U.HP = registerUnit({ key: 'hp-metric', symbol: 'HP', aliasSymbols: ['PS'], names: ['metric horsepower', 'metric hp'], dims: D.power, factor: '735.49875', longName: 'metric horsepower' });
+  U.mpg = registerUnit({ key: 'mpg', symbol: 'mpg', names: ['mile per gallon', 'miles per gallon', 'mpg'], dims: D.fuel, factor: Number(U.mi.factor) / Number(U.gal.factor), factorRat: U.mi.factorRat.div(U.gal.factorRat), longName: 'mile per gallon', longPlural: 'miles per gallon' });
+  U.kmL = registerUnit({ key: 'km/L', symbol: 'km/L', names: ['kilometer per liter', 'kilometers per liter', 'kilometre per litre'], dims: D.fuel, factor: 1e6, factorRat: Rat.fromDecimal('1000000'), longName: 'kilometer per liter', longPlural: 'kilometers per liter' });
+  U.Mbps = registerUnit({ key: 'Mbps', symbol: 'Mbps', names: ['megabit per second', 'megabits per second'], dims: D.dataRate, factor: '1000000', longName: 'megabit per second', longPlural: 'megabits per second' });
+  U.MBps = registerUnit({ key: 'MB/s', symbol: 'MB/s', names: ['megabyte per second', 'megabytes per second'], dims: D.dataRate, factor: '8000000', longName: 'megabyte per second', longPlural: 'megabytes per second' });
+  U.kBps = registerUnit({ key: 'kB/s', symbol: 'kB/s', names: ['kilobyte per second', 'kilobytes per second'], dims: D.dataRate, factor: '8000', longName: 'kilobyte per second', longPlural: 'kilobytes per second' });
+  // The uppercase calorie is the food Calorie (one kilocalorie).
+  U.Cal = registerUnit({ key: 'Cal', symbol: 'Cal', names: ['food calorie', 'large calorie'], dims: D.energy, factor: '4184', longName: 'Calorie', longPlural: 'Calories' });
+
+  // Area aliases and standalone forms not covered by exponent tokenization.
+  const powerAliasBase = (raw) => {
+    const supers = { '²': '2', '³': '3' };
+    let s = String(raw).replace(/[²³]/g, c => supers[c]);
+    const m = s.match(/^(.+?)([23])$/);
+    if (!m) return null;
+    const candidates = resolveBaseUnit(m[1]);
+    if (candidates.length !== 1) return null;
+    const pow = Number(m[2]);
+    const key = `${candidates[0].key}^${pow}`;
+    if (powerUnits.has(key)) return powerUnits.get(key);
+    return makePoweredUnit(candidates[0], pow);
+  };
+  function resolveBaseUnit(raw) {
+    const exact = symbolMap.get(raw);
+    if (exact) return [exact];
+    const names = nameMap.get(normalizeUnitName(raw)); if (names && names.length) return names;
+    const fold = foldedSymbols.get(String(raw).toLowerCase().replace(/[µμ]/g, 'u'));
+    return fold || [];
+  }
+  function makePoweredUnit(base, power) {
+    if (!Number.isInteger(power) || Math.abs(power) > 6 || base.offset !== 0) return null;
+    const key = `${base.key}^${power}`;
+    if (powerUnits.has(key)) return powerUnits.get(key);
+    const fr = base.factorRat ? base.factorRat.pow(power) : null;
+    const u = registerUnit({ key, symbol: `${base.symbol}^${power}`, names: [], dims: base.dims.map(v => v * power), factor: fr ? fr.toNumber() : Math.pow(base.factor, power), factorRat: fr, custom: true, longName: `${base.symbol}^${power}` });
+    powerUnits.set(key, u);
+    return u;
+  }
+  function resolveUnit(raw) {
+    const text = String(raw).trim();
+    if (!text) return { units: [], kind: 'none' };
+    const exact = symbolMap.get(text);
+    if (exact) return { units: [exact], kind: 'exact' };
+    const named = nameMap.get(normalizeUnitName(text));
+    if (named && named.length) return { units: Array.from(new Set(named)), kind: 'name' };
+    const pwr = powerAliasBase(text);
+    if (pwr) return { units: [pwr], kind: 'power' };
+    const fold = foldedSymbols.get(text.toLowerCase().replace(/[µμ]/g, 'u'));
+    if (fold && fold.length) {
+      const ordered = Array.from(new Set(fold)).sort((a, b) => {
+        const cost = u => {
+          const s = u.symbol.toLowerCase().replace(/[µμ]/g, 'u');
+          let n = 0; for (let i = 0; i < Math.min(s.length, text.length); i++) if (u.symbol[i] !== text[i]) n++;
+          return n + Math.abs(u.symbol.length - text.length) * 2;
+        };
+        return cost(a) - cost(b) || a.symbol.localeCompare(b.symbol);
+      });
+      return { units: ordered, kind: 'fold' };
+    }
+    // Greedy prefix+base fallback for uncommon micro spellings and aliases.
+    const canonical = text.replace(/^u/, 'µ').replace(/^μ/, 'µ');
+    const candidates = [];
+    for (const p of PREFIXES) {
+      if (!canonical.startsWith(p.symbol) || canonical.length <= p.symbol.length) continue;
+      const rest = canonical.slice(p.symbol.length);
+      for (const base of [U.g,U.m,U.s,U.Hz,U.J,U.Wh,U.cal,U.Pa,U.bar,U.L,U.W,U.A,U.V,U.N,U.ohm,U.K,U.bit,U.byte]) {
+        if (base.prefixable === 'none' || (base.prefixable === 'large' && !LARGE_PREFIXES.has(p.symbol))) continue;
+        if (rest === base.symbol) {
+          const candidate = symbolMap.get(p.symbol + base.symbol);
+          if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
+        }
+      }
+    }
+    return candidates.length ? { units: candidates, kind: 'fold' } : { units: [], kind: 'none' };
+  }
+
+  // Curated conversion order, used for the bar and alternate-unit output.
+  const alternateUnitKeys = {
+    [dimsKey(D.length)]: ['mi','km','m','ft','yd','in','cm','mm'],
+    [dimsKey(D.area)]: ['km^2','acre','ft^2','m^2','mi^2','yd^2','in^2'],
+    [dimsKey(dim([['T',-1]]))]: ['Hz','kHz','MHz','GHz'],
+    [dimsKey(D.speed)]: ['mph','kph','ft/s','knot','m/s'],
+    [dimsKey(D.mass)]: ['kg','g','lb','oz'],
+    [dimsKey(D.time)]: ['h','min','s','day','week','month','year'],
+    [dimsKey(D.volume)]: ['gal-us','L','cup-us','pt-us','qt-us','fl-oz-us','m^3','ft^3','in^3'],
+    [dimsKey(D.energy)]: ['J','kJ','cal','kcal','Wh','kWh'],
+    [dimsKey(D.power)]: ['W','kW','hp-mech','hp-metric'],
+    [dimsKey(D.pressure)]: ['Pa','kPa','bar','atm','psi'],
+    [dimsKey(D.force)]: ['N','lbf'],
+    [dimsKey(D.temp)]: ['degF','degC','K'],
+    [dimsKey(D.angle)]: ['deg','rad','grad'],
+    [dimsKey(D.current)]: ['A','mA'],
+    [dimsKey(D.voltage)]: ['V','mV'],
+    [dimsKey(D.resistance)]: ['ohm','kohm','Mohm'],
+    [dimsKey(D.data)]: ['GB','MB','TB','Gb','Mb','b','B'],
+    [dimsKey(D.fuel)]: ['mpg','km/L'],
+    [dimsKey(D.dataRate)]: ['Mbps','MB/s','kB/s']
+  };
+  function unitByKey(key) { return units.find(u => u.key === key) || null; }
+  function popularUnitsFor(dims) {
+    const keys = alternateUnitKeys[dimsKey(dims)] || [];
+    return keys.map(unitByKey).filter(Boolean);
+  }
+  function unitCandidatesForAutocomplete() {
+    const seen = new Set(); const out = [];
+    for (const u of units) {
+      if (!u.symbol || u.custom && !u.longName) continue;
+      const entries=new Set([u.symbol,u.longName,u.longPlural,...(u.names||[])]);
+      for (const entry of entries) {
+        if(!entry||/\b(?:feets|incheses|inche)$/.test(entry.toLowerCase()))continue;
+        const k = normalizeUnitName(entry); if (!k || seen.has(k)) continue;
+        seen.add(k); out.push({ text: entry, unit: u });
+      }
+    }
+    return out;
+  }
+
+  /* -----------------------------------------------------------------------
+     Tokenizer / parser: bounded precedence climbing; deliberately no eval.
+     ----------------------------------------------------------------------- */
+  class ParseError extends Error {}
+  const FUNC_NAMES = new Set(['log','ln','log2','log_2','sqrt','cbrt','sin','cos','tan','csc','sec','cot','asin','acos','atan','arcsin','arccos','arctan']);
+  const TRIG_NAMES = new Set(['sin','cos','tan','csc','sec','cot']);
+  const INVERSE = { asin: 'asin', arcsin: 'asin', acos: 'acos', arccos: 'acos', atan: 'atan', arctan: 'atan' };
+  function isWordStart(c) { return /[A-Za-zµμΩ°]/.test(c || ''); }
+  function isWordChar(c) { return /[A-Za-z0-9_µμΩ°²³⁻¹]/.test(c || ''); }
+  function tokenCanStart(t) {
+    if (!t) return false;
+    if (t.type === 'num' || t.type === 'lp') return true;
+    if (t.type === 'id') {
+      const lo = t.raw.toLowerCase();
+      if (lo === 'npr' || lo === 'ncr') return false;
+      if (['pi','π','e','log','ln','log2','log_2','sqrt','cbrt','sin','cos','tan','csc','sec','cot','asin','acos','atan','arcsin','arccos','arctan','p','c'].includes(lo)) return true;
+      if (functionSpec(t.raw, null, false)) return true;
+      return !!(t.unitChoice || resolveUnit(t.raw).units.length);
+    }
+    if (t.type === 'op' && (t.value === '+' || t.value === '-')) return true;
+    return false;
+  }
+  function tokenCanStartModulo(t) {
+    return !!t && (t.type === 'num' || t.type === 'lp' || t.type === 'id');
+  }
+  function specialInverseAt(s, i) {
+    for (const n of ['sin','cos','tan','csc','sec','cot']) {
+      if (s.slice(i, i + n.length).toLowerCase() !== n) continue;
+      const tail = s.slice(i + n.length);
+      let suffix = null;
+      if (tail.startsWith('⁻¹')) suffix = '⁻¹';
+      else if (tail.startsWith('**-1')) suffix = '**-1';
+      else if (tail.startsWith('^-1')) suffix = '^-1';
+      else if (tail.startsWith('-1')) {
+        const rest = tail.slice(2);
+        if (/^(?:\s*(?:\(|\d|\.))/.test(rest)) suffix = '-1';
+      }
+      if (!suffix) continue;
+      const after = s.slice(i + n.length + suffix.length);
+      if (!after || !/^\s*(?:\(|\d|\.)/.test(after)) continue;
+      return { raw: n + suffix, name: ({sin:'asin',cos:'acos',tan:'atan',csc:'acsc',sec:'asec',cot:'acot'})[n], end: i + n.length + suffix.length };
+    }
+    return null;
+  }
+  function tokenize(text) {
+    const tokens = []; let i = 0, previousEnd = 0;
+    while (i < text.length) {
+      const c = text[i];
+      if (/\s/.test(c)) { i++; continue; }
+      const start = i;
+      const inv = specialInverseAt(text, i);
+      if (inv) {
+        i = inv.end; tokens.push({ type: 'id', raw: inv.raw, nameOverride: inv.name, start, end: i, spaceBefore: start > previousEnd }); previousEnd = i; continue;
+      }
+      const rest = text.slice(i);
+      const nm = rest.match(/^(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+)?/);
+      if (nm) {
+        const raw = nm[0]; i += raw.length;
+        const rat = Rat.fromDecimal(raw); const value = Number(raw);
+        tokens.push({ type: 'num', raw, value, rat, dec: decFromString(raw), sci: /[eE][+-]?\d/.test(raw), start, end: i, spaceBefore: start > previousEnd });
+        previousEnd = i; continue;
+      }
+      if (isWordStart(c) || c === '⁻') {
+        i++;
+        while (i < text.length && isWordChar(text[i])) i++;
+        const raw = text.slice(start, i);
+        tokens.push({ type: 'id', raw, start, end: i, spaceBefore: start > previousEnd }); previousEnd = i; continue;
+      }
+      if (text.startsWith('**', i)) { i += 2; tokens.push({ type: 'op', value: '^', raw: '**', start, end: i, spaceBefore: start > previousEnd }); previousEnd = i; continue; }
+      const opMap = { '×':'*', '÷':'/', '−':'-' };
+      if (c === '(') { i++; tokens.push({ type: 'lp', raw: c, start, end: i, spaceBefore: start > previousEnd }); }
+      else if (c === ')') { i++; tokens.push({ type: 'rp', raw: c, start, end: i, spaceBefore: start > previousEnd }); }
+      else if (c === ',') { i++; tokens.push({ type: 'comma', raw: c, start, end: i, spaceBefore: start > previousEnd }); }
+      else if (opMap[c]) { i++; tokens.push({ type: 'op', value: opMap[c], raw: c, start, end: i, spaceBefore: start > previousEnd }); }
+      else if ('+-*/^%!'.includes(c)) { i++; tokens.push({ type: 'op', value: c, raw: c, start, end: i, spaceBefore: start > previousEnd }); }
+      else if (c === 'π') { i++; tokens.push({ type: 'id', raw: 'π', start, end: i, spaceBefore: start > previousEnd }); }
+      else { i++; tokens.push({ type: 'unknown', raw: c, start, end: i, spaceBefore: start > previousEnd }); }
+      previousEnd = i;
+    }
+    return tokens;
+  }
+  function functionSpec(raw, nextToken, hasFollowing) {
+    if (!raw) return null;
+    const low = raw.toLowerCase();
+    if (raw === 'P' || raw === 'C') return { name: raw === 'P' ? 'npr' : 'ncr', call2: true };
+    if (low === 'npr' || low === 'ncr') return { name: low, call2: true };
+    if (low === 'log_2') return { name: 'log', base: 2 };
+    const logN = low.match(/^log_?(\d+)$/);
+    if (logN && low !== 'log') return { name: 'log', base: Number(logN[1]) };
+    const inv = raw.match(/^(sin|cos|tan|csc|sec|cot)(?:\^?-1|\*\*-1|⁻¹)$/i);
+    if (inv) return { name: ({sin:'asin',cos:'acos',tan:'atan',csc:'acsc',sec:'asec',cot:'acot'})[inv[1].toLowerCase()] };
+    const sup = raw.match(/^(sin|cos|tan|csc|sec|cot)([²³])$/i);
+    if (sup) return { name: sup[1].toLowerCase(), power: sup[2] === '²' ? 2 : 3 };
+    const glued = raw.match(/^(sin|cos|tan|csc|sec|cot)(\d+)$/i);
+    if (glued) {
+      const argFollows = !!hasFollowing && !!nextToken && ['num','lp','id'].includes(nextToken.type);
+      if (argFollows) return { name: glued[1].toLowerCase(), power: Number(glued[2]) };
+      return { name: glued[1].toLowerCase(), literalArg: Number(glued[2]) };
+    }
+    if (FUNC_NAMES.has(low)) return { name: INVERSE[low] || low };
+    return null;
+  }
+  function isReservedFunction(raw) { return !!functionSpec(raw, null, false); }
+  function expandAmbiguities(tokens) {
+    let variants = [{ tokens: tokens.map(t => ({...t})), ambiguous: false, ambiguousUnits: [] }];
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (t.type !== 'id' || t.unitChoice || isReservedFunction(t.raw) || ['pi','π','e'].includes(t.raw.toLowerCase())) continue;
+      const r = resolveUnit(t.raw);
+      if (r.kind !== 'fold' || r.units.length < 2) continue;
+      const next = [];
+      for (const v of variants) for (const u of r.units) {
+        if (next.length >= 16) break;
+        const clone = v.tokens.map(x => ({...x}));
+        const c = clone[i]; c.unitChoice = u; c.unitMatchKind = 'fold'; c.ambiguousCase = true;
+        next.push({ tokens: clone, ambiguous: true, ambiguousUnits: [...v.ambiguousUnits, { raw: t.raw, unit: u }] });
+      }
+      variants = next.length ? next : variants;
+    }
+    // Resolve unique units up front so the parser can distinguish a unit from prose.
+    for (const v of variants) for (const t of v.tokens) {
+      if (t.type !== 'id' || t.unitChoice || isReservedFunction(t.raw) || ['pi','π','e'].includes(t.raw.toLowerCase())) continue;
+      const r = resolveUnit(t.raw);
+      if (r.units.length === 1) { t.unitChoice = r.units[0]; t.unitMatchKind = r.kind; }
+    }
+    return variants;
+  }
+
+  class Parser {
+    constructor(tokens) { this.tokens = tokens; this.i = 0; this.unitTokens = []; this.depth = 0; }
+    peek(n = 0) { return this.tokens[this.i + n] || null; }
+    take() { return this.tokens[this.i++] || null; }
+    expect(type, value) {
+      const t = this.take();
+      if (!t || t.type !== type || (value !== undefined && t.value !== value)) throw new ParseError('expected ' + type);
+      return t;
+    }
+    parse() {
+      if (!this.tokens.length) throw new ParseError('empty');
+      const ast = this.expr(0);
+      if (this.i !== this.tokens.length) throw new ParseError('trailing token');
+      return { ast, unitTokens: this.unitTokens };
+    }
+    expr(minBP) {
+      this.depth++;
+      if(this.depth>100){this.depth--;throw new ParseError('recursion cap');}
+      try {
+      let left = this.prefix();
+      while (true) {
+        const t = this.peek(); if (!t) break;
+        // Factorial and postfix percent.
+        if (t.type === 'op' && t.value === '!' && 100 >= minBP) {
+          this.take(); left = { type: 'postfix', op: '!', child: left }; continue;
+        }
+        if (t.type === 'op' && t.value === '%' && 100 >= minBP && !tokenCanStartModulo(this.peek(1))) {
+          this.take(); left = { type: 'postfix', op: '%', child: left }; continue;
+        }
+        let op = null, bp = -1, rightAssoc = false, implicit = false;
+        if (t.type === 'op') {
+          if (t.value === '^') { op = '^'; bp = 80; rightAssoc = true; }
+          else if (t.value === '*' || t.value === '/' || t.value === '%') { op = t.value; bp = 50; }
+          else if (t.value === '+' || t.value === '-') { op = t.value; bp = 40; }
+        } else if (t.type === 'id' && ['npr','ncr'].includes(t.raw.toLowerCase())) {
+          op = t.raw.toLowerCase(); bp = 55;
+        } else if (tokenCanStart(t)) {
+          if (!(left.type === 'num' && t.type === 'num')) { op = '*'; bp = 60; implicit = true; }
+        }
+        if (!op || bp < minBP) break;
+        if (!implicit) this.take();
+        const right = this.expr(rightAssoc ? bp : bp + 1);
+        left = { type: 'binary', op, left, right, implicit };
+      }
+      return left;
+      } finally { this.depth--; }
+    }
+    prefix() {
+      const t = this.take(); if (!t) throw new ParseError('missing operand');
+      if (t.type === 'num') return { type: 'num', value: t.value, rat: t.rat, dec: t.dec, raw: t.raw, sci: t.sci };
+      if (t.type === 'op' && (t.value === '+' || t.value === '-')) return { type: 'unary', op: t.value, child: this.expr(70) };
+      if (t.type === 'lp') {
+        const inside = this.expr(0); this.expect('rp'); return inside;
+      }
+      if (t.type !== 'id') throw new ParseError('not an operand');
+      const next = this.peek();
+      const fs = functionSpec(t.raw, next, !!next);
+      if (fs) return this.parseFunction(fs, t);
+      const lower = t.raw.toLowerCase();
+      if (lower === 'pi' || t.raw === 'π') return { type: 'const', name: 'pi' };
+      if (lower === 'e') return { type: 'const', name: 'e' };
+      let u = t.unitChoice || null, matchKind = t.unitMatchKind || '';
+      if (!u) {
+        const rr = resolveUnit(t.raw);
+        if (rr.units.length === 1) { u = rr.units[0]; matchKind = rr.kind; }
+      }
+      if (u) {
+        this.unitTokens.push({ token: t, unit: u, matchKind });
+        return { type: 'unit', unit: u, raw: t.raw, matchKind, token: t };
+      }
+      throw new ParseError('unknown word: ' + t.raw);
+    }
+    parseFunction(fs, token) {
+      const name = fs.name;
+      if (fs.call2) {
+        if (this.peek() && this.peek().type === 'lp') {
+          this.take(); const a = this.expr(0); this.expect('comma'); const b = this.expr(0); this.expect('rp');
+          return { type: 'call2', name, a, b };
+        }
+        if (name === 'npr' || name === 'ncr') throw new ParseError('nPr/nCr needs arguments');
+      }
+      if (fs.literalArg !== undefined) return { type: 'func', name, arg: { type: 'num', value: fs.literalArg, rat: Rat.fromInteger(fs.literalArg), dec: decFromString(fs.literalArg), raw: String(fs.literalArg) } };
+      let power = fs.power || 1;
+      if (!fs.power && TRIG_NAMES.has(name) && this.peek() && this.peek().type === 'op' && this.peek().value === '^' && this.peek(1) && this.peek(1).type === 'num' && Number.isInteger(this.peek(1).value) && this.peek(1).value >= 0 && this.peek(1).value <= 20) {
+        this.take(); power = this.take().value;
+      }
+      let arg;
+      if (this.peek() && this.peek().type === 'lp') {
+        this.take(); arg = this.expr(0); this.expect('rp');
+      } else {
+        if (!this.peek()) throw new ParseError('function needs argument');
+        arg = this.expr(60);
+      }
+      return { type: 'func', name, arg, base: fs.base, power };
+    }
+  }
+
+  function normalizeUnitPhrasesDetailed(input) {
+    let text=String(input), map=Array.from({length:text.length},(_,i)=>i);
+    const replaceMapped=(regex,fn)=>{
+      let out='',nextMap=[],cursor=0,m;
+      regex.lastIndex=0;
+      while((m=regex.exec(text))){
+        out+=text.slice(cursor,m.index);nextMap.push(...map.slice(cursor,m.index));
+        const replacement=String(fn(...m));
+        const oldStart=map[m.index]??m.index;
+        const oldEnd=(map[m.index+m[0].length-1]??(m.index+m[0].length-1))+1;
+        out+=replacement;
+        for(let j=0;j<replacement.length;j++){
+          const fraction=replacement.length<=1?0:j/(replacement.length-1);
+          nextMap.push(Math.round(oldStart+fraction*Math.max(0,oldEnd-oldStart-1)));
+        }
+        cursor=m.index+m[0].length;
+        if(m[0].length===0)regex.lastIndex++;
+      }
+      out+=text.slice(cursor);nextMap.push(...map.slice(cursor));
+      text=out;map=nextMap;
+    };
+    const imperial={gallon:'impgal',gal:'impgal',pint:'imppt',pt:'imppt',quart:'impqt',qt:'impqt',cup:'impcup','fl oz':'impfloz','fluid ounce':'impfloz'};
+    replaceMapped(/\b(?:imp|uk|imperial)\s+(gallon|gal|pint|pt|quart|qt|cup|fluid\s+ounce|fl\s*oz)\b/gi,(_m,u)=>{
+      const k=String(u).toLowerCase().replace(/\s+/g,' ').trim();
+      return imperial[k]||'imp'+k.replace(/\s+/g,'');
+    });
+    const wordUnit={
+      meter:'m',meters:'m',metre:'m',metres:'m',kilometer:'km',kilometers:'km',kilometre:'km',kilometres:'km',
+      mile:'mi',miles:'mi',foot:'ft',feet:'ft',yard:'yd',yards:'yd',inch:'in',inches:'in',
+      centimeter:'cm',centimeters:'cm',centimetre:'cm',centimetres:'cm',millimeter:'mm',millimeters:'mm',
+      millimetre:'mm',millimetres:'mm'
+    };
+    const choices=Object.keys(wordUnit).sort((a,b)=>b.length-a.length).join('|');
+    replaceMapped(new RegExp(`\\b(?:sq|square)\\s+(${choices})\\b`,'gi'),(_m,u)=>`${wordUnit[u.toLowerCase()]}^2`);
+    replaceMapped(new RegExp(`\\bcubic\\s+(${choices})\\b`,'gi'),(_m,u)=>`${wordUnit[u.toLowerCase()]}^3`);
+    replaceMapped(new RegExp(`\\b(${choices})\\s+squared\\b`,'gi'),(_m,u)=>`${wordUnit[u.toLowerCase()]}^2`);
+    replaceMapped(new RegExp(`\\b(${choices})\\s+cubed\\b`,'gi'),(_m,u)=>`${wordUnit[u.toLowerCase()]}^3`);
+    replaceMapped(/\bper\b/gi,()=>'/');
+    return {text,map};
+  }
+  function normalizeUnitPhrases(s) { return normalizeUnitPhrasesDetailed(s).text; }
+
+  function variantExpression(tokens, normalized, startToken) {
+    const start = tokens[startToken] ? tokens[startToken].start : 0;
+    let expr = normalized.slice(start).trim();
+    const replacements = [];
+    for (const t of tokens.slice(startToken)) {
+      if (t.type !== 'id' || !t.unitChoice) continue;
+      const canonical = t.unitChoice.symbol;
+      if (t.raw !== canonical && (t.ambiguousCase || t.unitMatchKind === 'fold')) replacements.push({ start: t.start - start, end: t.end - start, value: canonical });
+    }
+    for (const r of replacements.sort((a,b)=>b.start-a.start)) {
+      if (r.start >= 0 && r.end <= expr.length) expr = expr.slice(0,r.start) + r.value + expr.slice(r.end);
+    }
+    return expr;
+  }
+  let longUnitNameRegexes=null;
+  function rawContainsLongUnitName(text) {
+    const source=String(text).toLowerCase();
+    if(!longUnitNameRegexes){
+      const entries=new Set();
+      for(const u of units)for(const name of u.names||[]){
+        if(name&&name.length>=4&&normalizeUnitName(name)!==normalizeUnitName(u.symbol))entries.add(name.toLowerCase());
+      }
+      longUnitNameRegexes=Array.from(entries).map(name=>{
+        const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        return new RegExp(`(^|[^a-z])${escaped}(?=$|[^a-z])`,'i');
+      });
+    }
+    return longUnitNameRegexes.some(re=>re.test(source));
+  }
+  function parseLongestSuffix(raw) {
+    const trimmed = String(raw).replace(/\s+$/,'');
+    if (!trimmed || trimmed.length > 500) return null;
+    const normalizedInfo = normalizeUnitPhrasesDetailed(trimmed);
+    const normalized = normalizedInfo.text;
+    const all = tokenize(normalized);
+    if (!all.length || all.length > 200) return null;
+    for (let start = 0; start < all.length; start++) {
+      const slice = all.slice(start);
+      const expanded = expandAmbiguities(slice);
+      const parsed = [];
+      for (const v of expanded) {
+        try {
+          const p = new Parser(v.tokens).parse();
+          const startAt = slice[0].start;
+          const hasLongUnits = p.unitTokens.some(x => x.matchKind === 'name') || rawContainsLongUnitName(trimmed);
+          const hasCaseFold = v.ambiguous || p.unitTokens.some(x => x.matchKind === 'fold');
+          const quantitySpaces = p.unitTokens.filter(x => {
+            const at = slice.findIndex(t => t.start === x.token.start);
+            return at > 0 && slice[at - 1].type === 'num';
+          }).map(x => !!x.token.spaceBefore);
+          const unitSpace = quantitySpaces.length > 0 && quantitySpaces.every(Boolean);
+          parsed.push({ ast:p.ast, tokens:v.tokens, ambiguous:v.ambiguous, ambiguousUnits:v.ambiguousUnits, hasCaseFold, hasLongUnits, unitSpace, displayExpr:variantExpression(v.tokens, normalized, 0), startAt });
+        } catch (_) {}
+      }
+      if (parsed.length) {
+        const canonicalSource = normalized.slice(slice[0].start).trim();
+        const sourceStart = normalizedInfo.map[slice[0].start] ?? slice[0].start;
+        const lastIndex = Math.max(slice[0].start, slice[slice.length-1].end-1);
+        const sourceEnd = (normalizedInfo.map[lastIndex] ?? lastIndex) + 1;
+        const originalSource = trimmed.slice(sourceStart,sourceEnd).trim();
+        for (const p of parsed) {
+          // Preserve the user's long-form unit phrasing; canonicalize only case-folded symbols.
+          if (!p.hasCaseFold) p.displayExpr = originalSource;
+        }
+        return { variants: parsed, expression: canonicalSource, normalized, startAt: slice[0].start, tokens: slice };
+      }
+    }
+    return null;
+  }
+
+  /* -----------------------------------------------------------------------
+     Quantity evaluator. Values are canonical SI plus presentation metadata.
+     ----------------------------------------------------------------------- */
+  function makeQ(value, rat, dims = zeroDims(), unit = null, opts = {}) {
+    const dec = opts.dec || decFromRat(rat) || decFromString(value);
+    const v = dec ? dnum(dec, value) : value;
+    if (!Number.isFinite(v) || abs(v) > MAX_VALUE) throw new Error('numeric overflow');
+    return { value: v, dec, rat: rat || null, dims: dims.slice(), unit: unit || null, unitOnly: !!opts.unitOnly,
+      tempAbs: !!opts.tempAbs, tempDelta: !!opts.tempDelta, flags: opts.flags || null };
+  }
+  function cleanQ(q) {
+    if (abs(q.value) < 1e-14) { q.value = 0; q.rat = Rat.fromInteger(0); q.dec = decFromString('0'); }
+    else {
+      const n = Math.round(q.value);
+      if (abs(q.value - n) < 1e-14) { q.value = n; q.rat = Rat.fromInteger(n); q.dec = decFromString(n); }
+    }
+    if (!Number.isFinite(q.value) || abs(q.value) > MAX_VALUE) throw new Error('numeric overflow');
+    return q;
+  }
+  function unitFactorRat(unit) { return unit && unit.factorRat ? unit.factorRat : null; }
+  function unitValueForQ(q, unit) {
+    if (!unit || !sameDims(q.dims, unit.dims)) throw new Error('incompatible unit');
+    const isTemp = q.dims[DIM.TEMP] === 1;
+    const useOffset = isTemp && q.tempAbs && !q.tempDelta;
+    let value, rat = null, dec = null;
+    if (useOffset) {
+      value = (q.value - unit.offset) / unit.factor;
+      if (q.rat && unit.offsetRat && unit.factorRat) rat = q.rat.sub(unit.offsetRat)?.div(unit.factorRat) || null;
+      if (q.dec && unit.offsetDec && unit.factorDec) {
+        try { dec = q.dec.minus(unit.offsetDec).div(unit.factorDec); } catch (_) {}
+      }
+    } else {
+      value = q.value / unit.factor;
+      if (q.rat && unit.factorRat) rat = q.rat.div(unit.factorRat);
+      if (q.dec && unit.factorDec) { try { dec = q.dec.div(unit.factorDec); } catch (_) {} }
+    }
+    if (dec) value = dnum(dec, value);
+    return { value, rat, dec };
+  }
+  function makeFromUnitValue(value, rat, unit, opts = {}) {
+    let canonical, crat = null, dec = null;
+    const tempAbs = !!opts.tempAbs && !opts.tempDelta;
+    const temp = unit.dims[DIM.TEMP] === 1;
+    if (temp && tempAbs) {
+      canonical = value * unit.factor + unit.offset;
+      if (rat && unit.factorRat && unit.offsetRat) crat = rat.mul(unit.factorRat)?.add(unit.offsetRat) || null;
+      const vd = decFromRat(rat) || decFromString(value);
+      if (vd && unit.factorDec && unit.offsetDec) { try { dec = vd.times(unit.factorDec).plus(unit.offsetDec); } catch (_) {} }
+    } else {
+      canonical = value * unit.factor;
+      if (rat && unit.factorRat) crat = rat.mul(unit.factorRat);
+      const vd = decFromRat(rat) || decFromString(value);
+      if (vd && unit.factorDec) { try { dec = vd.times(unit.factorDec); } catch (_) {} }
+    }
+    return makeQ(canonical, crat, unit.dims, unit, { dec, tempAbs, tempDelta: !!opts.tempDelta });
+  }
+  function unitOnlyQ(unit) {
+    if (!unit || !unit.dims) throw new Error('invalid unit');
+    return makeQ(unit.factor, unit.factorRat, unit.dims, unit, { dec: unit.factorDec, unitOnly: true });
+  }
+  function approxFactorRat(value) { return Number.isFinite(value) ? Rat.fromDecimal(value.toPrecision(16)) : null; }
+  function customUnit(key, symbol, dims, factor, rat = null, derived = false) {
+    const existing = unitByKey(key); if (existing) return existing;
+    const r = rat || approxFactorRat(factor);
+    return registerUnit({ key, symbol, names: [], dims, factor, factorRat: r, custom: true, longName: symbol, derivedEligible: derived });
+  }
+  function powerUnitForQ(unit, power) {
+    if (!unit || unit.offset !== 0) throw new Error('absolute temperature power');
+    if (!Number.isInteger(power) || Math.abs(power) > 6) throw new Error('unit exponent cap');
+    const known = powerUnits.get(`${unit.key}^${power}`); if (known) return known;
+    return makePoweredUnit(unit, power);
+  }
+  function findDerivedUnit(dims, factor) {
+    let candidates = units.filter(u => u.derivedEligible && sameDims(u.dims, dims) && abs(u.factor - factor) <= Math.max(1e-10, abs(factor) * 1e-9));
+    candidates.sort((a,b) => b.priority - a.priority || a.symbol.length - b.symbol.length);
+    return candidates[0] || null;
+  }
+  function combineUnitMeta(ua, ub, op, dims) {
+    if (isDimensionless(dims)) return null;
+    if (!ua && !ub) return null;
+    if (ua && !ub) return ua;
+    if (!ua && ub && op === '*') return ub;
+    const fa = ua ? ua.factor : 1, fb = ub ? ub.factor : 1;
+    const factor = op === '*' ? fa * fb : fa / fb;
+    if (ua && ub && op === '*' && ua.key === ub.key) return powerUnitForQ(ua, 2);
+    if (ua && ub && op === '/' && ua.key === ub.key) return null;
+    const derived = findDerivedUnit(dims, factor); if (derived) return derived;
+    const symbol = op === '*'
+      ? (ua && ub ? `${ua.symbol}·${ub.symbol}` : (ua || ub).symbol)
+      : (ua ? `${ua.symbol}/${ub ? ub.symbol : '1'}` : `1/${ub.symbol}`);
+    const rat = ua && ub && ua.factorRat && ub.factorRat
+      ? (op === '*' ? ua.factorRat.mul(ub.factorRat) : ua.factorRat.div(ub.factorRat))
+      : (ua ? ua.factorRat : Rat.fromInteger(1));
+    return customUnit(`compound:${symbol}:${dimsKey(dims)}`, symbol, dims, factor, rat, false);
+  }
+  function chooseAddUnit(a, b, resultValue) {
+    if (a.dims[DIM.TEMP] === 1) return a.unit || b.unit || U.K;
+    if (a.unit && b.unit && a.unit.key === b.unit.key) return a.unit;
+    const candidates = [];
+    for (const u of [a.unit, b.unit, ...popularUnitsFor(a.dims)]) if (u && sameDims(u.dims, a.dims) && !candidates.includes(u)) candidates.push(u);
+    const inRange = candidates.filter(u => {
+      const v = resultValue / u.factor;
+      return abs(v) >= 1 && abs(v) < 1000;
+    });
+    if (inRange.length) {
+      if (a.unit && inRange.includes(a.unit)) return a.unit;
+      if (b.unit && inRange.includes(b.unit)) return b.unit;
+      return inRange[0];
+    }
+    return a.unit || b.unit || candidates[0] || null;
+  }
+  function dimPower(dims, p) {
+    const out = [];
+    for (const d of dims) {
+      const v = d * p;
+      if (Math.abs(v - Math.round(v)) > 1e-10) throw new Error('fractional unit dimension');
+      out.push(Math.round(v));
+    }
+    return out;
+  }
+  function checkQ(q) {
+    if (!Number.isFinite(q.value) || abs(q.value) > MAX_VALUE) throw new Error('numeric overflow');
+    return q;
+  }
+  function rationalPower(baseRat, exponentRat) {
+    if (!baseRat || !exponentRat) return null;
+    if (exponentRat.d === 1n) return baseRat.pow(Number(exponentRat.n));
+    const den = Number(exponentRat.d), num = Number(exponentRat.n);
+    if (!Number.isInteger(den) || den > 12 || !Number.isInteger(num) || abs(num) > 100) return null;
+    const root = ratRoot(baseRat, den); return root ? root.pow(num) : null;
+  }
+  function qPow(a, b) {
+    if (!isDimensionless(b.dims)) throw new Error('dimensionful exponent');
+    if (a.tempAbs) throw new Error('temperature exponent');
+    const p = b.value;
+    if (!Number.isFinite(p) || abs(p) > 1000) throw new Error('exponent cap');
+    if (a.value < 0 && Math.abs(p - Math.round(p)) > 1e-12) throw new Error('complex result');
+    const dims = dimPower(a.dims, p);
+    let dec = null;
+    if (a.dec && b.dec && DECIMAL) { try { dec = a.dec.pow(b.dec); } catch (_) {} }
+    let value = dec ? dnum(dec, Math.pow(a.value,p)) : Math.pow(a.value,p);
+    if (!Number.isFinite(value) || abs(value) > MAX_VALUE) throw new Error('numeric overflow');
+    let rat = rationalPower(a.rat, b.rat);
+    let unit = null;
+    if (!isDimensionless(dims) && a.unit) {
+      if (b.rat && b.rat.d === 1n) unit = powerUnitForQ(a.unit, Number(b.rat.n));
+      else {
+        const factor = Math.pow(a.unit.factor, p);
+        const fr = a.unit.factorRat ? rationalPower(a.unit.factorRat, b.rat) : null;
+        unit = customUnit(`pow:${a.unit.key}:${p}`, `${a.unit.symbol}^${p}`, dims, factor, fr);
+      }
+    }
+    return cleanQ(makeQ(value, rat, dims, unit, { dec }));
+  }
+  function addQ(a,b,op) {
+    if (!sameDims(a.dims,b.dims)) throw new Error('dimension mismatch');
+    if (a.unitOnly || b.unitOnly) throw new Error('bare unit arithmetic');
+    const sign = op === '+' ? 1 : -1;
+    let value, rat = ratBinary(op, a.rat, b.rat), dec = decBinary(op,a.dec,b.dec), unit, tempAbs=false, tempDelta=false;
+    if (a.dims[DIM.TEMP] === 1) {
+      unit = a.unit || b.unit || U.K;
+      const av = unitValueForQ(a, unit), bv = unitValueForQ(b, unit);
+      const displayed = av.value + sign * bv.value;
+      const displayedRat = av.rat && bv.rat ? ratBinary(op,av.rat,bv.rat) : null;
+      if (op === '+') {
+        tempAbs = a.tempAbs || b.tempAbs;
+        tempDelta = !tempAbs && (a.tempDelta || b.tempDelta);
+        const made = makeFromUnitValue(displayed, displayedRat, unit, { tempAbs, tempDelta });
+        value = made.value; rat = made.rat; dec = made.dec;
+      } else {
+        tempDelta = true; tempAbs = false;
+        value = displayed * unit.factor;
+        if (displayedRat && unit.factorRat) rat = displayedRat.mul(unit.factorRat);
+        dec = (av.dec && bv.dec && unit.factorDec) ? decBinary('*', decBinary('-',av.dec,bv.dec), unit.factorDec) : null;
+      }
+    } else {
+      value = op === '+' ? a.value + b.value : a.value - b.value;
+      dec = dec || decBinary(op,a.dec,b.dec);
+      if (dec) value = dnum(dec,value);
+      unit = chooseAddUnit(a,b,value);
+    }
+    if (a.dims[DIM.TEMP] !== 1) unit = chooseAddUnit(a,b,value);
+    return cleanQ(makeQ(value,rat,a.dims,unit,{dec,tempAbs,tempDelta}));
+  }
+  function multiplyQ(a,b,op) {
+    if (op !== '*' && op !== '/') throw new Error('invalid product');
+    const divide = op === '/';
+    if (divide && b.value === 0) throw new Error('division by zero');
+    // A unit-only node is a scale marker; multiplying a plain scalar by it applies that unit.
+    if (!divide && a.unitOnly && b.unitOnly) {
+      if (a.dims[DIM.TEMP] || b.dims[DIM.TEMP]) throw new Error('temperature product');
+      const dims = addDims(a.dims,b.dims);
+      const rat = ratBinary('*',a.rat,b.rat), dec = decBinary('*',a.dec,b.dec);
+      const value = dec ? dnum(dec,a.value*b.value) : a.value*b.value;
+      const unit = combineUnitMeta(a.unit,b.unit,'*',dims);
+      return cleanQ(makeQ(value,rat,dims,unit,{dec,unitOnly:true}));
+    }
+    if (!divide && a.unitOnly && isDimensionless(b.dims) && !b.unitOnly) {
+      return makeFromUnitValue(b.value * (a.unit.factor === 0 ? 0 : 1), b.rat, a.unit, { tempAbs: a.dims[DIM.TEMP] === 1 });
+    }
+    if (!divide && b.unitOnly && isDimensionless(a.dims) && !a.unitOnly) {
+      return makeFromUnitValue(a.value, a.rat, b.unit, { tempAbs: b.dims[DIM.TEMP] === 1 });
+    }
+    if (a.tempAbs || b.tempAbs) throw new Error('absolute temperature product');
+    if (divide && b.unitOnly && isDimensionless(a.dims) && !a.unitOnly) {
+      const dims = addDims(a.dims,b.dims,-1);
+      const rat = a.rat && b.rat ? a.rat.div(b.rat) : null;
+      const dec = decBinary('/',a.dec,b.dec);
+      const value = dec ? dnum(dec,a.value/b.value) : a.value/b.value;
+      const unit = combineUnitMeta(null,b.unit,'/',dims);
+      return cleanQ(makeQ(value,rat,dims,unit,{dec}));
+    }
+    if (divide && a.unitOnly && !b.unitOnly && isDimensionless(b.dims)) {
+      const dims = a.dims;
+      const rat = a.rat && b.rat ? a.rat.div(b.rat) : null;
+      const dec = decBinary('/',a.dec,b.dec);
+      const value = dec ? dnum(dec,a.value/b.value) : a.value/b.value;
+      return cleanQ(makeQ(value,rat,dims,a.unit,{dec}));
+    }
+    const dims = addDims(a.dims,b.dims,divide ? -1 : 1);
+    const rat = ratBinary(divide ? '/' : '*',a.rat,b.rat);
+    const dec = decBinary(divide ? '/' : '*',a.dec,b.dec);
+    const value = dec ? dnum(dec,divide ? a.value/b.value : a.value*b.value) : (divide ? a.value/b.value : a.value*b.value);
+    if (!Number.isFinite(value) || abs(value) > MAX_VALUE) throw new Error('numeric overflow');
+    const unit = combineUnitMeta(a.unit,b.unit,divide ? '/' : '*',dims);
+    return cleanQ(makeQ(value,rat,dims,unit,{dec,tempDelta:a.tempDelta || b.tempDelta}));
+  }
+  function gamma(z) {
+    // Lanczos approximation (real domain only).
+    const p = [676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+    if (z < 0.5) return Math.PI / (Math.sin(Math.PI*z) * gamma(1-z));
+    z -= 1; let x = 0.99999999999980993;
+    for (let i=0;i<p.length;i++) x += p[i] / (z+i+1);
+    const t = z + p.length - 0.5;
+    return Math.sqrt(2*Math.PI) * Math.pow(t,z+0.5) * Math.exp(-t) * x;
+  }
+  function factorialQ(q) {
+    if (!isDimensionless(q.dims) || q.value < 0) throw new Error('factorial domain');
+    const n = q.value;
+    if (Number.isInteger(n)) {
+      if (n > 170) throw new Error('factorial cap');
+      let v = 1n; for (let i=2;i<=n;i++) v *= BigInt(i);
+      return makeQ(Number(v),new Rat(v,1n),zeroDims(),null,{dec:decFromString(v.toString())});
+    }
+    const v = gamma(n+1);
+    if (!Number.isFinite(v) || v > MAX_VALUE) throw new Error('factorial overflow');
+    return makeQ(v,null,zeroDims(),null);
+  }
+  function permutationCombination(a,b,name) {
+    if (!isDimensionless(a.dims) || !isDimensionless(b.dims)) throw new Error('nPr/nCr needs dimensionless values');
+    const n=a.value, r=b.value;
+    if (!Number.isInteger(n)||!Number.isInteger(r)||n<0||r<0||r>n||n>170) throw new Error('nPr/nCr domain');
+    let result=1n;
+    if (name==='npr') for(let i=0;i<r;i++) result*=BigInt(n-i);
+    else { const k=Math.min(r,n-r); for(let i=1;i<=k;i++) result=result*BigInt(n-k+i)/BigInt(i); }
+    return makeQ(Number(result),new Rat(result,1n),zeroDims(),null,{dec:decFromString(result.toString())});
+  }
+  function decimalFunction(name, x, fallback) {
+    if (DECIMAL && x && typeof DECIMAL[name] === 'function') {
+      try { return DECIMAL[name](x); } catch (_) {}
+    }
+    return null;
+  }
+  function evalFunction(node, mode) {
+    const { name } = node;
+    const ev = evaluate(node.arg,mode); const a = ev.q;
+    let q, bare = ev.bareTrig;
+    if (name === 'sqrt' || name === 'cbrt') {
+      const degree = name === 'sqrt' ? 2 : 3;
+      if (name === 'sqrt' && a.value < 0) throw new Error('complex result');
+      if (a.unitOnly && a.unit && a.unit.offset !== 0) throw new Error('temperature root');
+      const dims = dimPower(a.dims,1/degree);
+      const value = name === 'sqrt' ? Math.sqrt(a.value) : Math.cbrt(a.value);
+      if (!Number.isFinite(value)) throw new Error('root domain');
+      let dec = null;
+      if (a.dec && DECIMAL) { try { dec = name === 'sqrt' ? a.dec.sqrt() : a.dec.cbrt(); } catch (_) {} }
+      const rat = ratRoot(a.rat,degree);
+      let unit = null;
+      if (!isDimensionless(dims) && a.unit) {
+        const p = 1/degree;
+        const factor = Math.pow(a.unit.factor,p);
+        const fr = ratRoot(a.unit.factorRat,degree);
+        unit = customUnit(`root:${a.unit.key}:${degree}`, fr && fr.d===1n ? a.unit.symbol : `${a.unit.symbol}^${p}`, dims, factor, fr);
+        if (fr && fr.d===1n) {
+          const target = powerUnits.get(`${a.unit.key}^${1}`); if (target && sameDims(target.dims,dims)) unit=target;
+        }
+        if (a.unit.symbol.endsWith('^2') && degree===2) unit=unitByKey(a.unit.key.slice(0,-2)) || unit;
+        if (a.unit.symbol.endsWith('^3') && degree===3) unit=unitByKey(a.unit.key.slice(0,-2)) || unit;
+      }
+      q=cleanQ(makeQ(value,rat,dims,unit,{dec,tempDelta:a.tempDelta}));
+      return {q,bareTrig:bare};
+    }
+    if (['sin','cos','tan','csc','sec','cot'].includes(name)) {
+      let angle;
+      if (isDimensionless(a.dims)) {
+        bare=true;
+        angle = mode === 'deg' ? a.value * PI/180 : a.value;
+      } else if (sameDims(a.dims,D.angle)) angle = a.value;
+      else throw new Error('trig needs an angle or bare number');
+      let value;
+      if (name==='sin') value=Math.sin(angle);
+      else if (name==='cos') value=Math.cos(angle);
+      else if (name==='tan') { if (abs(Math.cos(angle))<1e-15) throw new Error('trig pole'); value=Math.tan(angle); }
+      else if (name==='csc') { const x=Math.sin(angle); if(abs(x)<1e-15) throw new Error('trig pole'); value=1/x; }
+      else if (name==='sec') { const x=Math.cos(angle); if(abs(x)<1e-15) throw new Error('trig pole'); value=1/x; }
+      else { const x=Math.tan(angle); if(abs(x)<1e-15) throw new Error('trig pole'); value=1/x; }
+      if (!Number.isFinite(value) || abs(value)>1e15) throw new Error('trig pole');
+      let dec=null;
+      if (DECIMAL) {
+        try {
+          let x = a.dec;
+          if (isDimensionless(a.dims) && mode==='deg') x=x.times(decPi()).div(180);
+          const method = name;
+          dec = decimalFunction(method,x,null);
+          if (['csc','sec','cot'].includes(name) && dec) dec = new DECIMAL(1).div(dec);
+        } catch (_) {}
+      }
+      q=cleanQ(makeQ(value,null,zeroDims(),null,{dec}));
+      return {q,bareTrig:bare};
+    }
+    if (['asin','acos','atan'].includes(name)) {
+      if (!isDimensionless(a.dims)) throw new Error('inverse trig needs dimensionless input');
+      bare=true;
+      if ((name==='asin'||name==='acos') && abs(a.value)>1) throw new Error('inverse trig domain');
+      const value = name==='asin' ? Math.asin(a.value) : name==='acos' ? Math.acos(a.value) : Math.atan(a.value);
+      let dec=null;
+      if (DECIMAL && a.dec) dec=decimalFunction(name,a.dec,null);
+      const unit = mode==='deg' ? U.deg : U.rad;
+      q=cleanQ(makeQ(value,null,D.angle,unit,{dec}));
+      return {q,bareTrig:true};
+    }
+    if (name === 'log' || name === 'ln') {
+      if (!isDimensionless(a.dims) || a.value<=0) throw new Error('log domain');
+      const base = name==='ln' ? Math.E : (node.base || 10);
+      if (base<=0 || base===1) throw new Error('log base');
+      const value = Math.log(a.value) / Math.log(base);
+      let dec=null;
+      if (DECIMAL && a.dec) {
+        try { const lx=a.dec.ln(); dec = name==='ln' ? lx : lx.div(new DECIMAL(base).ln()); } catch (_) {}
+      }
+      q=makeQ(value,null,zeroDims(),null,{dec});
+      return {q,bareTrig:bare};
+    }
+    throw new Error('unknown function');
+  }
+  function evaluate(node, mode='rad') {
+    switch (node.type) {
+      case 'num': return { q: makeQ(node.value,node.rat,zeroDims(),null,{dec:node.dec}), bareTrig:false };
+      case 'const': {
+        if (node.name==='pi') return { q:makeQ(PI,null,zeroDims(),null,{dec:decPi()}), bareTrig:false };
+        return { q:makeQ(Math.E,null,zeroDims(),null,{dec:DECIMAL?DECIMAL.exp(1):null}), bareTrig:false };
+      }
+      case 'unit': return { q:unitOnlyQ(node.unit), bareTrig:false };
+      case 'unary': {
+        const x=evaluate(node.child,mode); if(node.op==='+') return x;
+        const q=x.q; q.value=-q.value; if(q.rat)q.rat=q.rat.neg(); if(q.dec)q.dec=q.dec.neg(); return {q:cleanQ(q),bareTrig:x.bareTrig};
+      }
+      case 'postfix': {
+        const x=evaluate(node.child,mode), a=x.q;
+        if(node.op==='!') return {q:factorialQ(a),bareTrig:x.bareTrig};
+        if(node.op==='%') {
+          const rat=a.rat ? a.rat.div(Rat.fromInteger(100)) : null;
+          const dec=a.dec ? a.dec.div(100) : null;
+          return {q:cleanQ(makeQ(a.value/100,rat,a.dims,a.unit,{dec,tempAbs:a.tempAbs,tempDelta:a.tempDelta})),bareTrig:x.bareTrig};
+        }
+        throw new Error('postfix');
+      }
+      case 'func': {
+        const r=evalFunction(node,mode);
+        if(node.power && node.power!==1) {
+          const pow=makeQ(node.power,Rat.fromInteger(node.power),zeroDims(),null,{dec:decFromString(node.power)});
+          const q=qPow(r.q,pow); return {q,bareTrig:r.bareTrig};
+        }
+        return r;
+      }
+      case 'call2': {
+        const a=evaluate(node.a,mode), b=evaluate(node.b,mode);
+        return {q:permutationCombination(a.q,b.q,node.name),bareTrig:a.bareTrig||b.bareTrig};
+      }
+      case 'binary': {
+        const a=evaluate(node.left,mode), b=evaluate(node.right,mode);
+        let q;
+        if(node.op==='+'||node.op==='-') q=addQ(a.q,b.q,node.op);
+        else if(node.op==='*'||node.op==='/') q=multiplyQ(a.q,b.q,node.op);
+        else if(node.op==='^') q=qPow(a.q,b.q);
+        else if(node.op==='%') {
+          if (!(isDimensionless(a.q.dims)&&isDimensionless(b.q.dims)) && !sameDims(a.q.dims,b.q.dims)) throw new Error('modulo dimensions');
+          if (b.q.value===0) throw new Error('modulo by zero');
+          const value=a.q.value%b.q.value;
+          let rat=null;
+          if(a.q.rat&&b.q.rat&&a.q.rat.d===1n&&b.q.rat.d===1n) rat=new Rat(a.q.rat.n%b.q.rat.n,1n);
+          q=cleanQ(makeQ(value,rat,a.q.dims,a.q.unit,{dec:decBinary('%',a.q.dec,b.q.dec)}));
+        } else if(node.op==='npr'||node.op==='ncr') q=permutationCombination(a.q,b.q,node.op);
+        else throw new Error('operator');
+        return {q,bareTrig:a.bareTrig||b.bareTrig};
+      }
+      default: throw new Error('invalid AST');
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Formatter: exact terminating values, inline approximation, decimal ladder.
+     ----------------------------------------------------------------------- */
+  function trimDecimal(s) {
+    if (!s.includes('.')) return s;
+    return s.replace(/0+$/,'').replace(/\.$/,'');
+  }
+  function trimApproxDecimal(s) {
+    const text=String(s);
+    if(!text.includes('.'))return text+'.0';
+    const [whole,frac='']=text.split('.');
+    const trimmed=frac.replace(/0+$/,'');
+    return `${whole}.${trimmed||'0'}`;
+  }
+  function fixedSigText(value,sig) {
+    if(value===0)return '0.0';
+    const decimals=Math.max(1,sig-1-Math.floor(Math.log10(abs(value))));
+    return trimApproxDecimal(value.toFixed(Math.min(100,decimals)));
+  }
+  function integerPartUnchanged(a,b) { return Math.trunc(a) === Math.trunc(b); }
+  function decimalRawToSci(raw) {
+    let s=String(raw), sign='';
+    if(s[0]==='-'){sign='-';s=s.slice(1);} else if(s[0]==='+')s=s.slice(1);
+    let [whole,frac='']=s.split('.');
+    const all=whole+frac;
+    let first=0; while(first<all.length&&all[first]==='0')first++;
+    if(first===all.length)return '0';
+    const exp=whole.length-first-1;
+    let sig=all.slice(first).replace(/0+$/,'');
+    if(!sig)sig='0';
+    const mant=sig.length===1?sig:sig[0]+'.'+sig.slice(1);
+    return `${sign}${mant}e${exp<0?'':'+'}${exp}`;
+  }
+  function fmtSciNumber(v, sig) {
+    const s = Number(v).toExponential(Math.max(0,sig-1));
+    const [m,e] = s.split('e');
+    const mant=trimApproxDecimal(m);
+    const exp=Number(e);
+    return `${mant}e${exp<0?'':'+'}${exp}`;
+  }
+  function inlineApprox(v) {
+    if (v===0) return {text:'0',rounded:0};
+    const scientific = abs(v)>=1e15 || abs(v)<1e-6;
+    let base=v, exponent=0;
+    if(scientific){ exponent=Math.floor(Math.log10(abs(v))); base=v/Math.pow(10,exponent); }
+    for(let d=1;d<=20;d++){
+      let rounded=Number(base.toFixed(d));
+      if(!Number.isFinite(rounded)||rounded===0||!integerPartUnchanged(base,rounded))continue;
+      if(abs((rounded-base)/base)<=0.04){
+        const text=trimApproxDecimal(rounded.toFixed(d));
+        return {text:scientific?`${text}e${exponent<0?'':'+'}${exponent}`:text,rounded:scientific?rounded*Math.pow(10,exponent):rounded,baseRounded:rounded,exponent};
+      }
+    }
+    const fallback=trimApproxDecimal(base.toPrecision(15));
+    return {text:scientific?`${fallback}e${exponent<0?'':'+'}${exponent}`:fallback,rounded:v,baseRounded:base,exponent};
+  }
+  function formatNumber(value, rat, mode='inline') {
+    let v=value;
+    if(abs(v)<1e-14)v=0;
+    else {const i=Math.round(v);if(abs(v-i)<1e-14){v=i;rat=Rat.fromInteger(i);}}
+    const scientific=abs(v)>=1e15 || (v!==0 && abs(v)<1e-6);
+    if(rat){
+      const raw=rat.terminatingString();
+      if(raw!==null && rat.significantDigits()<=20){
+        const text=scientific?decimalRawToSci(raw):raw;
+        return {text, exact:true, value:v, rounded:v, raw};
+      }
+    }
+    if(mode==='inline'){
+      const x=inlineApprox(v); return {text:x.text,exact:false,value:v,rounded:x.rounded,baseRounded:x.baseRounded,exponent:x.exponent};
+    }
+    if(mode==='alt'){
+      if(scientific){
+        let exp=Math.floor(Math.log10(abs(v))), m=v/Math.pow(10,exp), sig=3, r;
+        while(sig<16){r=Number(m.toPrecision(sig));if(integerPartUnchanged(m,r))break;sig++;}
+        return {text:fmtSciNumber(Math.sign(v)*Math.abs(r)*Math.pow(10,exp),sig),exact:false,value:v,rounded:v};
+      }
+      let sig=3, r;
+      while(sig<16){r=Number(v.toPrecision(sig));if(integerPartUnchanged(v,r))break;sig++;}
+      let text=fixedSigText(r,sig);
+      if(Number.isInteger(r)&&!Number.isInteger(v)){
+        for(let d=1;d<=12;d++){
+          const candidate=Number(v.toFixed(d));
+          if(integerPartUnchanged(v,candidate)){r=candidate;text=trimApproxDecimal(v.toFixed(d));break;}
+        }
+      }
+      return {text,exact:false,value:v,rounded:r};
+    }
+    if(mode==='ladder'){
+      const sig=Number(mode.sig||3);
+      return {text:fmtSciNumber(v,sig),exact:false,value:v,rounded:Number(v.toPrecision(sig))};
+    }
+    return {text:inlineApprox(v).text,exact:false,value:v};
+  }
+  function ladderNumbers(value, inlineFormatted) {
+    const inl=inlineApprox(value);
+    const inlError=abs(value-inl.rounded);
+    const out=[]; const seen=new Set([inl.text]);
+    for(const sig of [3,5,8]){
+      let candidate, text;
+      const sci=abs(value)>=1e15 || abs(value)<1e-6;
+      if(sci){
+        const exp=Math.floor(Math.log10(abs(value))), mant=value/Math.pow(10,exp);
+        let r=Number(mant.toPrecision(sig));
+        if(!integerPartUnchanged(mant,r))continue;
+        candidate=r*Math.pow(10,exp); text=fmtSciNumber(candidate,sig);
+      } else {
+        candidate=Number(value.toPrecision(sig));
+        if(!integerPartUnchanged(value,candidate))continue;
+        text=fixedSigText(candidate,sig);
+      }
+      if(seen.has(text)||text===inlineFormatted)continue;
+      const err=abs(value-candidate);
+      if(!(err < inlError - Math.max(1e-16,abs(value)*1e-14)))continue;
+      seen.add(text);out.push({value:candidate,text,sig});
+    }
+    return out;
+  }
+  function valuePresentation(q, unit, mode='inline') {
+    const u=unit||null;
+    const converted=u?unitValueForQ(q,u):{value:q.value,rat:q.rat,dec:q.dec};
+    const formatted=formatNumber(converted.value,converted.rat,mode);
+    return {...formatted, numericValue:converted.value, unit:u, dec:converted.dec};
+  }
+  function unitLabel(unit, numericValue, longStyle) {
+    if(!unit)return '';
+    if(longStyle && unit.longName && (!unit.custom || /\s/.test(unit.longName))){
+      const one=abs(numericValue)===1;
+      return one?unit.longName:(unit.longPlural||pluralOf(unit.longName));
+    }
+    return unit.symbol;
+  }
+  function formatQuantity(q, unit, mode='inline', longStyle=false, unitSpace=false, showUnit=true) {
+    const p=valuePresentation(q,unit,mode);
+    const label=showUnit?unitLabel(unit,p.numericValue,longStyle):'';
+    return { ...p, unitText:label, text:p.text+(label?(unitSpace?' ':'')+label:'') };
+  }
+  function qNumberInUnit(q,u){return unitValueForQ(q,u).value;}
+  function chooseMainUnit(q) {
+    if(q.unit&&sameDims(q.unit.dims,q.dims))return q.unit;
+    if(isDimensionless(q.dims))return null;
+    const candidates=popularUnitsFor(q.dims);
+    const fit=candidates.find(u=>abs(q.value/u.factor)>=1&&abs(q.value/u.factor)<1000);
+    return fit||candidates[0]||null;
+  }
+  function sameUnit(a,b) {
+    if(!a||!b)return false;
+    return a.key===b.key || (sameDims(a.dims,b.dims)&&abs(a.factor-b.factor)<=Math.max(1e-14,abs(a.factor)*1e-12)&&a.symbol===b.symbol);
+  }
+  function alternateUnits(q,main) {
+    const arr=popularUnitsFor(q.dims); const out=[];
+    for(const u of arr){
+      if(sameUnit(u,main))continue;
+      if(out.some(x=>sameUnit(x,u)))continue;
+      out.push(u);
+    }
+    return out;
+  }
+
+  /* -----------------------------------------------------------------------
+     Analyzer and ordered suggestion construction.
+     ----------------------------------------------------------------------- */
+  function unwrapUnaryNumber(ast) {
+    if(ast.type==='num')return true;
+    return ast.type==='unary'&&(ast.op==='+'||ast.op==='-')&&unwrapUnaryNumber(ast.child);
+  }
+  function isLoneConstant(ast) { return ast.type==='const'; }
+  function isUnitExpr(ast) {
+    if(ast.type==='unit')return true;
+    if(ast.type==='binary'&&(ast.op==='*'||ast.op==='/')&&isUnitExpr(ast.left)&&isUnitExpr(ast.right))return true;
+    if(ast.type==='binary'&&ast.op==='^'&&isUnitExpr(ast.left)&&unwrapUnaryNumber(ast.right))return true;
+    return false;
+  }
+  function isValueWithUnit(ast) {
+    if(ast.type==='binary'&&ast.op==='*'){
+      return (unwrapUnaryNumber(ast.left)&&isUnitExpr(ast.right))||(unwrapUnaryNumber(ast.right)&&isUnitExpr(ast.left));
+    }
+    if(ast.type==='binary'&&ast.op==='/'){
+      return (isValueWithUnit(ast.left)&&isUnitExpr(ast.right))||(unwrapUnaryNumber(ast.left)&&isUnitExpr(ast.right));
+    }
+    return false;
+  }
+  function isBareUnitAst(ast) { return isValueWithUnit(ast); }
+  function isPartialLiteralAst(ast) { return unwrapUnaryNumber(ast)||isValueWithUnit(ast); }
+  function isLonePercent(ast) { return ast.type==='postfix'&&ast.op==='%'&&unwrapUnaryNumber(ast.child); }
+  function isPhoneOrDate(s) {
+    const x=s.trim();
+    return /^(?:\d{3}-\d{4}|\d{3}-\d{3}-\d{4}|\(?\d{3}\)?[ -]?\d{3}-\d{4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})$/.test(x);
+  }
+  function spacingAroundEquals(expr) {
+    return /\s(?:[+\-*/^%]|×|÷|−)|(?:[+\-*/^%]|×|÷|−)\s/.test(expr) || /\s{2,}/.test(expr);
+  }
+  function shapeLine(rawLine, bulletLen) {
+    const line=rawLine.slice(bulletLen);
+    const trimmedEnd=line.replace(/\s+$/,'');
+    const endsEquals=trimmedEnd.endsWith('=');
+    const lastEq=line.lastIndexOf('=');
+    if(endsEquals){
+      const prevEq=line.lastIndexOf('=',lastEq-1);
+      const begin=prevEq+1;
+      return {line, explicitEquals:true, currentRaw:line.slice(begin,lastEq), currentOffset:begin, partial:false, previousRaw:'', previousOffset:0, replaceStart:0, trimmedEnd};
+    }
+    if(lastEq>=0){
+      const prevEq=line.lastIndexOf('=',lastEq-1);
+      const prevBegin=prevEq+1;
+      const curBegin=lastEq+1;
+      return {line, explicitEquals:false, currentRaw:line.slice(curBegin), currentOffset:curBegin, partial:false,
+        previousRaw:line.slice(prevBegin,lastEq), previousOffset:prevBegin, replaceStart:curBegin, trimmedEnd};
+    }
+    return {line, explicitEquals:false, currentRaw:line, currentOffset:0, partial:false, previousRaw:'', previousOffset:0, replaceStart:0, trimmedEnd};
+  }
+  function astHasOneLiteralAndUnit(ast) { return isValueWithUnit(ast); }
+  function safeEvaluateVariants(info) {
+    const out=[];
+    for(const v of info.variants){
+      const modes={};
+      try{modes.rad=evaluate(v.ast,'rad');}catch(e){modes.radError=e;}
+      try{modes.deg=evaluate(v.ast,'deg');}catch(e){modes.degError=e;}
+      const bare=!!((modes.rad&&modes.rad.bareTrig)||(modes.deg&&modes.deg.bareTrig));
+      if(bare){
+        const items=[]; if(modes.rad)items.push({mode:'rad',...modes.rad}); if(modes.deg)items.push({mode:'deg',...modes.deg});
+        if(items.length)out.push({variant:v,bareTrig:true,items});
+      }else{
+        const r=modes.rad||modes.deg;
+        if(r)out.push({variant:v,bareTrig:false,items:[{mode:null,...r}]});
+      }
+    }
+    return out;
+  }
+  function numericMatch(a,b) {
+    const norm=x=>String(x).trim().toLowerCase().replace(/[µμ]/g,'u').replace(/\s+/g,' ');
+    return norm(a)===norm(b);
+  }
+  function prefixRemainder(typed, full) {
+    const compact=s=>String(s).toLowerCase().replace(/[µμ]/g,'u').replace(/\s+/g,'');
+    const tc=compact(typed), fc=compact(full);
+    if(tc.length>fc.length||fc.slice(0,tc.length)!==tc)return null;
+    if(tc.length===fc.length)return '';
+    let seen=0, cut=full.length;
+    for(let i=0;i<full.length;i++){
+      if(seen===tc.length){cut=i;break;}
+      if(/\s/.test(full[i]))continue;
+      seen++;
+    }
+    let remainder=full.slice(cut);
+    if(/\s$/.test(typed))remainder=remainder.replace(/^\s+/,'');
+    return remainder;
+  }
+  function buildChip(spec) {
+    const displayEquation = spec.label || `${spec.displayExpr || ''} = ${spec.resultText || ''}`;
+    return {
+      insertText: spec.insertText || '', displayEquation, displayExpr: spec.displayExpr || '',
+      resultText: spec.resultText || '', typedPrefixLen: spec.typedPrefixLen || 0,
+      typedPrefix: spec.typedPrefix || '', tag: spec.tag || '', inlineEligible: !!spec.inlineEligible,
+      kind: spec.kind || 'primary', replaceRange: spec.replaceRange || null,
+      ariaLabel: spec.ariaLabel || displayEquation
+    };
+  }
+  function chipInsertText(resultText, shape, expr) {
+    if(shape.partial) return resultText;
+    if(shape.explicitEquals) return resultText;
+    return (spacingAroundEquals(expr)?' = ':'=')+resultText;
+  }
+  function lineAllowsInline(classification, shape, hasExplicitIntent) {
+    if(classification==='bareUnit'||classification==='ambiguous')return false;
+    if(classification==='phone'||classification==='date'||classification==='bullet')return !!shape.explicitEquals||!!hasExplicitIntent;
+    return true;
+  }
+  function makeFormattedResult(item, style, space) {
+    const q=item.q, unit=item.unit;
+    const main=formatQuantity(q,unit,'inline',style,space,!item.hideUnit);
+    const ladder=[];
+    if(!main.exact){
+      const p=valuePresentation(q,unit,'inline');
+      const all=ladderNumbers(p.numericValue,p.text);
+      for(const l of all){
+        const fake=makeQ(l.value, null, q.dims, q.unit, {tempAbs:q.tempAbs,tempDelta:q.tempDelta});
+        // Ladder values are already in the selected unit; attach them as direct unit values for presentation.
+        ladder.push(l);
+      }
+    }
+    return {q,unit,main,ladder};
+  }
+  function ladderTextFor(item,l,style,space) {
+    const unit=item.unit;
+    const n=l.text;
+    const label=item.hideUnit?'':unitLabel(unit,l.value,style);
+    return n+(label?(space?' ':'')+label:'');
+  }
+  function makePrimaryChip(item,displayExpr,shape,classification,opts={}) {
+    const resultText=item.formatted.main.text;
+    const insertText=chipInsertText(resultText,shape,displayExpr);
+    const eligible=lineAllowsInline(classification,shape,opts.explicitIntent) && !opts.forceChipOnly;
+    return buildChip({insertText,displayExpr,resultText,tag:opts.tag,kind:'primary',inlineEligible:eligible});
+  }
+  function makeAltChip(q,unit,displayExpr,shape,style,space,tag='') {
+    const formatted=formatQuantity(q,unit,'alt',style,space);
+    return buildChip({insertText:chipInsertText(formatted.text,shape,displayExpr),displayExpr,resultText:formatted.text,tag,kind:'alternate',inlineEligible:false});
+  }
+  function resultVariantsFor(scored, style, space) {
+    return scored.items.map(it=>{
+      const unit=chooseMainUnit(it.q);
+      const hideUnit=!!(scored.bareTrig&&sameDims(it.q.dims,D.angle));
+      const formatted=makeFormattedResult({...it,unit,hideUnit},style,space);
+      if(scored.conversionPrimary){
+        formatted.main=formatQuantity(it.q,unit,'alt',style,space,!hideUnit);
+        formatted.ladder=[];
+      }
+      return {...it,unit,hideUnit,formatted};
+    });
+  }
+  function addDedupe(chips) {
+    const seen=new Set(), out=[];
+    for(const c of chips){
+      const key=[c.insertText,c.resultText,c.displayEquation,c.kind,c.replaceRange?c.replaceRange.join(':'):''].join('|');
+      if(seen.has(key))continue;seen.add(key);out.push(c);
+    }
+    return out;
+  }
+  function createFullSuggestions(scored, info, shape, classification, opts={}) {
+    const chips=[]; const forceChipOnly=!!opts.forceChipOnly;
+    const displayExpr=opts.displayExpr || scored.variant.displayExpr || info.expression;
+    const items=resultVariantsFor(scored,!!scored.variant.hasLongUnits,scored.variant.unitSpace);
+    const multiMode=scored.bareTrig && items.length>1;
+    if(opts.bareUnit){
+      const item=items[0];
+      for(const u of alternateUnits(item.q,item.unit)) chips.push(makeAltChip(item.q,u,displayExpr,shape,!!scored.variant.hasLongUnits,scored.variant.unitSpace));
+      return chips;
+    }
+    if(forceChipOnly){
+      for(const item of items){
+        chips.push(makePrimaryChip(item,displayExpr,shape,classification,{tag:item.mode||'',forceChipOnly:true,explicitIntent:opts.explicitIntent}));
+      }
+      return chips;
+    }
+    if(multiMode){
+      // Mode primaries first, then each mode's ladder; tags stay faint in the bar.
+      for(const item of items) chips.push(makePrimaryChip(item,displayExpr,shape,classification,{tag:item.mode,explicitIntent:opts.explicitIntent}));
+      for(const item of items){
+        for(const l of item.formatted.ladder){
+          const text=ladderTextFor(item,l,!!scored.variant.hasLongUnits,scored.variant.unitSpace);
+          chips.push(buildChip({insertText:chipInsertText(text,shape,displayExpr),displayExpr,resultText:text,tag:item.mode,kind:'ladder',inlineEligible:false}));
+        }
+      }
+      return addDedupe(chips);
+    }
+    const item=items[0];
+    chips.push(makePrimaryChip(item,displayExpr,shape,classification,{tag:item.mode||'',explicitIntent:opts.explicitIntent}));
+    // Curated conversion targets follow the primary result.
+    for(const u of alternateUnits(item.q,item.unit)) chips.push(makeAltChip(item.q,u,displayExpr,shape,!!scored.variant.hasLongUnits,scored.variant.unitSpace,item.mode||''));
+    // Longer decimals for the primary unit only.
+    for(const l of item.formatted.ladder){
+      const text=ladderTextFor(item,l,!!scored.variant.hasLongUnits,scored.variant.unitSpace);
+      chips.push(buildChip({insertText:chipInsertText(text,shape,displayExpr),displayExpr,resultText:text,tag:item.mode||'',kind:'ladder',inlineEligible:false}));
+    }
+    return addDedupe(chips);
+  }
+  function createPartialSuggestions(scoredSet, info, shape, typedText, replaceRange, classification='inline') {
+    const typed=typedText.trim();
+    const allItems=[];
+    for(const scored of scoredSet){
+      const displayExpr=scored.variant.displayExpr||info.expression;
+      for(const item of resultVariantsFor(scored,!!scored.variant.hasLongUnits,scored.variant.unitSpace)){
+        allItems.push({scored,item,displayExpr});
+      }
+    }
+    if(!allItems.length)return [];
+    const matches=[];
+    for(const row of allItems){
+      const p=row.item.formatted.main;
+      const full=p.text;
+      const remainder=prefixRemainder(typed,full);
+      if(remainder!==null)matches.push({...row,full,remainder,exact:p.exact});
+    }
+    if(!matches.length){
+      const altMatches=[], ladderMatches=[];
+      for(const row of allItems){
+        for(const u of alternateUnits(row.item.q,row.item.unit)){
+          const formatted=formatQuantity(row.item.q,u,'alt',!!row.scored.variant.hasLongUnits,row.scored.variant.unitSpace);
+          const remainder=prefixRemainder(typed,formatted.text);
+          if(remainder!==null)altMatches.push({...row,full:formatted.text,remainder,unit:u});
+        }
+        for(const l of row.item.formatted.ladder){
+          const full=ladderTextFor(row.item,l,!!row.scored.variant.hasLongUnits,row.scored.variant.unitSpace);
+          const remainder=prefixRemainder(typed,full);
+          if(remainder!==null)ladderMatches.push({...row,full,remainder});
+        }
+      }
+      if(altMatches.some(m=>m.remainder===''))return [];
+      if(altMatches.length){
+        return addDedupe(altMatches.filter(m=>m.remainder!=='').map(m=>buildChip({insertText:m.remainder,displayExpr:m.displayExpr,resultText:m.full,
+          typedPrefix:typed,typedPrefixLen:typed.length,tag:m.item.mode||'',kind:'partial',inlineEligible:false})));
+      }
+      if(ladderMatches.length){
+        const deeper=ladderMatches.filter(m=>m.remainder!=='');
+        return addDedupe(deeper.map(m=>buildChip({insertText:m.remainder,displayExpr:m.displayExpr,resultText:m.full,
+          typedPrefix:typed,typedPrefixLen:typed.length,tag:m.item.mode||'',kind:'ladder',inlineEligible:false})));
+      }
+      // A typed result which does not prefix any legal answer gets one replace chip.
+      const row=allItems[0]; const full=row.item.formatted.main.text;
+      const chip=buildChip({insertText:full,displayExpr:row.displayExpr,resultText:full,kind:'replace',inlineEligible:false,replaceRange});
+      return [chip];
+    }
+    // A matching terminating result is complete; it must not re-trigger itself.
+    if(matches.some(m=>m.remainder===''&&m.exact))return [];
+    const chips=[];
+    for(const m of matches){
+      const eligible=lineAllowsInline(classification,shape,true)&&m.remainder!=='';
+      if(m.remainder!==''){
+        chips.push(buildChip({insertText:m.remainder,displayExpr:m.displayExpr,resultText:m.full,typedPrefix:typed,typedPrefixLen:typed.length,
+          tag:m.item.mode||'',kind:'partial',inlineEligible:eligible}));
+      }
+    }
+    // Once the inline approximation is fully typed, only finer primary-unit digits remain.
+    for(const m of matches){
+      if(m.item.formatted.main.exact)continue;
+      const value=m.item.formatted.main.numericValue;
+      for(const l of m.item.formatted.ladder){
+        const text=ladderTextFor(m.item,l,!!m.scored.variant.hasLongUnits,m.scored.variant.unitSpace);
+        const rem=prefixRemainder(typed,text);
+        if(rem===null||rem==='')continue;
+        chips.push(buildChip({insertText:rem,displayExpr:m.displayExpr,resultText:text,typedPrefix:typed,typedPrefixLen:typed.length,
+          tag:m.item.mode||'',kind:'ladder',inlineEligible:false}));
+      }
+    }
+    return addDedupe(chips);
+  }
+
+  /* -----------------------------------------------------------------------
+     Name/unit autocomplete (separate from expression evaluation).
+     ----------------------------------------------------------------------- */
+  const functionCompletions=['sqrt(','cbrt(','sin(','cos(','tan(','asin(','acos(','atan(','log(','log2(','ln('];
+  const constantCompletions=['pi','π','e'];
+  const allUnitCompletions=unitCandidatesForAutocomplete();
+  function autocompleteFor(text, shape, lineBaseOffset) {
+    const source=shape.currentRaw;
+    const trimmed=source.replace(/\s+$/,'');
+    const conversion=trimmed.match(/(?:\b(?:to|in)|->)\s*([A-Za-zµμΩ°]*)$/i);
+    let prefix='', prefixStart=-1, conversionTarget=false;
+    if(conversion){
+      prefix=conversion[1]; prefixStart=trimmed.length-prefix.length; conversionTarget=true;
+      if(prefix && resolveUnit(prefix).units.length)return [];
+    }
+    else {
+      const m=trimmed.match(/([A-Za-zµμΩ°][A-Za-z0-9_µμΩ°]*)$/);
+      if(!m)return [];
+      prefix=m[1]; prefixStart=trimmed.length-prefix.length;
+      const r=resolveUnit(prefix);
+      const isKnown=!!(r.units.length || isReservedFunction(prefix) || ['pi','π','e'].includes(prefix.toLowerCase()));
+      if(isKnown)return [];
+    }
+    if(prefix.length<1)return [];
+    const low=prefix.toLowerCase(); const completions=[];
+    const add=(full,kind='autocomplete')=>{
+      if(!full.toLowerCase().startsWith(low)||full.length<=prefix.length)return;
+      if(completions.some(x=>x.full.toLowerCase()===full.toLowerCase()))return;
+      completions.push({full,kind});
+    };
+    if(!conversionTarget){
+      for(const f of functionCompletions)add(f,'function');
+      for(const c of constantCompletions)add(c,'constant');
+    }
+    for(const e of allUnitCompletions)add(e.text,'unit');
+    completions.sort((a,b)=>{
+      const order={function:0,constant:1,unit:2};
+      const common=['kilogram','kilometer','kilometre','kilohertz','kilobyte','kilobit','kilojoule','kilowatt','kilopascal','kiloliter'];
+      const ai=common.indexOf(a.full.toLowerCase()),bi=common.indexOf(b.full.toLowerCase());
+      const rank=x=>x<0?999:x;
+      return order[a.kind]-order[b.kind]||rank(ai)-rank(bi)||a.full.length-b.full.length||a.full.localeCompare(b.full);
+    });
+    return completions.slice(0,10).map(x=>{
+      const suffix=x.full.slice(prefix.length);
+      return buildChip({insertText:suffix,label:x.full,kind:'autocomplete',inlineEligible:true,ariaLabel:`Complete ${x.full}`});
+    });
+  }
+
+  /* -----------------------------------------------------------------------
+     Explicit conversion recognition and full per-line analyzer.
+     ----------------------------------------------------------------------- */
+  function splitConversion(expr) {
+    const m=expr.match(/^(.*?)(?:\s+to\s+|\s+in\s+|\s*->\s*)([A-Za-zµμΩ°][A-Za-z0-9_µμΩ°²³]*)\s*$/i);
+    if(!m)return null;
+    const target=resolveUnit(m[2]);
+    if(!target.units.length)return null;
+    return {source:m[1].trim(),target:target.units[0],targetUnits:target.units,targetAmbiguous:target.units.length>1,rawTarget:m[2]};
+  }
+  function parseAndEval(raw) {
+    const info=parseLongestSuffix(raw); if(!info)return null;
+    return {info,scored:safeEvaluateVariants(info)};
+  }
+  function runAnalysis(text, caret, lineStart, rawLine, hasComposition) {
+    if(hasComposition)return {chips:[],ghost:''};
+    const selection=editor.selectionStart!==editor.selectionEnd;
+    if(selection)return {chips:[],ghost:''};
+    const suffix=text.slice(caret, text.indexOf('\n',caret)<0?text.length:text.indexOf('\n',caret));
+    if(suffix.trim()!=='')return {chips:[],ghost:''};
+    if(rawLine.length>1000)return {chips:[],ghost:''};
+    const bullet=rawLine.match(/^(\s*)([-*+•–])\s+/);
+    const bulletLen=bullet?bullet[0].length:0;
+    const bulletFlag=!!bullet;
+    const shape=shapeLine(rawLine,bulletLen);
+    const baseOffset=lineStart+bulletLen;
+    const isTrailingEq=shape.explicitEquals;
+
+    // Trailing equals: calculate the segment immediately before that equals.
+    if(isTrailingEq){
+      const segment=shape.currentRaw;
+      const parsed=parseAndEval(segment);
+      if(!parsed||!parsed.scored.length)return {chips:[],ghost:''};
+      const info=parsed.info;
+      const onlyNumber=info.variants.every(v=>unwrapUnaryNumber(v.ast));
+      if(onlyNumber)return {chips:[],ghost:''};
+      if(info.variants.every(v=>isLonePercent(v.ast)))return {chips:[],ghost:''};
+      const phoneDate=isPhoneOrDate(info.expression);
+      const bareUnit=info.variants.length===1&&isBareUnitAst(info.variants[0].ast);
+      const ambiguous=info.variants.some(v=>v.ambiguous);
+      const classification=bulletFlag?'bullet':phoneDate?(isDatePattern(info.expression)?'date':'phone'):ambiguous?'ambiguous':bareUnit?'bareUnit':'inline';
+      const chips=[];
+      for(const scored of parsed.scored){
+        const useOnly=ambiguous||parsed.scored.length>1;
+        chips.push(...createFullSuggestions(scored,info,{...shape,partial:false},classification,{bareUnit,forceChipOnly:useOnly,explicitIntent:true}));
+      }
+      return {chips:addDedupe(chips),ghost:''};
+    }
+
+    // An equals followed by a literal quantity is a typed partial result, provided
+    // the immediately preceding segment contains a valid expression.
+    if(shape.previousRaw){
+      const currentText=shape.currentRaw.replace(/\s+$/,'');
+      const currentParsed=parseLongestSuffix(currentText);
+      const literalCurrent=currentParsed&&currentParsed.variants.length&&currentParsed.variants.every(v=>isPartialLiteralAst(v.ast));
+      if(literalCurrent){
+        const previousConversion=splitConversion(shape.previousRaw.trim());
+        const previous=parseAndEval(previousConversion?previousConversion.source:shape.previousRaw);
+        if(previous&&previous.scored.length){
+          let info=previous.info;
+          let scored=previous.scored;
+          if(previousConversion){
+            const converted=[];
+            for(const row of scored){
+              const target=previousConversion.target;
+              const items=row.items.filter(it=>sameDims(it.q.dims,target.dims)).map(it=>({...it,q:{...it.q,unit:target}}));
+              if(items.length)converted.push({...row,items,conversionPrimary:true,variant:{...row.variant,displayExpr:`${row.variant.displayExpr} to ${target.symbol}`}});
+            }
+            scored=converted;
+            info={...info,expression:`${info.expression} to ${previousConversion.target.symbol}`};
+          }
+          if(scored.length){
+            const rangeStart=baseOffset+shape.replaceStart;
+            const rangeEnd=lineStart+rawLine.length;
+            const prevPhoneDate=isPhoneOrDate(previous.info.expression);
+            const prevBare=!previousConversion&&previous.info.variants.length===1&&isBareUnitAst(previous.info.variants[0].ast);
+            const prevAmbiguous=previous.info.variants.some(v=>v.ambiguous);
+            const prevClass=previousConversion?'inline':bulletFlag?'bullet':prevPhoneDate?(isDatePattern(previous.info.expression)?'date':'phone'):prevAmbiguous?'ambiguous':prevBare?'bareUnit':'inline';
+            const chips=createPartialSuggestions(scored,info,{...shape,partial:true,explicitEquals:false},currentText,{start:rangeStart,end:rangeEnd},prevClass);
+            return {chips,ghost:''};
+          }
+        }
+      }
+    }
+
+    // No trailing equals: analyze the last segment; autocomplete takes priority only
+    // when the final identifier is genuinely incomplete.
+    const segment=shape.currentRaw;
+    const auto=autocompleteFor(text,shape,baseOffset);
+    if(auto.length)return {chips:auto,ghost:''};
+
+    let conversion=null;
+    const conversionMaybe=splitConversion(segment.trim());
+    let expressionRaw=segment;
+    if(conversionMaybe){conversion=conversionMaybe;expressionRaw=conversion.source;}
+    const parsed=parseAndEval(expressionRaw);
+    if(!parsed||!parsed.scored.length)return {chips:[],ghost:''};
+    const info=parsed.info;
+    const onlyNumber=info.variants.every(v=>unwrapUnaryNumber(v.ast));
+    if(onlyNumber)return {chips:[],ghost:''};
+    if(info.variants.every(v=>isLonePercent(v.ast)))return {chips:[],ghost:''};
+    const phoneDate=isPhoneOrDate(info.expression);
+    const bareUnit=!conversion&&info.variants.length===1&&isBareUnitAst(info.variants[0].ast);
+    const ambiguous=info.variants.some(v=>v.ambiguous)||(conversion&&conversion.targetAmbiguous);
+    const classification=bulletFlag?'bullet':phoneDate?(isDatePattern(info.expression)?'date':'phone'):ambiguous?'ambiguous':bareUnit?'bareUnit':'inline';
+    const chips=[];
+    for(const scored of parsed.scored){
+      const variant=conversion?{...scored.variant,hasLongUnits:scored.variant.hasLongUnits}:scored.variant;
+      const s={...scored,variant};
+      const force=ambiguous||parsed.scored.length>1;
+      if(conversion){
+        for(const target of conversion.targetUnits){
+          const convertedItems=[];
+          for(const it of scored.items){
+            if(!sameDims(it.q.dims,target.dims))continue;
+            const newQ={...it.q,unit:target};
+            convertedItems.push({...it,q:newQ});
+          }
+          if(convertedItems.length){
+            const targetExpr=`${info.expression} to ${target.symbol}`;
+            const converted={...s,items:convertedItems,bareTrig:scored.bareTrig,conversionPrimary:true,variant:{...s.variant,displayExpr:targetExpr}};
+            const out=createFullSuggestions(converted,info,{...shape,partial:false},classification,{forceChipOnly:force||conversion.targetAmbiguous,explicitIntent:false,displayExpr:targetExpr});
+            chips.push(...out);
+          }
+        }
+      }else{
+        chips.push(...createFullSuggestions(s,info,{...shape,partial:false},classification,{bareUnit,forceChipOnly:force,explicitIntent:false}));
+      }
+    }
+
+    // Scientific notation followed by a minus is intentionally dual-read: sci first,
+    // then ordinary multiplication by e and subtraction. Both readings are bar-only.
+    if(!conversion&&!ambiguous){
+      const scientific=info.expression.match(/(\d+(?:\.\d*)?)e-(\d+)/i);
+      if(scientific){
+        const altText=info.expression.replace(/(\d+(?:\.\d*)?)e-(\d+)/ig,'$1*e-$2');
+        const alt=parseAndEval(altText);
+        if(alt&&alt.scored.length){
+          chips.length=0;
+          for(const scored of parsed.scored.slice(0,1)){
+            const rendered=prettyAst(scored.variant.ast);
+            chips.push(...createFullSuggestions(scored,info,{...shape,partial:false},'ambiguous',{forceChipOnly:true,displayExpr:rendered}));
+          }
+          for(const scored of alt.scored.slice(0,1)){
+            const rendered=prettyAst(scored.variant.ast);
+            chips.push(...createFullSuggestions(scored,alt.info,{...shape,partial:false},'ambiguous',{forceChipOnly:true,displayExpr:rendered}));
+          }
+        }
+      }
+    }
+    return {chips:addDedupe(chips),ghost:''};
+  }
+  function isDatePattern(s) {
+    const x=s.trim();
+    return /^\d{4}-\d{1,2}-\d{1,2}$/.test(x)||/^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}$/.test(x);
+  }
+  function toSuperscript(value) {
+    const map={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+    return String(value).split('').map(c=>map[c]||c).join('');
+  }
+  function prettyAst(ast, parent=0) {
+    const prec={'+':40,'-':40,'*':60,'/':50,'%':50,'npr':55,'ncr':55,'^':80};
+    if(ast.type==='num'){
+      if(ast.sci&&/[eE]-/.test(ast.raw)){
+        const m=ast.raw.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))[eE]-(\d+)$/);
+        if(m){const exponent=Number(m[2]);const coefficient=Number(m[1])===1?'':`${m[1]}·`;return `${coefficient}10${toSuperscript(-exponent)}`;}
+      }
+      return ast.raw;
+    }
+    if(ast.type==='const')return ast.name==='pi'?'π':'e';
+    if(ast.type==='unit')return ast.unit.symbol;
+    if(ast.type==='unary')return ast.op+prettyAst(ast.child,70);
+    if(ast.type==='postfix')return prettyAst(ast.child,100)+ast.op;
+    if(ast.type==='func'){
+      const arg=prettyAst(ast.arg,0);
+      const base=ast.base?`log_${ast.base}`:ast.name;
+      return `${base}${ast.power&&ast.power!==1?`^${ast.power}`:''}(${arg})`;
+    }
+    if(ast.type==='call2')return `${ast.name==='npr'?'nPr':'nCr'}(${prettyAst(ast.a)}, ${prettyAst(ast.b)})`;
+    if(ast.type==='binary'){
+      const p=prec[ast.op]||50;
+      const left=prettyAst(ast.left,p),right=prettyAst(ast.right,p+(ast.op==='^'?0:1));
+      const op=ast.op==='npr'?' nPr ':ast.op==='ncr'?' nCr ':(ast.op==='*'||ast.implicit)?'·':` ${ast.op} `;
+      const s=left+op+right;return p<parent?`(${s})`:s;
+    }
+    return '';
+  }
+
+  /* -----------------------------------------------------------------------
+     UI: ghost mirror, chip strip, key policy, insertion and autosave.
+     ----------------------------------------------------------------------- */
+  const editor=document.getElementById('editor');
+  const mirror=document.getElementById('mirror');
+  const bar=document.getElementById('suggestionBar');
+  const strip=document.getElementById('chipStrip');
+  const STORAGE_KEY='quiet-calc-notes-v1';
+  let composing=false, dismissed=false, timer=0, saveTimer=0;
+  let suggestions=[], highlighted=0, explicitlyMoved=false, currentGhost='', signature='';
+  let lastRenderedCaret=-1;
+  try { editor.value=localStorage.getItem(STORAGE_KEY)||''; } catch (_) { editor.value=''; }
+
+  function renderMirror() {
+    const text=editor.value;
+    const start=editor.selectionStart||0;
+    const end=editor.selectionEnd||start;
+    mirror.replaceChildren();
+    mirror.appendChild(document.createTextNode(text.slice(0,start)));
+    if(start===end&&currentGhost){
+      const span=document.createElement('span');span.className='ghost';span.textContent=currentGhost;mirror.appendChild(span);
+    }
+    mirror.appendChild(document.createTextNode(text.slice(end)));
+    mirror.scrollTop=editor.scrollTop;mirror.scrollLeft=editor.scrollLeft;
+  }
+  function chipSignature(list) { return list.map(c=>`${c.kind}:${c.insertText}:${c.displayEquation}:${c.tag}`).join('\u0001'); }
+  function renderChip(chip,index) {
+    const button=document.createElement('button');button.type='button';button.className='chip';
+    button.setAttribute('role','option');button.setAttribute('aria-selected',index===highlighted?'true':'false');button.setAttribute('aria-label',chip.ariaLabel);
+    if(index===highlighted)button.classList.add('highlighted');
+    if(chip.kind==='autocomplete'){
+      const label=document.createElement('span');label.className='chip-label';label.textContent=chip.displayEquation;button.appendChild(label);
+    }else{
+      const equation=document.createElement('span');equation.className='equation';
+      const left=document.createElement('span');left.className='eq-left';left.textContent=chip.displayExpr;
+      const eq=document.createElement('span');eq.className='eq-equals';eq.textContent=' = ';
+      const result=document.createElement('span');result.className='eq-result';
+      if(chip.typedPrefixLen>0){
+        const typed=document.createElement('span');typed.className='typed-result';typed.textContent=chip.typedPrefix;
+        const rest=document.createElement('span');rest.className='inserted-result';rest.textContent=chip.resultText.slice(chip.typedPrefixLen);
+        result.append(typed,rest);
+      }else{
+        const inserted=document.createElement('span');inserted.className='inserted-result';inserted.textContent=chip.resultText;result.appendChild(inserted);
+      }
+      equation.append(left,eq,result);button.appendChild(equation);
+    }
+    if(chip.tag){const tag=document.createElement('span');tag.className='chip-tag';tag.textContent=chip.tag;button.appendChild(tag);}
+    button.addEventListener('mousedown',e=>e.preventDefault());
+    button.addEventListener('touchstart',()=>{}, {passive:true});
+    button.addEventListener('click',()=>acceptChip(index));
+    return button;
+  }
+  function showSuggestions(list) {
+    const nextSig=chipSignature(list);
+    if(nextSig!==signature){highlighted=0;explicitlyMoved=false;signature=nextSig;}
+    suggestions=list;
+    if(!suggestions.length){
+      bar.hidden=true;strip.replaceChildren();currentGhost='';renderMirror();return;
+    }
+    highlighted=clamp(highlighted,0,suggestions.length-1);
+    strip.replaceChildren();
+    suggestions.forEach((c,i)=>strip.appendChild(renderChip(c,i)));
+    bar.hidden=false;
+    const btn=strip.children[highlighted];
+    if(btn){
+      const r=btn.getBoundingClientRect(), s=strip.getBoundingClientRect();
+      if(r.left<s.left||r.right>s.right)btn.scrollIntoView({block:'nearest',inline:'nearest'});
+    }
+    const selected=suggestions[highlighted];
+    currentGhost=(!dismissed&&selected&&selected.inlineEligible)?selected.insertText:'';
+    renderMirror();
+  }
+  function clearSuggestions() {
+    suggestions=[];highlighted=0;explicitlyMoved=false;currentGhost='';signature='';
+    bar.hidden=true;strip.replaceChildren();renderMirror();
+  }
+  function scheduleAnalysis() {
+    clearTimeout(timer);
+    timer=setTimeout(runEngine,30);
+  }
+  function runEngine() {
+    if(dismissed||composing){clearSuggestions();return;}
+    const text=editor.value, caret=editor.selectionStart||0;
+    if(editor.selectionStart!==editor.selectionEnd){clearSuggestions();return;}
+    const lineStart=text.lastIndexOf('\n',Math.max(0,caret-1))+1;
+    let lineEnd=text.indexOf('\n',caret);if(lineEnd<0)lineEnd=text.length;
+    if(text.slice(caret,lineEnd).trim()!==''){clearSuggestions();return;}
+    const rawLine=text.slice(lineStart,caret);
+    const result=runAnalysis(text,caret,lineStart,rawLine,composing);
+    showSuggestions(result.chips||[]);
+    lastRenderedCaret=caret;
+  }
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{try{localStorage.setItem(STORAGE_KEY,editor.value);}catch(_){}},180);
+  }
+  function insertText(text, range) {
+    if(!text)return;
+    editor.focus({preventScroll:true});
+    const start=range?range.start:editor.selectionStart;
+    const end=range?range.end:editor.selectionEnd;
+    editor.setSelectionRange(start,end);
+    const before=editor.value;
+    let usedExec=false;
+    try {
+      if(document.execCommand){
+        usedExec=document.execCommand('insertText',false,text);
+      }
+    } catch (_) { usedExec=false; }
+    if(editor.value===before){
+      editor.setRangeText(text,start,end,'end');
+    }
+    const pos=start+text.length;
+    editor.setSelectionRange(pos,pos);
+    saveSoon();
+    dismissed=false;
+    scheduleAnalysis();
+    renderMirror();
+  }
+  function acceptChip(index=highlighted) {
+    const chip=suggestions[index];if(!chip)return;
+    const range=chip.replaceRange?chip.replaceRange:null;
+    const insertion=chip.insertText;
+    if(!insertion&&range){clearSuggestions();return;}
+    insertText(insertion,range);
+  }
+  function moveHighlight(delta) {
+    const next=highlighted+delta;
+    if(next<0||next>=suggestions.length){dismissed=true;clearSuggestions();return false;}
+    highlighted=next;explicitlyMoved=true;
+    strip.querySelectorAll('.chip').forEach((b,i)=>{
+      b.classList.toggle('highlighted',i===highlighted);b.setAttribute('aria-selected',i===highlighted?'true':'false');
+    });
+    const selected=suggestions[highlighted];
+    currentGhost=(!dismissed&&selected&&selected.inlineEligible)?selected.insertText:'';
+    const btn=strip.children[highlighted];if(btn)btn.scrollIntoView({block:'nearest',inline:'nearest'});
+    renderMirror();return true;
+  }
+  editor.addEventListener('input',()=>{dismissed=false;saveSoon();scheduleAnalysis();renderMirror();});
+  editor.addEventListener('scroll',()=>{mirror.scrollTop=editor.scrollTop;mirror.scrollLeft=editor.scrollLeft;});
+  editor.addEventListener('click',()=>{if(!dismissed)scheduleAnalysis();renderMirror();});
+  editor.addEventListener('keyup',e=>{
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))scheduleAnalysis();
+    renderMirror();
+  });
+  editor.addEventListener('compositionstart',()=>{composing=true;clearSuggestions();});
+  editor.addEventListener('compositionend',()=>{composing=false;dismissed=false;scheduleAnalysis();});
+  editor.addEventListener('keydown',e=>{
+    if(e.isComposing||composing)return;
+    if(dismissed&&e.key!=='Escape')dismissed=false;
+    if(e.key==='Escape'){
+      if(suggestions.length){e.preventDefault();dismissed=true;clearSuggestions();}
+      return;
+    }
+    if((e.altKey)&&/^[1-9]$/.test(e.key)){
+      const i=Number(e.key)-1;if(suggestions[i]){e.preventDefault();acceptChip(i);}return;
+    }
+    if(suggestions.length&&['ArrowLeft','ArrowUp'].includes(e.key)){
+      if(moveHighlight(-1))e.preventDefault();return;
+    }
+    if(suggestions.length&&['ArrowRight','ArrowDown'].includes(e.key)){
+      if(moveHighlight(1))e.preventDefault();return;
+    }
+    if(e.key==='Tab'){
+      const chip=suggestions[highlighted];
+      if(chip&&((currentGhost&&chip.inlineEligible)||explicitlyMoved)){
+        e.preventDefault();acceptChip(highlighted);
+      }else{
+        e.preventDefault();insertText('\t');
+      }
+      return;
+    }
+    if(e.key==='Enter'){
+      const chip=suggestions[highlighted];
+      if(chip&&((currentGhost&&chip.inlineEligible)||explicitlyMoved)){
+        e.preventDefault();acceptChip(highlighted);
+      }
+      return;
+    }
+  });
+  document.addEventListener('selectionchange',()=>{
+    if(document.activeElement===editor){
+      renderMirror();
+      if(editor.selectionStart!==editor.selectionEnd)clearSuggestions();
+      else if(!composing&&!dismissed)scheduleAnalysis();
+    }
+  });
+  window.addEventListener('resize',renderMirror);
+  window.addEventListener('beforeunload',()=>{try{localStorage.setItem(STORAGE_KEY,editor.value);}catch(_){}});
+  renderMirror();
+  scheduleAnalysis();
+
+})();
+</script>
+</body>
+</html>
