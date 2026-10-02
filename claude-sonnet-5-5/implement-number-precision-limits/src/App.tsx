@@ -35,7 +35,7 @@ export default function App() {
       />
       <div id="bar" ref={barRef}>
         <div id="chips" ref={chipsRef} />
-        <div id="hint">Tab accept · Enter accept inline · ←→ switch</div>
+        <div id="hint">Tab accept · ←→ switch</div>
       </div>
     </>
   );
