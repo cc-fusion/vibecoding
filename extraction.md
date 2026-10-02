@@ -5,3 +5,4 @@ Process all `.zip` archives located in XXX according to the exact workflow below
 4. Inspect the root of each extracted folder:
 - **Static HTML:** If the folder contains plain `index.html` and standard static assets without a build system, leave the directory as-is.
 - **React / Vite:** If the folder contains a `package.json` indicating a React/Vite application: Build the project into a **single, fully inlined HTML file** (inline all CSS and JS chunks) located at `<name>/dist/index.html`.
+5. Open a PR
