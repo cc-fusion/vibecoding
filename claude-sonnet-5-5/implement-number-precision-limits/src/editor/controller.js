@@ -13,7 +13,7 @@ export function createEditor({ ta, mirror, mi, bar, chipsEl }) {
   const ac = new AbortController();
   const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
 
-  const state = { chips: [], hi: 0, moved: false, sig: '', dismissed: false, composing: false };
+  const state = { chips: [], hi: 0, sig: '', dismissed: false, composing: false };
 
   /* ---- rendering ---- */
   function ghostText() {
@@ -63,7 +63,7 @@ export function createEditor({ ta, mirror, mi, bar, chipsEl }) {
 
   function setChips(chips) {
     const sig = chips.map(c => c.insertText + '|' + c.replaceLen + '|' + (c.tag || '') + '|' + c.dim).join('\u00a6');
-    if (sig !== state.sig) { state.hi = 0; state.moved = false; state.sig = sig; }
+    if (sig !== state.sig) { state.hi = 0; state.sig = sig; }
     state.chips = chips;
     if (state.hi >= chips.length) state.hi = 0;
     render();
@@ -132,19 +132,12 @@ export function createEditor({ ta, mirror, mi, bar, chipsEl }) {
       if (have) accept(state.hi); else insertText('\t');
       return;
     }
-    if (k === 'Enter') {
-      if (e.shiftKey) return;
-      // Enter only accepts what is visible inline (or a cell the user explicitly moved to)
-      const acceptable = have && (ghostText() !== '' || state.moved);
-      if (acceptable) { e.preventDefault(); accept(state.hi); }
-      return;
-    }
     if (have && !e.shiftKey) {
       if ((k === 'ArrowLeft' || k === 'ArrowUp') && state.hi > 0) {
-        e.preventDefault(); state.hi--; state.moved = true; render(); return;
+        e.preventDefault(); state.hi--; render(); return;
       }
       if ((k === 'ArrowRight' || k === 'ArrowDown') && state.hi < state.chips.length - 1) {
-        e.preventDefault(); state.hi++; state.moved = true; render(); return;
+        e.preventDefault(); state.hi++; render(); return;
       }
     }
   });
