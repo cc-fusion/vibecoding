@@ -1,6 +1,6 @@
 # Objective
 
-Select a game from the list in the Context & Scope block. Design and build it as a complete, playable, feature-rich game using standard HTML (along with CSS and vanilla JavaScript) for the main body. React is only permitted as an outer wrapper if required for deployment; do not write the core game logic or main body of the application using React or TypeScript.
+Select a game from the list in the Context & Scope block. Design and build it as a complete, playable, feature-rich game using standard HTML (along with CSS and JavaScript) for the main body. React is only permitted as an outer wrapper if required for deployment; do not write the core game logic or main body of the application using React or TypeScript.
 
 Treat the selected idea as a launchpad. Expand it with deep interlocking mechanics, progression, and polish so the result feels like a finished commercial indie title, not a prototype.
 
