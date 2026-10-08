@@ -65,4 +65,4 @@ The finished game must include all of the following:
 - [ ] **Performance**: the game uses `requestAnimationFrame` with delta-time, stays smooth under heavy particle or entity counts, and handles window resize.
 - [ ] **Robustness**: edge cases are guarded (empty arrays, division by zero, rapid input, tab blur, `localStorage` unavailable).
 
-Build idea #1
+Build the idea based off of the image
