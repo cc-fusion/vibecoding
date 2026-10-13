@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REACTOR CONTROL ROOM — Point Kinetics Simulator</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  html{background:#020617} body{font-family:Inter,system-ui,sans-serif} .mono{font-family:"JetBrains Mono",monospace}
+  .panel{background:#0f172a;border:1px solid #1e293b;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .panel2{background:#111c31;border:1px solid #263650;border-radius:12px}
+  .readout{background:#020617;border:1px solid #1e293b;border-radius:10px}
+  .btn{transition:.15s;cursor:pointer} .btn:active{transform:scale(.97)} .btn:disabled{opacity:.38;cursor:not-allowed;transform:none}
+  .cbtn{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:8px 10px;font-weight:700;font-size:12px;color:#e2e8f0}
+  .cbtn:hover{background:#334155} .cbtn.on{background:#065f46;border-color:#10b981;color:#a7f3d0}
+  .cbtn.warn-on{background:#7f1d1d;border-color:#ef4444;color:#fecaca}
+  input[type=range]{-webkit-appearance:none;width:100%;height:8px;border-radius:99px;background:#1e293b;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#22d3ee;border:3px solid #083344;box-shadow:0 0 0 2px #22d3ee66;cursor:pointer}
+  input[type=range].amber::-webkit-slider-thumb{background:#f59e0b;border-color:#451a03;box-shadow:0 0 0 2px #f59e0b55}
+  input[type=range].red::-webkit-slider-thumb{background:#ef4444;border-color:#450a0a}
+  @keyframes alarmFlash{0%,100%{background:#450a0a}50%{background:#991b1b}}
+  .alarm-crit{animation:alarmFlash .7s infinite;border-color:#ef4444!important}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 24px 4px rgba(239,68,68,.45)}}
+  .scramGlow{animation:pulseGlow 1.6s infinite}
+  @keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .slideUp{animation:slideUp .45s cubic-bezier(.2,.9,.25,1) both}
+  @keyframes toastIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+  .toast{animation:toastIn .3s both}
+  @keyframes floatUp{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-46px)}}
+  .floatTxt{animation:floatUp 1.6s forwards}
+  @keyframes blinkDot{0%,100%{opacity:1}50%{opacity:.25}} .blink{animation:blinkDot 1s infinite}
+  @keyframes vignettePulse{0%,100%{opacity:0}50%{opacity:.55}} #critVignette{animation:vignettePulse 1s infinite}
+  ::-webkit-scrollbar{width:8px;height:8px} ::-webkit-scrollbar-thumb{background:#334155;border-radius:99px} ::-webkit-scrollbar-track{background:#0b1220}
+  .seg.on{background:#0891b2;color:white;border-color:#22d3ee}
+  .diffBtn.on{background:#b45309;border-color:#f59e0b;color:#fff7ed}
+  .scenCard{transition:.2s;cursor:pointer} .scenCard:hover{transform:translateY(-3px);border-color:#22d3ee}
+  .scenCard.sel{border-color:#22d3ee;background:#0c2233}
+  .tabBtn.on{background:#0891b2;color:#fff}
+  details summary{cursor:pointer}
+  .kbd{background:#1e293b;border:1px solid #475569;border-bottom-width:3px;border-radius:6px;padding:1px 6px;font-size:11px}
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden">
+
+<!-- ===================== TITLE SCREEN ===================== -->
+<div id="titleScreen" class="min-h-screen relative">
+  <div class="absolute inset-0 opacity-[.13] pointer-events-none" style="background-image:radial-gradient(circle at 20% 30%, #164e63 0, transparent 40%),radial-gradient(circle at 85% 70%, #7f1d1d 0, transparent 35%),linear-gradient(#1e293b 1px,transparent 1px),linear-gradient(90deg,#1e293b 1px,transparent 1px);background-size:auto,auto,44px 44px,44px 44px"></div>
+  <div class="relative max-w-7xl mx-auto px-4 py-8 lg:py-12">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="slideUp">
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-14 rounded-2xl bg-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#082f49" stroke-width="2.2"><circle cx="12" cy="12" r="2.4" fill="#082f49"/><ellipse cx="12" cy="12" rx="10" ry="4.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(120 12 12)"/></svg>
+          </div>
+          <div>
+            <h1 class="text-4xl lg:text-6xl font-black tracking-tight leading-none">REACTOR<br><span class="text-cyan-400">CONTROL ROOM</span></h1>
+            <p class="text-slate-400 mt-2 max-w-xl text-sm lg:text-base">Point-kinetics neutronics, thermal-hydraulics, xenon-135 poisoning, steam &amp; turbine load-following, safety systems — and the shift where everything fails at once.</p>
+          </div>
+        </div>
+      </div>
+      <div class="panel p-4 min-w-[240px] slideUp">
+        <div class="text-[11px] tracking-widest text-slate-400 font-bold">OPERATOR PROFILE</div>
+        <div class="flex items-end justify-between mt-1"><div><div id="profRank" class="text-xl font-black text-amber-300">Trainee Operator</div><div id="profXp" class="mono text-xs text-slate-400">0 XP</div></div><div class="text-right"><div class="text-[11px] text-slate-400">BEST SCORE</div><div id="profBest" class="mono font-bold text-cyan-300">—</div></div></div>
+        <div class="h-2 bg-slate-800 rounded-full mt-3 overflow-hidden"><div id="profBar" class="h-full bg-amber-400 rounded-full" style="width:4%"></div></div>
+        <div id="profNext" class="text-[11px] text-slate-500 mt-1">Next rank at 300 XP</div>
+        <button id="btnResetProgress" class="btn text-[11px] text-red-300 underline mt-2">Reset saved progress</button>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-5 mt-8">
+      <div class="lg:col-span-8">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <h2 class="font-black text-lg">CAMPAIGN — FIVE SHIFTS, ESCALATING CONSEQUENCES</h2>
+          <div class="flex items-center gap-2"><span class="text-xs text-slate-400 font-bold">DIFFICULTY</span>
+            <div class="flex gap-1" id="diffRow">
+              <button data-diff="trainee" class="diffBtn btn cbtn">TRAINEE</button>
+              <button data-diff="operator" class="diffBtn btn cbtn">OPERATOR</button>
+              <button data-diff="senior" class="diffBtn btn cbtn">SENIOR</button>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Difficulty changes rod worth, xenon strength, fault frequency, grid volatility and scoring. Complete a shift to unlock the next.</p>
+        <div id="scenGrid" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
+        <div class="panel p-4 mt-4 flex flex-wrap gap-3 items-center justify-between">
+          <div><div class="font-black">FREE SANDBOX — INSTRUCTOR MODE</div><div class="text-xs text-slate-400">No objectives, no clock. Inject faults, chase criticality, learn what xenon does to a restart. Meltdown still counts.</div></div>
+          <button id="btnSandbox" class="btn bg-cyan-600 hover:bg-cyan-500 font-black px-5 py-3 rounded-xl">ENTER SANDBOX</button>
+        </div>
+      </div>
+      <div class="lg:col-span-4 space-y-4">
+        <div class="panel p-5 slideUp">
+          <div class="font-black text-cyan-300">YOUR FIRST 60 SECONDS</div>
+          <ol class="text-sm text-slate-300 space-y-2 mt-3 list-decimal list-inside">
+            <li>Pick <b>Shift 1 — Startup</b> and press <b>Begin Shift</b>.</li>
+            <li>Withdraw control rods until reactivity nears <span class="mono text-emerald-300">0 pcm</span>.</li>
+            <li>Watch neutron flux climb, fuel heat the coolant, pressure follow temperature.</li>
+            <li>Open the turbine valve and sell megawatts to the grid.</li>
+            <li>Hold the target band. Then the grid — and the plant — start pushing back.</li>
+          </ol>
+          <div class="grid grid-cols-2 gap-2 mt-4">
+            <button id="btnStartSel" class="btn bg-emerald-600 hover:bg-emerald-500 font-black py-3 rounded-xl col-span-2 text-lg">▶ BEGIN SELECTED SHIFT</button>
+            <button id="btnHelpTitle" class="btn cbtn py-2.5">? OPERATOR MANUAL</button>
+            <button id="btnSettingsTitle" class="btn cbtn py-2.5">⚙ SETTINGS</button>
+          </div>
+        </div>
+        <div class="panel p-5">
+          <div class="font-black text-amber-300">THE FOUR COUPLED SYSTEMS</div>
+          <div class="space-y-2.5 mt-3 text-[13px]">
+            <div class="panel2 p-3"><b class="text-cyan-300">1 · Neutronics</b><span class="text-slate-400"> — rods, boron, delayed precursors and xenon set reactivity (pcm). Cross prompt-critical (+650 pcm) and physics stops negotiating.</span></div>
+            <div class="panel2 p-3"><b class="text-orange-300">2 · Thermal-Hydraulics</b><span class="text-slate-400"> — fission heats fuel → coolant → pressure. Hot fuel &amp; coolant feed <i>negative</i> reactivity back. Lose flow and the loop bites.</span></div>
+            <div class="panel2 p-3"><b class="text-emerald-300">3 · Secondary &amp; Grid</b><span class="text-slate-400"> — the turbine is your heat sink and your income. Trip it and the primary heats up while revenue stops.</span></div>
+            <div class="panel2 p-3"><b class="text-red-300">4 · Safety &amp; Power</b><span class="text-slate-400"> — SCRAM, ECCS, diesels and batteries. In a blackout, every pump is a battery decision.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-[11px] text-slate-600 mt-6">Keyboard: <span class="kbd">Space</span> pause · <span class="kbd">↑</span><span class="kbd">↓</span> rods · <span class="kbd">S</span> SCRAM · <span class="kbd">1–4</span> speed · <span class="kbd">A</span> acknowledge alarms · <span class="kbd">M</span> mute · <span class="kbd">H</span> help</p>
+  </div>
+</div>
+
+<!-- ===================== SIM SCREEN ===================== -->
+<div id="simScreen" class="hidden min-h-screen relative">
+  <div id="critVignette" class="fixed inset-0 pointer-events-none z-40 hidden" style="box-shadow:inset 0 0 120px 40px rgba(220,38,38,.55)"></div>
+
+  <!-- Header HUD -->
+  <header class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+    <div class="max-w-[1600px] mx-auto px-3 py-2 flex flex-wrap items-center gap-2">
+      <button id="btnExit" class="btn cbtn">☰ MENU</button>
+      <div class="min-w-[150px]"><div id="hudScen" class="font-black leading-none text-sm lg:text-base">SHIFT 1</div><div id="hudDiff" class="text-[10px] text-slate-400">OPERATOR · SEED 1901</div></div>
+      <div class="readout px-3 py-1.5 text-center"><div class="text-[9px] text-slate-400 font-bold">MISSION TIME</div><div id="hudClock" class="mono font-extrabold text-cyan-300">00:00</div></div>
+      <div class="readout px-3 py-1.5 text-center"><div class="text-[9px] text-slate-400 font-bold">THERMAL POWER</div><div class="mono font-extrabold text-orange-300"><span id="hudPower">0.0</span>%</div></div>
+      <div class="readout px-3 py-1.5 text-center hidden md:block"><div class="text-[9px] text-slate-400 font-bold">ELECTRICAL</div><div class="mono font-extrabold text-emerald-300"><span id="hudElec">0</span> MW</div></div>
+      <div class="readout px-3 py-1.5 text-center hidden md:block"><div class="text-[9px] text-slate-400 font-bold">REACTIVITY</div><div id="hudRho" class="mono font-extrabold text-slate-200">— pcm</div></div>
+      <div id="hudState" class="px-3 py-1.5 rounded-lg font-black text-xs bg-slate-800 border border-slate-600">SUBCRITICAL</div>
+      <div class="flex-1"></div>
+      <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl p-1">
+        <button id="btnPause" class="btn cbtn !py-1.5">❚❚</button>
+        <button data-speed="0.5" class="spd btn cbtn !py-1.5 mono">0.5×</button>
+        <button data-speed="1" class="spd btn cbtn !py-1.5 mono">1×</button>
+        <button data-speed="2" class="spd btn cbtn !py-1.5 mono">2×</button>
+        <button data-speed="4" class="spd btn cbtn !py-1.5 mono">4×</button>
+      </div>
+      <button id="btnSound" class="btn cbtn" title="Mute / unmute">♪ ON</button>
+      <button id="btnHelpSim" class="btn cbtn">?</button>
+      <button id="btnSettingsSim" class="btn cbtn">⚙</button>
+      <button id="btnEndShift" class="btn bg-amber-600 hover:bg-amber-500 font-bold text-xs px-3 py-2 rounded-xl">END SHIFT</button>
+    </div>
+  </header>
+
+  <main class="max-w-[1600px] mx-auto p-3 grid grid-cols-1 xl:grid-cols-12 gap-3 relative">
+    <div id="floatLayer" class="absolute inset-0 pointer-events-none z-30 overflow-hidden"></div>
+
+    <!-- LEFT: core -->
+    <section class="xl:col-span-3 space-y-3">
+      <div class="panel p-3">
+        <div class="flex justify-between items-center"><h3 class="font-black text-sm">REACTOR VESSEL</h3><span id="coreStateTag" class="text-[10px] mono px-2 py-0.5 rounded bg-slate-800 border border-slate-600">COLD</span></div>
+        <canvas id="coreCanvas" width="520" height="430" class="w-full rounded-xl mt-2 bg-slate-950 border border-slate-800"></canvas>
+        <div class="grid grid-cols-2 gap-2 mt-2 text-center">
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">FUEL TEMP</div><div class="mono font-extrabold" ><span id="mFuel">240</span>°C</div><div class="h-1.5 bg-slate-800 rounded mt-1"><div id="barFuel" class="h-full bg-orange-500 rounded" style="width:10%"></div></div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">COOLANT AVG</div><div class="mono font-extrabold"><span id="mCool">240</span>°C</div><div class="h-1.5 bg-slate-800 rounded mt-1"><div id="barCool" class="h-full bg-cyan-500 rounded" style="width:10%"></div></div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">PRESSURE</div><div class="mono font-extrabold"><span id="mPres">90</span> bar</div><div class="h-1.5 bg-slate-800 rounded mt-1"><div id="barPres" class="h-full bg-violet-400 rounded" style="width:40%"></div></div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">CORE LEVEL</div><div class="mono font-extrabold"><span id="mLevel">100</span>%</div><div class="h-1.5 bg-slate-800 rounded mt-1"><div id="barLevel" class="h-full bg-sky-400 rounded" style="width:100%"></div></div></div>
+        </div>
+        <div class="mt-2 panel2 p-2.5">
+          <div class="flex justify-between text-[11px]"><span class="font-bold text-fuchsia-300">XE-135 POISON</span><span id="mXe" class="mono">0 pcm</span></div>
+          <div class="h-2 bg-slate-800 rounded mt-1"><div id="barXe" class="h-full bg-fuchsia-500 rounded" style="width:0%"></div></div>
+          <div class="flex justify-between text-[11px] mt-2"><span class="font-bold text-slate-300">CORE INTEGRITY</span><span id="mInteg" class="mono">100%</span></div>
+          <div class="h-2 bg-slate-800 rounded mt-1"><div id="barInteg" class="h-full bg-emerald-500 rounded" style="width:100%"></div></div>
+          <div class="flex justify-between text-[11px] mt-2"><span class="font-bold text-slate-300">CONTAINMENT</span><span id="mCont" class="mono">1.0 bar</span></div>
+          <div class="h-2 bg-slate-800 rounded mt-1"><div id="barCont" class="h-full bg-teal-400 rounded" style="width:15%"></div></div>
+        </div>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm mb-2">REACTIVITY BALANCE <span class="text-slate-500 font-normal text-[11px]">(pcm)</span></h3>
+        <div id="rhoBars" class="space-y-1.5 text-[11px] mono"></div>
+        <div class="border-t border-slate-700 mt-2 pt-2 flex justify-between mono text-xs"><span>TOTAL</span><b id="rhoTotal">0</b></div>
+        <p class="text-[11px] text-slate-500 mt-1">+650 pcm = prompt critical. Temperature &amp; xenon push back against the rods — that fight <i>is</i> the job.</p>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm">OBJECTIVES</h3>
+        <div id="objList" class="space-y-2 mt-2"></div>
+        <div id="jobBox" class="hidden mt-3 panel2 p-2"><div class="flex justify-between text-[11px]"><span id="jobName" class="font-bold text-amber-300">CREW WORKING…</span><span id="jobPct" class="mono">0%</span></div><div class="h-2 bg-slate-800 rounded mt-1"><div id="jobBar" class="h-full bg-amber-400 rounded" style="width:0%"></div></div></div>
+        <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+          <div class="readout p-2"><div class="text-[9px] text-slate-400">ENERGY SOLD</div><div id="stEnergy" class="mono font-bold text-emerald-300 text-sm">0</div><div class="text-[9px] text-slate-500">MWh</div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400">REVENUE</div><div id="stMoney" class="mono font-bold text-emerald-300 text-sm">$0k</div><div class="text-[9px] text-slate-500">budget</div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400">SHIFT SCORE</div><div id="stScore" class="mono font-bold text-cyan-300 text-sm">0</div><div class="text-[9px] text-slate-500">live</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER -->
+    <section class="xl:col-span-6 space-y-3">
+      <div id="coachBox" class="hidden panel p-3 border !border-cyan-500 bg-cyan-950">
+        <div class="flex justify-between gap-2"><div><div class="font-black text-cyan-300 text-sm">INSTRUCTOR</div><div id="coachText" class="text-sm text-cyan-100 mt-0.5">Withdraw the rods.</div></div><button id="btnCoachHide" class="btn cbtn h-fit">DISMISS</button></div>
+        <div class="h-1.5 bg-cyan-900 rounded mt-2"><div id="coachBar" class="h-full bg-cyan-400 rounded" style="width:10%"></div></div>
+      </div>
+
+      <div class="panel p-3">
+        <div class="flex justify-between items-center flex-wrap gap-2"><h3 class="font-black text-sm">PLANT SCHEMATIC — PRIMARY → STEAM GENERATOR → TURBINE</h3><span class="text-[10px] mono text-slate-400">pipe colour = temperature · dots = flow</span></div>
+        <canvas id="pidCanvas" width="980" height="400" class="w-full rounded-xl mt-2 bg-slate-950 border border-slate-800"></canvas>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-center">
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">GRID DEMAND</div><div class="mono font-extrabold text-amber-300"><span id="mDemand">50</span>%</div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">SG PRESSURE</div><div class="mono font-extrabold"><span id="mSG">20</span> bar</div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">COOLANT FLOW</div><div class="mono font-extrabold"><span id="mFlow">100</span>%</div></div>
+          <div class="readout p-2"><div class="text-[9px] text-slate-400 font-bold">POWER SOURCE</div><div id="mSource" class="mono font-extrabold text-emerald-300 text-sm">GRID</div></div>
+        </div>
+        <div class="mt-2">
+          <div class="flex justify-between text-[11px]"><span class="text-slate-400">OUTPUT vs DEMAND</span><span id="demandErr" class="mono">—</span></div>
+          <div class="relative h-4 bg-slate-800 rounded-full mt-1 overflow-hidden"><div id="barOutput" class="h-full bg-emerald-500 rounded-full" style="width:0%"></div><div id="demandTick" class="absolute top-0 bottom-0 w-1 bg-amber-400" style="left:50%"></div></div>
+        </div>
+      </div>
+
+      <div class="panel p-3">
+        <div class="flex flex-wrap justify-between gap-2 items-center"><h3 class="font-black text-sm">TREND</h3>
+          <div class="flex gap-3 text-[11px] mono">
+            <label class="flex gap-1 items-center cursor-pointer"><input type="checkbox" id="chkPower" checked class="accent-cyan-400">POWER %</label>
+            <label class="flex gap-1 items-center cursor-pointer"><input type="checkbox" id="chkTemp" checked class="accent-orange-400">FUEL °C/10</label>
+            <label class="flex gap-1 items-center cursor-pointer"><input type="checkbox" id="chkPres" class="accent-violet-400">PRESS bar</label>
+            <label class="flex gap-1 items-center cursor-pointer"><input type="checkbox" id="chkXe" class="accent-fuchsia-400">|XE| pcm/30</label>
+          </div>
+        </div>
+        <canvas id="chartCanvas" width="980" height="240" class="w-full rounded-xl mt-2 bg-slate-950 border border-slate-800"></canvas>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="panel p-3">
+          <div class="flex justify-between items-center"><h3 class="font-black text-sm text-red-300">⚠ ALARM PANEL</h3><div class="flex gap-1"><button id="btnAck" class="btn cbtn !py-1">ACK <span class="kbd">A</span></button><button id="btnSilence" class="btn cbtn !py-1">SILENCE</button></div></div>
+          <div id="alarmList" class="space-y-1.5 mt-2 max-h-[168px] overflow-y-auto pr-1"><div class="text-xs text-slate-500">All systems normal.</div></div>
+        </div>
+        <div class="panel p-3">
+          <h3 class="font-black text-sm">EVENT LOG</h3>
+          <div id="eventLog" class="space-y-1 mt-2 max-h-[168px] overflow-y-auto pr-1 text-[11px] mono"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: controls -->
+    <section class="xl:col-span-3 space-y-3">
+      <button id="btnScram" class="btn scramGlow w-full bg-red-700 hover:bg-red-600 border-2 border-red-400 rounded-2xl py-4 font-black text-xl tracking-widest">⬤ SCRAM</button>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btnResetScram" class="btn cbtn" disabled>RESET SCRAM</button>
+        <button id="btnTripTurb" class="btn cbtn">TRIP TURBINE</button>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm text-cyan-300">REACTIVITY CONTROL</h3>
+        <div class="flex justify-between text-[11px] mt-2"><span>CONTROL RODS WITHDRAWN</span><b id="vRod" class="mono">20%</b></div>
+        <input id="rngRod" type="range" min="0" max="100" value="20" step="1">
+        <div class="grid grid-cols-4 gap-1 mt-1">
+          <button class="btn cbtn rodStep" data-d="-10">−10</button><button class="btn cbtn rodStep" data-d="-2">−2</button>
+          <button class="btn cbtn rodStep" data-d="2">+2</button><button class="btn cbtn rodStep" data-d="10">+10</button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">Insert = shutdown. Withdraw slowly near critical — delayed neutrons give you seconds, not minutes. <span class="kbd">↑</span><span class="kbd">↓</span></p>
+        <div class="flex justify-between text-[11px] mt-3"><span>BORON (CHEMICAL SHIM)</span><b id="vBoron" class="mono">1000 ppm</b></div>
+        <input id="rngBoron" type="range" min="0" max="2000" value="1000" step="10" class="amber">
+        <div class="grid grid-cols-2 gap-1 mt-1"><button id="btnBorate" class="btn cbtn">+ BORATE</button><button id="btnDilute" class="btn cbtn">− DILUTE</button></div>
+        <p class="text-[10px] text-slate-500 mt-1">Boron is slow, smooth reactivity — the tool for fighting xenon without rod drama.</p>
+        <label class="flex items-center gap-2 mt-3 text-xs cursor-pointer panel2 p-2"><input id="chkAutoRod" type="checkbox" class="accent-cyan-400 w-4 h-4"><span><b>Automatic Rod Control</b><br><span class="text-slate-500 text-[11px]">Holds your set power — unlock: Senior Operator rank or buy upgrade.</span></span></label>
+        <div class="flex justify-between text-[11px] mt-2"><span>AUTO POWER SETPOINT</span><b id="vSetPt" class="mono">50%</b></div>
+        <input id="rngSetPt" type="range" min="5" max="100" value="50">
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm text-sky-300">COOLANT &amp; PRESSURIZER</h3>
+        <div class="grid grid-cols-2 gap-1 mt-2">
+          <button id="btnPumpA" class="btn cbtn on">PUMP A · ON</button><button id="btnPumpB" class="btn cbtn on">PUMP B · ON</button>
+        </div>
+        <div class="flex justify-between text-[11px] mt-2"><span>PUMP SPEED</span><b id="vPumpSpd" class="mono">100%</b></div>
+        <input id="rngPumpSpd" type="range" min="20" max="110" value="100">
+        <div class="grid grid-cols-2 gap-1 mt-2">
+          <button id="btnHeater" class="btn cbtn">PZR HEATER</button><button id="btnSpray" class="btn cbtn">PZR SPRAY</button>
+          <button id="btnECCS" class="btn cbtn">ECCS INJECT</button><button id="btnContSpray" class="btn cbtn">CONT. SPRAY</button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">No flow + fission = fuel temperature excursion. ECCS refills the core but needs electrical power.</p>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm text-emerald-300">TURBINE &amp; ELECTRICAL</h3>
+        <div class="flex justify-between text-[11px] mt-2"><span>TURBINE STEAM VALVE</span><b id="vTurb" class="mono">0%</b></div>
+        <input id="rngTurb" type="range" min="0" max="100" value="0">
+        <div class="grid grid-cols-2 gap-1 mt-1"><button id="btnTurbReset" class="btn cbtn">RESET TURBINE</button><button id="btnLoadPreset" class="btn cbtn">MATCH DEMAND</button></div>
+        <div class="border-t border-slate-700 mt-3 pt-2 space-y-1">
+          <div class="flex justify-between text-[11px]"><span>BATTERY</span><b id="vBatt" class="mono">100%</b></div>
+          <div class="h-2 bg-slate-800 rounded"><div id="barBatt" class="h-full bg-lime-400 rounded" style="width:100%"></div></div>
+          <div class="flex justify-between text-[11px]"><span>DIESEL FUEL</span><b id="vDieselFuel" class="mono">100%</b></div>
+          <div class="h-2 bg-slate-800 rounded"><div id="barDiesel" class="h-full bg-amber-400 rounded" style="width:100%"></div></div>
+        </div>
+        <div class="grid grid-cols-2 gap-1 mt-2">
+          <button id="btnDiesel" class="btn cbtn">START DIESEL</button><button id="btnRestoreGrid" class="btn cbtn">RESTORE GRID ($40k)</button>
+          <button id="btnIsolate" class="btn cbtn">ISOLATE BREAK</button><button id="btnRepairPump" class="btn cbtn">REPAIR PUMP ($25k)</button>
+        </div>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm text-amber-300">PLANT UPGRADES <span class="text-slate-500 font-normal text-[10px]">bought with shift revenue</span></h3>
+        <div id="upgradeList" class="space-y-1.5 mt-2"></div>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm text-red-300">INSTRUCTOR — FAULT INJECTION</h3>
+        <div class="grid grid-cols-2 gap-1 mt-2">
+          <button class="btn cbtn faultBtn" data-fault="pumpTrip">PUMP TRIP</button>
+          <button class="btn cbtn faultBtn" data-fault="loca">SMALL LOCA</button>
+          <button class="btn cbtn faultBtn" data-fault="turbTrip">TURBINE TRIP</button>
+          <button class="btn cbtn faultBtn" data-fault="blackout">GRID LOSS</button>
+          <button class="btn cbtn faultBtn" data-fault="steamBreak">STEAM BREAK</button>
+          <button class="btn cbtn faultBtn" data-fault="rodEject">ROD EJECTION</button>
+          <button class="btn cbtn faultBtn" data-fault="demandSpike">DEMAND SPIKE</button>
+          <button class="btn cbtn faultBtn" data-fault="rodDrift">ROD DRIFT</button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">In campaign shifts the plant injects its own. Here, you are the accident.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+<div id="helpModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3">
+  <div class="panel max-w-3xl w-full max-h-[88vh] overflow-y-auto p-6 slideUp">
+    <div class="flex justify-between"><h2 class="text-2xl font-black">OPERATOR MANUAL</h2><button class="btn cbtn closeHelp">✕ CLOSE</button></div>
+    <div class="grid md:grid-cols-2 gap-4 mt-4 text-sm">
+      <div class="panel2 p-4"><h3 class="font-black text-cyan-300">THE CORE LOOP</h3><p class="text-slate-300 mt-1">Rods &amp; boron set <b>reactivity</b>. Near 0 pcm the reactor is critical and power holds. Positive reactivity → power rises exponentially on the delayed-neutron timescale. Rising fuel/coolant temperature subtracts reactivity (your built-in brake), xenon-135 subtracts much more after power changes, and only decays over (compressed) hours. Generate steam, sell power, keep every needle out of the red.</p></div>
+      <div class="panel2 p-4"><h3 class="font-black text-orange-300">READING THE PLANT</h3><ul class="list-disc list-inside text-slate-300 space-y-1 mt-1"><li><b>Fuel temp</b> &gt;950°C warning, &gt;1100°C damage, ~1800°C meltdown.</li><li><b>Pressure</b> follows coolant temperature; &gt;210 bar strains the vessel, &gt;250 bar sustained ruptures it.</li><li><b>Level</b> falling = leak. Uncovered fuel overheats fast.</li><li><b>Xenon</b> peaks <i>after</i> a shutdown/trip — restarting into the pit needs boron dilution, rods, or patience.</li></ul></div>
+      <div class="panel2 p-4"><h3 class="font-black text-emerald-300">CONTROLS</h3><ul class="list-disc list-inside text-slate-300 space-y-1 mt-1"><li>Rod slider/buttons — fast reactivity.</li><li>Boron — slow shim, ± buttons nudge 40 ppm.</li><li>Pumps &amp; speed — coolant flow and heat removal.</li><li>Turbine valve — heat sink + revenue; trips remove both.</li><li>ECCS — emergency core refill (needs power).</li><li>Diesel — your lifeline when the grid dies; batteries bridge the gap.</li><li>Crew jobs (isolate break, repair pump, restore grid) cost money and time.</li></ul></div>
+      <div class="panel2 p-4"><h3 class="font-black text-red-300">WHEN IT GOES WRONG</h3><ul class="list-disc list-inside text-slate-300 space-y-1 mt-1"><li><b>Power excursion:</b> insert rods, borate, SCRAM if reactivity stays positive.</li><li><b>LOCA:</b> SCRAM, ECCS on, isolate the break, watch level recover.</li><li><b>Blackout:</b> SCRAM, start the diesel <i>before</i> the battery dies, restore flow, cool down gently — decay heat still needs removing.</li><li><b>Turbine trip:</b> cut power or the primary will heat and pressurise.</li></ul></div>
+    </div>
+    <h3 class="font-black mt-4">KEYBOARD</h3>
+    <p class="text-sm text-slate-300 mt-1"><span class="kbd">Space</span> pause · <span class="kbd">↑</span>/<span class="kbd">↓</span> rods ±2% · <span class="kbd">S</span> SCRAM · <span class="kbd">R</span> reset SCRAM · <span class="kbd">E</span> ECCS · <span class="kbd">D</span> diesel · <span class="kbd">A</span> acknowledge · <span class="kbd">1–4</span> speed (0.5/1/2/4×) · <span class="kbd">M</span> mute · <span class="kbd">H</span> help · <span class="kbd">Esc</span> pause menu</p>
+    <h3 class="font-black mt-4">WINNING &amp; LOSING</h3>
+    <p class="text-sm text-slate-300 mt-1">Complete every objective before the shift clock runs out for a graded pass (S–D) and XP toward Senior Operator, unlocking later shifts and Automatic Rod Control. Meltdown, vessel rupture, containment failure, a dead battery with a hot core, or an unfinished shift ends the run. Sandbox never times out — it just keeps score.</p>
+  </div>
+</div>
+
+<div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3">
+  <div class="panel max-w-md w-full p-6 slideUp">
+    <div class="flex justify-between"><h2 class="text-xl font-black">SETTINGS</h2><button class="btn cbtn closeSettings">✕</button></div>
+    <div class="space-y-4 mt-4 text-sm">
+      <div><div class="flex justify-between"><span>Master volume</span><b id="vVol" class="mono">70%</b></div><input id="rngVol" type="range" min="0" max="100" value="70"></div>
+      <label class="flex justify-between items-center cursor-pointer"><span>Mute all audio</span><input id="chkMute" type="checkbox" class="accent-red-500 w-5 h-5"></label>
+      <label class="flex justify-between items-center cursor-pointer"><span>Ambient plant hum &amp; pumps</span><input id="chkAmbient" type="checkbox" checked class="accent-cyan-400 w-5 h-5"></label>
+      <label class="flex justify-between items-center cursor-pointer"><span>Show instructor coach (Shift 1)</span><input id="chkCoach" type="checkbox" checked class="accent-cyan-400 w-5 h-5"></label>
+      <label class="flex justify-between items-center cursor-pointer"><span>Reduce flashing effects</span><input id="chkCalm" type="checkbox" class="accent-cyan-400 w-5 h-5"></label>
+      <div><div class="flex justify-between"><span>Default difficulty</span></div>
+        <div class="flex gap-1 mt-1" id="diffRow2">
+          <button data-diff="trainee" class="diffBtn btn cbtn flex-1">TRAINEE</button><button data-diff="operator" class="diffBtn btn cbtn flex-1">OPERATOR</button><button data-diff="senior" class="diffBtn btn cbtn flex-1">SENIOR</button>
+        </div></div>
+      <p class="text-[11px] text-slate-500">Settings, XP, unlocked shifts and best scores persist in this browser. Audio is fully synthesized — no files.</p>
+    </div>
+  </div>
+</div>
+
+<div id="pauseModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3">
+  <div class="panel max-w-sm w-full p-6 text-center slideUp">
+    <h2 class="text-3xl font-black">SHIFT PAUSED</h2><p class="text-slate-400 text-sm mt-1">The reactor is holding its breath.</p>
+    <div class="grid gap-2 mt-5">
+      <button id="btnResume" class="btn bg-emerald-600 hover:bg-emerald-500 font-black py-3 rounded-xl">▶ RESUME</button>
+      <button id="btnRestart" class="btn cbtn py-2.5">↻ RESTART SHIFT</button>
+      <button id="btnHelpPause" class="btn cbtn py-2.5">OPERATOR MANUAL</button>
+      <button id="btnSettingsPause" class="btn cbtn py-2.5">SETTINGS</button>
+      <button id="btnQuitTitle" class="btn cbtn py-2.5">RETURN TO TITLE</button>
+    </div>
+  </div>
+</div>
+
+<div id="endModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
+  <div class="panel max-w-lg w-full p-6 slideUp">
+    <div id="endBadge" class="text-center"><div id="endGrade" class="text-7xl font-black text-emerald-400">S</div><h2 id="endTitle" class="text-2xl font-black mt-1">SHIFT COMPLETE</h2><p id="endSub" class="text-slate-400 text-sm">The grid is fed. The core is intact.</p></div>
+    <div id="endStats" class="grid grid-cols-2 gap-2 mt-4 text-center"></div>
+    <div id="endUnlock" class="hidden mt-3 panel2 p-3 text-center text-amber-300 font-bold text-sm"></div>
+    <div class="grid grid-cols-2 gap-2 mt-5">
+      <button id="btnNextScen" class="btn bg-emerald-600 hover:bg-emerald-500 font-black py-3 rounded-xl">NEXT SHIFT →</button>
+      <button id="btnRetry" class="btn cbtn py-3">↻ REPLAY</button>
+      <button id="btnEndSandbox" class="btn cbtn py-3">FREE SANDBOX</button>
+      <button id="btnEndTitle" class="btn cbtn py-3">TITLE SCREEN</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="fixed top-16 right-3 z-50 space-y-2 w-[300px] pointer-events-none"></div>
+
+<script>
+"use strict";
+/* ============ UTILITIES & PERSISTENCE ============ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let SAVE=store.get("reactorSaveV1",{xp:0,unlocked:1,best:{},settings:{vol:70,mute:false,ambient:true,coach:true,calm:false,diff:"operator"}});
+SAVE.settings=Object.assign({vol:70,mute:false,ambient:true,coach:true,calm:false,diff:"operator"},SAVE.settings||{});
+SAVE.best=SAVE.best||{};SAVE.unlocked=SAVE.unlocked||1;SAVE.xp=SAVE.xp||0;if(!["trainee","operator","senior"].includes(SAVE.settings.diff))SAVE.settings.diff="operator";
+function persist(){store.set("reactorSaveV1",SAVE)}
+const RANKS=[[0,"Trainee Operator"],[300,"Licensed Operator"],[800,"Senior Operator"],[1600,"Shift Supervisor"],[3000,"Plant Director"]];
+function rankOf(xp){let r=RANKS[0],n=RANKS[1]||null;for(let i=0;i<RANKS.length;i++){if(xp>=RANKS[i][0]){r=RANKS[i];n=RANKS[i+1]||null}}return{cur:r,next:n}}
+const DIFFS={trainee:{label:"TRAINEE",rodWorth:30,xe:0.75,faultEvery:0,demandJitter:0,startMoney:70,scoreMult:0.8,desc:"Gentle physics, no random faults, fat budget."},operator:{label:"OPERATOR",rodWorth:38,xe:1,faultEvery:170,demandJitter:2,startMoney:50,scoreMult:1,desc:"Full physics, occasional random faults."},senior:{label:"SENIOR",rodWorth:46,xe:1.25,faultEvery:95,demandJitter:5,startMoney:38,scoreMult:1.35,desc:"Hot rods, strong xenon, restless grid & plant."}};
+
+/* ============ AUDIO (fully synthesized) ============ */
+let AC=null,masterGain=null,humOsc=null,humOsc2=null,humGain=null,pumpGain=null,noiseSrc=null;
+function initAudio(){if(AC){if(AC.state==="suspended")AC.resume();return}try{AC=new(window.AudioContext||window.webkitAudioContext)();masterGain=AC.createGain();masterGain.connect(AC.destination);applyVolume();
+humOsc=AC.createOscillator();humOsc.type="sine";humOsc.frequency.value=50;humOsc2=AC.createOscillator();humOsc2.type="triangle";humOsc2.frequency.value=100;humGain=AC.createGain();humGain.gain.value=0;humOsc.connect(humGain);humOsc2.connect(humGain);humGain.connect(masterGain);humOsc.start();humOsc2.start();
+const len=AC.sampleRate*2,buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+noiseSrc=AC.createBufferSource();noiseSrc.buffer=buf;noiseSrc.loop=true;const bp=AC.createBiquadFilter();bp.type="bandpass";bp.frequency.value=420;bp.Q.value=.7;pumpGain=AC.createGain();pumpGain.gain.value=0;noiseSrc.connect(bp);bp.connect(pumpGain);pumpGain.connect(masterGain);noiseSrc.start();}catch(e){AC=null}}
+function applyVolume(){if(masterGain)masterGain.gain.value=SAVE.settings.mute?0:(SAVE.settings.vol/100)*0.9}
+function beep(f=880,dur=.09,type="square",vol=.12,when=0){if(!AC||SAVE.settings.mute)return;const t=AC.currentTime+when,o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(masterGain);o.start(t);o.stop(t+dur+.02)}
+function sndClick(){beep(620,.05,"square",.05)}
+function sndScram(){if(!AC)return;beep(160,.35,"sawtooth",.25);beep(70,.5,"sine",.3,.02);for(let i=0;i<4;i++)beep(1200-i*200,.06,"square",.09,.05*i)}
+function sndAlarm(){beep(980,.12,"square",.1);beep(980,.12,"square",.1,.18)}
+function sndSuccess(){[523,659,784,1046].forEach((f,i)=>beep(f,.16,"triangle",.12,i*.1))}
+function sndFail(){[400,300,210,130].forEach((f,i)=>beep(f,.25,"sawtooth",.14,i*.14))}
+let ambTimer=0;
+function updateAmbient(dt){if(!AC)return;ambTimer-=dt;if(ambTimer>0)return;ambTimer=.25;const on=SAVE.settings.ambient&&!SAVE.settings.mute&&G&&G.running&&!G.paused;const t=AC.currentTime;humGain.gain.setTargetAtTime(on?0.012+G.heatPct*0.00045:0,t,.2);humOsc.frequency.setTargetAtTime(48+G.heatPct*.25,t,.3);pumpGain.gain.setTargetAtTime(on?G.flow*0.00035:0,t,.2)}
+
+/* ============ SCENARIOS ============ */
+const SCEN=[
+{id:0,name:"SHIFT 1 · STARTUP & POWER ASCENSION",short:"Startup",icon:"◉",seed:1901,color:"#22d3ee",desc:"Cold plant, withdrawn grid. Bring the core critical, raise power smoothly, synchronise the turbine and hold 45–55% while selling your first megawatts.",goal:"Reach & hold 45–55% power, generate energy",maxTime:420},
+{id:1,name:"SHIFT 2 · LOAD FOLLOW",short:"Load Follow",icon:"∿",seed:2044,color:"#34d399",desc:"The grid operator now owns your throttle. Demand steps up and down for four minutes — chase it with rods, boron and steam without cooking the core.",goal:"Track shifting grid demand for 4 minutes",maxTime:300},
+{id:2,name:"SHIFT 3 · THE XENON PIT",short:"Xenon Pit",icon:"☢",seed:3113,color:"#e879f9",desc:"Twelve hours after a trip (compressed, mercifully), xenon-135 sits in the core eating neutrons. Restart to 30% anyway: dilute boron, manage rods, or wait out the poison.",goal:"Restart to 30% despite peak xenon",maxTime:420},
+{id:3,name:"SHIFT 4 · LOSS OF COOLANT",short:"LOCA",icon:"💧",seed:4200,color:"#38bdf8",desc:"Full power, quiet shift — until a pump trips and a small break opens. SCRAM, inject, isolate, and prove the safety case you have been rehearsing.",goal:"Survive a pump trip + small LOCA",maxTime:420},
+{id:4,name:"SHIFT 5 · STATION BLACKOUT — CAPSTONE",short:"Blackout",icon:"⚡",seed:5555,color:"#f87171",desc:"The grid is gone, the diesels are cold, and decay heat does not care. Batteries are a countdown. Restore cooling, cool the core down, and hold a stable shutdown.",goal:"Survive total loss of off-site power",maxTime:480}];
+const UPGRADES=[
+{id:"eccs",name:"Enhanced ECCS",cost:55,desc:"Emergency injection flow ×1.7",owned:false},
+{id:"diesel",name:"Fast-Start Diesels",cost:40,desc:"Diesel start 5s → 2s, slower fuel burn",owned:false},
+{id:"governor",name:"Advanced Governor + Auto Rods",cost:65,desc:"Unlocks Automatic Rod Control permanently",owned:false},
+{id:"sensors",name:"Predictive Sensor Suite",cost:45,desc:"Slower core damage, earlier warnings, +10% score",owned:false},
+{id:"pumps",name:"High-Head Pumps",cost:42,desc:"Coolant flow effectiveness +15%",owned:false}];
+
+/* ============ GAME STATE ============ */
+let G=null,selectedScen=0,rafId=null,lastTs=0;
+function eqC(p){return 0.0065/(0.05*0.08)*p}
+function newState(scenIdx){
+ const diff=DIFFS[SAVE.settings.diff],sandbox=scenIdx<0,sc= sandbox?null:SCEN[scenIdx];
+ const rng=mulberry32(sandbox?777:(sc.seed));
+ return {sandbox,scenIdx,diffKey:SAVE.settings.diff,diff,rng,running:true,paused:false,ended:false,speed:1,
+  t:0,fission:0.2,precursor:eqC(0.2),decay:0,heatPct:0.2,rodPos:20,boron:1050,scrammed:false,scramResettable:false,
+  fuelTemp:245,coolAvg:240,coolHot:252,pressure:88,sgPressure:18,level:100,contP:1.0,contTemp:30,
+  iodine:0.05,xenon:0.03,flow:100,pumpA:true,pumpB:true,pumpSpd:100,pumpFault:null,flowTarget:100,
+  heater:false,spray:false,eccs:false,contSpray:false,turbValve:0,turbTripped:false,elec:0,demand:50,demandBase:50,
+  offsite:true,dieselState:"off",dieselTimer:0,dieselFuel:100,battery:100,job:null,leak:0,steamBreak:0,rodEjectT:0,rodDriftT:0,
+  rho:{rod:0,boron:0,fuel:0,mod:0,xe:0,total:0},integrity:100,ruptureT:0,damageRate:0,
+  money:diff.startMoney,energy:0,score:0,alarmCount:0,scrams:0,peakTemp:245,peakPower:0,minBattery:100,demandErrSum:0,demandSamples:0,maxDemandErr:0,
+  holdBand:0,holdStable:0,incidentT:-1,incidentDone:false,eccsUsed:false,dieselStarted:false,turbSynced:false,generated50:false,
+  milestones:{},upgrades:JSON.parse(JSON.stringify(UPGRADES)),autoRod:false,setPt:50,history:[],histT:0,logT:0,objT:0,chartT:0,
+  eventsFired:{},silencedUntil:0,acked:{},critActive:false,scoreTick:0,randomFaultT:diff.faultEvery?diff.faultEvery*(0.7+rng()*0.6):0,demandStepT:0,coachStep:0,floatT:0};
+}
+function applyScenarioStart(){
+ if(G.sandbox){G.fission=8;G.precursor=eqC(8);G.heatPct=8;G.rodPos=48;G.boron=950;G.fuelTemp=330;G.coolAvg=272;G.pressure=118;G.demand=55;return}
+ const i=G.scenIdx;
+ if(i===0){/* defaults cold */}
+ if(i===1){setPowerState(72);G.rodPos=63;G.boron=880;G.turbValve=72;G.fuelTemp=690;G.coolAvg=302;G.pressure=158;G.sgPressure=62;G.demand=60;G.demandBase=60}
+ if(i===2){G.fission=0.4;G.precursor=eqC(0.4);G.rodPos=28;G.boron=980;G.xenon=0.95;G.iodine=0.32;G.fuelTemp=290;G.coolAvg=282;G.pressure=140;G.demand=30}
+ if(i===3){setPowerState(85);G.rodPos=64;G.boron=860;G.turbValve=80;G.fuelTemp=760;G.coolAvg=308;G.pressure=160;G.sgPressure=66;G.demand=80}
+ if(i===4){setPowerState(90);G.rodPos=65;G.boron=850;G.turbValve=84;G.fuelTemp=790;G.coolAvg=310;G.pressure=161;G.sgPressure=68;G.demand=85}
+}
+function setPowerState(p){G.fission=p;G.precursor=eqC(p);G.heatPct=p}
+
+/* ============ LOGGING / TOASTS / FLOATERS ============ */
+function fmtTime(s){s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
+function log(msg,type="info"){const el=$("eventLog");if(!el)return;const colors={info:"text-slate-300",good:"text-emerald-300",warn:"text-amber-300",bad:"text-red-300",sys:"text-cyan-300"};const d=document.createElement("div");d.className=colors[type]||colors.info;d.textContent="["+fmtTime(G?G.t:0)+"] "+msg;el.prepend(d);while(el.children.length>60)el.lastChild.remove()}
+function toast(title,body,color="#22d3ee"){const t=document.createElement("div");t.className="toast panel p-3 pointer-events-auto";t.style.borderColor=color;t.innerHTML='<div class="font-black text-sm" style="color:'+color+'">'+title+'</div><div class="text-xs text-slate-300 mt-0.5">'+body+'</div>';$("toasts").appendChild(t);setTimeout(()=>{t.style.opacity="0";t.style.transition=".4s";setTimeout(()=>t.remove(),420)},4200)}
+function floater(txt,color="#34d399"){const l=$("floatLayer");if(!l||!l.clientWidth)return;const d=document.createElement("div");d.className="floatTxt absolute mono font-extrabold text-sm";d.style.color=color;d.style.left=(38+Math.random()*24)+"%";d.style.top=(30+Math.random()*15)+"%";d.textContent=txt;l.appendChild(d);setTimeout(()=>d.remove(),1650)}
+
+/* ============ PHYSICS ============ */
+const BETA=0.0065,LAMBDA=0.05,DLAM=0.08;
+function computeRho(){
+ const d=G.diff;
+ let rod=(G.rodPos-58)*d.rodWorth;
+ if(G.scrammed)rod=-5200;
+ let boron=-(G.boron-900)*1.05;
+ let fuel=-(G.fuelTemp-620)*1.55;
+ let mod=-(G.coolAvg-298)*3.4;
+ if(G.level<55)mod-=(55-G.level)*9;
+ let xe=-2950*G.xenon*d.xe;
+ let eject=G.rodEjectT>0?950:0;
+ let total=clamp(rod+boron+fuel+mod+xe+eject,-9000,5200);
+ G.rho={rod,boron,fuel,mod,xe:xe+eject,total};
+ return total;
+}
+function stepPhysics(dt){
+ // timers & scripted events
+ G.t+=dt; if(G.rodEjectT>0)G.rodEjectT-=dt; if(G.rodDriftT>0){G.rodDriftT-=dt;G.rodPos=clamp(G.rodPos+dt*1.2,0,100)}
+ if(G.steamBreak>0)G.steamBreak=Math.max(0,G.steamBreak-dt*0.02);
+ scriptedEvents(); randomEvents(dt); updateDemand(dt); updateJob(dt);
+ // electrical sources
+ const powered=G.offsite||G.dieselState==="run";
+ if(G.dieselState==="start"){G.dieselTimer-=dt;if(G.dieselTimer<=0){G.dieselState="run";G.dieselStarted=true;log("Diesel generator synchronised to the emergency bus.","good");toast("DIESEL ONLINE","Emergency power restored. Pumps and ECCS are live.","#34d399");beep(440,.15,"triangle",.12);beep(660,.2,"triangle",.12,.12)}}
+ if(G.dieselState==="run"){G.dieselFuel=clamp(G.dieselFuel-dt*(hasUp("diesel")?0.008:0.014),0,100);if(G.dieselFuel<=0){G.dieselState="off";log("Diesel ran out of fuel.","bad")}}
+ if(!powered){G.battery=clamp(G.battery-dt*0.55,0,100)}else{G.battery=clamp(G.battery+dt*(G.dieselState==="run"?1.4:0.8),0,100)}
+ G.minBattery=Math.min(G.minBattery,G.battery);
+ // pumps & flow
+ const pumpCount=(G.pumpA&&G.pumpFault!=="A"?1:0)+(G.pumpB&&G.pumpFault!=="B"?1:0);
+ G.flowTarget=powered?pumpCount/2*G.pumpSpd*(hasUp("pumps")?1.15:1):0;
+ G.flow+=(G.flowTarget-G.flow)*Math.min(1,dt*(G.flowTarget<G.flow?0.25:0.5));
+ G.flow=clamp(G.flow,0,125);
+ // automatic rod control
+ if(G.autoRod&&(hasUp("governor")||rankOf(SAVE.xp).cur[0]>=800)&&!G.scrammed){const err=G.setPt-G.fission;G.rodPos=clamp(G.rodPos+clamp(err*0.02,-0.35,0.35)*dt*8,0,100);syncRodUI()}
+ // neutron kinetics (sub-stepped)
+ computeRho();const rhoF=G.rho.total/100000;
+ let remain=dt,guard=0;
+ while(remain>0&&guard++<400){const h=Math.min(0.05,remain);remain-=h;
+   const dn=((rhoF-BETA)/LAMBDA)*G.fission+DLAM*G.precursor;
+   const dC=(BETA/LAMBDA)*G.fission-DLAM*G.precursor;
+   G.fission+=dn*h;G.precursor+=dC*h;
+   if(G.fission<0.03){G.fission=0.03;G.precursor=Math.max(G.precursor,eqC(0.03))}
+   G.fission=clamp(G.fission,0,175);G.precursor=clamp(G.precursor,0,400);
+ }
+ G.decay*=Math.exp(-dt/260);
+ G.heatPct=clamp(G.fission+G.decay,0,180);
+ G.peakPower=Math.max(G.peakPower,G.heatPct);
+ // xenon / iodine (compressed timescale)
+ const pn=clamp(G.fission/100,0,1.6);
+ G.iodine+=dt*0.0045*(pn*1.05-G.iodine);
+ G.xenon+=dt*(0.0038*G.iodine+0.0012*pn-0.0042*G.xenon-0.0075*G.xenon*pn);
+ G.iodine=clamp(G.iodine,0,1.6);G.xenon=clamp(G.xenon,0,1.5);
+ computeRho();
+ // thermal-hydraulics
+ const flowF=clamp(G.flow/100,0,1.25);
+ const sinkF=G.turbTripped?0.08:clamp(G.turbValve/100,0,1);
+ const coolEff=clamp((0.22+0.78*flowF)*(0.42+0.58*Math.max(sinkF,0.12)),0.06,1.3)*(G.level<45?0.55:1);
+ const eqCool=272+ (G.heatPct*0.42)/Math.max(0.18,coolEff) - (G.steamBreak>0?38:0);
+ G.coolAvg+=(eqCool-G.coolAvg)*Math.min(1,dt*0.035);
+ if(G.flow<12&&G.heatPct>4)G.coolAvg+=dt*G.heatPct*0.055; // stagnant heating
+ G.coolHot=G.coolAvg+8+G.heatPct*0.22*Math.max(.3,flowF);
+ let eqFuel=G.coolAvg+G.heatPct*(4.6+(100-clamp(G.flow,0,100))*0.045);
+ if(G.level<40)eqFuel+=(40-G.level)*14;
+ if(G.eccs&&powered)eqFuel-=70;
+ G.fuelTemp+=(eqFuel-G.fuelTemp)*Math.min(1,dt*0.028);
+ if(G.eccs&&powered)G.fuelTemp-=dt*2.2;
+ G.fuelTemp=clamp(G.fuelTemp,40,2400);G.coolAvg=clamp(G.coolAvg,30,900);
+ G.peakTemp=Math.max(G.peakTemp,G.fuelTemp);
+ // pressure
+ let eqPres=72+(G.coolAvg-235)*0.52+(G.heater?10:0)-(G.spray?16:0)+(G.level-100)*0.22-(G.leak>0?26:0)-(G.steamBreak>0?18:0);
+ G.pressure+=(eqPres-G.pressure)*Math.min(1,dt*0.05);G.pressure=clamp(G.pressure,8,320);
+ // inventory / level
+ if(G.leak>0)G.level-=dt*G.leak;
+ if(G.eccs&&powered)G.level+=dt*(hasUp("eccs")?4.4:2.6);
+ if(G.leak===0&&G.level<100)G.level+=dt*0.25; // normal makeup
+ G.level=clamp(G.level,0,112);
+ // steam generator & turbine
+ const eqSG=14+G.heatPct*0.62-G.turbValve*0.22-(G.steamBreak>0?30:0);
+ G.sgPressure+=(eqSG-G.sgPressure)*Math.min(1,dt*0.06);G.sgPressure=clamp(G.sgPressure,4,120);
+ const thermalMW=G.heatPct/100*3000;
+ G.elec=(!G.turbTripped&&powered!==false)?thermalMW*0.33*clamp(G.turbValve/72,0,1.25)*clamp(G.sgPressure/58,0.25,1.15):0;
+ if(G.turbTripped)G.elec=0;
+ G.elec=clamp(G.elec,0,1150);
+ // containment
+ let contTarget=1+(G.leak>0?1.5:0)+(G.steamBreak>0?1.8:0)+Math.max(0,G.fuelTemp-1000)*0.001;
+ if(G.contSpray&&powered)contTarget-=0.7;
+ G.contP+=(contTarget-G.contP)*Math.min(1,dt*0.03);G.contP=clamp(G.contP,0.8,8);
+ G.contTemp=28+Math.max(0,G.contP-1)*22+(G.steamBreak>0?25:0);
+ // economics & score sampling
+ const rev=G.elec*(dt/60)*0.045; G.money+=rev; G.energy+=G.elec*(dt/60);
+ G.money-=dt*0.012*( (G.pumpA?1:0)+(G.pumpB?1:0) ); if(G.eccs)G.money-=dt*0.02;
+ const err=Math.abs(G.heatPct-G.demand); if(G.t>5){G.demandErrSum+=err*dt;G.demandSamples+=dt;G.maxDemandErr=Math.max(G.maxDemandErr,err)}
+ G.scoreTick+=dt;
+ if(G.scoreTick>=1){G.scoreTick=0;let s=G.energy*0.55+G.money*0.12;if(err<6)s+=2.2;if(err>18)s-=1.5;if(G.critActive)s-=4;G.score=Math.max(0,Math.round(s*(hasUp("sensors")?1.1:1)))}
+ // damage & failure physics
+ const sensRate=hasUp("sensors")?0.75:1;
+ if(G.fuelTemp>1100){G.damageRate=(G.fuelTemp-1100)*0.0016*sensRate;G.integrity-=G.damageRate*dt*10}else G.damageRate=0;
+ if(G.level<8&&G.fuelTemp>700)G.integrity-=dt*1.4;
+ if(G.pressure>250){G.ruptureT+=dt}else G.ruptureT=Math.max(0,G.ruptureT-dt);
+ G.integrity=clamp(G.integrity,0,100);
+ checkMilestones();checkEndConditions();
+}
+function hasUp(id){return G.upgrades.find(u=>u.id===id).owned}
+function scriptedEvents(){
+ if(G.sandbox)return;const i=G.scenIdx,f=G.eventsFired;
+ if(i===3&&G.t>=28&&!f.inc){f.inc=1;G.incidentT=G.t;G.pumpFault="B";G.pumpB=false;G.leak=1.15;triggerFaultFX("pumpTrip");log("PUMP B TRIPPED — vibration alarm. RCS flow falling.","bad");setTimeout(()=>{if(G&&!G.ended){log("Small break in Loop B — core level falling, containment pressure rising.","bad");toast("SMALL LOCA","Level is falling. SCRAM, ECCS, isolate the break.","#f87171");sndAlarm()}},10);syncPumpUI()}
+ if(i===4&&G.t>=20&&!f.inc){f.inc=1;G.incidentT=G.t;G.offsite=false;triggerFaultFX("blackout");log("LOSS OF OFF-SITE POWER — grid fault upstream. Emergency bus on battery.","bad");toast("STATION BLACKOUT","SCRAM the reactor. Start the diesel before the battery dies.","#f87171");sndAlarm()}
+}
+function randomEvents(dt){
+ if(G.diff.faultEvery<=0||G.sandbox&&false)return;
+ if(G.sandbox)return;
+ G.randomFaultT-=dt;if(G.randomFaultT>0)return;G.randomFaultT=G.diff.faultEvery*(0.7+G.rng()*0.7);
+ const pool=["rodDrift","demandSpike","pumpTrip"];const f=pool[Math.floor(G.rng()*pool.length)];
+ if(f==="pumpTrip"&&G.scenIdx<3)return; injectFault(f,true);
+}
+function updateDemand(dt){
+ if(G.sandbox){if(G.eventsFired.demandSpikeT>0){G.eventsFired.demandSpikeT-=dt;G.demand=80}else G.demand=55;return}
+ if(G.scenIdx===1){const steps=[[0,60],[55,85],[115,50],[175,78],[235,65]];let d=60;for(const[s,v]of steps)if(G.t>=s)d=v;G.demandBase=d}
+ if(G.scenIdx===0)G.demandBase=50;
+ const jit=G.diff.demandJitter?Math.sin(G.t*0.11)*G.diff.demandJitter*0.4:0;
+ G.demand=clamp(G.demandBase+jit,5,100);
+ if(G.eventsFired.demandSpikeT>0){G.eventsFired.demandSpikeT-=dt;G.demand=clamp(G.demand+22,0,105)}
+}
+function updateJob(dt){
+ if(!G.job)return;G.job.t+=dt;if(G.job.t>=G.job.total){const j=G.job;G.job=null;$("jobBox").classList.add("hidden");j.done();}else{$("jobBox").classList.remove("hidden");$("jobName").textContent=G.job.name;$("jobPct").textContent=Math.round(G.job.t/G.job.total*100)+"%";$("jobBar").style.width=(G.job.t/G.job.total*100)+"%"}
+}
+function startJob(name,secs,done){if(G.job){toast("CREW BUSY","The maintenance crew can only do one job at a time.","#f59e0b");return false}G.job={name,t:0,total:secs,done};log("Crew dispatched: "+name,"sys");return true}
+
+/* ============ FAULTS ============ */
+function injectFault(f,quiet){
+ if(!G||G.ended)return;
+ if(f==="pumpTrip"){const which=G.pumpB?"B":"A";if(which==="B"){G.pumpB=false;G.pumpFault="B"}else{G.pumpA=false;G.pumpFault="A"}syncPumpUI();log("INSTRUCTOR: Pump "+which+" tripped.","warn")}
+ if(f==="loca"){G.leak=1.25;log("INSTRUCTOR: Small LOCA — RCS inventory falling.","bad")}
+ if(f==="turbTrip"){tripTurbine("INSTRUCTOR: Turbine tripped.")}
+ if(f==="blackout"){G.offsite=false;log("INSTRUCTOR: Off-site power lost.","bad")}
+ if(f==="steamBreak"){G.steamBreak=1;log("INSTRUCTOR: Steam line break — rapid secondary cooldown (positive moderator reactivity!).","bad")}
+ if(f==="rodEject"){G.rodEjectT=9;G.rodPos=100;syncRodUI();log("INSTRUCTOR: ROD EJECTION — reactivity spike!","bad");sndAlarm()}
+ if(f==="demandSpike"){G.eventsFired.demandSpikeT=25;log("Grid demand spike for 25 s.","warn")}
+ if(f==="rodDrift"){G.rodDriftT=14;log("Rod drive drift — rods creeping outward.","warn")}
+ if(!quiet)beep(300,.15,"sawtooth",.1);
+ updateSourceUI();
+}
+function triggerFaultFX(f){/* scripted variants reuse state changes already applied */}
+function tripTurbine(msg){if(G.turbTripped)return;G.turbTripped=true;if(msg)log(msg,"warn");toast("TURBINE TRIPPED","Heat sink and revenue lost. Primary will heat up.","#f59e0b")}
+function doScram(manual){
+ if(G.scrammed||G.ended)return;G.scrammed=true;G.scrams++;G.decay=Math.max(G.decay,G.fission*0.068);G.rodPos=0;syncRodUI();tripTurbine(null);G.turbTripped=true;
+ log(manual?"MANUAL SCRAM — all rods fully inserted. Turbine tripped. Decay heat remains.":"SCRAM — protection system actuated.","bad");sndScram();floater("SCRAM","#f87171");checkResettable();
+}
+function checkResettable(){G.scramResettable=G.scrammed&&G.fission<6;$("btnResetScram").disabled=!G.scramResettable}
+
+/* ============ OBJECTIVES ============ */
+function objectives(){
+ if(G.sandbox)return[{label:"Free operation — no objectives. Meltdown still ends the shift.",done:false,prog:G.heatPct/100}];
+ const i=G.scenIdx,o=[];
+ if(i===0){
+  o.push({label:"Raise power into the 45–55% band",done:G.holdBand>0||isBand(),prog:G.heatPct/50});
+  o.push({label:"Hold 45–55% for 45 s (now "+Math.floor(G.holdBand)+" s)",done:G.holdBand>=45,prog:G.holdBand/45});
+  o.push({label:"Synchronise turbine & sell 120 MWh (now "+Math.floor(G.energy)+")",done:G.energy>=120,prog:G.energy/120});
+  o.push({label:"Avoid core damage — integrity ≥ 97% (now "+Math.floor(G.integrity)+"%)",done:G.integrity>=97,prog:G.integrity/100});
+ }
+ if(i===1){const avg=G.demandSamples?G.demandErrSum/G.demandSamples:0;
+  o.push({label:"Survive the 4-minute demand programme ("+fmtTime(Math.max(0,240-G.t))+" left)",done:G.t>=240,prog:G.t/240});
+  o.push({label:"Average demand error < 9% (now "+avg.toFixed(1)+"%)",done:G.t>=240&&avg<9,prog:1-avg/18});
+  o.push({label:"Sell 500 MWh (now "+Math.floor(G.energy)+")",done:G.energy>=500,prog:G.energy/500});
+  o.push({label:"No core damage (integrity "+Math.floor(G.integrity)+"%)",done:G.integrity>92,prog:G.integrity/100});
+ }
+ if(i===2){
+  o.push({label:"Reach 25–35% power despite xenon (Xe now "+Math.round(G.rho.xe)+" pcm)",done:G.holdBand>0,prog:G.heatPct/30});
+  o.push({label:"Hold 25–35% for 30 s (now "+Math.floor(G.holdBand)+" s)",done:G.holdBand>=30,prog:G.holdBand/30});
+  o.push({label:"Avoid core damage — integrity ≥ 97% (now "+Math.floor(G.integrity)+"%)",done:G.integrity>=97,prog:G.integrity/100});
+ }
+ if(i===3){const after=G.incidentT>0;
+  o.push({label:after?"Incident in progress — respond":"Operate at power until the shift event",done:after,prog:after?1:G.t/28});
+  o.push({label:"Trip the reactor (power < 10%) within 40 s of the incident",done:!!G.objTripOk,prog:G.objTripOk?1:0});
+  o.push({label:"Run ECCS and recover core level above 45%",done:G.level>45&&after&&G.eccsUsed,prog:G.level/45});
+  o.push({label:"Isolate the break (crew job)",done:!!G.breakIsolated,prog:G.breakIsolated?1:0});
+  o.push({label:"Then hold a stable, cooled shutdown for 45 s ("+Math.floor(G.holdStable)+" s)",done:G.holdStable>=45,prog:G.holdStable/45});
+ }
+ if(i===4){const after=G.incidentT>0;
+  o.push({label:after?"BLACKOUT — the clock is the battery":"Operate at power until the shift event",done:after,prog:after?1:G.t/20});
+  o.push({label:"SCRAM the reactor",done:G.scrams>0,prog:G.scrams>0?1:0});
+  o.push({label:"Start a diesel before the battery empties",done:G.dieselStarted,prog:G.dieselStarted?1:G.battery/100});
+  o.push({label:"Restore coolant flow above 40%",done:after&&G.flow>40,prog:G.flow/40});
+  o.push({label:"Cool fuel below 420°C and hold stable 45 s ("+Math.floor(G.holdStable)+" s)",done:G.holdStable>=45,prog:G.holdStable/45});
+ }
+ return o;
+}
+function isBand(){const b=G.scenIdx===2?[25,35]:[45,55];return G.heatPct>=b[0]&&G.heatPct<=b[1]&&!G.scrammed}
+function updateObjectives(dt){
+ if(G.sandbox)return;
+ if((G.scenIdx===0||G.scenIdx===2)&&isBand())G.holdBand+=dt; 
+ if(G.scenIdx===3&&G.incidentT>0){
+   if(!G.objTripOk&&G.heatPct<10&&G.t-G.incidentT<=40)G.objTripOk=true;
+   if(G.eccs)G.eccsUsed=true;
+   const stable=G.breakIsolated&&G.level>45&&G.fuelTemp<800&&G.heatPct<12;
+   G.holdStable=stable?G.holdStable+dt:0;
+ }
+ if(G.scenIdx===4&&G.incidentT>0){
+   const stable=G.scrams>0&&G.dieselStarted&&G.flow>40&&G.fuelTemp<420;
+   G.holdStable=stable?G.holdStable+dt:0;
+ }
+ const obs=objectives();
+ if(obs.length&&obs.every(x=>x.done))endShift(true,"All objectives complete.");
+ else if(!G.sandbox&&G.t>=SCEN[G.scenIdx].maxTime)endShift(false,"Shift clock expired with objectives incomplete.");
+}
+function checkMilestones(){
+ const m=G.milestones;
+ if(!m.crit&&G.rho.total>-80&&G.fission>2){m.crit=1;toast("FIRST CRITICALITY","Reactivity crossed zero. The chain reaction is self-sustaining.","#22d3ee");log("Core is critical.","sys");beep(740,.12,"triangle",.1)}
+ if(!m.mwh100&&G.energy>=100){m.mwh100=1;floater("+100 MWh","#34d399");toast("100 MWh SOLD","The plant is earning its keep.","#34d399")}
+ if(!m.full&&G.heatPct>=98){m.full=1;toast("FULL POWER","3000 MW thermal. Every system is working for a living.","#f59e0b")}
+ if(!m.xe&&G.rho.xe<-1800){m.xe=1;toast("XENON PIT","Poison is eating >1800 pcm. Boron, rods, or patience — choose.","#e879f9")}
+}
+function checkEndConditions(){
+ if(G.ended)return;
+ if(G.integrity<=0||G.fuelTemp>=1800)return endShift(false,"CORE MELTDOWN — fuel integrity lost at "+Math.round(G.fuelTemp)+"°C. The vessel, and the shift, are gone.");
+ if(G.ruptureT>10)return endShift(false,"REACTOR VESSEL RUPTURE — sustained pressure above 250 bar tore the primary boundary.");
+ if(G.contP>=6)return endShift(false,"CONTAINMENT FAILURE — pressure exceeded design limits during the release.");
+ if(G.battery<=0&&!G.offsite&&G.dieselState!=="run"&&G.fuelTemp>500)return endShift(false,"BATTERY EXHAUSTED WITH A HOT CORE — no pumps, no ECCS, no options. Station blackout complete.");
+}
+
+/* ============ ALARMS ============ */
+function computeAlarms(){
+ const a=[];const push=(lvl,code,text)=>a.push({lvl,code,text});
+ if(G.fuelTemp>1100)push(2,"FT_HI","FUEL TEMP HIGH-HIGH — core damage in progress");
+ else if(G.fuelTemp>950)push(1,"FT_HI","FUEL TEMP HIGH");
+ if(G.pressure>225)push(2,"P_HI","RCS PRESSURE CRITICAL");else if(G.pressure>200)push(1,"P_HI","RCS PRESSURE HIGH");
+ if(G.pressure<70&&G.t>10)push(1,"P_LO","RCS PRESSURE LOW — possible leak");
+ if(G.level<55)push(2,"LVL","CORE LEVEL LOW");else if(G.level<80)push(1,"LVL","CORE LEVEL FALLING");
+ if(G.flow<45&&G.heatPct>15)push(2,"FLOW","LOW COOLANT FLOW AT POWER");else if(G.flow<70)push(1,"FLOW","COOLANT FLOW REDUCED");
+ if(G.rho.total>620)push(2,"RHO","APPROACHING PROMPT CRITICALITY");else if(G.rho.total>250&&G.fission>5)push(1,"RHO","HIGH POSITIVE REACTIVITY");
+ if(G.rho.xe<-1700)push(1,"XE","XENON POISON SEVERE");
+ if(!G.offsite&&G.dieselState!=="run")push(2,"PWR","NO AC POWER — ON BATTERY ("+Math.floor(G.battery)+"%)");
+ if(G.battery<30&&!G.offsite)push(2,"BATT","BATTERY LOW");
+ if(G.leak>0)push(2,"LOCA","LOCA — RCS INVENTORY LOSS");
+ if(G.steamBreak>0)push(1,"STM","STEAM LINE BREAK");
+ if(G.contP>3)push(2,"CONT","CONTAINMENT PRESSURE HIGH");else if(G.contP>1.8)push(1,"CONT","CONTAINMENT PRESSURE RISING");
+ if(G.turbTripped&&G.heatPct>25)push(1,"TURB","TURBINE TRIPPED AT POWER — heat sink lost");
+ if(G.dieselState==="run"&&G.dieselFuel<25)push(1,"DFUEL","DIESEL FUEL LOW");
+ if(Math.abs(G.heatPct-G.demand)>20&&G.t>15&&!G.sandbox)push(1,"DEM","GRID DEMAND MISMATCH >20%");
+ return a;
+}
+let lastAlarmCodes="";
+function renderAlarms(){
+ const list=computeAlarms();G.critActive=list.some(a=>a.lvl===2);
+ $("critVignette").classList.toggle("hidden",!(G.critActive&&!SAVE.settings.calm));
+ const codes=list.map(a=>a.code).join(",");
+ if(codes!==lastAlarmCodes){const old=new Set(lastAlarmCodes.split(","));list.forEach(a=>{if(!old.has(a.code)&&!G.acked[a.code]){G.alarmCount++;if(a.lvl===2&&performance.now()>G.silencedUntil)sndAlarm()}});lastAlarmCodes=codes}
+ const el=$("alarmList");
+ if(!list.length){el.innerHTML='<div class="text-xs text-emerald-300">✓ All systems normal.</div>';return}
+ el.innerHTML=list.map(a=>'<div class="px-2.5 py-2 rounded-lg border text-[11px] font-bold '+(a.lvl===2?"alarm-crit bg-red-950 border-red-500 text-red-100":"bg-amber-950/70 border-amber-600 text-amber-200")+'">'+(G.acked[a.code]?"(ACK) ":"")+a.text+'</div>').join("");
+ checkResettable();
+}
+
+/* ============ RENDERING: CORE & P&ID & CHART ============ */
+function tempColor(t){ // 200 cold -> 1200 hot
+ const stops=[[40,80,200],[30,160,90],[240,200,40],[245,110,30],[230,30,20]];const x=clamp((t-200)/1000,0,1)*4;const i=Math.min(3,Math.floor(x)),f=x-i;const c=stops[i].map((v,k)=>Math.round(lerp(v,stops[i+1][k],f)));return "rgb("+c.join(",")+")"}
+function drawCore(now){
+ const c=$("coreCanvas"),x=c.getContext("2d");const W=c.width,H=c.height;x.clearRect(0,0,W,H);
+ // containment dome
+ x.strokeStyle="#334155";x.lineWidth=3;x.beginPath();x.arc(260,215,196,Math.PI,0);x.stroke();
+ x.fillStyle="#0b1526";x.beginPath();x.arc(260,215,196,Math.PI,0);x.lineTo(456,410);x.lineTo(64,410);x.closePath();x.fill();
+ // vessel
+ x.fillStyle="#1e293b";roundRect(x,180,90,160,300,18);x.fill();x.strokeStyle="#64748b";x.lineWidth=3;roundRect(x,180,90,160,300,18);x.stroke();
+ // water
+ const lvlH=clamp(G.level,0,112)/112*270;x.fillStyle="rgba(56,150,240,.45)";x.fillRect(192,378-lvlH,136,lvlH);
+ // fuel assemblies
+ const fc=tempColor(G.fuelTemp);
+ for(let r=0;r<9;r++)for(let col=0;col<5;col++){const fx=202+col*24,fy=190+r*21;x.fillStyle=fc;x.globalAlpha=.55+.45*Math.abs(Math.sin(now/500+r));x.fillRect(fx,fy,15,16)}
+ x.globalAlpha=1;
+ // neutrons
+ const nDots=Math.floor(clamp(G.heatPct,0,120));
+ x.fillStyle="#a5f3fc";for(let i=0;i<nDots;i++){const px=195+((i*67+now*.06*(1+i%3))%130),py=185+((i*41+now*.04)%195);x.beginPath();x.arc(px,py,2,0,7);x.fill()}
+ // control rods (insertion = 100-rodPos)
+ const depth=(100-G.rodPos)/100*150+ (G.scrammed?150:0);
+ x.strokeStyle="#e2e8f0";x.lineWidth=4;for(let col=0;col<5;col++){const rx=209+col*24;x.beginPath();x.moveTo(rx,92);x.lineTo(rx,92+clamp(depth,10,190));x.stroke()}
+ x.fillStyle="#94a3b8";x.fillRect(196,78,128,14);
+ // glow by power
+ if(G.heatPct>3){x.fillStyle="rgba(249,115,22,"+clamp(G.heatPct/500,0,.2)+")";x.beginPath();x.arc(260,280,110,0,7);x.fill()}
+ // labels
+ x.fillStyle="#e2e8f0";x.font="bold 15px JetBrains Mono";x.fillText("CORE",238,415);
+ x.font="12px JetBrains Mono";x.fillStyle="#fca5a5";x.fillText(Math.round(G.fuelTemp)+"°C",352,240);
+ x.fillStyle="#7dd3fc";x.fillText("LVL "+Math.floor(G.level)+"%",96,240);
+ x.fillStyle="#f0abfc";x.fillText("Xe "+Math.round(G.rho.xe),352,268);
+ x.fillStyle="#cbd5e1";x.fillText(G.scrammed?"RODS IN":"ROD "+Math.round(G.rodPos)+"% OUT",86,120);
+ if(G.damageRate>0){x.fillStyle="rgba(239,68,68,.85)";x.font="bold 16px JetBrains Mono";x.fillText("⚠ CORE DAMAGE",178,60)}
+}
+function roundRect(x,a,b,w,h,r){x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath()}
+function drawPID(now){
+ const c=$("pidCanvas"),x=c.getContext("2d");const W=c.width,H=c.height;x.clearRect(0,0,W,H);
+ x.font="bold 13px JetBrains Mono";
+ const hot=tempColor(G.coolHot*2.2),cold="#2563eb";
+ // pipes
+ pipe(x,180,200,330,200,hot,10);pipe(x,330,120,180,120,cold,10);
+ pipe(x,430,200,610,200,"#f59e0b",9);pipe(x,610,285,430,285,"#475569",7);
+ flowDots(x,180,200,330,200,now,G.flow);flowDots(x,330,120,180,120,now,G.flow);
+ flowDots(x,430,200,610,200,now,G.turbValve); 
+ // reactor
+ x.fillStyle="#1e293b";roundRect(x,80,110,100,180,14);x.fill();x.strokeStyle="#64748b";x.lineWidth=2.5;roundRect(x,80,110,100,180,14);x.stroke();
+ x.fillStyle=tempColor(G.fuelTemp);x.fillRect(105,170,50,95);
+ x.fillStyle="#e2e8f0";x.fillText("REACTOR",92,315);x.fillStyle="#fca5a5";x.fillText(Math.round(G.heatPct)+"%",110,160);
+ // pumps
+ pumpIcon(x,255,255,G.pumpA&&G.pumpFault!=="A",G.flow);pumpIcon(x,255,66,G.pumpB&&G.pumpFault!=="B",G.flow);
+ x.fillStyle="#cbd5e1";x.fillText("PUMPS",228,305);
+ // SG
+ x.fillStyle="#1e293b";roundRect(x,330,90,100,220,14);x.fill();x.strokeStyle="#64748b";roundRect(x,330,90,100,220,14);x.stroke();
+ x.fillStyle="rgba(56,150,240,.5)";x.fillRect(342,220,76,78);x.fillStyle="#fbbf24";for(let i=0;i<3;i++)x.fillRect(348+i*26,120,12,95);
+ x.fillStyle="#e2e8f0";x.fillText("STEAM GEN",332,335);x.fillStyle="#fcd34d";x.fillText(Math.round(G.sgPressure)+" bar",352,80);
+ // turbine
+ x.fillStyle="#1e293b";roundRect(x,610,140,130,120,14);x.fill();x.strokeStyle=G.turbTripped?"#ef4444":"#64748b";roundRect(x,610,140,130,120,14);x.stroke();
+ x.save();x.translate(675,200);x.rotate(G.turbTripped?0:now/90);x.strokeStyle="#34d399";x.lineWidth=5;for(let i=0;i<3;i++){x.rotate(Math.PI*2/3);x.beginPath();x.moveTo(0,0);x.lineTo(0,-38);x.stroke()}x.restore();
+ x.fillStyle="#e2e8f0";x.fillText("TURBINE",640,285);x.fillStyle=G.turbTripped?"#f87171":"#6ee7b7";x.fillText(G.turbTripped?"TRIPPED":Math.round(G.elec)+" MW",638,130);
+ // generator + grid
+ x.fillStyle="#1e293b";roundRect(x,790,150,110,100,14);x.fill();x.strokeStyle="#64748b";roundRect(x,790,150,110,100,14);x.stroke();
+ x.fillStyle=G.offsite?"#34d399":"#f87171";x.beginPath();x.arc(845,200,22,0,7);x.fill();x.fillStyle="#052e16";x.font="bold 20px Inter";x.fillText("⚡",837,208);x.font="bold 13px JetBrains Mono";x.fillStyle="#e2e8f0";x.fillText(G.offsite?"GRID OK":"GRID LOST",800,275);
+ // ECCS tank
+ x.fillStyle="#1e293b";roundRect(x,80,330,110,55,10);x.fill();x.strokeStyle=G.eccs?"#38bdf8":"#475569";roundRect(x,80,330,110,55,10);x.stroke();
+ x.fillStyle=G.eccs?"#7dd3fc":"#94a3b8";x.fillText(G.eccs?"ECCS FLOWING":"ECCS STBY",88,363);
+ pipe(x,135,330,135,290,G.eccs?"#38bdf8":"#334155",5);
+ // diesel
+ x.fillStyle="#1e293b";roundRect(x,760,320,150,60,10);x.fill();x.strokeStyle=G.dieselState==="run"?"#a3e635":"#475569";roundRect(x,760,320,150,60,10);x.stroke();
+ x.fillStyle="#e2e8f0";x.fillText("DIESEL: "+G.dieselState.toUpperCase(),772,355);
+ x.fillStyle="#fbbf24";x.fillText("BATT "+Math.floor(G.battery)+"%",772,305);
+ // containment label
+ x.strokeStyle="#1e293b";x.lineWidth=10;x.beginPath();x.arc(255,205,185,Math.PI*.95,Math.PI*1.95);x.stroke();
+ x.fillStyle="#94a3b8";x.fillText("CONTAINMENT "+G.contP.toFixed(1)+" bar",60,40);
+ if(G.leak>0){x.fillStyle="#f87171";x.font="bold 15px JetBrains Mono";x.fillText("◉ BREAK — LOOP B",300,375)}
+ x.font="bold 13px JetBrains Mono";
+}
+function pipe(x,x1,y1,x2,y2,col,w){x.strokeStyle=col;x.lineWidth=w;x.lineCap="round";x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()}
+function flowDots(x,x1,y1,x2,y2,now,speed){if(speed<3)return;x.fillStyle="rgba(255,255,255,.85)";const n=4;for(let i=0;i<n;i++){const f=((now/1400*(speed/60)+i/n)%1);x.beginPath();x.arc(lerp(x1,x2,f),lerp(y1,y2,f),3.2,0,7);x.fill()}}
+function pumpIcon(x,px,py,on,flow){x.fillStyle="#0f172a";x.beginPath();x.arc(px,py,24,0,7);x.fill();x.strokeStyle=on?"#22d3ee":"#ef4444";x.lineWidth=3;x.stroke();x.save();x.translate(px,py);if(on)x.rotate(performance.now()/120);x.strokeStyle=on?"#a5f3fc":"#7f1d1d";x.lineWidth=3;for(let i=0;i<3;i++){x.rotate(Math.PI*2/3);x.beginPath();x.moveTo(0,0);x.lineTo(0,-16);x.stroke()}x.restore();x.fillStyle="#e2e8f0";x.font="bold 11px JetBrains Mono";x.fillText(on?"RUN":"STOP",px-14,py+38)}
+function drawChart(){
+ const c=$("chartCanvas"),x=c.getContext("2d");const W=c.width,H=c.height;x.clearRect(0,0,W,H);
+ x.strokeStyle="#1e293b";for(let i=1;i<5;i++){x.beginPath();x.moveTo(40,i*H/5);x.lineTo(W-8,i*H/5);x.stroke()}
+ x.fillStyle="#64748b";x.font="11px JetBrains Mono";x.fillText("120",6,18);x.fillText("60",12,H/2);x.fillText("0",16,H-6);
+ const h=G.history;if(h.length<2){x.fillStyle="#475569";x.fillText("collecting data…",60,30);return}
+ const series=[];
+ if($("chkPower").checked)series.push({k:"p",col:"#22d3ee",max:120});
+ if($("chkTemp").checked)series.push({k:"ft",col:"#fb923c",max:120,div:10});
+ if($("chkPres").checked)series.push({k:"pr",col:"#a78bfa",max:260});
+ if($("chkXe").checked)series.push({k:"xe",col:"#e879f9",max:3600,div:30});
+ series.forEach(s=>{x.strokeStyle=s.col;x.lineWidth=2;x.beginPath();h.forEach((pt,i)=>{const px=40+i/(299)*(W-55),val=(s.div?pt[s.k]/s.div:pt[s.k]),py=H-14-clamp(val/s.max,0,1)*(H-30);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()});
+ // demand line
+ x.strokeStyle="#f59e0b";x.setLineDash([5,5]);x.beginPath();h.forEach((pt,i)=>{const px=40+i/299*(W-55),py=H-14-clamp(pt.d/120,0,1)*(H-30);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();x.setLineDash([]);
+ x.fillStyle="#f59e0b";x.fillText("--- demand",W-110,16);
+}
+function sampleHistory(){G.history.push({p:G.heatPct,ft:G.fuelTemp,pr:G.pressure,xe:Math.abs(G.rho.xe),d:G.demand});if(G.history.length>300)G.history.shift()}
+
+/* ============ HUD UPDATE ============ */
+const rhoNames={rod:"Control rods",boron:"Boron shim",fuel:"Fuel temp (Doppler)",mod:"Moderator temp",xe:"Xenon + faults"};
+function updateHUD(){
+ if(!G)return;
+ $("hudClock").textContent=fmtTime(G.t)+(G.sandbox?"":" / "+fmtTime(SCEN[G.scenIdx].maxTime));
+ $("hudPower").textContent=G.heatPct.toFixed(1);
+ $("hudElec").textContent=Math.round(G.elec);
+ const rho=G.rho.total;$("hudRho").textContent=(rho>0?"+":"")+Math.round(rho)+" pcm";$("hudRho").style.color=rho>250?"#f87171":rho>-80?"#34d399":"#e2e8f0";
+ const st=$("hudState");
+ if(G.scrammed){st.textContent="SCRAMMED";st.className="px-3 py-1.5 rounded-lg font-black text-xs bg-red-950 border border-red-500 text-red-200"}
+ else if(G.fission<1){st.textContent="SUBCRITICAL";st.className="px-3 py-1.5 rounded-lg font-black text-xs bg-slate-800 border border-slate-600"}
+ else if(rho>250){st.textContent="PROMPT RISK ↑↑";st.className="px-3 py-1.5 rounded-lg font-black text-xs bg-red-950 border border-red-500 text-red-200"}
+ else if(rho>20){st.textContent="SUPERCRITICAL ↑";st.className="px-3 py-1.5 rounded-lg font-black text-xs bg-amber-950 border border-amber-500 text-amber-200"}
+ else if(rho>-80){st.textContent="CRITICAL ●";st.className="px-3 py-1.5 rounded-lg font-black text-xs bg-emerald-950 border border-emerald-500 text-emerald-200"}
+ else{st.textContent="SUBCRITICAL ↓";st.className="px-3 py-1.5 rounded-lg font-black text-xs bg-slate-800 border border-slate-600"}
+ $("mFuel").textContent=Math.round(G.fuelTemp);$("barFuel").style.width=clamp(G.fuelTemp/1400*100,0,100)+"%";$("barFuel").style.background=G.fuelTemp>1100?"#ef4444":G.fuelTemp>950?"#f59e0b":"#f97316";
+ $("mCool").textContent=Math.round(G.coolAvg);$("barCool").style.width=clamp(G.coolAvg/500*100,0,100)+"%";
+ $("mPres").textContent=Math.round(G.pressure);$("barPres").style.width=clamp(G.pressure/280*100,0,100)+"%";$("barPres").style.background=G.pressure>210?"#ef4444":"#a78bfa";
+ $("mLevel").textContent=Math.floor(G.level);$("barLevel").style.width=clamp(G.level,0,100)+"%";$("barLevel").style.background=G.level<55?"#ef4444":"#38bdf8";
+ $("mXe").textContent=Math.round(G.rho.xe)+" pcm";$("barXe").style.width=clamp(Math.abs(G.rho.xe)/3000*100,0,100)+"%";
+ $("mInteg").textContent=Math.floor(G.integrity)+"%";$("barInteg").style.width=G.integrity+"%";$("barInteg").style.background=G.integrity<70?"#ef4444":G.integrity<90?"#f59e0b":"#10b981";
+ $("mCont").textContent=G.contP.toFixed(1)+" bar";$("barCont").style.width=clamp(G.contP/6*100,0,100)+"%";
+ $("coreStateTag").textContent=G.fuelTemp>950?"OVERHEAT":G.fuelTemp>500?"AT POWER":G.coolAvg>280?"HOT STANDBY":"COLD";
+ $("mDemand").textContent=Math.round(G.demand);$("mSG").textContent=Math.round(G.sgPressure);$("mFlow").textContent=Math.round(G.flow);
+ const src=$("mSource");if(G.offsite){src.textContent="GRID";src.style.color="#34d399"}else if(G.dieselState==="run"){src.textContent="DIESEL";src.style.color="#a3e635"}else if(G.dieselState==="start"){src.textContent="STARTING…";src.style.color="#f59e0b"}else{src.textContent="BATTERY";src.style.color="#f87171"}
+ $("barOutput").style.width=clamp(G.heatPct,0,100)+"%";$("demandTick").style.left=clamp(G.demand,0,100)+"%";
+ const err=G.heatPct-G.demand;$("demandErr").textContent=(err>0?"+":"")+err.toFixed(1)+"% vs demand";$("demandErr").style.color=Math.abs(err)<8?"#34d399":"#f59e0b";
+ $("stEnergy").textContent=Math.floor(G.energy);$("stMoney").textContent="$"+Math.round(G.money)+"k";$("stScore").textContent=G.score;
+ $("vRod").textContent=Math.round(G.rodPos)+"%";$("vBoron").textContent=Math.round(G.boron)+" ppm";$("vPumpSpd").textContent=Math.round(G.pumpSpd)+"%";$("vTurb").textContent=Math.round(G.turbValve)+"%";$("vSetPt").textContent=Math.round(G.setPt)+"%";
+ $("vBatt").textContent=Math.floor(G.battery)+"%";$("barBatt").style.width=G.battery+"%";$("barBatt").style.background=G.battery<30?"#ef4444":"#a3e635";
+ $("vDieselFuel").textContent=Math.floor(G.dieselFuel)+"%";$("barDiesel").style.width=G.dieselFuel+"%";
+ // reactivity bars
+ $("rhoBars").innerHTML=Object.keys(rhoNames).map(k=>{const v=G.rho[k];const w=clamp(Math.abs(v)/3000*50,0,50);return '<div class="flex items-center gap-2"><span class="w-[118px] text-slate-400">'+rhoNames[k]+'</span><div class="flex-1 h-3 bg-slate-800 rounded relative overflow-hidden"><div class="absolute top-0 bottom-0 '+(v>=0?"bg-red-400":"bg-cyan-400")+'" style="'+(v>=0?"left:50%":"right:50%")+';width:'+w+'%"></div><div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-500"></div></div><span class="w-[70px] text-right">'+(v>0?"+":"")+Math.round(v)+'</span></div>'}).join("");
+ $("rhoTotal").textContent=(rho>0?"+":"")+Math.round(rho)+" pcm";$("rhoTotal").style.color=rho>250?"#f87171":"#e2e8f0";
+ // objectives
+ $("objList").innerHTML=objectives().map(o=>'<div class="panel2 p-2"><div class="flex gap-2 text-xs"><span>'+(o.done?"✓":"○")+'</span><span class="'+(o.done?"text-emerald-300":"text-slate-300")+'">'+o.label+'</span></div><div class="h-1.5 bg-slate-800 rounded mt-1.5"><div class="h-full '+(o.done?"bg-emerald-500":"bg-cyan-500")+' rounded" style="width:'+clamp(o.prog*100,0,100)+'%"></div></div></div>').join("");
+ renderAlarms();updateCoach();drawChart();
+}
+function updateCoach(){
+ const box=$("coachBox");if(!box)return;
+ if(G.sandbox||G.scenIdx!==0||!SAVE.settings.coach||G.t>150){box.classList.add("hidden");return}
+ box.classList.remove("hidden");
+ let txt="",prog=0;
+ if(G.rodPos<40){txt="Step 1 — Withdraw the control rods toward 55–65% (slider or + buttons). Reactivity will climb toward zero.";prog=G.rodPos/40}
+ else if(G.fission<10){txt="Step 2 — You are near critical. Ease the rods out in small steps and watch neutron power rise. Aim for a slow, controlled climb.";prog=G.fission/10}
+ else if(G.fission<45){txt="Step 3 — Power is rising. As fuel heats, temperature feedback will push back — that is normal. Nudge rods to keep climbing toward 50%.";prog=G.fission/45}
+ else if(G.turbValve<30){txt="Step 4 — Open the turbine steam valve to ~60%. The turbine is your heat sink and your paycheck.";prog=G.turbValve/30}
+ else{txt="Step 5 — Hold 45–55%. Trim rods against temperature feedback, keep pressure < 210 bar, and sell 120 MWh.";prog=G.holdBand/45}
+ $("coachText").textContent=txt;$("coachBar").style.width=clamp(prog*100,4,100)+"%";
+}
+function syncRodUI(){$("rngRod").value=Math.round(G.rodPos)}
+function syncPumpUI(){$("btnPumpA").textContent="PUMP A · "+(G.pumpA&&G.pumpFault!=="A"?"ON":"OFF");$("btnPumpA").classList.toggle("on",G.pumpA&&G.pumpFault!=="A");$("btnPumpB").textContent="PUMP B · "+(G.pumpB&&G.pumpFault!=="B"?"ON":"OFF");$("btnPumpB").classList.toggle("on",G.pumpB&&G.pumpFault!=="B")}
+function updateSourceUI(){}
+
+/* ============ END / SCORING ============ */
+function gradeFor(score,success){if(!success)return"F";if(score>=900)return"S";if(score>=650)return"A";if(score>=450)return"B";if(score>=280)return"C";return"D"}
+function endShift(success,reason){
+ if(G.ended)return;G.ended=true;G.running=false;
+ const avgErr=G.demandSamples?G.demandErrSum/G.demandSamples:0;
+ let bonus=success?250:0, xp=Math.round((success?120:25)+G.energy*0.08+(success?150:0))*G.diff.scoreMult;
+ if(success&&G.sandbox){/* sandbox voluntary end */}
+ const finalScore=Math.round((G.score+bonus-Math.max(0,100-G.integrity)*3-G.alarmCount*4)*G.diff.scoreMult);
+ const grade=gradeFor(finalScore,success);
+ SAVE.xp+=Math.round(xp);
+ let unlockMsg="";
+ if(success&&!G.sandbox&&G.scenIdx+1<SCEN.length&&SAVE.unlocked<G.scenIdx+2){SAVE.unlocked=G.scenIdx+2;unlockMsg="UNLOCKED: "+SCEN[G.scenIdx+1].name}
+ if(!G.sandbox){const key="s"+G.scenIdx;if(!SAVE.best[key]||finalScore>SAVE.best[key])SAVE.best[key]=finalScore}
+ persist();renderProfile();renderScenarios();
+ $("endGrade").textContent=grade;$("endGrade").style.color=success?(grade==="S"?"#fbbf24":"#34d399"):"#f87171";
+ $("endTitle").textContent=success?(G.sandbox?"SANDBOX SESSION ENDED":"SHIFT COMPLETE"):"SHIFT FAILED";
+ $("endSub").textContent=reason;
+ const stats=[["Thermal peak",Math.round(G.peakPower)+"%"],["Peak fuel temp",Math.round(G.peakTemp)+"°C"],["Energy sold",Math.floor(G.energy)+" MWh"],["Revenue budget","$"+Math.round(G.money)+"k"],["Avg demand error",avgErr.toFixed(1)+"%"],["Alarms raised",G.alarmCount],["SCRAMs",G.scrams],["Core integrity",Math.floor(G.integrity)+"%"],["Lowest battery",Math.floor(G.minBattery)+"%"],["Final score",finalScore],["XP earned","+"+Math.round(xp)],["Operator rank",rankOf(SAVE.xp).cur[1]]];
+ $("endStats").innerHTML=stats.map(s=>'<div class="readout p-2.5"><div class="text-[9px] text-slate-400 font-bold">'+s[0].toUpperCase()+'</div><div class="mono font-extrabold mt-0.5">'+s[1]+'</div></div>').join("");
+ $("endUnlock").classList.toggle("hidden",!unlockMsg);$("endUnlock").textContent=unlockMsg;
+ $("btnNextScen").style.display=(!G.sandbox&&G.scenIdx<SCEN.length-1&&success)?"":"none";
+ $("endModal").classList.remove("hidden");
+ if(success)sndSuccess();else sndFail();
+ log(success?"Shift complete.":"Shift failed: "+reason,success?"good":"bad");
+}
+
+/* ============ MAIN LOOP ============ */
+function frame(ts){
+ rafId=requestAnimationFrame(frame);
+ const dtReal=Math.min(0.05,(ts-lastTs)/1000||0.016);lastTs=ts;
+ if(!G||!G.running||G.paused||G.ended){if(G&&$("simScreen")&&!$("simScreen").classList.contains("hidden")){drawCore(ts);drawPID(ts)}return}
+ const simDt=dtReal*G.speed*2;
+ // physics in bounded chunks for stability at high speed
+ let rem=simDt,guard=0;while(rem>0&&guard++<24){const h=Math.min(0.5,rem);rem-=h;stepPhysics(h);if(G.ended)break}
+ updateObjectives(simDt);
+ G.histT+=simDt;if(G.histT>2.5){G.histT=0;sampleHistory()}
+ G.chartT+=dtReal;if(G.chartT>0.12){G.chartT=0;updateHUD()}
+ G.floatT+=dtReal;if(G.floatT>7){G.floatT=0;if(G.elec>50)floater("+"+Math.round(G.elec)+" MW → grid","#34d399")}
+ drawCore(ts);drawPID(ts);updateAmbient(dtReal);
+}
+
+/* ============ UI WIRING ============ */
+function renderProfile(){const r=rankOf(SAVE.xp);$("profRank").textContent=r.cur[1];$("profXp").textContent=SAVE.xp+" XP";const bests=Object.values(SAVE.best);$("profBest").textContent=bests.length?Math.max(...bests):"—";if(r.next){const lo=r.cur[0],hi=r.next[0];$("profBar").style.width=clamp((SAVE.xp-lo)/(hi-lo)*100,3,100)+"%";$("profNext").textContent="Next: "+r.next[1]+" at "+hi+" XP"}else{$("profBar").style.width="100%";$("profNext").textContent="Maximum rank achieved"}}
+function renderScenarios(){
+ const grid=$("scenGrid");grid.innerHTML="";
+ SCEN.forEach((s,i)=>{const locked=i>=SAVE.unlocked;const best=SAVE.best["s"+i];
+  const d=document.createElement("div");d.className="scenCard panel p-4 "+(selectedScen===i?"sel":"");d.style.opacity=locked?.55:1;
+  d.innerHTML='<div class="flex justify-between items-start"><span class="text-2xl" style="color:'+s.color+'">'+s.icon+'</span>'+(locked?'<span class="text-[10px] font-black bg-slate-800 border border-slate-600 px-2 py-0.5 rounded">🔒 LOCKED</span>':best?'<span class="text-[10px] font-black bg-emerald-950 border border-emerald-600 text-emerald-300 px-2 py-0.5 rounded">BEST '+best+'</span>':'<span class="text-[10px] font-black bg-cyan-950 border border-cyan-700 text-cyan-300 px-2 py-0.5 rounded">READY</span>')+'</div><div class="font-black mt-2 text-sm">'+s.name+'</div><p class="text-xs text-slate-400 mt-1 leading-relaxed">'+s.desc+'</p><div class="text-[11px] mt-2 text-amber-300 font-bold">◎ '+s.goal+'</div><div class="text-[10px] text-slate-500 mono mt-1">SHIFT LIMIT '+fmtTime(s.maxTime)+' · SEED '+s.seed+'</div>';
+  d.onclick=()=>{if(locked){toast("SHIFT LOCKED","Complete the previous shift to unlock this one.","#f59e0b");beep(220,.12,"square",.08);return}selectedScen=i;renderScenarios();sndClick()};
+  grid.appendChild(d)});
+ document.querySelectorAll(".diffBtn").forEach(b=>b.classList.toggle("on",b.dataset.diff===SAVE.settings.diff));
+}
+function renderUpgrades(){
+ const el=$("upgradeList");if(!el||!G)return;
+ el.innerHTML=G.upgrades.map(u=>'<div class="panel2 p-2 flex justify-between gap-2 items-center"><div><div class="text-xs font-bold">'+u.name+'</div><div class="text-[10px] text-slate-500">'+u.desc+'</div></div>'+(u.owned?'<span class="text-[10px] font-black text-emerald-300">INSTALLED</span>':'<button class="btn cbtn upgBtn" data-upg="'+u.id+'" '+(G.money<u.cost?"disabled":"")+'>$'+u.cost+'k</button>')+'</div>').join("");
+ el.querySelectorAll(".upgBtn").forEach(b=>b.onclick=()=>{const u=G.upgrades.find(x=>x.id===b.dataset.upg);if(G.money<u.cost)return;G.money-=u.cost;u.owned=true;log("Upgrade installed: "+u.name,"good");toast("UPGRADE INSTALLED",u.name+" — "+u.desc,"#f59e0b");sndClick();renderUpgrades();updateHUD()});
+}
+function startSim(scenIdx){
+ initAudio();if(AC&&AC.state==="suspended")AC.resume();
+ G=newState(scenIdx);applyScenarioStart();
+ $("titleScreen").classList.add("hidden");$("simScreen").classList.remove("hidden");$("endModal").classList.add("hidden");$("pauseModal").classList.add("hidden");
+ $("hudScen").textContent=G.sandbox?"FREE SANDBOX — INSTRUCTOR MODE":SCEN[scenIdx].name;
+ $("hudDiff").textContent=G.diff.label+" · SEED "+(G.sandbox?777:SCEN[scenIdx].seed)+(scenIdx===4?" · CAPSTONE":"");
+ $("eventLog").innerHTML="";lastAlarmCodes="";
+ syncAllControls();renderUpgrades();sampleHistory();
+ setSpeed(1);setPaused(false);
+ if(G.sandbox){log("Sandbox live. Core at 8% — the instructor console is yours.","sys");toast("SANDBOX","Inject faults from the red panel. No clock, no mercy.","#22d3ee")}
+ else{log(SCEN[scenIdx].name+" — shift started on "+G.diff.label+".","sys");log("Objective: "+SCEN[scenIdx].goal,"sys");
+  if(scenIdx===2){log("Xenon is at its post-trip peak. Dilute boron or wait it out.","warn");toast("THE XENON PIT","Xe-135 is eating ~"+Math.abs(Math.round(-2950*G.xenon*G.diff.xe))+" pcm right now.","#e879f9")}
+  if(scenIdx===3)toast("SHIFT 4","Full power. Something is scheduled at 00:28. It is not a drill.","#38bdf8");
+  if(scenIdx===4)toast("CAPSTONE — STATION BLACKOUT","At 00:20 the grid disappears. Battery is a countdown.","#f87171");
+ }
+ updateHUD();
+ if(!rafId){lastTs=performance.now();rafId=requestAnimationFrame(frame)}
+}
+function syncAllControls(){
+ $("rngRod").value=G.rodPos;$("rngBoron").value=G.boron;$("rngPumpSpd").value=G.pumpSpd;$("rngTurb").value=G.turbValve;$("rngSetPt").value=G.setPt;$("chkAutoRod").checked=false;G.autoRod=false;
+ syncPumpUI();setToggle("btnHeater",false);setToggle("btnSpray",false);setToggle("btnECCS",false);setToggle("btnContSpray",false);$("btnDiesel").textContent="START DIESEL";$("btnResetScram").disabled=true;
+}
+function setToggle(id,on){const b=$(id);b.classList.toggle("on",on)}
+function setPaused(p){if(!G)return;G.paused=p;$("btnPause").textContent=p?"▶":"❚❚";$("pauseModal").classList.toggle("hidden",!p)}
+function setSpeed(s){if(!G)return;G.speed=s;document.querySelectorAll(".spd").forEach(b=>b.classList.toggle("seg",+b.dataset.speed===s));document.querySelectorAll(".spd").forEach(b=>b.classList.toggle("on",+b.dataset.speed===s))}
+function backToTitle(){if(G){G.running=false}$("simScreen").classList.add("hidden");$("endModal").classList.add("hidden");$("pauseModal").classList.add("hidden");$("titleScreen").classList.remove("hidden");renderProfile();renderScenarios();if(AC){humGain&&(humGain.gain.value=0);pumpGain&&(pumpGain.gain.value=0)}}
+
+/* bindings */
+function bind(){
+ document.querySelectorAll(".diffBtn").forEach(b=>b.onclick=()=>{SAVE.settings.diff=b.dataset.diff;persist();renderScenarios();sndClick()});
+ $("btnStartSel").onclick=()=>startSim(selectedScen);
+ $("btnSandbox").onclick=()=>startSim(-1);
+ $("btnSandbox").onmouseenter=()=>{};
+ $("btnHelpTitle").onclick=()=>{$("helpModal").classList.remove("hidden");sndClick()};
+ $("btnSettingsTitle").onclick=()=>{$("settingsModal").classList.remove("hidden");sndClick()};
+ document.querySelectorAll(".closeHelp").forEach(b=>b.onclick=()=>$("helpModal").classList.add("hidden"));
+ document.querySelectorAll(".closeSettings").forEach(b=>b.onclick=()=>$("settingsModal").classList.add("hidden"));
+ $("btnResetProgress").onclick=()=>{SAVE={xp:0,unlocked:1,best:{},settings:SAVE.settings};persist();renderProfile();renderScenarios();toast("PROGRESS RESET","XP, unlocks and best scores cleared. Settings kept.","#f59e0b")};
+ // sim header
+ $("btnExit").onclick=()=>{setPaused(true)};
+ $("btnPause").onclick=()=>setPaused(!G.paused);
+ document.querySelectorAll(".spd").forEach(b=>b.onclick=()=>{setSpeed(+b.dataset.speed);sndClick()});
+ $("btnEndShift").onclick=()=>{if(G.sandbox)endShift(true,"Sandbox session ended by the operator.");else if(confirm("End this shift now and accept the current result?"))endShift(objectives().every(o=>o.done),"Shift ended early by the operator.")};
+ $("btnHelpSim").onclick=()=>$("helpModal").classList.remove("hidden");
+ $("btnSettingsSim").onclick=()=>$("settingsModal").classList.remove("hidden");
+ $("btnSound").onclick=()=>{SAVE.settings.mute=!SAVE.settings.mute;persist();applyVolume();syncSettingsUI();$("btnSound").textContent=SAVE.settings.mute?"🔇":"🔊"};
+ // pause modal
+ $("btnResume").onclick=()=>setPaused(false);
+ $("btnRestart").onclick=()=>startSim(G.sandbox?-1:G.scenIdx);
+ $("btnHelpPause").onclick=()=>$("helpModal").classList.remove("hidden");
+ $("btnSettingsPause").onclick=()=>$("settingsModal").classList.remove("hidden");
+ $("btnQuitTitle").onclick=backToTitle;
+ // end modal
+ $("btnRetry").onclick=()=>startSim(G.sandbox?-1:G.scenIdx);
+ $("btnEndTitle").onclick=backToTitle;
+ $("btnEndSandbox").onclick=()=>startSim(-1);
+ $("btnNextScen").onclick=()=>startSim(Math.min(SCEN.length-1,G.scenIdx+1));
+ $("btnCoachHide").onclick=()=>{SAVE.settings.coach=false;persist();syncSettingsUI();$("coachBox").classList.add("hidden")};
+ // controls
+ $("rngRod").addEventListener("input",e=>{if(G.scrammed){e.target.value=0;toast("SCRAM ACTIVE","Reset the SCRAM (power < 6%) before withdrawing rods.","#f87171");return}G.rodPos=+e.target.value});
+ document.querySelectorAll(".rodStep").forEach(b=>b.onclick=()=>{if(G.scrammed)return;G.rodPos=clamp(G.rodPos+ +b.dataset.d,0,100);syncRodUI();sndClick()});
+ $("rngBoron").addEventListener("input",e=>{G.boron=+e.target.value});
+ $("btnBorate").onclick=()=>{G.boron=clamp(G.boron+40,0,2000);$("rngBoron").value=G.boron;sndClick();floater("BORATE +40 ppm","#f59e0b")};
+ $("btnDilute").onclick=()=>{G.boron=clamp(G.boron-40,0,2000);$("rngBoron").value=G.boron;sndClick();floater("DILUTE −40 ppm","#22d3ee")};
+ $("chkAutoRod").addEventListener("change",e=>{const ok=hasUp("governor")||rankOf(SAVE.xp).cur[0]>=800;if(e.target.checked&&!ok){e.target.checked=false;toast("LOCKED","Automatic Rod Control needs the Governor upgrade ($65k) or Senior Operator rank.","#f59e0b");return}G.autoRod=e.target.checked;log("Automatic Rod Control "+(G.autoRod?"engaged at "+Math.round(G.setPt)+"%":"disengaged"),"sys")});
+ $("rngSetPt").addEventListener("input",e=>{G.setPt=+e.target.value});
+ $("btnPumpA").onclick=()=>{if(G.pumpFault==="A"){toast("PUMP A FAULT","Repair the pump (crew job) before restarting it.","#f87171");return}G.pumpA=!G.pumpA;syncPumpUI();sndClick()};
+ $("btnPumpB").onclick=()=>{if(G.pumpFault==="B"){toast("PUMP B FAULT","Repair the pump (crew job) before restarting it.","#f87171");return}G.pumpB=!G.pumpB;syncPumpUI();sndClick()};
+ $("rngPumpSpd").addEventListener("input",e=>{G.pumpSpd=+e.target.value});
+ $("btnHeater").onclick=e=>{G.heater=!G.heater;setToggle("btnHeater",G.heater);sndClick()};
+ $("btnSpray").onclick=e=>{G.spray=!G.spray;setToggle("btnSpray",G.spray);sndClick()};
+ $("btnECCS").onclick=()=>{G.eccs=!G.eccs;setToggle("btnECCS",G.eccs);if(G.eccs){G.eccsUsed=true;log("ECCS injection "+(G.offsite||G.dieselState==="run"?"FLOWING":"commanded — NO POWER to pumps!"),G.offsite||G.dieselState==="run"?"good":"bad")}sndClick()};
+ $("btnContSpray").onclick=()=>{G.contSpray=!G.contSpray;setToggle("btnContSpray",G.contSpray);sndClick()};
+ $("rngTurb").addEventListener("input",e=>{if(G.turbTripped){toast("TURBINE TRIPPED","Reset the turbine before admitting steam.","#f59e0b");e.target.value=G.turbValve;return}G.turbValve=+e.target.value;if(G.turbValve>5)G.turbSynced=true});
+ $("btnTripTurb").onclick=()=>{tripTurbine("Turbine manually tripped.");sndClick()};
+ $("btnTurbReset").onclick=()=>{if(G.sgPressure<25){toast("SG PRESSURE LOW","Build steam generator pressure above 25 bar first.","#f59e0b");return}G.turbTripped=false;log("Turbine reset and ready for steam.","good");sndClick()};
+ $("btnLoadPreset").onclick=()=>{if(G.turbTripped)return toast("TURBINE TRIPPED","Reset it first.","#f59e0b");G.turbValve=clamp(G.demand,0,100);$("rngTurb").value=G.turbValve;sndClick()};
+ $("btnScram").onclick=()=>doScram(true);
+ $("btnResetScram").onclick=()=>{if(!G.scramResettable)return;G.scrammed=false;G.rodPos=0;syncRodUI();log("SCRAM reset. Rods remain fully inserted — withdraw deliberately.","sys");sndClick();checkResettable();$("btnResetScram").disabled=true};
+ $("btnAck").onclick=ackAlarms; $("btnSilence").onclick=()=>{G.silencedUntil=performance.now()+30000;toast("ALARMS SILENCED","Audible alerts muted for 30 s. The panel still tells the truth.","#f59e0b")};
+ $("btnDiesel").onclick=()=>{if(G.dieselState==="run"){G.dieselState="off";$("btnDiesel").textContent="START DIESEL";log("Diesel stopped.","warn");return}if(G.dieselState==="start")return;if(G.dieselFuel<=1){toast("NO DIESEL FUEL","The day tank is empty.","#f87171");return}G.dieselState="start";G.dieselTimer=hasUp("diesel")?2:5;$("btnDiesel").textContent="STARTING…";log("Diesel start sequence initiated ("+G.dieselTimer+" s).","sys");beep(180,.3,"sawtooth",.12)};
+ $("btnRestoreGrid").onclick=()=>{if(G.offsite)return toast("GRID ALREADY LIVE","Off-site power is available.","#34d399");if(G.money<40)return toast("INSUFFICIENT BUDGET","Restoring the grid costs $40k.","#f87171");if(startJob("Restoring off-site power",25,()=>{G.offsite=true;log("Off-site power restored. Emergency bus normalised.","good");toast("GRID RESTORED","Off-site power is back.","#34d399")}))G.money-=40};
+ $("btnIsolate").onclick=()=>{if(G.leak<=0)return toast("NO BREAK","There is no active RCS break to isolate.","#34d399");startJob("Isolating the Loop B break",18,()=>{G.leak=0;G.breakIsolated=true;log("Break isolated. RCS inventory loss stopped.","good");toast("BREAK ISOLATED","Level should now recover with ECCS/makeup.","#34d399");sndSuccess()})};
+ $("btnRepairPump").onclick=()=>{if(!G.pumpFault)return toast("PUMPS HEALTHY","No faulted pump to repair.","#34d399");if(G.money<25)return toast("INSUFFICIENT BUDGET","Pump repair costs $25k.","#f87171");const f=G.pumpFault;if(startJob("Repairing Pump "+f,22,()=>{G.pumpFault=null;if(f==="A")G.pumpA=true;else G.pumpB=true;syncPumpUI();log("Pump "+f+" repaired and available.","good")}))G.money-=25};
+ document.querySelectorAll(".faultBtn").forEach(b=>b.onclick=()=>{injectFault(b.dataset.fault,false);updateHUD()});
+ // settings
+ $("rngVol").addEventListener("input",e=>{SAVE.settings.vol=+e.target.value;$("vVol").textContent=e.target.value+"%";applyVolume();persist()});
+ $("chkMute").addEventListener("change",e=>{SAVE.settings.mute=e.target.checked;applyVolume();persist();$("btnSound").textContent=SAVE.settings.mute?"🔇":"🔊"});
+ $("chkAmbient").addEventListener("change",e=>{SAVE.settings.ambient=e.target.checked;persist()});
+ $("chkCoach").addEventListener("change",e=>{SAVE.settings.coach=e.target.checked;persist()});
+ $("chkCalm").addEventListener("change",e=>{SAVE.settings.calm=e.target.checked;persist()});
+ ["chkPower","chkTemp","chkPres","chkXe"].forEach(id=>$(id).addEventListener("change",drawChart));
+ // keyboard
+ document.addEventListener("keydown",e=>{
+  if(!$("simScreen")||$("simScreen").classList.contains("hidden")||!G)return;
+  if(e.target.tagName==="INPUT"&&e.target.type!=="range")return;
+  const k=e.key;
+   if(k===" "){if(e.target.tagName==="BUTTON")return;e.preventDefault();if(!$("endModal").classList.contains("hidden"))return;setPaused(!G.paused)}
+  else if(k==="ArrowUp"){e.preventDefault();if(!G.scrammed){G.rodPos=clamp(G.rodPos+2,0,100);syncRodUI()}}
+  else if(k==="ArrowDown"){e.preventDefault();G.rodPos=clamp(G.rodPos-2,0,100);syncRodUI()}
+  else if(k==="s"||k==="S")doScram(true);
+  else if(k==="r"||k==="R")$("btnResetScram").click();
+  else if(k==="e"||k==="E")$("btnECCS").click();
+  else if(k==="d"||k==="D")$("btnDiesel").click();
+  else if(k==="a"||k==="A")ackAlarms();
+  else if(k==="m"||k==="M")$("btnSound").click();
+  else if(k==="h"||k==="H")$("helpModal").classList.toggle("hidden");
+  else if(k==="Escape"){if(!$("helpModal").classList.contains("hidden"))$("helpModal").classList.add("hidden");else if(!$("settingsModal").classList.contains("hidden"))$("settingsModal").classList.add("hidden");else setPaused(true)}
+  else if(["1","2","3","4"].includes(k))setSpeed([0.5,1,2,4][+k-1]);
+ });
+ document.addEventListener("visibilitychange",()=>{if(document.hidden&&G&&G.running&&!G.paused&&!G.ended){setPaused(true);log("Auto-paused (tab hidden). The plant waits for no one — except now.","sys")}});
+ window.addEventListener("resize",()=>{if(G){drawChart()}});
+}
+function ackAlarms(){if(!G)return;computeAlarms().forEach(a=>G.acked[a.code]=1);setTimeout(()=>{if(G)G.acked={}},45000);renderAlarms();sndClick()}
+function syncSettingsUI(){$("rngVol").value=SAVE.settings.vol;$("vVol").textContent=SAVE.settings.vol+"%";$("chkMute").checked=SAVE.settings.mute;$("chkAmbient").checked=SAVE.settings.ambient;$("chkCoach").checked=SAVE.settings.coach;$("chkCalm").checked=SAVE.settings.calm;$("btnSound").textContent=SAVE.settings.mute?"🔇":"🔊"}
+
+/* ============ INIT ============ */
+renderProfile();renderScenarios();syncSettingsUI();bind();
+</script>
+</body>
+</html>

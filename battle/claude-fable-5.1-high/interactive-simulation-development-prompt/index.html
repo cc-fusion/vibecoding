@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Cellular Automata Workshop</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+:root{--bg:#070a12;--panel:#0d1322;--line:#1e2a44;--text:#dfe7ff;--muted:#8a97b8;--acc:#5ff0ff;--acc2:#b48cff;--ok:#5fff9a;--warn:#ffcc55;--bad:#ff6b7a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;font-size:14px}
+#app{position:relative;height:100%;width:100%}
+h1,h2,h3{font-weight:700}
+p{margin:6px 0}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:#141c31;border-radius:8px;padding:6px 10px;transition:background .15s,transform .1s,border-color .15s}
+button:hover{background:#1c2744;border-color:#2e3f6a}
+button:active{transform:scale(.97)}
+button.active,button.primary{background:linear-gradient(135deg,#1b4a63,#2a2f6b);border-color:var(--acc);box-shadow:0 0 12px rgba(95,240,255,.25)}
+button.primary{font-weight:600}
+button:disabled{opacity:.4;cursor:not-allowed}
+input[type=range]{width:100%;accent-color:var(--acc)}
+input[type=number],input[type=text],select{background:#0a0f1c;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:4px 6px;font:inherit}
+.hidden{display:none!important}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column}
+.small{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+/* TITLE */
+#bgcanvas{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+.title-inner{position:relative;z-index:1;margin:auto;text-align:center;padding:24px;max-width:720px;width:100%}
+.title-inner h1{font-size:clamp(28px,6vw,56px);letter-spacing:.12em;margin:0;line-height:1.05;text-shadow:0 0 30px rgba(95,240,255,.5)}
+.title-inner h1 span{display:block;font-size:.5em;letter-spacing:.5em;color:var(--acc)}
+.tag{color:var(--muted);margin:10px 0 26px}
+.menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;max-width:520px;margin:0 auto}
+.menu button{padding:12px;font-size:15px;background:rgba(20,28,49,.85);backdrop-filter:blur(4px)}
+#title-progress{margin-top:22px;color:var(--muted);font-size:12px;line-height:1.7}
+.ver{position:absolute;bottom:8px;right:12px;font-size:11px;color:#3c4a6b}
+/* SELECT */
+#scr-select header{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+#scr-select h2{margin:0;font-size:18px;flex:1}
+.tabs{display:flex;gap:4px}
+.sel-body{flex:1;overflow:auto;padding:16px}
+.diff-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.diff-row .desc{color:var(--muted);font-size:12px;width:100%}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:transform .15s,border-color .15s;position:relative;display:flex;flex-direction:column;gap:6px;min-height:150px}
+.card:hover{transform:translateY(-2px);border-color:var(--acc)}
+.card.locked{opacity:.45;cursor:not-allowed}
+.card.capstone{border-color:#6a4ab0;background:linear-gradient(160deg,#141a33,#1b1230)}
+.card h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+.card .icon{font-size:20px}
+.card p{margin:0;color:var(--muted);font-size:12px;flex:1;line-height:1.45}
+.card .meta{font-size:11px;color:var(--acc);display:flex;justify-content:space-between}
+.stars{color:var(--warn);letter-spacing:2px}
+/* GAME */
+#hud-top{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap;z-index:3}
+#hud-title{display:flex;flex-direction:column;line-height:1.1;min-width:90px}
+#hud-title b{font-size:14px}
+#hud-rule{font-size:11px;color:var(--acc)}
+#hud-objective{flex:1;min-width:160px;font-size:12px;color:var(--text);background:#0a0f1c;border:1px solid var(--line);border-radius:8px;padding:5px 9px;line-height:1.3}
+#hud-objective b{color:var(--warn)}
+#hud-stats{display:flex;gap:10px;font-size:12px;color:var(--muted)}
+#hud-stats b{color:var(--text);font-variant-numeric:tabular-nums}
+#st-state{padding:2px 7px;border-radius:10px;background:#1a2340;color:var(--acc);font-size:11px}
+#time-controls{display:flex;gap:4px;align-items:center}
+#time-controls button{padding:5px 9px}
+.speeds{display:flex;gap:2px;margin-left:4px}
+.speeds button{padding:4px 7px;font-size:11px}
+#main{flex:1;display:flex;min-height:0;position:relative}
+#toolbar{width:58px;display:flex;flex-direction:column;gap:5px;padding:6px;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;align-items:center;z-index:2}
+#toolbar button{width:44px;height:40px;padding:0;font-size:18px;display:flex;align-items:center;justify-content:center;position:relative}
+#toolbar .sep{height:1px;width:40px;background:var(--line);margin:3px 0}
+#toolbar .lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+#toolbar .sw{width:14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.3)}
+#toolbar button.st{font-size:11px;flex-direction:column;gap:2px;height:44px}
+#canvas-wrap{flex:1;position:relative;min-width:0;background:#05070d;overflow:hidden}
+#grid{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;display:block}
+#hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(13,19,34,.95);border:1px solid var(--acc);border-radius:12px;padding:12px 16px;max-width:460px;width:92%;font-size:13px;line-height:1.45;z-index:4;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#hint .row{margin-top:8px;justify-content:space-between}
+#toasts{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:4;pointer-events:none;align-items:center}
+.toast{background:rgba(13,19,34,.95);border:1px solid var(--line);border-left:3px solid var(--acc);padding:7px 12px;border-radius:8px;font-size:12px;animation:toastin .3s ease;max-width:min(420px,90vw)}
+.toast.ok{border-left-color:var(--ok)}.toast.warn{border-left-color:var(--warn)}.toast.bad{border-left-color:var(--bad)}
+@keyframes toastin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+#panel{width:310px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;z-index:3}
+.panel-tabs{display:flex;border-bottom:1px solid var(--line)}
+.panel-tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:9px 2px;font-size:12px;color:var(--muted);border-bottom:2px solid transparent}
+.panel-tabs button.active{color:var(--text);border-bottom-color:var(--acc);background:transparent;box-shadow:none}
+.ptab{flex:1;overflow:auto;padding:12px}
+.ptab h4{margin:12px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.ptab h4:first-child{margin-top:0}
+.bs-row{display:flex;gap:3px;align-items:center;margin:4px 0}
+.bs-row span{width:14px;font-size:11px;color:var(--muted)}
+.bs-row label{width:24px;height:24px;border:1px solid var(--line);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;user-select:none}
+.bs-row input{display:none}
+.bs-row input:checked+label{background:#1b4a63;border-color:var(--acc);color:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:var(--muted)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px;border:1px solid rgba(255,255,255,.2)}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px}
+.lib-item{border:1px solid var(--line);border-radius:8px;padding:6px;text-align:center;cursor:pointer;background:#0a0f1c;font-size:11px;transition:border-color .15s}
+.lib-item:hover,.lib-item.active{border-color:var(--acc)}
+.lib-item canvas{width:100%;height:52px;image-rendering:pixelated;display:block;margin-bottom:4px;background:#05070d;border-radius:4px}
+.exp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.exp-item{border:1px solid var(--line);border-radius:8px;padding:6px;cursor:pointer;background:#0a0f1c;font-size:11px;text-align:center}
+.exp-item:hover{border-color:var(--acc2)}
+.exp-item canvas{width:100%;aspect-ratio:1;image-rendering:pixelated;display:block;margin-bottom:4px;border-radius:4px}
+#chart{width:100%;height:150px;display:block;background:#0a0f1c;border-radius:8px;border:1px solid var(--line)}
+#chart-legend{display:flex;gap:12px;font-size:11px;margin-top:6px;flex-wrap:wrap}
+#chart-numbers{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12px;margin-top:10px}
+#chart-numbers b{float:right;font-variant-numeric:tabular-nums}
+#log{list-style:none;margin:0;padding:0;font-size:11.5px}
+#log li{padding:4px 0;border-bottom:1px solid #121a2e;color:var(--muted)}
+#log li b{color:var(--acc);margin-right:6px;font-weight:500}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.kv b{text-align:right;font-variant-numeric:tabular-nums}
+.setting{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #121a2e}
+.setting label{color:var(--text)}
+.setting .ctl{display:flex;gap:4px;align-items:center;min-width:150px;justify-content:flex-end}
+/* MODAL */
+.modal{position:fixed;inset:0;background:rgba(3,5,10,.7);display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(5px);padding:12px}
+.box{background:#111a2e;border:1px solid #2a3c66;border-radius:16px;padding:22px;max-width:640px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);animation:boxin .25s ease}
+@keyframes boxin{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.box h2{margin:0 0 6px;font-size:22px}
+.box h3{margin:14px 0 6px;font-size:14px;color:var(--acc)}
+.box p{line-height:1.5;color:#c6d0ea;margin:6px 0}
+.box .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.box .actions button{flex:1;min-width:120px;padding:10px}
+.box.win{border-color:var(--ok);box-shadow:0 0 60px rgba(95,255,154,.2)}
+.box.fail{border-color:var(--bad);box-shadow:0 0 60px rgba(255,107,122,.2)}
+.help-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.help-body{font-size:13px;line-height:1.55}
+.help-body kbd{background:#0a0f1c;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-family:ui-monospace,monospace;font-size:11px}
+.help-body ul{padding-left:18px;margin:4px 0}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+.stat{background:#0a0f1c;border:1px solid var(--line);border-radius:10px;padding:10px}
+.stat .v{font-size:20px;font-weight:600;color:var(--acc)}
+.stat .k{font-size:11px;color:var(--muted)}
+.ach{display:flex;gap:8px;flex-wrap:wrap}
+.ach span{border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--muted)}
+.ach span.got{border-color:var(--warn);color:var(--warn)}
+#panel-toggle-mobile{display:none}
+@media(max-width:960px){
+ #panel{position:absolute;right:0;top:0;bottom:0;width:min(320px,88vw);transform:translateX(100%);transition:transform .25s}
+ #panel.open{transform:none;box-shadow:-10px 0 40px rgba(0,0,0,.6)}
+ #toolbar{width:50px}#toolbar button{width:40px;height:36px;font-size:16px}
+ #hud-stats{gap:6px;font-size:11px}#hud-objective{order:10;width:100%;flex-basis:100%}
+}
+@media(max-width:600px){#hud-title{display:none}.speeds button{padding:3px 5px}}
+</style>
+</head>
+<body>
+<div id="app">
+<!-- TITLE -->
+<section id="scr-title" class="screen">
+ <canvas id="bgcanvas"></canvas>
+ <div class="title-inner">
+  <h1>CELLULAR AUTOMATA<span>WORKSHOP</span></h1>
+  <p class="tag">Seven rule families · one grid · emergent everything</p>
+  <div class="menu">
+   <button data-act="tutorial" class="primary">▶ Tutorial</button>
+   <button data-act="challenges">Challenges</button>
+   <button data-act="sandbox">Sandbox</button>
+   <button data-act="continue" id="btn-continue" class="hidden">Continue saved sandbox</button>
+   <button data-act="help">Help</button>
+   <button data-act="settings">Settings</button>
+   <button data-act="stats">Statistics</button>
+  </div>
+  <div id="title-progress"></div>
+ </div>
+ <div class="ver">v1.0 · Web Audio · localStorage</div>
+</section>
+<!-- SELECT -->
+<section id="scr-select" class="screen hidden">
+ <header>
+  <button data-act="title">← Title</button>
+  <h2>Choose a scenario</h2>
+  <div class="tabs"><button class="tab active" data-tab="challenges">Challenges</button><button class="tab" data-tab="sandbox">Sandbox modes</button></div>
+ </header>
+ <div id="sel-challenges" class="sel-body">
+  <div class="diff-row">
+   <span class="small">Difficulty:</span>
+   <button class="diff" data-diff="A">Apprentice</button>
+   <button class="diff" data-diff="J">Journeyman</button>
+   <button class="diff" data-diff="M">Master</button>
+   <span class="desc" id="diff-desc"></span>
+  </div>
+  <div id="chal-grid" class="card-grid"></div>
+ </div>
+ <div id="sel-sandbox" class="sel-body hidden">
+  <p class="small" style="margin:0 0 12px">Free play with every rule family. Grid size and wrapping are set in Settings.</p>
+  <div id="mode-grid" class="card-grid"></div>
+ </div>
+</section>
+<!-- GAME -->
+<section id="scr-game" class="screen hidden">
+ <div id="hud-top">
+  <button id="btn-menu" title="Menu (Esc)">☰</button>
+  <div id="hud-title"><b id="hud-mode">Life</b><span id="hud-rule">B3/S23</span></div>
+  <div id="hud-objective"></div>
+  <div id="hud-stats">
+   <span>Gen <b id="st-gen">0</b></span>
+   <span><span id="st-pop-label">Pop</span> <b id="st-pop">0</b></span>
+   <span id="st-budget-wrap" class="hidden">Budget <b id="st-budget">0</b></span>
+   <span id="st-timer-wrap" class="hidden">Left <b id="st-timer">0</b></span>
+   <span id="st-state">—</span>
+  </div>
+  <div id="time-controls">
+   <button id="btn-reset" title="Reset to start / back to build (Backspace)">⟲</button>
+   <button id="btn-step" title="Step one generation (N)">⏭</button>
+   <button id="btn-play" title="Play / Pause (Space)" class="primary">▶</button>
+   <div class="speeds">
+    <button data-speed="0.5" title="Speed ½× (1)">½×</button><button data-speed="1" class="active" title="Speed 1× (2)">1×</button><button data-speed="2" title="Speed 2× (3)">2×</button><button data-speed="4" title="Speed 4× (4)">4×</button><button data-speed="8" title="Speed 8× (5)">8×</button>
+   </div>
+  </div>
+  <button id="btn-mute" title="Mute (M)">🔊</button>
+  <button id="btn-help2" title="Help (H)">?</button>
+  <button id="btn-panel" title="Toggle side panel (Tab)">▤</button>
+ </div>
+ <div id="main">
+  <div id="toolbar"></div>
+  <div id="canvas-wrap">
+   <canvas id="grid"></canvas>
+   <div id="toasts"></div>
+   <div id="hint" class="hidden"><div id="hint-text"></div><div class="row"><span class="small" id="hint-step"></span><button id="hint-skip">Skip tutorial</button></div></div>
+  </div>
+  <aside id="panel">
+   <div class="panel-tabs">
+    <button data-ptab="rules" class="active">Rules</button>
+    <button data-ptab="library">Library</button>
+    <button data-ptab="explore">Explore</button>
+    <button data-ptab="charts">Charts</button>
+    <button data-ptab="log">Log</button>
+   </div>
+   <div id="ptab-rules" class="ptab"></div>
+   <div id="ptab-library" class="ptab hidden"></div>
+   <div id="ptab-explore" class="ptab hidden"></div>
+   <div id="ptab-charts" class="ptab hidden">
+    <canvas id="chart" width="280" height="150"></canvas>
+    <div id="chart-legend"><span style="color:#5ff0ff">■ Population</span><span style="color:#ffcc55">■ Activity</span><span style="color:#b48cff">■ Entropy</span></div>
+    <div id="chart-numbers"></div>
+   </div>
+   <div id="ptab-log" class="ptab hidden"><ul id="log"></ul></div>
+  </aside>
+ </div>
+</section>
+<!-- MODALS -->
+<div id="modal-pause" class="modal hidden"><div class="box">
+ <h2>Paused</h2><p class="small" id="pause-info"></p>
+ <div class="actions">
+  <button class="primary" data-act="resume">Resume</button>
+  <button data-act="help">Help</button>
+  <button data-act="settings">Settings</button>
+  <button data-act="save" id="btn-save">Save sandbox</button>
+  <button data-act="restart">Restart scenario</button>
+  <button data-act="select">Scenario select</button>
+  <button data-act="title">Quit to title</button>
+ </div></div></div>
+<div id="modal-settings" class="modal hidden"><div class="box">
+ <h2>Settings</h2>
+ <div class="setting"><label>Master volume</label><div class="ctl"><input type="range" id="set-volume" min="0" max="1" step="0.01" style="width:140px"><span id="set-volume-v" class="small"></span></div></div>
+ <div class="setting"><label>Mute audio</label><div class="ctl"><button id="set-mute"></button></div></div>
+ <div class="setting"><label>Sandbox grid size</label><div class="ctl"><button data-gs="S">96×60</button><button data-gs="M">144×90</button><button data-gs="L">192×120</button></div></div>
+ <div class="setting"><label>Edge wrapping (sandbox)</label><div class="ctl"><button id="set-wrap"></button></div></div>
+ <div class="setting"><label>Grid lines</label><div class="ctl"><button id="set-gridlines"></button></div></div>
+ <div class="setting"><label>Colour theme</label><div class="ctl"><button data-theme="neon">Neon</button><button data-theme="classic">Classic</button><button data-theme="ember">Ember</button></div></div>
+ <div class="setting"><label>Visual effects &amp; generation ticks</label><div class="ctl"><button id="set-effects"></button></div></div>
+ <div class="setting"><label>Reset all progress</label><div class="ctl"><button id="set-wipe">Wipe save data</button></div></div>
+ <div class="actions"><button class="primary" data-act="close">Done</button></div></div></div>
+<div id="modal-help" class="modal hidden"><div class="box" style="max-width:720px">
+ <h2>Help</h2>
+ <div class="help-tabs"><button data-htab="basics" class="active">Basics</button><button data-htab="controls">Controls</button><button data-htab="families">Rule families</button><button data-htab="challenges">Challenges</button><button data-htab="tips">Tips</button></div>
+ <div class="help-body" id="help-body"></div>
+ <div class="actions"><button class="primary" data-act="close">Close</button></div></div></div>
+<div id="modal-end" class="modal hidden"><div class="box" id="end-box"></div></div>
+<div id="modal-stats" class="modal hidden"><div class="box" id="stats-box"></div></div>
+</div>
+<script>
+'use strict';
+/* ============================ UTILITIES ============================ */
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+const store={ok:(()=>{try{localStorage.setItem('__caw_t','1');localStorage.removeItem('__caw_t');return true}catch(e){return false}})(),
+ get(k,d){if(!this.ok)return d;try{const v=localStorage.getItem('caw_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+ set(k,v){if(!this.ok)return;try{localStorage.setItem('caw_'+k,JSON.stringify(v))}catch(e){}},
+ del(k){if(!this.ok)return;try{localStorage.removeItem('caw_'+k)}catch(e){}}};
+const SET=Object.assign({volume:0.6,muted:false,gridSize:'M',gridLines:true,theme:'neon',effects:true,wrap:true,diff:'J',tutorialDone:false},store.get('settings',{}));
+const PROG=store.get('progress',{stars:{},ach:{},stats:{gens:0,cells:0,wins:0,fails:0,sessions:0,maxPop:0,time:0}});
+PROG.stars=PROG.stars||{};PROG.ach=PROG.ach||{};PROG.stats=Object.assign({gens:0,cells:0,wins:0,fails:0,sessions:0,maxPop:0,time:0},PROG.stats||{});
+const saveSettings=()=>store.set('settings',SET),saveProgress=()=>store.set('progress',PROG);
+const GRID_SIZES={S:[96,60],M:[144,90],L:[192,120]};
+
+/* ============================ MODE DEFINITIONS ============================ */
+const MODES={
+ life:{name:'Life-like',icon:'◼',gps:12,popLabel:'Pop',desc:'Two-state B/S automata. Conway\'s Life, HighLife, Seeds, Day & Night — any of 262,144 rules. Cells are born or survive by neighbour count.'},
+ brain:{name:"Brian's Brain",icon:'✦',gps:12,popLabel:'Firing',desc:'Three states: off, firing, refractory. An off cell fires when exactly two neighbours fire. Never settles — a storm of gliders.'},
+ wire:{name:'WireWorld',icon:'⚡',gps:10,popLabel:'Electrons',desc:'Conductors carry electrons (head → tail → conductor). Build clocks, diodes and logic gates out of wire.'},
+ ant:{name:"Langton's Ant",icon:'🐜',gps:150,popLabel:'Painted',desc:'Turmites flip cells and turn. Chaos for ~10,000 steps, then an endless highway emerges. Multi-colour rules build castles.'},
+ sand:{name:'Sandpile',icon:'▲',gps:24,popLabel:'Grains',desc:'Abelian sandpile. Cells with 4+ grains topple to their neighbours. Self-organised criticality and power-law avalanches.'},
+ elem:{name:'Elementary 1D',icon:'≣',gps:20,popLabel:'Row pop',desc:'Wolfram rules 0–255. Each row is the next moment in time; watch rule 30 chaos or rule 110 universality scroll by.'},
+ lenia:{name:'Lenia',icon:'◉',gps:10,popLabel:'Mass',desc:'Continuous automata: a smooth ring kernel and a bell-shaped growth function. Blobs, rings and self-propelling creatures.'}
+};
+const THEMES={
+ neon:{bg:[8,11,20],gridc:'rgba(255,255,255,0.07)',live:[95,240,255],old:[180,100,255],heat:[255,70,150],brainOn:[255,255,255],brainDying:[70,120,255],wire:{1:[130,100,35],2:[90,210,255],3:[255,100,70],4:[75,78,92]},ant:[235,230,140],antColors:[[8,11,20],[235,230,140],[255,120,80],[120,200,255],[200,120,255],[120,255,160],[255,255,255]],sand:[[14,18,30],[55,70,130],[80,140,210],[180,220,255],[255,255,255]],elem:[225,240,255],lenia:[[8,11,20],[15,80,120],[50,200,170],[250,250,130],[255,255,255]]},
+ classic:{bg:[250,250,250],gridc:'rgba(0,0,0,0.08)',live:[25,25,25],old:[25,25,25],heat:[200,200,200],brainOn:[20,20,20],brainDying:[140,140,140],wire:{1:[200,170,60],2:[30,90,220],3:[220,50,50],4:[120,120,120]},ant:[0,0,0],antColors:[[250,250,250],[0,0,0],[220,60,60],[60,100,220],[150,60,200],[60,160,80],[240,180,0]],sand:[[250,250,250],[190,190,230],[120,120,210],[60,60,180],[20,20,100]],elem:[20,20,20],lenia:[[250,250,250],[180,210,230],[80,140,190],[20,60,120],[0,0,40]]},
+ ember:{bg:[18,8,5],gridc:'rgba(255,200,150,0.07)',live:[255,210,80],old:[255,80,30],heat:[150,30,10],brainOn:[255,240,200],brainDying:[200,60,20],wire:{1:[120,70,30],2:[255,230,120],3:[255,80,30],4:[80,60,55]},ant:[255,200,80],antColors:[[18,8,5],[255,200,80],[255,90,40],[255,140,160],[200,120,255],[160,255,160],[255,255,255]],sand:[[18,8,5],[90,30,20],[180,70,30],[255,150,50],[255,240,180]],elem:[255,220,150],lenia:[[18,8,5],[110,20,10],[230,90,20],[255,210,80],[255,255,230]]}
+};
+const T=()=>THEMES[SET.theme]||THEMES.neon;
+
+/* ============================ STATE ============================ */
+const S={screen:'title',mode:'life',GW:144,GH:90,grid:null,next:null,age:null,heat:null,F:null,F2:null,nb:null,
+ gen:0,running:false,speed:1,acc:0,pop:0,changed:0,entropy:0,period:0,
+ rule:{born:[0,0,0,1,0,0,0,0,0],survive:[0,0,1,1,0,0,0,0,0]},elemRule:30,elemRow:0,antRule:'RL',ants:[],antDir:0,
+ lenia:{R:10,mu:0.15,sigma:0.017,dt:0.1},kern:null,sandRain:0,sandDrip:false,
+ wrap:true,tool:'draw',brush:1,drawState:1,stamp:null,stampRot:0,stampFlip:false,
+ hist:{gen:[],pop:[],act:[],ent:[]},hashes:new Uint32Array(256),
+ ch:null,zoom:1,ox:0,oy:0,log:[],particles:[],floaters:[],hover:null,
+ sess:{cells:0,peakPop:0,time:0,gens:0},sandbox:true,soupDensity:0.35,stateLabel:'—',stableCount:0,oscCount:0,extinctFlag:false,
+ tut:null,ptab:'rules'};
+
+function allocGrid(W,H){S.GW=W;S.GH=H;const N=W*H;S.grid=new Uint16Array(N);S.next=new Uint16Array(N);S.age=new Uint16Array(N);S.heat=new Float32Array(N);S.F=new Float32Array(N);S.F2=new Float32Array(N);buildNb();
+ S.oc=document.createElement('canvas');S.oc.width=W;S.oc.height=H;S.octx=S.oc.getContext('2d');S.img=S.octx.createImageData(W,H);}
+function buildNb(){const W=S.GW,H=S.GH,w=S.wrap;const xm=new Int32Array(W),xp=new Int32Array(W),ym=new Int32Array(H),yp=new Int32Array(H);
+ for(let x=0;x<W;x++){xm[x]=x>0?x-1:(w?W-1:-1);xp[x]=x<W-1?x+1:(w?0:-1)}
+ for(let y=0;y<H;y++){ym[y]=y>0?y-1:(w?H-1:-1);yp[y]=y<H-1?y+1:(w?0:-1)}
+ S.nb={xm,xp,ym,yp}}
+
+/* ============================ RULES ============================ */
+function setRuleString(str){const m=/B([0-8]*)\/S([0-8]*)/i.exec(str);if(!m)return false;S.rule.born=Array.from({length:9},(_,i)=>m[1].includes(i)?1:0);S.rule.survive=Array.from({length:9},(_,i)=>m[2].includes(i)?1:0);return true}
+function ruleString(){return 'B'+S.rule.born.map((v,i)=>v?i:'').join('')+'/S'+S.rule.survive.map((v,i)=>v?i:'').join('')}
+const RULE_PRESETS=[['Conway\'s Life','B3/S23'],['HighLife','B36/S23'],['Seeds','B2/S'],['Day & Night','B3678/S34678'],['Diamoeba','B35678/S5678'],['Maze','B3/S12345'],['Mazectric','B3/S1234'],['Anneal','B4678/S35678'],['Replicator','B1357/S1357'],['2x2','B36/S125'],['Morley','B368/S245'],['Coral','B3/S45678'],['Life w/o Death','B3/S012345678'],['Gnarl','B1/S1'],['Stains','B3678/S235678']];
+const ANT_PRESETS=[['Langton RL','RL'],['Symmetric LLRR','LLRR'],['Chaotic RLR','RLR'],['Square filler','LRRRRRLLR'],['Highway builder','RRLLLRLLLRRR'],['Triangle','LLRRRLRLRLLR'],['Spiral RRLL','RRLL']];
+const ELEM_PRESETS=[30,90,110,184,45,73,54,150,106,22];
+const LENIA_PRESETS=[['Orbium regime',{R:13,mu:0.15,sigma:0.017,dt:0.1}],['Blobs',{R:10,mu:0.3,sigma:0.06,dt:0.1}],['Worms',{R:10,mu:0.26,sigma:0.036,dt:0.1}],['Rings',{R:12,mu:0.2,sigma:0.03,dt:0.08}],['Sparse',{R:8,mu:0.12,sigma:0.02,dt:0.12}]];
+
+/* ============================ STEP FUNCTIONS ============================ */
+function stepLife(){const W=S.GW,H=S.GH,g=S.grid,n=S.next,age=S.age,heat=S.heat,{xm,xp,ym,yp}=S.nb,B=S.rule.born,Sv=S.rule.survive;let pop=0,ch=0;
+ for(let y=0;y<H;y++){const yu=ym[y],yd=yp[y],r=y*W,ru=yu<0?-1:yu*W,rd=yd<0?-1:yd*W;
+  for(let x=0;x<W;x++){const xl=xm[x],xr=xp[x];let c=0;
+   if(xl>=0){c+=g[r+xl];if(ru>=0)c+=g[ru+xl];if(rd>=0)c+=g[rd+xl]}
+   if(xr>=0){c+=g[r+xr];if(ru>=0)c+=g[ru+xr];if(rd>=0)c+=g[rd+xr]}
+   if(ru>=0)c+=g[ru+x];if(rd>=0)c+=g[rd+x];
+   const i=r+x,v=g[i];const nv=v?(Sv[c]?1:0):(B[c]?1:0);n[i]=nv;
+   if(nv!==v){ch++;if(v)heat[i]=1}
+   if(nv){pop++;age[i]=v?(age[i]<60000?age[i]+1:60000):1}else age[i]=0;}}
+ S.grid=n;S.next=g;S.pop=pop;S.changed=ch}
+function stepBrain(){const W=S.GW,H=S.GH,g=S.grid,n=S.next,heat=S.heat,{xm,xp,ym,yp}=S.nb;let pop=0,ch=0;
+ for(let y=0;y<H;y++){const yu=ym[y],yd=yp[y],r=y*W,ru=yu<0?-1:yu*W,rd=yd<0?-1:yd*W;
+  for(let x=0;x<W;x++){const xl=xm[x],xr=xp[x];let c=0;
+   if(xl>=0){c+=g[r+xl]===1;if(ru>=0)c+=g[ru+xl]===1;if(rd>=0)c+=g[rd+xl]===1}
+   if(xr>=0){c+=g[r+xr]===1;if(ru>=0)c+=g[ru+xr]===1;if(rd>=0)c+=g[rd+xr]===1}
+   if(ru>=0)c+=g[ru+x]===1;if(rd>=0)c+=g[rd+x]===1;
+   const i=r+x,v=g[i];let nv;if(v===1)nv=2;else if(v===2){nv=0;heat[i]=1}else nv=(c===2)?1:0;n[i]=nv;if(nv!==v)ch++;if(nv===1)pop++;}}
+ S.grid=n;S.next=g;S.pop=pop;S.changed=ch}
+function stepWire(){const W=S.GW,H=S.GH,g=S.grid,n=S.next,{xm,xp,ym,yp}=S.nb;let pop=0,ch=0;
+ for(let y=0;y<H;y++){const yu=ym[y],yd=yp[y],r=y*W,ru=yu<0?-1:yu*W,rd=yd<0?-1:yd*W;
+  for(let x=0;x<W;x++){const i=r+x,v=g[i];let nv=v;
+   if(v===2)nv=3;else if(v===3)nv=1;else if(v===1){const xl=xm[x],xr=xp[x];let c=0;
+    if(xl>=0){c+=g[r+xl]===2;if(ru>=0)c+=g[ru+xl]===2;if(rd>=0)c+=g[rd+xl]===2}
+    if(xr>=0){c+=g[r+xr]===2;if(ru>=0)c+=g[ru+xr]===2;if(rd>=0)c+=g[rd+xr]===2}
+    if(ru>=0)c+=g[ru+x]===2;if(rd>=0)c+=g[rd+x]===2;if(c===1||c===2)nv=2}
+   n[i]=nv;if(nv!==v)ch++;if(nv===2)pop++;}}
+ S.grid=n;S.next=g;S.pop=pop;S.changed=ch}
+function stepAnt(){const W=S.GW,H=S.GH,g=S.grid,r=S.antRule,k=r.length;let pop=S.pop;
+ for(const a of S.ants){const i=a.y*W+a.x;const c=g[i]%k;const t=r[c];
+  if(t==='L')a.d=(a.d+3)&3;else if(t==='R')a.d=(a.d+1)&3;else if(t==='U')a.d=(a.d+2)&3;
+  const nv=(c+1)%k;g[i]=nv;S.age[i]=1;pop+=(nv?1:0)-(c?1:0);
+  if(a.d===0)a.y--;else if(a.d===1)a.x++;else if(a.d===2)a.y++;else a.x--;
+  if(a.x<0)a.x=W-1;else if(a.x>=W)a.x=0;if(a.y<0)a.y=H-1;else if(a.y>=H)a.y=0;
+  if(a.x<a.minx)a.minx=a.x;if(a.x>a.maxx)a.maxx=a.x;if(a.y<a.miny)a.miny=a.y;if(a.y>a.maxy)a.maxy=a.y;a.steps++}
+ S.pop=pop;S.changed=S.ants.length}
+function stepSand(){const W=S.GW,H=S.GH,g=S.grid,n=S.next;
+ if(S.sandRain>0){for(let k=0;k<S.sandRain;k++){const i=(Math.random()*W*H)|0;if(g[i]<60000)g[i]++}}
+ if(S.sandDrip){const i=(H>>1)*W+(W>>1);if(g[i]<60000)g[i]++}
+ n.set(g);let top=0,tot=0;
+ for(let y=0;y<H;y++){const r=y*W;for(let x=0;x<W;x++){const i=r+x,v=g[i];if(v>=4){const q=v>>2;n[i]-=q*4;top+=q;
+  if(x>0)n[i-1]+=q;if(x<W-1)n[i+1]+=q;if(y>0)n[i-W]+=q;if(y<H-1)n[i+W]+=q;S.heat[i]=1}}}
+ for(let i=0,N=W*H;i<N;i++){if(n[i]>60000)n[i]=60000;tot+=n[i]}
+ S.grid=n;S.next=g;S.pop=tot;S.changed=top}
+function stepElem(){const W=S.GW,H=S.GH,g=S.grid;let row=S.elemRow;
+ if(row>=H-1){g.copyWithin(0,W);g.fill(0,(H-1)*W);row=H-2}
+ const src=row*W,dst=(row+1)*W,rule=S.elemRule,wr=S.wrap;let pop=0,ch=0;
+ for(let x=0;x<W;x++){const l=x>0?g[src+x-1]:(wr?g[src+W-1]:0),c=g[src+x],r=x<W-1?g[src+x+1]:(wr?g[src]:0);const v=(rule>>((l<<2)|(c<<1)|r))&1;g[dst+x]=v;pop+=v;if(v!==c)ch++}
+ S.elemRow=row+1;S.pop=pop;S.changed=ch}
+function buildKernel(){const R=S.lenia.R,W=S.GW;const dx=[],dy=[],ws=[];let sum=0;
+ for(let y=-R;y<=R;y++)for(let x=-R;x<=R;x++){const r=Math.sqrt(x*x+y*y)/R;if(r<1&&r>0){const w=Math.exp(4-4/(r*(1-r)));dx.push(x);dy.push(y);ws.push(w);sum+=w}}
+ const n=ws.length,lin=new Int32Array(n),w=new Float32Array(n);for(let i=0;i<n;i++){w[i]=ws[i]/sum;lin[i]=dy[i]*W+dx[i]}
+ S.kern={n,dx:Int32Array.from(dx),dy:Int32Array.from(dy),w,lin}}
+function stepLenia(){const W=S.GW,H=S.GH,F=S.F,G=S.F2,K=S.kern,{mu,sigma,dt,R}=S.lenia;let mass=0,act=0;const inv=1/(2*sigma*sigma),n=K.n,kw=K.w,kl=K.lin,kx=K.dx,ky=K.dy;
+ for(let y=0;y<H;y++){const inY=y>=R&&y<H-R;for(let x=0;x<W;x++){const i=y*W+x;let u=0;
+  if(inY&&x>=R&&x<W-R){for(let k=0;k<n;k++)u+=F[i+kl[k]]*kw[k]}
+  else{for(let k=0;k<n;k++){let xx=x+kx[k],yy=y+ky[k];if(xx<0)xx+=W;else if(xx>=W)xx-=W;if(yy<0)yy+=H;else if(yy>=H)yy-=H;u+=F[yy*W+xx]*kw[k]}}
+  const d=u-mu;const gr=2*Math.exp(-d*d*inv)-1;let v=F[i]+dt*gr;v=v<0?0:v>1?1:v;G[i]=v;mass+=v;act+=Math.abs(v-F[i])}}
+ S.F=G;S.F2=F;S.pop=Math.round(mass);S.changed=act;S.leniaMass=mass;S.leniaAct=act}
+function stepOnce(){switch(S.mode){case 'life':stepLife();break;case 'brain':stepBrain();break;case 'wire':stepWire();break;case 'ant':stepAnt();break;case 'sand':stepSand();break;case 'elem':stepElem();break;case 'lenia':stepLenia();break}
+ S.gen++;PROG.stats.gens++;S.sess.gens++;if(S.pop>S.sess.peakPop)S.sess.peakPop=S.pop;if(S.pop>PROG.stats.maxPop)PROG.stats.maxPop=S.pop;
+ if(S.mode==='life'||S.mode==='brain'||S.mode==='wire'){const h=gridHash();S.hashes[S.gen&255]=h;S.period=S.pop>0?findPeriod(h):0}
+ if(S.ch)challengeTick();else sandboxTick()}
+function gridHash(){const g=S.grid;let h=2166136261;for(let i=0,n=g.length;i<n;i++){const v=g[i];if(v){h^=i;h=Math.imul(h,16777619);h^=v;h=Math.imul(h,16777619)}}return h>>>0}
+function findPeriod(h){const maxp=Math.min(200,S.gen);for(let p=1;p<=maxp;p++){if(S.hashes[(S.gen-p)&255]===h)return p}return 0}
+function recountPop(){const g=S.grid;let p=0;const m=S.mode;if(m==='lenia'){let s=0;for(let i=0;i<S.F.length;i++)s+=S.F[i];S.pop=Math.round(s);return}
+ if(m==='elem'){const r=S.elemRow*S.GW;for(let x=0;x<S.GW;x++)p+=g[r+x];S.pop=p;return}
+ for(let i=0;i<g.length;i++){const v=g[i];if(m==='wire'){if(v===2)p++}else if(m==='brain'){if(v===1)p++}else if(m==='sand')p+=v;else if(v)p++}S.pop=p}
+function spatialEntropy(){const W=S.GW,H=S.GH,m=S.mode,g=S.grid,F=S.F;const on=m==='lenia'?i=>F[i]>0.3:m==='wire'?i=>g[i]===2||g[i]===3:m==='sand'?i=>g[i]>=2:i=>g[i]>0;
+ const bins=new Uint32Array(16);let tot=0;for(let y=0;y<H-1;y+=2){const r=y*W,r2=r+W;for(let x=0;x<W-1;x+=2){const b=(on(r+x)?1:0)|(on(r+x+1)?2:0)|(on(r2+x)?4:0)|(on(r2+x+1)?8:0);bins[b]++;tot++}}
+ let e=0;for(let k=0;k<16;k++){const c=bins[k];if(c){const p=c/tot;e-=p*Math.log2(p)}}return e/4}
+
+/* ============================ PATTERNS ============================ */
+function rle(s){const cells=[];let x=0,y=0,num='';for(const ch of s){if(ch>='0'&&ch<='9'){num+=ch;continue}const n=num?parseInt(num):1;num='';if(ch==='b')x+=n;else if(ch==='o'){for(let k=0;k<n;k++)cells.push([x++,y,1])}else if(ch==='$'){y+=n;x=0}else if(ch==='!')break}return norm(cells)}
+function art(s,map){const cells=[];s.split('\n').forEach((line,y)=>{[...line].forEach((ch,x)=>{const v=map[ch];if(v)cells.push([x,y,v])})});return norm(cells)}
+function norm(cells){let w=0,h=0;for(const c of cells){if(c[0]+1>w)w=c[0]+1;if(c[1]+1>h)h=c[1]+1}return{w,h,cells}}
+const WIRE_CLOCK='cccch..\nc...t..\nc...c..\nccccc..\n.....c.\n......c';
+const WMAP={c:1,h:2,t:3,'#':4};
+const LIB={
+ life:[['Glider','bo$2bo$3o!'],['LWSS','bo2bo$o$o3bo$4o!'],['MWSS','3bo$bo3bo$o$o4bo$5o!'],['Blinker','3o!'],['Toad','b3o$3o!'],['Beacon','2o$o$3bo$2b2o!'],['Pulsar','2b3o3b3o$$o4bobo4bo$o4bobo4bo$o4bobo4bo$2b3o3b3o$$2b3o3b3o$o4bobo4bo$o4bobo4bo$o4bobo4bo$$2b3o3b3o!'],['Pentadecathlon','2bo4bo$2ob4ob2o$2bo4bo!'],['Block','2o$2o!'],['Beehive','b2o$o2bo$b2o!'],['Loaf','b2o$o2bo$bobo$2bo!'],['Boat','2o$obo$bo!'],['Eater','2o$obo$2bo$2b2o!'],['R-pentomino','b2o$2o$bo!'],['Acorn','bo$3bo$2o2b3o!'],['Diehard','6bo$2o$bo3b3o!'],['Gosper Gun','24bo$22bobo$12b2o6b2o12b2o$11bo3bo4b2o12b2o$2o8bo5bo3b2o$2o8bo3bob2o4bobo$10bo5bo7bo$11bo3bo$12b2o!']].map(([n,r])=>({n,p:rle(r)})),
+ brain:[['Spark','oo'],['Hook','oo\no.'],['Bar','ooo'],['Cross','.o.\nooo\n.o.']].map(([n,a])=>({n,p:art(a,{o:1})})),
+ wire:[['Clock',WIRE_CLOCK],['Electron','th'],['Wire ×8','cccccccc'],['Diode (passes ←)','....cc....\ncccc.ccccc\n....cc....'],['Corner','c....\nc....\nc....\nccccc'],['Splitter','....ccc\n....c..\ncccc...\n....c..\n....ccc']].map(([n,a])=>({n,p:art(a,WMAP)})),
+ ant:[['Block 3×3','ooo\nooo\nooo'],['Bar','ooooooo'],['Ring','.ooo.\no...o\no...o\no...o\n.ooo.']].map(([n,a])=>({n,p:art(a,{o:1})})),
+ sand:[['Pile 50',null],['Pile 200',null],['Pile 1000',null]].map(([n])=>({n,sand:parseInt(n.split(' ')[1])})),
+ elem:[],
+ lenia:[['Blob',null],['Big blob',null],['Ring',null],['Twin',null]].map(([n])=>({n,lenia:n}))
+};
+function leniaBrush(name){const c=[];const R=name==='Big blob'?9:name==='Ring'?8:5;for(let y=-R;y<=R;y++)for(let x=-R;x<=R;x++){const r=Math.sqrt(x*x+y*y)/R;if(r>1)continue;let v;if(name==='Ring')v=Math.exp(-((r-0.7)*(r-0.7))/0.03);else v=Math.exp(-r*r*2.5);
+ if(name==='Twin'){const x2=x+6;const r2=Math.sqrt(x2*x2+y*y)/R;v=Math.max(Math.exp(-((x-3)*(x-3)+y*y)/(R*R*0.3)),Math.exp(-((x+3)*(x+3)+y*y)/(R*R*0.3)))}
+ if(v>0.02)c.push([x+R,y+R,v])}return norm(c)}
+function transformPattern(p,rot,flip){let cells=p.cells.map(([x,y,v])=>{let X=x,Y=y;if(flip)X=p.w-1-X;for(let r=0;r<rot;r++){const t=X;X=(r%2===0?p.h:p.w)-1-Y;Y=t}return[X,Y,v]});return norm(cells)}
+
+/* ============================ LOG / TOASTS / FX ============================ */
+function log(msg,cls){S.log.push({g:S.gen,msg});if(S.log.length>200)S.log.shift();const ul=$('#log');if(ul){const li=document.createElement('li');li.innerHTML='<b>g'+S.gen+'</b>'+msg;ul.prepend(li);while(ul.children.length>120)ul.lastChild.remove()}}
+function toast(msg,cls='',dur=3200){log(msg);const t=document.createElement('div');t.className='toast '+cls;t.textContent=msg;const box=$('#toasts');box.appendChild(t);while(box.children.length>4)box.firstChild.remove();setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400)},dur)}
+function floatText(x,y,text,color){if(!SET.effects)return;S.floaters.push({x,y,text,color:color||'#5ff0ff',t:0,life:1.2});if(S.floaters.length>40)S.floaters.shift()}
+function burst(cx,cy,n,color){if(!SET.effects)return;for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,sp=40+Math.random()*180;S.particles.push({x:cx,y:cy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-60,t:0,life:0.8+Math.random()*0.8,c:color||['#5ff0ff','#b48cff','#5fff9a','#ffcc55'][i&3],s:2+Math.random()*3})}if(S.particles.length>600)S.particles.splice(0,S.particles.length-600)}
+function ringFx(x,y,r,color){if(!SET.effects)return;S.floaters.push({x,y,ring:r,color,t:0,life:0.6})}
+function updateParticles(dt){for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i];p.t+=dt;if(p.t>p.life){S.particles.splice(i,1);continue}p.vy+=300*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=0.98}
+ for(let i=S.floaters.length-1;i>=0;i--){const f=S.floaters[i];f.t+=dt;if(f.t>f.life)S.floaters.splice(i,1)}}
+/* ============================ RENDERING ============================ */
+const cv=$('#grid'),ctx=cv.getContext('2d');let cw=1,chh=1,dpr=1;
+function sizeCanvas(){const r=$('#canvas-wrap').getBoundingClientRect();dpr=Math.min(2,window.devicePixelRatio||1);cw=Math.max(1,r.width);chh=Math.max(1,r.height);const W=Math.round(cw*dpr),H=Math.round(chh*dpr);if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}}
+function baseCs(){return Math.min(cw/S.GW,chh/S.GH)}
+function cellSize(){return baseCs()*S.zoom}
+function fitView(){sizeCanvas();S.zoom=1;const cs=cellSize();S.ox=(cw-S.GW*cs)/2;S.oy=(chh-S.GH*cs)/2}
+function clampView(){const cs=cellSize(),gw=S.GW*cs,gh=S.GH*cs;S.ox=gw<=cw?(cw-gw)/2:clamp(S.ox,cw-gw,0);S.oy=gh<=chh?(chh-gh)/2:clamp(S.oy,chh-gh,0)}
+function zoomAt(px,py,f){const cs0=cellSize();const nz=clamp(S.zoom*f,1,14);const cs1=baseCs()*nz;S.ox=px-(px-S.ox)*(cs1/cs0);S.oy=py-(py-S.oy)*(cs1/cs0);S.zoom=nz;clampView()}
+function toCell(px,py){const cs=cellSize();return{x:Math.floor((px-S.ox)/cs),y:Math.floor((py-S.oy)/cs)}}
+function fillImage(){const d=S.img.data,W=S.GW,H=S.GH,N=W*H,g=S.grid,th=T(),bg=th.bg,m=S.mode,ht=S.heat;
+ if(m==='life'){const L=th.live,O=th.old,Hc=th.heat,age=S.age;for(let i=0,p=0;i<N;i++,p+=4){let r,gg,b;if(g[i]){const t=age[i]>40?1:age[i]/40;r=L[0]+(O[0]-L[0])*t;gg=L[1]+(O[1]-L[1])*t;b=L[2]+(O[2]-L[2])*t}else{const h=ht[i];if(h>0.03){const k=h*0.65;r=bg[0]+(Hc[0]-bg[0])*k;gg=bg[1]+(Hc[1]-bg[1])*k;b=bg[2]+(Hc[2]-bg[2])*k}else{r=bg[0];gg=bg[1];b=bg[2]}}d[p]=r;d[p+1]=gg;d[p+2]=b;d[p+3]=255}}
+ else if(m==='brain'){const A=th.brainOn,B=th.brainDying;for(let i=0,p=0;i<N;i++,p+=4){const v=g[i];let c;if(v===1)c=A;else if(v===2)c=B;else{const h=ht[i];if(h>0.03){d[p]=bg[0]+(B[0]-bg[0])*h*0.4;d[p+1]=bg[1]+(B[1]-bg[1])*h*0.4;d[p+2]=bg[2]+(B[2]-bg[2])*h*0.4;d[p+3]=255;continue}c=bg}d[p]=c[0];d[p+1]=c[1];d[p+2]=c[2];d[p+3]=255}}
+ else if(m==='wire'){const Wc=th.wire;for(let i=0,p=0;i<N;i++,p+=4){const v=g[i];const c=v?Wc[v]||bg:bg;d[p]=c[0];d[p+1]=c[1];d[p+2]=c[2];d[p+3]=255}}
+ else if(m==='ant'){const C=th.antColors,k=S.antRule.length;for(let i=0,p=0;i<N;i++,p+=4){const v=g[i]%k;const c=C[Math.min(v,C.length-1)];d[p]=c[0];d[p+1]=c[1];d[p+2]=c[2];d[p+3]=255}}
+ else if(m==='sand'){const C=th.sand;for(let i=0,p=0;i<N;i++,p+=4){const v=g[i];const c=C[v>4?4:v];const h=ht[i];d[p]=c[0]+(255-c[0])*h*0.5;d[p+1]=c[1]+(255-c[1])*h*0.5;d[p+2]=c[2]+(255-c[2])*h*0.5;d[p+3]=255}}
+ else if(m==='elem'){const E=th.elem,row=S.elemRow;for(let y=0;y<H;y++){const f=0.45+0.55*(1-Math.min(1,(row-y)/H));for(let x=0;x<W;x++){const i=y*W+x,p=i*4;if(g[i]){d[p]=bg[0]+(E[0]-bg[0])*f;d[p+1]=bg[1]+(E[1]-bg[1])*f;d[p+2]=bg[2]+(E[2]-bg[2])*f}else{d[p]=bg[0];d[p+1]=bg[1];d[p+2]=bg[2]}d[p+3]=255}}}
+ else if(m==='lenia'){const C=th.lenia,F=S.F;for(let i=0,p=0;i<N;i++,p+=4){const v=F[i];const s=v*4;const k=s>=4?3:s|0;const t=s-k;const a=C[k],b=C[k+1]||C[4];d[p]=a[0]+(b[0]-a[0])*t;d[p+1]=a[1]+(b[1]-a[1])*t;d[p+2]=a[2]+(b[2]-a[2])*t;d[p+3]=255}}}
+function rectPath(z){ctx.rect(z.x,z.y,z.w,z.h)}
+function render(){const th=T();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle=`rgb(${th.bg[0]},${th.bg[1]},${th.bg[2]})`;ctx.fillRect(0,0,cw,chh);
+ fillImage();S.octx.putImageData(S.img,0,0);const cs=cellSize();ctx.imageSmoothingEnabled=false;ctx.drawImage(S.oc,0,0,S.GW,S.GH,S.ox,S.oy,S.GW*cs,S.GH*cs);
+ if(S.running){const h=S.heat;for(let i=0;i<h.length;i++)if(h[i]>0.01)h[i]*=0.86}
+ const now=performance.now()/1000;
+ ctx.save();ctx.translate(S.ox,S.oy);ctx.scale(cs,cs);ctx.lineWidth=1/cs;
+ if(SET.gridLines&&cs>=6){ctx.strokeStyle=th.gridc;ctx.beginPath();for(let x=0;x<=S.GW;x++){ctx.moveTo(x,0);ctx.lineTo(x,S.GH)}for(let y=0;y<=S.GH;y++){ctx.moveTo(0,y);ctx.lineTo(S.GW,y)}ctx.stroke()}
+ if(S.mode==='elem'){ctx.strokeStyle='rgba(95,240,255,.6)';ctx.lineWidth=2/cs;ctx.strokeRect(0,S.elemRow,S.GW,1);ctx.lineWidth=1/cs}
+ if(S.ch){const c=S.ch;
+  if(c.zone){ctx.fillStyle='rgba(95,255,154,.06)';ctx.strokeStyle='rgba(95,255,154,.6)';ctx.lineWidth=2/cs;ctx.beginPath();rectPath(c.zone);ctx.fill();ctx.stroke()}
+  if(c.target){ctx.fillStyle='rgba(255,107,122,.12)';ctx.strokeStyle='rgba(255,107,122,.8)';ctx.lineWidth=2/cs;ctx.beginPath();rectPath(c.target);ctx.fill();ctx.stroke()}
+  if(c.exit){ctx.fillStyle='rgba(255,204,85,.12)';ctx.strokeStyle='rgba(255,204,85,.7)';ctx.lineWidth=2/cs;for(const z of c.exit){ctx.beginPath();rectPath(z);ctx.fill();ctx.stroke()}}
+  if(c.targets){for(const t of c.targets){const pulse=1.6+Math.sin(now*4+t.x)*0.4;ctx.strokeStyle=t.hit?'rgba(95,255,154,.9)':'rgba(255,107,122,.9)';ctx.lineWidth=2/cs;ctx.beginPath();ctx.arc(t.x+0.5,t.y+0.5,pulse,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(t.x+0.5,t.y+0.5,0.5,0,Math.PI*2);ctx.fillStyle=t.hit?'rgba(95,255,154,.8)':'rgba(255,107,122,.5)';ctx.fill()}}
+  ctx.lineWidth=1/cs}
+ if(S.mode==='ant'){for(const a of S.ants){ctx.save();ctx.translate(a.x+0.5,a.y+0.5);ctx.rotate(a.d*Math.PI/2);ctx.fillStyle='#ff5577';ctx.beginPath();ctx.moveTo(0,-0.6);ctx.lineTo(0.5,0.5);ctx.lineTo(-0.5,0.5);ctx.closePath();ctx.fill();ctx.restore()}}
+ const hv=S.hover;
+ if(hv&&hv.x>=0&&hv.y>=0&&hv.x<S.GW&&hv.y<S.GH&&S.screen==='game'&&!S.modalOpen){
+  if(S.tool==='stamp'&&S.stamp){const p=stampPattern();if(p){const ox=hv.x-(p.w>>1),oy=hv.y-(p.h>>1);const ok=stampOk(ox,oy,p);ctx.fillStyle=ok?'rgba(95,255,154,.55)':'rgba(255,107,122,.55)';for(const [x,y,v] of p.cells){ctx.globalAlpha=typeof v==='number'&&v<1?v:1;ctx.fillRect(ox+x+0.1,oy+y+0.1,0.8,0.8)}ctx.globalAlpha=1}}
+  else if(S.tool==='draw'||S.tool==='erase'){ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5/cs;ctx.beginPath();if(S.brush>1)ctx.arc(hv.x+0.5,hv.y+0.5,S.brush-0.4,0,Math.PI*2);else ctx.rect(hv.x,hv.y,1,1);ctx.stroke()}}
+ for(const f of S.floaters){if(f.ring){const k=f.t/f.life;ctx.strokeStyle=f.color||'rgba(95,240,255,.8)';ctx.globalAlpha=1-k;ctx.lineWidth=2/cs;ctx.beginPath();ctx.arc(f.x+0.5,f.y+0.5,f.ring*(0.3+k*1.2),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1}}
+ ctx.restore();
+ ctx.font='600 13px system-ui';ctx.textAlign='center';
+ for(const f of S.floaters){if(f.ring)continue;const k=f.t/f.life;ctx.globalAlpha=1-k;ctx.fillStyle=f.color;ctx.fillText(f.text,S.ox+(f.x+0.5)*cs,S.oy+f.y*cs-k*34)}ctx.globalAlpha=1;
+ for(const p of S.particles){ctx.globalAlpha=1-p.t/p.life;ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,p.s,p.s)}ctx.globalAlpha=1;
+ if(S.ch&&S.ch.phase==='build'&&!S.running){ctx.fillStyle='rgba(95,255,154,.9)';ctx.font='600 12px system-ui';ctx.textAlign='left';ctx.fillText('BUILD MODE — press ▶ to run',12,chh-12)}}
+
+/* ============================ STAMPS / EDITING ============================ */
+function stampsAllowed(){return !(S.ch&&S.ch.diff==='M')&&!(S.ch&&S.ch.def.noEdit)}
+function stampPattern(){const st=S.stamp;if(!st)return null;if(st.p)return transformPattern(st.p,S.stampRot,S.stampFlip);if(st.lenia)return leniaBrush(st.lenia);if(st.sand){return{w:1,h:1,cells:[[0,0,1]]}}return null}
+function stampOk(ox,oy,p){for(const [x,y] of p.cells){const X=ox+x,Y=oy+y;if(X<0||Y<0||X>=S.GW||Y>=S.GH)return false;if(canEdit(X,Y)!==true)return false}return true}
+function placeStamp(c){const st=S.stamp;if(!st)return;const p=stampPattern();if(!p)return;const ox=c.x-(p.w>>1),oy=c.y-(p.h>>1);
+ if(!stampOk(ox,oy,p)){const r=canEdit(clamp(c.x,0,S.GW-1),clamp(c.y,0,S.GH-1));toast(typeof r==='string'?r:'Pattern does not fit there.','warn',1500);sfx('error');return}
+ if(st.sand){const old=S.drawState;S.drawState=st.sand;const r=setCellUser(c.x,c.y,false,1);S.drawState=old;if(r){sfx('stamp');ringFx(c.x,c.y,2,'rgba(255,255,255,.7)');strokeCells=0;endStroke(true)}return}
+ if(st.lenia){for(const [x,y,v] of p.cells){const i=(oy+y)*S.GW+ox+x;S.F[i]=Math.min(1,S.F[i]+v)}sfx('stamp');ringFx(c.x,c.y,p.w/2,'rgba(95,240,255,.8)');endStroke(true);return}
+ const ch=S.ch;if(ch){let add=0,el=0;for(const [x,y,v] of p.cells){const i=(oy+y)*S.GW+ox+x;const ov=S.grid[i];if(!ov&&v)add++;if(S.mode==='wire'&&(v===2||v===3)&&!(ov===2||ov===3))el++}
+  if(ch.budget>0&&ch.used+add>ch.budget){toast(`Not enough budget: needs ${add}, ${ch.budget-ch.used} left.`,'warn',1800);sfx('error');return}
+  if(S.mode==='wire'&&ch.elec+el>ch.electrons){toast('Electron limit exceeded.','warn');sfx('error');return}}
+ let n=0;for(const [x,y,v] of p.cells){const i=(oy+y)*S.GW+ox+x;const ov=S.grid[i];if(ov===v)continue;if(!applyBudget(ov,v))continue;S.grid[i]=v;if(S.mode==='life')S.age[i]=1;if(S.mode==='ant')S.pop+=(v?1:0)-(ov?1:0);n++;S.sess.cells++;PROG.stats.cells++}
+ if(n){sfx('stamp');ringFx(c.x,c.y,Math.max(p.w,p.h)/2+1,'rgba(95,240,255,.8)');floatText(c.x,c.y,st.n,'#5ff0ff');endStroke(true)}}
+function canEdit(x,y){const c=S.ch;if(!c)return true;const d=c.def;if(c.phase==='done')return false;if(d.noEdit)return 'This challenge is solved by choosing a rule, not by drawing.';
+ if(c.phase==='run'&&!d.liveEdit)return 'Editing is locked while running. Press ⟲ to go back to build mode.';
+ if(c.baseMask&&c.baseMask[y*S.GW+x])return 'That cell belongs to the scenario and cannot be changed.';
+ if(c.zone){const z=c.zone;if(x<z.x||y<z.y||x>=z.x+z.w||y>=z.y+z.h)return 'Build only inside the green zone.'}return true}
+let budgetWarnT=0;function budgetWarn(){const n=performance.now();if(n-budgetWarnT<1200)return;budgetWarnT=n;toast('Budget exhausted — erase cells to free some.','warn',1500);if(S.hover)floatText(S.hover.x,S.hover.y,'Budget!','#ffcc55');sfx('error')}
+function applyBudget(ov,nv){const c=S.ch;if(!c)return true;const m=S.mode;
+ if(m==='sand'){if(nv>ov)c.used+=nv-ov;return true}
+ const on=v=>m==='wire'?(v>=1&&v<=3):v>=1,el=v=>v===2||v===3;const inc=on(nv)&&!on(ov),dec=!on(nv)&&on(ov);
+ if(inc&&c.budget>0&&c.used>=c.budget){budgetWarn();return false}
+ if(m==='wire'&&el(nv)&&!el(ov)&&c.elec>=c.electrons){toast('Electron limit reached ('+c.electrons+').','warn',1500);sfx('error');return false}
+ if(inc)c.used++;else if(dec)c.used=Math.max(0,c.used-1);
+ if(m==='wire'){if(el(nv)&&!el(ov))c.elec++;else if(!el(nv)&&el(ov))c.elec=Math.max(0,c.elec-1)}return true}
+let strokeCells=0,strokeWarned=false;
+function setCellUser(x,y,erase,fall){const m=S.mode,i=y*S.GW+x;const res=canEdit(x,y);if(res!==true){if(typeof res==='string'&&!strokeWarned){strokeWarned=true;toast(res,'warn',1800);sfx('error')}return false}
+ if(m==='lenia'){const F=S.F,old=F[i];const nv=erase?0:Math.min(1,old+0.9*fall);if(Math.abs(nv-old)<1e-4)return false;F[i]=nv;if(!erase&&old===0){S.sess.cells++;PROG.stats.cells++}return true}
+ if(m==='elem'){const j=S.elemRow*S.GW+x;const ov=S.grid[j],nv=erase?0:1;if(ov===nv)return false;if(!applyBudget(ov,nv))return false;S.grid[j]=nv;S.pop+=nv-ov;return true}
+ const g=S.grid,ov=g[i];let nv;
+ if(m==='sand'){if(erase)nv=0;else{let add=S.drawState|0;if(S.ch&&S.ch.budget>0){add=Math.min(add,S.ch.budget-S.ch.used);if(add<=0){budgetWarn();return false}}nv=Math.min(60000,ov+add)}}
+ else if(erase)nv=0;else nv=S.drawState|0;
+ if(m==='wire'&&ov===4&&!S.sandbox)return false;
+ if(m==='ant'&&erase){for(let k=S.ants.length-1;k>=0;k--)if(S.ants[k].x===x&&S.ants[k].y===y)S.ants.splice(k,1)}
+ if(ov===nv)return false;if(!applyBudget(ov,nv))return false;
+ g[i]=nv;if(m==='life')S.age[i]=nv?1:0;if(nv&&!ov){S.sess.cells++;PROG.stats.cells++}if(m==='ant')S.pop+=(nv?1:0)-(ov?1:0);return true}
+function paintBrush(x,y,erase){const r=S.brush-1;let n=0;for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){if(dx*dx+dy*dy>r*r+r*0.5)continue;const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=S.GW||yy>=S.GH)continue;const fall=1-Math.sqrt(dx*dx+dy*dy)/(r+1.2);if(setCellUser(xx,yy,erase,fall))n++}strokeCells+=n}
+function placeAnt(c){const lim=S.ch?S.ch.ants:64;if(canEdit(c.x,c.y)!==true){toast(canEdit(c.x,c.y),'warn');return}if(S.ants.length>=lim){toast('Ant limit reached ('+lim+').','warn');sfx('error');return}
+ S.ants.push({x:c.x,y:c.y,d:S.antDir,minx:c.x,maxx:c.x,miny:c.y,maxy:c.y,steps:0});floatText(c.x,c.y,'🐜','#ff5577');sfx('stamp');strokeCells=0;endStroke(true)}
+function applyTool(c,erase,isDown){if(c.x<0||c.y<0||c.x>=S.GW||c.y>=S.GH)return;if(S.ch&&S.ch.phase==='done')return;const tool=erase?'erase':S.tool;
+ if(tool==='stamp'){if(isDown)placeStamp(c);return}if(tool==='pan')return;
+ if(S.mode==='ant'&&S.drawState==='ant'&&tool==='draw'){if(isDown)placeAnt(c);return}
+ paintBrush(c.x,c.y,tool==='erase')}
+function endStroke(silent){if(strokeCells>0&&!silent)sfx('draw');strokeCells=0;strokeWarned=false;
+ if(!S.running){if(S.mode==='life'||S.mode==='brain'||S.mode==='wire'){S.hashes[S.gen&255]=gridHash();S.period=0}recountPop()}
+ updateHUD();tutorialCheck()}
+function soup(){const d=S.soupDensity,m=S.mode,W=S.GW,H=S.GH,N=W*H;const rnd=Math.random;
+ if(m==='lenia'){for(let k=0;k<14;k++){const cx=rnd()*W,cy=rnd()*H,R=4+rnd()*7,a=0.5+rnd()*0.5;for(let y=-R;y<=R;y++)for(let x=-R;x<=R;x++){const r=(x*x+y*y)/(R*R);if(r>1)continue;const X=((((cx+x)|0)%W)+W)%W,Y=((((cy+y)|0)%H)+H)%H;const i=Y*W+X;S.F[i]=Math.min(1,S.F[i]+a*Math.exp(-r*3))}}recountPop();return}
+ if(m==='elem'){const r=S.elemRow*W;for(let x=0;x<W;x++)S.grid[r+x]=rnd()<0.5?1:0;recountPop();return}
+ if(m==='sand'){for(let i=0;i<N;i++)if(rnd()<d)S.grid[i]+=1+((rnd()*3)|0);recountPop();return}
+ if(m==='wire'){for(let i=0;i<N;i++)if(S.grid[i]!==4)S.grid[i]=rnd()<d*0.5?(rnd()<0.08?2:1):0;recountPop();return}
+ for(let i=0;i<N;i++){if(S.ch&&S.ch.baseMask&&S.ch.baseMask[i])continue;S.grid[i]=rnd()<d?1:0;S.age[i]=S.grid[i]}recountPop()}
+function clearGrid(){S.grid.fill(0);S.age.fill(0);S.heat.fill(0);S.F.fill(0);if(S.mode==='ant')S.ants=[];if(S.mode==='elem')S.elemRow=0;S.pop=0;S.changed=0;S.period=0;if(S.ch){S.ch.used=0;S.ch.elec=0;if(S.ch.base){restoreSnapshot(S.ch.base)}}updateHUD()}
+
+/* ============================ SNAPSHOTS ============================ */
+function takeSnapshot(){return{grid:S.grid.slice(),F:S.mode==='lenia'?S.F.slice():null,ants:S.ants.map(a=>({...a})),elemRow:S.elemRow,used:S.ch?S.ch.used:0,elec:S.ch?S.ch.elec:0,rule:S.mode==='life'?ruleString():null,elemRule:S.elemRule,antRule:S.antRule,lenia:{...S.lenia}}}
+function restoreSnapshot(s){S.grid.set(s.grid);if(s.F)S.F.set(s.F);S.ants=s.ants.map(a=>({...a}));S.elemRow=s.elemRow;for(let i=0;i<S.grid.length;i++)S.age[i]=S.grid[i]?1:0;S.heat.fill(0);if(S.ch){S.ch.used=s.used;S.ch.elec=s.elec}if(s.rule&&S.mode==='life')setRuleString(s.rule);if(s.elemRule!=null)S.elemRule=s.elemRule;if(s.antRule)S.antRule=s.antRule;if(s.lenia&&S.mode==='lenia'){S.lenia={...s.lenia};buildKernel()}recountPop();S.changed=0;S.period=0}
+
+/* ============================ INPUT ============================ */
+const ptrs=new Map();let drawing=false,lastCell=null,panning=null,pinch=null,spaceHeld=false,strokeErase=false;
+function localPt(e){const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+cv.addEventListener('pointerdown',e=>{e.preventDefault();audioInit();if(S.screen!=='game'||S.modalOpen)return;try{cv.setPointerCapture(e.pointerId)}catch(x){}const pt=localPt(e);ptrs.set(e.pointerId,pt);
+ if(ptrs.size===2){if(drawing){drawing=false;endStroke()}panning=null;const a=[...ptrs.values()];pinch={d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)||1,mx:(a[0].x+a[1].x)/2,my:(a[0].y+a[1].y)/2,zoom:S.zoom,ox:S.ox,oy:S.oy};return}
+ if(e.button===1||S.tool==='pan'||spaceHeld){panning={sx:pt.x,sy:pt.y,ox:S.ox,oy:S.oy};return}
+ drawing=true;strokeCells=0;strokeWarned=false;strokeErase=e.button===2;const c=toCell(pt.x,pt.y);applyTool(c,strokeErase,true);lastCell=c});
+cv.addEventListener('pointermove',e=>{const pt=localPt(e);S.hover=toCell(pt.x,pt.y);if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,pt);
+ if(pinch&&ptrs.size===2){const a=[...ptrs.values()];const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)||1;const mx=(a[0].x+a[1].x)/2,my=(a[0].y+a[1].y)/2;const nz=clamp(pinch.zoom*d/pinch.d,1,14);const ratio=nz/pinch.zoom;S.zoom=nz;S.ox=mx-(pinch.mx-pinch.ox)*ratio;S.oy=my-(pinch.my-pinch.oy)*ratio;clampView();return}
+ if(panning){S.ox=panning.ox+(pt.x-panning.sx);S.oy=panning.oy+(pt.y-panning.sy);clampView();return}
+ if(drawing&&(S.tool==='draw'||S.tool==='erase'||strokeErase)){const c=S.hover;if(S.mode==='ant'&&S.drawState==='ant'&&!strokeErase)return;let x0=lastCell.x,y0=lastCell.y;const x1=c.x,y1=c.y;const dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1;let err=dx-dy,guard=0;
+  while(guard++<2000){if(!(x0===lastCell.x&&y0===lastCell.y))applyTool({x:x0,y:y0},strokeErase,false);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>-dy){err-=dy;x0+=sx}if(e2<dx){err+=dx;y0+=sy}}lastCell=c}});
+function endPointer(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(drawing){drawing=false;endStroke()}panning=null}
+cv.addEventListener('pointerup',endPointer);cv.addEventListener('pointercancel',endPointer);cv.addEventListener('pointerleave',()=>{S.hover=null});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();const pt=localPt(e);zoomAt(pt.x,pt.y,e.deltaY<0?1.15:1/1.15)},{passive:false});
+document.addEventListener('keydown',e=>{const tag=(e.target.tagName||'').toLowerCase();if(tag==='input'||tag==='select'||tag==='textarea')return;
+ if(e.key==='Escape'){if(S.modalOpen)closeModal();else if(S.screen==='game')openPause();else if(S.screen==='select')showScreen('title');return}
+ if(S.screen!=='game'||S.modalOpen)return;
+ const k=e.key.toLowerCase();
+ if(e.code==='Space'){e.preventDefault();if(!e.repeat)togglePlay();spaceHeld=true;return}
+ switch(k){case 'n':stepManual();break;case '1':setSpeed(0.5);break;case '2':setSpeed(1);break;case '3':setSpeed(2);break;case '4':setSpeed(4);break;case '5':setSpeed(8);break;
+  case 'd':setTool('draw');break;case 'e':setTool('erase');break;case 's':if(stampsAllowed())setTool('stamp');break;case 'p':setTool('pan');break;
+  case 'c':if(S.sandbox){clearGrid();toast('Grid cleared')}else clearBuild();break;case 'r':if(S.sandbox||(S.ch&&S.ch.def.liveEdit&&S.mode==='lenia')){soup();endStroke(true);sfx('stamp')}break;
+  case 'q':S.stampRot=(S.stampRot+1)&3;break;case 'f':S.stampFlip=!S.stampFlip;break;case 'h':openHelp();break;case 'm':toggleMute();break;case 'g':SET.gridLines=!SET.gridLines;saveSettings();break;
+  case '+':case '=':zoomAt(cw/2,chh/2,1.25);break;case '-':zoomAt(cw/2,chh/2,0.8);break;case '0':fitView();break;case 'backspace':e.preventDefault();resetSession();break;case 'tab':e.preventDefault();$('#panel').classList.toggle('open');break;
+  case 'arrowleft':S.ox+=40;clampView();break;case 'arrowright':S.ox-=40;clampView();break;case 'arrowup':S.oy+=40;clampView();break;case 'arrowdown':S.oy-=40;clampView();break}});
+document.addEventListener('keyup',e=>{if(e.code==='Space')spaceHeld=false});
+window.addEventListener('resize',()=>{if(S.screen==='game'){const z=S.zoom;sizeCanvas();if(z<=1)fitView();else clampView()}sizeBg()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&S.running){S.running=false;S.autoPaused=true;updatePlayBtn();log('Auto-paused (tab hidden)')}});
+
+/* ============================ UI: TOOLBAR & PANELS ============================ */
+function statesFor(m){const th=T(),rgb=a=>`rgb(${a[0]},${a[1]},${a[2]})`;switch(m){
+ case 'life':return[{v:1,name:'Alive',c:rgb(th.live)}];
+ case 'brain':return[{v:1,name:'Fire',c:rgb(th.brainOn)},{v:2,name:'Dying',c:rgb(th.brainDying)}];
+ case 'wire':{const a=[{v:1,name:'Wire',c:rgb(th.wire[1])}];const d=S.ch&&S.ch.def;if(!d||d.electrons>0)a.push({v:2,name:'Head',c:rgb(th.wire[2])},{v:3,name:'Tail',c:rgb(th.wire[3])});if(S.sandbox)a.push({v:4,name:'Wall',c:rgb(th.wire[4])});return a}
+ case 'ant':return[{v:1,name:'Paint',c:rgb(th.ant)},{v:'ant',name:'Ant',c:'#ff5577'}];
+ case 'sand':return[{v:1,name:'+1',c:rgb(th.sand[1])},{v:10,name:'+10',c:rgb(th.sand[3])},{v:50,name:'+50',c:rgb(th.sand[4])}];
+ case 'elem':return[{v:1,name:'On',c:rgb(th.elem)}];
+ case 'lenia':return[{v:1,name:'Mass',c:rgb(th.lenia[3])}]}return[]}
+function legendHTML(m){const st=statesFor(m);let extra='';const th=T(),rgb=a=>`rgb(${a[0]},${a[1]},${a[2]})`;if(m==='life')extra=`<span><i style="background:${rgb(th.old)}"></i>Old cell</span><span><i style="background:${rgb(th.heat)}"></i>Just died</span>`;if(m==='wire'&&!S.sandbox)extra=`<span><i style="background:${rgb(th.wire[4])}"></i>Wall</span>`;if(m==='sand')extra=`<span><i style="background:${rgb(th.sand[2])}"></i>2 grains</span><span><i style="background:${rgb(th.sand[4])}"></i>4+ (toppling)</span>`;return '<div class="legend">'+st.map(s=>`<span><i style="background:${s.c}"></i>${s.name}</span>`).join('')+extra+'</div>'}
+function buildToolbar(){const tb=$('#toolbar'),m=S.mode,d=S.ch&&S.ch.def;let h='';const tool=(id,icon,title)=>`<button data-tool="${id}" title="${title}" class="${S.tool===id?'active':''}">${icon}</button>`;
+ h+='<div class="lbl">Tool</div>'+tool('draw','✏️','Draw (D) — right-drag erases')+tool('erase','⌫','Erase (E)');if(stampsAllowed()&&LIB[m].length)h+=tool('stamp','▦','Stamp (S) — pick from Library · Q rotate · F flip');h+=tool('pan','✋','Pan (P) — or middle-drag / hold Space');
+ if(!(d&&d.noEdit)){h+='<div class="sep"></div><div class="lbl">State</div>';statesFor(m).forEach(st=>{h+=`<button class="st ${String(S.drawState)===String(st.v)?'active':''}" data-state="${st.v}" title="Paint: ${st.name}"><i class="sw" style="background:${st.c}"></i>${st.name}</button>`});
+  h+='<div class="sep"></div><div class="lbl">Brush</div><div class="row" style="gap:2px;justify-content:center;width:44px">';[1,2,3,5].forEach(b=>h+=`<button data-brush="${b}" title="Brush size ${b}" class="${S.brush===b?'active':''}" style="width:20px;height:22px;font-size:10px;padding:0">${b}</button>`);h+='</div>'}
+ if(S.sandbox||(d&&d.liveEdit&&m==='lenia'))h+='<div class="sep"></div><button data-cmd="soup" title="Random soup (R)">🎲</button><button data-cmd="clear" title="Clear grid (C)">🧹</button>';
+ else if(d&&!d.noEdit)h+='<div class="sep"></div><button data-cmd="clearbuild" title="Clear your build (C)">🧹</button>';
+ h+='<div class="sep"></div><button data-cmd="zin" title="Zoom in (+)">＋</button><button data-cmd="zout" title="Zoom out (−)">－</button><button data-cmd="fit" title="Fit view (0)">⤢</button>';tb.innerHTML=h}
+$('#toolbar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;audioInit();sfx('click');
+ if(b.dataset.tool)setTool(b.dataset.tool);else if(b.dataset.state!=null){S.drawState=b.dataset.state==='ant'?'ant':parseInt(b.dataset.state);if(S.tool==='stamp'||S.tool==='pan')S.tool='draw';buildToolbar()}
+ else if(b.dataset.brush){S.brush=parseInt(b.dataset.brush);buildToolbar()}
+ else{const c=b.dataset.cmd;if(c==='soup'){soup();endStroke(true);toast('Random soup poured')}else if(c==='clear'){clearGrid();toast('Grid cleared')}else if(c==='clearbuild')clearBuild();else if(c==='zin')zoomAt(cw/2,chh/2,1.25);else if(c==='zout')zoomAt(cw/2,chh/2,0.8);else if(c==='fit')fitView()}});
+function setTool(t){S.tool=t;if(t==='stamp'&&!S.stamp){const l=LIB[S.mode];if(l.length)S.stamp=l[0]}buildToolbar();buildLibrary();cv.style.cursor=t==='pan'?'grab':'crosshair'}
+function clearBuild(){if(!S.ch)return;if(S.ch.phase==='run'){resetSession()}restoreSnapshot(S.ch.base);S.gen=0;S.hashes[0]=gridHash();updateHUD();toast('Build cleared')}
+function ruleEditable(){return S.sandbox||(S.ch&&S.ch.def.ruleEdit&&S.ch.phase==='build')||(S.ch&&S.ch.def.ruleEdit&&S.ch.def.liveEdit)}
+function buildRulesPanel(){const p=$('#ptab-rules'),m=S.mode,ed=ruleEditable();let h=`<h4>Legend</h4>${legendHTML(m)}`;
+ if(m==='life'){h+=`<h4>Rule <span style="color:var(--acc)" id="rule-str">${ruleString()}</span></h4>`;if(ed){h+='<div class="bs-row"><span>B</span>'+[...Array(9)].map((_,i)=>`<input type="checkbox" id="b${i}" data-bs="b" data-i="${i}" ${S.rule.born[i]?'checked':''}><label for="b${i}">${i}</label>`).join('')+'</div>';h+='<div class="bs-row"><span>S</span>'+[...Array(9)].map((_,i)=>`<input type="checkbox" id="s${i}" data-bs="s" data-i="${i}" ${S.rule.survive[i]?'checked':''}><label for="s${i}">${i}</label>`).join('')+'</div>';
+  h+=`<select id="rule-preset" style="width:100%;margin-top:6px"><option value="">— famous rules —</option>${RULE_PRESETS.map(r=>`<option value="${r[1]}">${r[0]} (${r[1]})</option>`).join('')}</select><p class="small">B = neighbour counts that give birth, S = counts that let a cell survive.</p>`}else h+='<p class="small">Rule is fixed for this challenge.</p>'}
+ if(m==='brain')h+='<h4>Rule</h4><p class="small">Off → Firing when exactly 2 neighbours fire. Firing → Dying → Off. Density of a soup decides how long the storm lasts.</p>';
+ if(m==='wire')h+='<h4>Rule</h4><p class="small">Head → Tail → Conductor. A conductor becomes a Head when 1 or 2 neighbours are Heads (3+ blocks the signal — that is how diodes and gates work).</p>';
+ if(m==='ant'){h+=`<h4>Turmite rule</h4>`;if(ed)h+=`<input type="text" id="ant-rule" value="${S.antRule}" maxlength="12" style="width:100%" placeholder="e.g. RL, LLRR"><select id="ant-preset" style="width:100%;margin-top:6px"><option value="">— presets —</option>${ANT_PRESETS.map(r=>`<option value="${r[1]}">${r[0]} (${r[1]})</option>`).join('')}</select><p class="small">One letter per colour: L/R turn, N straight, U reverse. Length sets the number of colours.</p>`;else h+=`<p class="small">Rule <b>${S.antRule}</b> (fixed).</p>`;
+  h+=`<h4>Ants (${S.ants.length})</h4><div class="row"><span class="small">Facing</span>${['↑','→','↓','←'].map((a,i)=>`<button data-antdir="${i}" class="${S.antDir===i?'active':''}" style="padding:3px 8px">${a}</button>`).join('')}</div>`;if(S.sandbox)h+=`<div class="row" style="margin-top:6px"><button id="ant-add">Add ant at centre</button><button id="ant-clear">Remove ants</button></div>`;h+='<p class="small">Select the <b>Ant</b> state in the toolbar and click the grid to place one.</p>'}
+ if(m==='sand'){h+=`<h4>Sources</h4>`;if(S.sandbox)h+=`<label class="small">Rain: <b id="rain-v">${S.sandRain}</b> grains/gen</label><input type="range" id="rain" min="0" max="30" value="${S.sandRain}"><div class="row" style="margin-top:6px"><button id="drip" class="${S.sandDrip?'active':''}">Centre drip ${S.sandDrip?'ON':'OFF'}</button></div>`;h+=`<p class="small">Paint grains with the +1/+10/+50 states. Cells with 4+ grains topple one grain to each neighbour; grains leaving the edge vanish. Activity = topplings per generation.</p>`}
+ if(m==='elem'){h+=`<h4>Wolfram rule <span style="color:var(--acc)" id="elem-v">${S.elemRule}</span></h4>`;if(ed)h+=`<input type="range" id="elem-rule" min="0" max="255" value="${S.elemRule}"><div class="row" style="margin-top:4px"><input type="number" id="elem-num" min="0" max="255" value="${S.elemRule}" style="width:70px">${ELEM_PRESETS.map(r=>`<button data-elem="${r}" style="padding:3px 7px;font-size:11px">${r}</button>`).join('')}</div>`;
+  h+=`<div class="row" style="margin-top:8px"><button id="elem-seed">Single seed row</button><button id="elem-rand">Random row</button></div><p class="small">Each new row is computed from the row above. Edit the highlighted current row by clicking any column.</p>`}
+ if(m==='lenia'){const L=S.lenia;h+=`<h4>Kernel &amp; growth</h4>`;if(ed){h+=`<label class="small">Radius R <b id="le-R-v">${L.R}</b></label><input type="range" id="le-R" min="5" max="14" step="1" value="${L.R}"><label class="small">Growth centre μ <b id="le-mu-v">${L.mu.toFixed(3)}</b></label><input type="range" id="le-mu" min="0.05" max="0.5" step="0.005" value="${L.mu}"><label class="small">Growth width σ <b id="le-sigma-v">${L.sigma.toFixed(3)}</b></label><input type="range" id="le-sigma" min="0.005" max="0.12" step="0.001" value="${L.sigma}"><label class="small">Time step dt <b id="le-dt-v">${L.dt.toFixed(2)}</b></label><input type="range" id="le-dt" min="0.02" max="0.3" step="0.01" value="${L.dt}"><select id="le-preset" style="width:100%;margin-top:6px"><option value="">— regimes —</option>${LENIA_PRESETS.map((r,i)=>`<option value="${i}">${r[0]}</option>`).join('')}</select>`}
+  h+='<p class="small">Each cell senses a ring-shaped neighbourhood of radius R. If the weighted density is near μ (within ~σ) the cell grows, otherwise it decays. Paint mass or pour a soup.</p>'}
+ if(S.sandbox&&(m==='life'||m==='brain'||m==='sand'||m==='wire'))h+=`<h4>Soup density <b id="soup-v">${Math.round(S.soupDensity*100)}%</b></h4><input type="range" id="soup-d" min="0.05" max="0.9" step="0.01" value="${S.soupDensity}">`;
+ if(S.sandbox&&m!=='wire'&&m!=='sand'&&m!=='ant'&&m!=='lenia')h+=`<div class="row" style="margin-top:8px"><button id="wrap-btn">${S.wrap?'Edges wrap: ON':'Edges wrap: OFF'}</button></div>`;
+ h+=`<h4>About</h4><p class="small">${MODES[m].desc}</p>`;p.innerHTML=h;
+ p.querySelectorAll('input[data-bs]').forEach(el=>el.addEventListener('change',()=>{const i=+el.dataset.i;(el.dataset.bs==='b'?S.rule.born:S.rule.survive)[i]=el.checked?1:0;onRuleChanged()}));
+ const rp=$('#rule-preset');if(rp)rp.addEventListener('change',()=>{if(rp.value){setRuleString(rp.value);onRuleChanged();buildRulesPanel()}});
+ const ar=$('#ant-rule');if(ar)ar.addEventListener('change',()=>{const v=ar.value.toUpperCase().replace(/[^LRNU]/g,'');if(v.length>=2){S.antRule=v;ar.value=v;S.grid.fill(0);S.ants.forEach(a=>{a.minx=a.maxx=a.x;a.miny=a.maxy=a.y});recountPop();$('#hud-rule').textContent=v;toast('Turmite rule '+v)}else{ar.value=S.antRule;toast('Rule needs at least 2 letters of L/R/N/U','warn')}});
+ const ap=$('#ant-preset');if(ap)ap.addEventListener('change',()=>{if(ap.value){ar.value=ap.value;ar.dispatchEvent(new Event('change'))}});
+ p.querySelectorAll('[data-antdir]').forEach(b=>b.addEventListener('click',()=>{S.antDir=+b.dataset.antdir;buildRulesPanel()}));
+ const aa=$('#ant-add');if(aa)aa.addEventListener('click',()=>{placeAnt({x:S.GW>>1,y:S.GH>>1});buildRulesPanel()});const ac=$('#ant-clear');if(ac)ac.addEventListener('click',()=>{S.ants=[];buildRulesPanel()});
+ const rain=$('#rain');if(rain)rain.addEventListener('input',()=>{S.sandRain=+rain.value;$('#rain-v').textContent=S.sandRain});const drip=$('#drip');if(drip)drip.addEventListener('click',()=>{S.sandDrip=!S.sandDrip;buildRulesPanel()});
+ const er=$('#elem-rule'),en=$('#elem-num');const setElem=v=>{S.elemRule=clamp(v|0,0,255);if(er)er.value=S.elemRule;if(en)en.value=S.elemRule;$('#elem-v').textContent=S.elemRule;$('#hud-rule').textContent='Rule '+S.elemRule;store.set('lastElem',S.elemRule);if(S.ch)updateHUD()};
+ if(er)er.addEventListener('input',()=>setElem(+er.value));if(en)en.addEventListener('change',()=>setElem(+en.value));p.querySelectorAll('[data-elem]').forEach(b=>b.addEventListener('click',()=>setElem(+b.dataset.elem)));
+ const es=$('#elem-seed');if(es)es.addEventListener('click',()=>{if(!S.sandbox&&S.ch.def.noEdit)return;elemReset(false)});const erd=$('#elem-rand');if(erd)erd.addEventListener('click',()=>{if(!S.sandbox&&S.ch.def.noEdit)return;elemReset(true)});
+ ['R','mu','sigma','dt'].forEach(k=>{const el=$('#le-'+k);if(el)el.addEventListener('input',()=>{S.lenia[k]=+el.value;$('#le-'+k+'-v').textContent=k==='R'?S.lenia[k]:S.lenia[k].toFixed(3);if(k==='R')buildKernel();$('#hud-rule').textContent=leniaLabel()})});
+ const lp=$('#le-preset');if(lp)lp.addEventListener('change',()=>{if(lp.value!==''){S.lenia={...LENIA_PRESETS[+lp.value][1]};buildKernel();buildRulesPanel();$('#hud-rule').textContent=leniaLabel();toast('Regime: '+LENIA_PRESETS[+lp.value][0])}});
+ const sd=$('#soup-d');if(sd)sd.addEventListener('input',()=>{S.soupDensity=+sd.value;$('#soup-v').textContent=Math.round(S.soupDensity*100)+'%'});
+ const wb=$('#wrap-btn');if(wb)wb.addEventListener('click',()=>{S.wrap=!S.wrap;SET.wrap=S.wrap;saveSettings();buildNb();buildRulesPanel();toast('Edge wrapping '+(S.wrap?'on':'off'))})}
+function leniaLabel(){const L=S.lenia;return `R${L.R} μ${L.mu.toFixed(2)} σ${L.sigma.toFixed(3)}`}
+function elemReset(random){S.grid.fill(0);S.elemRow=0;if(random){for(let x=0;x<S.GW;x++)S.grid[x]=Math.random()<0.5?1:0}else S.grid[S.GW>>1]=1;S.gen=0;recountPop();S.hist={gen:[],pop:[],act:[],ent:[]};updateHUD()}
+function onRuleChanged(){const rs=ruleString();$('#hud-rule').textContent=rs;const el=$('#rule-str');if(el)el.textContent=rs;store.set('lastRule',rs);log('Rule set to '+rs)}
+function drawPatternThumb(canvas,p,m){const c=canvas.getContext('2d'),th=T();const W=canvas.width,H=canvas.height;c.fillStyle=`rgb(${th.bg[0]},${th.bg[1]},${th.bg[2]})`;c.fillRect(0,0,W,H);if(!p)return;const s=Math.max(1,Math.floor(Math.min(W/(p.w+2),H/(p.h+2))));const ox=((W-p.w*s)/2)|0,oy=((H-p.h*s)/2)|0;
+ for(const [x,y,v] of p.cells){let col;if(m==='wire')col=th.wire[v];else if(m==='lenia'){const C=th.lenia;const k=Math.min(3,(v*4)|0);col=C[k+1]}else if(m==='brain')col=v===1?th.brainOn:th.brainDying;else if(m==='ant')col=th.ant;else col=th.live;c.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;c.fillRect(ox+x*s,oy+y*s,Math.max(1,s-(s>3?1:0)),Math.max(1,s-(s>3?1:0)))}}
+function buildLibrary(){const p=$('#ptab-library'),m=S.mode,lib=LIB[m];if(!stampsAllowed()){p.innerHTML='<p class="small">The pattern library is disabled on <b>Master</b> difficulty — build everything by hand.</p>'+(lib.length?'<h4>Reference (view only)</h4><div class="lib-grid" id="lib-grid"></div>':'');}
+ else if(!lib.length){p.innerHTML='<p class="small">No stamp patterns for this mode. Use the toolbar states to paint directly.</p>';return}
+ else p.innerHTML='<p class="small">Click a pattern, then click the grid to stamp it. <kbd>Q</kbd> rotates, <kbd>F</kbd> flips.</p><div class="lib-grid" id="lib-grid"></div>';
+ const g=$('#lib-grid');if(!g)return;lib.forEach((it,idx)=>{const d=document.createElement('div');d.className='lib-item'+(S.stamp===it&&S.tool==='stamp'?' active':'');const cvs=document.createElement('canvas');cvs.width=72;cvs.height=48;d.appendChild(cvs);d.appendChild(document.createTextNode(it.n));let pat=it.p||(it.lenia?leniaBrush(it.lenia):null);if(it.sand){const c=cvs.getContext('2d');const th=T();c.fillStyle=`rgb(${th.bg})`;c.fillRect(0,0,72,48);const r=8+Math.log2(it.sand)*1.6;const grd=c.createRadialGradient(36,24,1,36,24,r);grd.addColorStop(0,`rgb(${th.sand[4]})`);grd.addColorStop(1,`rgb(${th.sand[1]})`);c.fillStyle=grd;c.beginPath();c.arc(36,24,r,0,7);c.fill()}else drawPatternThumb(cvs,pat,m);
+  if(stampsAllowed())d.addEventListener('click',()=>{S.stamp=it;S.tool='stamp';S.stampRot=0;S.stampFlip=false;sfx('click');buildToolbar();buildLibrary();cv.style.cursor='crosshair'});g.appendChild(d)})}
+function miniLife(born,surv,seed,n,gens){let g=new Uint8Array(n*n),t=new Uint8Array(n*n);const rnd=mulberry32(seed);for(let i=0;i<g.length;i++)g[i]=rnd()<0.4?1:0;
+ for(let k=0;k<gens;k++){for(let y=0;y<n;y++){const yu=((y-1+n)%n)*n,yd=((y+1)%n)*n,r=y*n;for(let x=0;x<n;x++){const xl=(x-1+n)%n,xr=(x+1)%n;const c=g[yu+xl]+g[yu+x]+g[yu+xr]+g[r+xl]+g[r+xr]+g[yd+xl]+g[yd+x]+g[yd+xr];t[r+x]=g[r+x]?surv[c]:born[c]}}const s=g;g=t;t=s}return g}
+function miniElem(rule,seed,n){const g=new Uint8Array(n*n);const rnd=mulberry32(seed);for(let x=0;x<n;x++)g[x]=rnd()<0.5?1:0;for(let y=1;y<n;y++){for(let x=0;x<n;x++){const l=g[(y-1)*n+(x-1+n)%n],c=g[(y-1)*n+x],r=g[(y-1)*n+(x+1)%n];g[y*n+x]=(rule>>((l<<2)|(c<<1)|r))&1}}return g}
+function thumbCanvas(arr,n){const c=document.createElement('canvas');c.width=n;c.height=n;const x=c.getContext('2d'),im=x.createImageData(n,n),th=T();for(let i=0;i<n*n;i++){const v=arr[i];const col=v?th.live:th.bg;im.data[i*4]=col[0];im.data[i*4+1]=col[1];im.data[i*4+2]=col[2];im.data[i*4+3]=255}x.putImageData(im,0,0);return c}
+let exploreSeed=1;
+function buildExplorer(){const p=$('#ptab-explore'),m=S.mode;if(m==='life'){if(!ruleEditable()){p.innerHTML='<p class="small">Rule exploration is available in Sandbox mode.</p>';return}
+  p.innerHTML=`<p class="small">Mutations of <b>${ruleString()}</b> — each thumbnail is a 48×48 soup after 40 generations. Click one to adopt it.</p><div class="row" style="margin-bottom:8px"><button id="exp-mut">🧬 Mutate again</button><button id="exp-rand">🎲 Random rule</button></div><div class="exp-grid" id="exp-grid"></div>`;
+  const g=$('#exp-grid');for(let k=0;k<6;k++){const rnd=mulberry32(hashStr(ruleString())+exploreSeed*131+k*7);const born=S.rule.born.slice(),surv=S.rule.survive.slice();const flips=1+(rnd()<0.4?1:0);for(let f=0;f<flips;f++){const arr=rnd()<0.5?born:surv;let i=(rnd()*9)|0;if(arr===born&&i===0&&rnd()<0.8)i=1+((rnd()*8)|0);arr[i]^=1}
+   const str='B'+born.map((v,i)=>v?i:'').join('')+'/S'+surv.map((v,i)=>v?i:'').join('');const arr=miniLife(born,surv,1234+k,48,40);let pop=0;for(const v of arr)pop+=v;const d=document.createElement('div');d.className='exp-item';d.appendChild(thumbCanvas(arr,48));d.appendChild(document.createTextNode(str+' · '+Math.round(pop/23.04)+'%'));d.title='Adopt rule '+str;d.addEventListener('click',()=>{setRuleString(str);onRuleChanged();buildRulesPanel();buildExplorer();toast('Adopted rule '+str,'ok');sfx('stamp')});g.appendChild(d)}
+  $('#exp-mut').addEventListener('click',()=>{exploreSeed++;buildExplorer();sfx('click')});$('#exp-rand').addEventListener('click',()=>{const b=[],s=[];for(let i=0;i<9;i++){b.push(i>0&&Math.random()<0.3?1:0);s.push(Math.random()<0.4?1:0)}S.rule.born=b;S.rule.survive=s;onRuleChanged();buildRulesPanel();buildExplorer();sfx('stamp')})}
+ else if(m==='elem'){if(!ruleEditable()){p.innerHTML='<p class="small">Rule exploration is locked right now.</p>';return}p.innerHTML=`<p class="small">Random Wolfram rules from a random row. Click to adopt.</p><div class="row" style="margin-bottom:8px"><button id="exp-mut">🎲 New set</button></div><div class="exp-grid" id="exp-grid"></div>`;const g=$('#exp-grid');const rnd=mulberry32(exploreSeed*977+5);
+  for(let k=0;k<8;k++){const rule=(rnd()*256)|0;const d=document.createElement('div');d.className='exp-item';d.appendChild(thumbCanvas(miniElem(rule,99+k,48),48));d.appendChild(document.createTextNode('Rule '+rule));d.addEventListener('click',()=>{S.elemRule=rule;buildRulesPanel();$('#hud-rule').textContent='Rule '+rule;toast('Rule '+rule,'ok');sfx('stamp');if(S.ch)updateHUD()});g.appendChild(d)}
+  $('#exp-mut').addEventListener('click',()=>{exploreSeed++;buildExplorer();sfx('click')})}
+ else p.innerHTML=`<p class="small">The rule-space explorer works for <b>Life-like</b> and <b>Elementary</b> families. For ${MODES[m].name}, experiment with the parameters in the Rules tab.</p>`}
+$$('.panel-tabs button').forEach(b=>b.addEventListener('click',()=>{S.ptab=b.dataset.ptab;$$('.panel-tabs button').forEach(x=>x.classList.toggle('active',x===b));$$('.ptab').forEach(x=>x.classList.toggle('hidden',x.id!=='ptab-'+S.ptab));if(S.ptab==='charts')drawChart();if(S.ptab==='explore')buildExplorer();sfx('click')}));
+
+/* ============================ STATS & CHART ============================ */
+function sampleStats(){S.entropy=spatialEntropy();const h=S.hist;h.gen.push(S.gen);h.pop.push(S.pop);h.act.push(S.mode==='lenia'?S.changed:S.changed);h.ent.push(S.entropy);if(h.gen.length>260){h.gen.shift();h.pop.shift();h.act.shift();h.ent.shift()}
+ if(S.ptab==='charts')drawChart();updateHUD()}
+function drawChart(){const c=$('#chart');const w=c.clientWidth||280;if(c.width!==w)c.width=w;const x=c.getContext('2d'),W=c.width,H=c.height,h=S.hist;x.fillStyle='#0a0f1c';x.fillRect(0,0,W,H);x.strokeStyle='#1e2a44';x.beginPath();for(let k=1;k<4;k++){x.moveTo(0,H*k/4);x.lineTo(W,H*k/4)}x.stroke();
+ const n=h.gen.length;if(n<2){x.fillStyle='#8a97b8';x.font='11px system-ui';x.fillText('Run the simulation to collect data',10,H/2);return}
+ const series=(arr,col,norm)=>{let mx=0;for(const v of arr)if(v>mx)mx=v;if(norm)mx=1;if(mx<=0)mx=1;x.strokeStyle=col;x.lineWidth=1.5;x.beginPath();for(let i=0;i<n;i++){const px=i/(n-1)*W,py=H-4-(arr[i]/mx)*(H-8);if(i)x.lineTo(px,py);else x.moveTo(px,py)}x.stroke()};
+ series(h.pop,'#5ff0ff',false);series(h.act,'#ffcc55',false);series(h.ent,'#b48cff',true);
+ x.fillStyle='#8a97b8';x.font='10px system-ui';x.fillText('gen '+h.gen[0],4,H-4);x.textAlign='right';x.fillText('gen '+h.gen[n-1],W-4,H-4);x.textAlign='left';
+ const nums=$('#chart-numbers');const actLabel=S.mode==='sand'?'Topplings':S.mode==='lenia'?'Δ mass':'Changed cells';nums.innerHTML=`<span>${MODES[S.mode].popLabel}<b>${S.pop}</b></span><span>Peak<b>${S.sess.peakPop}</b></span><span>${actLabel}<b>${S.mode==='lenia'?S.changed.toFixed(1):S.changed}</b></span><span>Entropy<b>${S.entropy.toFixed(3)}</b></span><span>Density<b>${(S.pop/(S.GW*S.GH)*100).toFixed(1)}%</b></span><span>Period<b>${S.period||'—'}</b></span><span>Generations<b>${S.gen}</b></span><span>Cells placed<b>${S.sess.cells}</b></span>`}
+function updateHUD(){$('#st-gen').textContent=S.gen;$('#st-pop').textContent=S.mode==='lenia'?S.pop:S.pop;$('#st-pop-label').textContent=MODES[S.mode].popLabel;$('#st-state').textContent=S.stateLabel;
+ const c=S.ch;if(c){const d=c.def;$('#st-budget-wrap').classList.toggle('hidden',!(c.budget>0));if(c.budget>0){$('#st-budget').textContent=c.used+'/'+c.budget+(d.electrons?` ⚡${c.elec}/${c.electrons}`:'')+(d.ants?` 🐜${S.ants.length}/${c.ants}`:'');$('#st-budget').style.color=c.used>c.budget?'var(--bad)':''}
+  $('#st-timer-wrap').classList.toggle('hidden',!(c.time>0));if(c.time>0)$('#st-timer').textContent=Math.max(0,c.time-S.gen);$('#hud-objective').innerHTML=(d.status?d.status(c):'')||'<b>'+d.name+'</b> — '+d.goal}
+ else{$('#st-budget-wrap').classList.add('hidden');$('#st-timer-wrap').classList.add('hidden');$('#hud-objective').innerHTML='<b>Sandbox</b> — '+MODES[S.mode].name+'. Draw, stamp, mutate rules, watch the charts.'}}
+function updatePlayBtn(){const b=$('#btn-play');b.textContent=S.running?'❚❚':'▶';b.title=S.running?'Pause (Space)':'Play (Space)';$$('.speeds button').forEach(x=>x.classList.toggle('active',+x.dataset.speed===S.speed))}
+function sandboxTick(){if(S.pop===0&&S.gen>10&&!S.extinctFlag){S.extinctFlag=true;S.stateLabel='Extinct';toast('Extinction — the grid is empty.','bad');award('extinct','Extinction event');return}
+ if(S.pop>0)S.extinctFlag=false;
+ if(S.mode==='life'||S.mode==='brain'||S.mode==='wire'){if(S.period===1){S.stableCount++;S.oscCount=0;if(S.stableCount===40){S.stateLabel='Still life';toast('Stable: the pattern has frozen into a still life.','ok');award('still','Reached a still life')}}
+  else if(S.period>=2){S.oscCount++;S.stableCount=0;if(S.oscCount===80){S.stateLabel='Oscillating p'+S.period;toast('Stable oscillation with period '+S.period+'.','ok');award('osc','Found an oscillator')}}
+  else{S.stableCount=0;S.oscCount=0;if(S.gen%20===0){const h=S.hist.pop;const past=h.length>30?h[h.length-30]:S.pop;S.stateLabel=S.pop>past*1.1?'Growing':S.pop<past*0.9?'Declining':'Chaotic'}}}
+ else if(S.gen%20===0){const h=S.hist.pop;const past=h.length>30?h[h.length-30]:S.pop;S.stateLabel=S.changed===0?'Static':S.pop>past*1.05?'Growing':S.pop<past*0.95?'Declining':'Active'}
+ if(S.sess.gens===10000)award('marathon','Marathon: 10,000 generations in one session');if(S.pop>=3000)award('crowd','Crowd: 3,000+ live cells');if(S.entropy>=0.85&&S.pop>500)award('chaos','Chaos: entropy above 0.85');
+ if(S.mode==='ant'&&S.gen%50===0){for(const a of S.ants)if(a.maxx-a.minx>60||a.maxy-a.miny>60){award('highway','Highway: an ant escaped its chaos');break}}
+ if(S.mode==='lenia'&&S.gen===500&&S.pop>10)award('lenia','Lenia life persisted 500 steps')}
+
+/* ============================ AUDIO ============================ */
+const AU={ctx:null,lastTick:0};
+function audioInit(){if(AU.ctx)return;const C=window.AudioContext||window.webkitAudioContext;if(!C)return;try{const ctx=new C();const master=ctx.createGain();master.gain.value=SET.muted?0:SET.volume;master.connect(ctx.destination);
+ const dg=ctx.createGain();dg.gain.value=0;const f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=300;f.Q.value=5;const o1=ctx.createOscillator();o1.type='sawtooth';o1.frequency.value=55;const o2=ctx.createOscillator();o2.type='triangle';o2.frequency.value=82.4;o2.detune.value=6;o1.connect(f);o2.connect(f);f.connect(dg);dg.connect(master);o1.start();o2.start();Object.assign(AU,{ctx,master,droneGain:dg,filter:f,o1,o2})}catch(e){}}
+function tone(freq,dur,type='sine',vol=0.2,when=0){if(!AU.ctx||SET.muted)return;try{const t=AU.ctx.currentTime+when;const o=AU.ctx.createOscillator(),g=AU.ctx.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.012);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(AU.master);o.start(t);o.stop(t+dur+0.03)}catch(e){}}
+function sfx(n){if(!AU.ctx)return;if(AU.ctx.state==='suspended')AU.ctx.resume().catch(()=>{});switch(n){case 'click':tone(900,0.05,'square',0.03);break;case 'draw':tone(500+Math.random()*120,0.05,'triangle',0.05);break;case 'stamp':tone(440,0.12,'triangle',0.08);tone(660,0.14,'triangle',0.07,0.06);break;
+ case 'play':tone(330,0.1,'sine',0.08);tone(495,0.16,'sine',0.08,0.08);break;case 'pause':tone(495,0.1,'sine',0.08);tone(330,0.16,'sine',0.08,0.08);break;case 'win':[523,659,784,1047,1319].forEach((f,i)=>tone(f,0.5,'triangle',0.12,i*0.11));break;case 'fail':[420,320,230,160].forEach((f,i)=>tone(f,0.45,'sawtooth',0.07,i*0.16));break;
+ case 'arrive':tone(1300,0.12,'sine',0.12);tone(1900,0.1,'sine',0.06,0.05);break;case 'error':tone(140,0.14,'square',0.06);break;case 'milestone':[660,880,1100].forEach((f,i)=>tone(f,0.3,'triangle',0.09,i*0.09));break}}
+function audioFrame(){if(!AU.ctx)return;const t=AU.ctx.currentTime;const dens=clamp(S.pop/(S.GW*S.GH)*(S.mode==='sand'?0.3:S.mode==='lenia'?1:4),0,1);const target=(S.running&&S.screen==='game'&&!S.modalOpen)?0.045:0.012;
+ AU.droneGain.gain.setTargetAtTime(SET.effects?target:0,t,0.4);AU.filter.frequency.setTargetAtTime(140+dens*1600+S.entropy*500,t,0.25);const act=clamp(S.changed/(S.pop+1),0,1);AU.o2.detune.setTargetAtTime(6+act*45,t,0.3)}
+function audioTick(){if(!AU.ctx||SET.muted||!SET.effects)return;const now=performance.now();if(now-AU.lastTick<110)return;AU.lastTick=now;if(S.pop===0)return;tone(180+S.entropy*700+(S.gen%6)*12,0.045,'sine',0.02)}
+function setVolume(v){SET.volume=clamp(v,0,1);saveSettings();if(AU.master)AU.master.gain.setTargetAtTime(SET.muted?0:SET.volume,AU.ctx.currentTime,0.05)}
+function toggleMute(){SET.muted=!SET.muted;saveSettings();if(AU.master)AU.master.gain.setTargetAtTime(SET.muted?0:SET.volume,AU.ctx.currentTime,0.05);$('#btn-mute').textContent=SET.muted?'🔇':'🔊';const sm=$('#set-mute');if(sm)sm.textContent=SET.muted?'Muted':'Sound on';toast(SET.muted?'Audio muted':'Audio on','',1200)}
+/* ============================ CHALLENGES ============================ */
+const CH_W=128,CH_H=80;
+const DIFFS={A:{name:'Apprentice',budget:1.5,time:1.5,stars:1,desc:'Generous budgets (×1.5) and time limits (×1.5). Full pattern library.'},J:{name:'Journeyman',budget:1,time:1,stars:2,desc:'Standard budgets and time limits. Pattern library available.'},M:{name:'Master',budget:1,time:1,stars:3,desc:'Standard budgets and time, but the pattern library is disabled — every cell by hand.'}};
+function zoneCount(z){let n=0;const g=S.grid,W=S.GW;for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++)if(g[y*W+x])n++;return n}
+function placeArt(p,ox,oy,mask){const W=S.GW;for(const [x,y,v] of p.cells){const i=(oy+y)*W+ox+x;if(i<0||i>=S.grid.length)continue;S.grid[i]=v;if(mask)mask[i]=1}}
+function wallLine(x0,y0,x1,y1,mask){const W=S.GW;if(x0===x1){for(let y=Math.min(y0,y1);y<=Math.max(y0,y1);y++){S.grid[y*W+x0]=4;mask[y*W+x0]=1}}else{for(let x=Math.min(x0,x1);x<=Math.max(x0,x1);x++){S.grid[y0*W+x]=4;mask[y0*W+x]=1}}}
+function addTargets(c,list,mask){c.targets=list.map(([x,y])=>({x,y,hit:0,wasHead:false}));for(const t of c.targets){const i=t.y*S.GW+t.x;if(S.mode==='wire')S.grid[i]=1;mask[i]=1}}
+const CHALLENGES=[
+{id:'spark',name:'Spark',mode:'life',rule:'B3/S23',budget:30,time:20,wrap:true,desc:'Draw a few cells and keep at least one alive for 20 generations. Learn the tools.',goal:'Keep any cell alive until generation 20.',
+ check(c){if(S.pop===0)return{r:'fail',why:'Everything died out at generation '+S.gen+'. Try a 2×2 block or three cells in a row.'};if(S.gen>=c.time)return{r:'win'}}},
+{id:'still',name:'Still Life',mode:'life',rule:'B3/S23',budget:24,time:120,wrap:true,desc:'Create a pattern of at least 6 cells that stays perfectly unchanged for 30 consecutive generations.',goal:'≥6 cells, unchanged for 30 generations in a row.',status:c=>`<b>Still Life</b> — frozen for ${c.stable}/30 · pop ${S.pop}`,
+ check(c){if(S.pop>=6&&S.period===1)c.stable++;else c.stable=0;if(c.stable>=30)return{r:'win'};if(S.gen>=c.time)return{r:'fail',why:S.pop<6?'Fewer than 6 cells survived.':'The pattern kept changing. Blocks, beehives and loaves are still lifes.'}}},
+{id:'osc',name:'Oscillator',mode:'life',rule:'B3/S23',budget:30,time:200,wrap:true,desc:'Build a pattern that repeats with period 2 or more and keeps oscillating for 60 generations.',goal:'Sustain a period ≥2 oscillation for 60 generations.',status:c=>`<b>Oscillator</b> — period ${S.period||'—'} · held ${c.stable}/60`,
+ check(c){if(S.pop>=3&&S.period>=2)c.stable++;else c.stable=0;if(c.stable>=60)return{r:'win',note:'period '+S.period};if(S.gen>=c.time)return{r:'fail',why:S.period===1?'Your pattern froze into a still life.':S.pop===0?'Extinct.':'No stable oscillation was detected.'}}},
+{id:'msg',name:'Messenger',mode:'life',rule:'B3/S23',budget:30,time:400,wrap:false,desc:'Send a live cell from the green build zone into the red strip on the far right. Still lifes stay put — you need something that travels. (F flips a stamp.)',goal:'Get a live cell into the red target strip.',
+ zone:(W,H)=>({x:2,y:2,w:Math.floor(W*0.33),h:H-4}),target:(W,H)=>({x:W-10,y:0,w:10,h:H}),status:c=>`<b>Messenger</b> — reach the red strip · pop ${S.pop}`,
+ check(c){if(zoneCount(c.target)>0)return{r:'win'};if(S.pop===0)return{r:'fail',why:'The pattern died before arriving.'};if(S.gen>=c.time)return{r:'fail',why:'Nothing reached the strip in time. A lightweight spaceship covers 1 cell every 2 generations.'}}},
+{id:'meth',name:'Methuselah',mode:'life',rule:'B3/S23',budget:10,time:600,wrap:true,desc:'Using no more than 10 cells, grow a population of at least 100 within 600 generations. Small seeds, long lives.',goal:'From ≤10 cells, reach population 100.',status:c=>`<b>Methuselah</b> — pop ${S.pop}/100 · peak ${S.sess.peakPop}`,
+ check(c){if(S.pop>=100)return{r:'win'};if(S.pop===0)return{r:'fail',why:'Extinct. Try an R-pentomino shape.'};if(S.gen>=c.time)return{r:'fail',why:'Population peaked at '+S.sess.peakPop+'.'}}},
+{id:'brain',name:'Brainstorm',mode:'brain',budget:12,time:300,wrap:true,desc:"Brian's Brain never settles. Seed at most 12 firing cells and keep the storm alive through generation 300.",goal:'Keep at least one firing cell until generation 300.',status:c=>`<b>Brainstorm</b> — firing ${S.pop} · survive to ${c.time}`,
+ check(c){if(S.pop===0)return{r:'fail',why:'The brain fell silent at generation '+S.gen+'.'};if(S.gen>=c.time)return{r:'win'}}},
+{id:'gun',name:'Gun Factory',mode:'life',rule:'B3/S23',capstone:true,budget:38,time:600,wrap:false,desc:'With at most 38 cells inside the build zone, deliver 10 separate gliders into the orange exit band within 600 generations. Hand-placed gliders will not be enough — build a gun.',goal:'Deliver 10 gliders into the orange exit band.',
+ zone:(W,H)=>({x:2,y:2,w:Math.floor(W*0.5),h:Math.floor(H*0.5)}),exit:(W,H)=>[{x:W-5,y:0,w:5,h:H},{x:0,y:H-5,w:W,h:5}],status:c=>`<b>Gun Factory</b> — gliders delivered ${c.arrivals}/10`,
+ tick(c){const g=S.grid,W=S.GW;let live=0,lx=0,ly=0;for(const z of c.exit)for(let y=z.y;y<z.y+z.h;y++)for(let x=z.x;x<z.x+z.w;x++){const i=y*W+x;if(g[i]){live++;lx=x;ly=y;g[i]=0;S.age[i]=0;S.heat[i]=1}}
+  if(live>0&&S.gen-c.lastArrival>8){c.arrivals++;c.lastArrival=S.gen;sfx('arrive');floatText(lx,ly,'glider '+c.arrivals,'#ffcc55');ringFx(lx,ly,3,'rgba(255,204,85,.9)')}},
+ check(c){if(c.arrivals>=10)return{r:'win'};if(S.gen>=c.time)return{r:'fail',why:'Only '+c.arrivals+' gliders arrived. A Gosper gun fires one every 30 generations.'}}},
+{id:'wire1',name:'Live Wire',mode:'wire',budget:140,time:260,electrons:0,wrap:false,desc:'A clock on the left pulses electrons. Lay conductor to carry one to the glowing target on the right. Grey walls block the way — diagonal contact counts.',goal:'Carry an electron from the clock to the target.',
+ setup(c,W,H){const m=c.baseMask;placeArt(art(WIRE_CLOCK,WMAP),4,(H>>1)-3,m);wallLine(40,18,40,H-1,m);wallLine(84,0,84,H-19,m);addTargets(c,[[W-8,H>>1]],m)},status:c=>`<b>Live Wire</b> — target ${c.hits?'hit ✓':'not reached'}`,
+ check(c){if(c.hits>=1)return{r:'win'};if(S.gen>=c.time)return{r:'fail',why:'No electron reached the target. Is the wire continuous and touching the clock output?'}}},
+{id:'wire2',name:'Fan-out',mode:'wire',budget:260,time:340,electrons:0,wrap:false,desc:'One clock, two targets, a long wall between them. Split the signal so both targets fire.',goal:'Deliver electrons to both targets.',
+ setup(c,W,H){const m=c.baseMask;placeArt(art(WIRE_CLOCK,WMAP),4,(H>>1)-3,m);wallLine(26,H>>1,W-16,H>>1,m);addTargets(c,[[W-6,8],[W-6,H-9]],m)},status:c=>`<b>Fan-out</b> — targets hit ${c.targets.filter(t=>t.hit).length}/2`,
+ check(c){if(c.targets.every(t=>t.hit))return{r:'win'};if(S.gen>=c.time)return{r:'fail',why:'Only '+c.targets.filter(t=>t.hit).length+' of 2 targets fired.'}}},
+{id:'wire3',name:'Grand Clock',mode:'wire',capstone:true,budget:80,electrons:4,time:300,wrap:false,desc:'No source this time. Build your own clock — a conductor loop carrying a head and tail — and deliver 6 electrons to the target within 300 generations. At most 4 electron cells may be placed.',goal:'Deliver 6 electrons to the target using your own clock.',
+ setup(c,W,H){addTargets(c,[[W-10,H>>1]],c.baseMask)},status:c=>`<b>Grand Clock</b> — electrons delivered ${c.hits}/6`,
+ check(c){if(c.hits>=6)return{r:'win'};if(S.gen>=c.time)return{r:'fail',why:c.hits===0?'No electron ever reached the target.':'Only '+c.hits+' electrons arrived. A tighter loop fires more often.'}}},
+{id:'sand',name:'Avalanche',mode:'sand',liveEdit:true,autoRun:true,budget:1200,time:0,wrap:false,desc:'Pour grains only inside the central pour zone and let the pile topple outward until all three target markers hold sand. Your grain supply is limited — the pile grows as the square root of what you pour.',goal:'Topple sand onto all three targets with a limited grain supply.',
+ zone:(W,H)=>({x:(W>>1)-1,y:(H>>1)-1,w:3,h:3}),setup(c,W,H){const cx=W>>1,cy=H>>1;c.targets=[{x:cx+10,y:cy,hit:0},{x:cx-10,y:cy,hit:0},{x:cx,y:cy-10,hit:0}]},
+ status:c=>`<b>Avalanche</b> — targets ${c.targets.filter(t=>t.hit).length}/3 · topplings/gen ${S.changed}`,
+ check(c){for(const t of c.targets){if(!t.hit&&S.grid[t.y*S.GW+t.x]>=1){t.hit=1;sfx('arrive');floatText(t.x,t.y,'reached!','#5fff9a')}}if(c.targets.every(t=>t.hit))return{r:'win'};if(c.used>=c.budget&&S.changed===0){c.idle++;if(c.idle>15)return{r:'fail',why:'The sand ran out and the pile settled before reaching every target.'}}else c.idle=0}},
+{id:'elem',name:'Chaos Hunter',mode:'elem',noEdit:true,ruleEdit:true,time:110,fixedTime:true,wrap:true,desc:'Pick a Wolfram rule (0–255) that is genuinely chaotic from a random start: medium density, constant change, no short repeats. Set it in the Rules tab, press Play to test.',goal:'Choose a chaotic (class 3) rule and press Play.',
+ setup(c,W,H){S.grid.fill(0);const r=mulberry32(4242);for(let x=0;x<W;x++)S.grid[x]=r()<0.5?1:0;S.elemRow=0;S.elemRule=4},status:c=>`<b>Chaos Hunter</b> — testing rule ${S.elemRule} · judged at generation ${c.time}`,
+ check(c){if(S.gen<c.time)return;const W=S.GW,g=S.grid,row=S.elemRow;const rows=[];for(let k=39;k>=0;k--)rows.push((row-k)*W);let dens=0,chg=0;for(let r=0;r<40;r++)for(let x=0;x<W;x++){dens+=g[rows[r]+x];if(r>0&&g[rows[r]+x]!==g[rows[r-1]+x])chg++}dens/=40*W;chg/=39*W;
+  let periodic=false;for(let p=1;p<=8&&!periodic;p++){let same=true;for(let r=20;r<40&&same;r++)for(let x=0;x<W;x++)if(g[rows[r]+x]!==g[rows[r-p]+x]){same=false;break}if(same)periodic=true}
+  const th=c.diff==='M'?{lo:0.3,hi:0.7,ch:0.3}:c.diff==='A'?{lo:0.1,hi:0.9,ch:0.12}:{lo:0.2,hi:0.8,ch:0.2};const note=`rule ${S.elemRule}: density ${(dens*100).toFixed(0)}%, change ${(chg*100).toFixed(0)}%`;
+  if(dens>=th.lo&&dens<=th.hi&&chg>=th.ch&&!periodic)return{r:'win',note};return{r:'fail',why:periodic?`Rule ${S.elemRule} settled into a short cycle (class 2). ${note}.`:dens<th.lo?`Rule ${S.elemRule} is dying out (${(dens*100).toFixed(0)}% density).`:dens>th.hi?`Rule ${S.elemRule} saturates (${(dens*100).toFixed(0)}% density).`:`Rule ${S.elemRule} barely changes (${(chg*100).toFixed(0)}% per row).`}}},
+{id:'ant',name:'Ant Painter',mode:'ant',budget:40,ants:3,time:1500,wrap:true,desc:'Place up to 3 ants (and up to 40 painted cells). After 1500 steps the ants must have painted more cells than any single ant could manage. Space them out!',goal:'Paint enough cells in 1500 steps.',
+ setup(c,W,H){const g=new Uint8Array(W*H);let x=W>>1,y=H>>1,d=0,cnt=0;for(let s=0;s<1500;s++){const i=y*W+x;const v=g[i];d=v?(d+3)&3:(d+1)&3;g[i]=v?0:1;cnt+=v?-1:1;if(d===0)y--;else if(d===1)x++;else if(d===2)y++;else x--;x=(x+W)%W;y=(y+H)%H}c.ref=cnt;c.need=Math.ceil(cnt*(c.diff==='A'?1.4:c.diff==='M'?1.9:1.6))},
+ status:c=>`<b>Ant Painter</b> — painted ${S.pop}/${c.need} (one ant alone paints ${c.ref})`,
+ check(c){if(S.gen>=c.time)return S.pop>=c.need?{r:'win',note:S.pop+' cells painted'}:{r:'fail',why:`Only ${S.pop} of ${c.need} cells painted. Ants that overlap undo each other.`}}},
+{id:'lenia',name:'Primordial Soup',mode:'lenia',liveEdit:true,ruleEdit:true,time:250,wrap:true,desc:'Tune the growth function (μ, σ) and kernel radius, paint or soup some mass, then run 250 steps. Succeed if life persists: between 2% and 50% of the grid holds mass and the field is still changing.',goal:'Keep a living, changing Lenia field for 250 steps.',
+ status:c=>`<b>Primordial Soup</b> — mass ${((S.leniaMass||0)/(S.GW*S.GH)*100).toFixed(1)}% of grid · step ${S.gen}/${c.time}`,
+ check(c){const N=S.GW*S.GH,frac=(S.leniaMass||0)/N,act=(S.leniaAct||0)/N;if(S.gen>30&&frac<0.0005)return{r:'fail',why:'All mass decayed. Widen σ or raise μ toward the density you paint.'};if(S.gen>=c.time){const b=c.diff==='M'?[0.03,0.35]:c.diff==='A'?[0.01,0.6]:[0.02,0.5];if(frac>=b[0]&&frac<=b[1]&&act>0.0003)return{r:'win',note:`${(frac*100).toFixed(1)}% mass`};return{r:'fail',why:frac<b[0]?'Too little mass survived.':frac>b[1]?'The field saturated — growth is too easy.':'The field froze solid.'}}}}
+];
+const ACH={first:'First victory',extinct:'Extinction event',still:'Still life (sandbox)',osc:'Oscillator (sandbox)',marathon:'Marathon: 10k generations',crowd:'Crowd: 3,000 cells',chaos:'Entropy above 0.85',highway:'Ant highway',lenia:'Lenia survivor',gun:'Gun Factory cleared',clock:'Grand Clock cleared',master:'A Master clear',all:'Every challenge cleared'};
+function award(id,label){if(PROG.ach[id])return;PROG.ach[id]=Date.now();saveProgress();toast('🏆 Achievement: '+(label||ACH[id]),'ok',4000);sfx('milestone')}
+function unlocked(i){return i<3||!!PROG.stars[CHALLENGES[i-1].id]}
+function setupChallenge(def,diff){const D=DIFFS[diff];const c={def,diff,phase:'build',budget:def.budget?Math.ceil(def.budget*D.budget):0,time:def.time?(def.fixedTime?def.time:Math.round(def.time*D.time)):0,electrons:def.electrons||0,ants:def.ants?(diff==='A'?def.ants+1:def.ants):0,used:0,elec:0,stable:0,arrivals:0,lastArrival:-99,hits:0,idle:0,targets:null,zone:null,target:null,exit:null,baseMask:new Uint8Array(S.GW*S.GH),startTime:performance.now()};
+ if(def.zone)c.zone=def.zone(S.GW,S.GH);if(def.target)c.target=def.target(S.GW,S.GH);if(def.exit)c.exit=def.exit(S.GW,S.GH);S.ch=c;if(def.setup)def.setup(c,S.GW,S.GH);recountPop();c.base=takeSnapshot();c.build=null;if(def.autoRun){c.phase='run';S.running=true}}
+function challengeTick(){const c=S.ch;if(c.phase!=='run')return;const d=c.def;if(d.tick)d.tick(c);
+ if(c.targets&&S.mode==='wire'){for(const t of c.targets){const v=S.grid[t.y*S.GW+t.x];if(v===2&&!t.wasHead){t.hit++;c.hits++;sfx('arrive');floatText(t.x,t.y,'⚡ hit','#5fff9a');ringFx(t.x,t.y,3,'rgba(95,255,154,.9)')}t.wasHead=v===2}}
+ const res=d.check(c);if(res)finishChallenge(res)}
+function startRun(){const c=S.ch,d=c.def;recountPop();
+ if(c.budget>0&&c.used>c.budget){toast('Over budget — remove '+(c.used-c.budget)+' cells.','bad');sfx('error');return}
+ if(d.ants&&S.ants.length===0){toast('Place at least one ant first: pick the Ant state and click the grid.','warn');sfx('error');return}
+ if(!d.noEdit&&S.mode!=='wire'&&S.mode!=='lenia'&&S.pop===0){toast('Draw something first!','warn');sfx('error');return}
+ if(S.mode==='lenia'&&S.pop===0){toast('Paint some mass or press 🎲 for a soup first.','warn');sfx('error');return}
+ if(S.mode==='wire'&&c.used===0){toast('Lay some conductor first.','warn');sfx('error');return}
+ c.build=takeSnapshot();c.phase='run';c.startTime=performance.now();if(c.targets)c.targets.forEach(t=>{t.wasHead=false});S.hashes[S.gen&255]=gridHash();S.running=true;S.acc=0;sfx('play');toast('Run started'+(c.time?' — '+c.time+' generations':''),'ok',1500);buildToolbar();buildRulesPanel();updatePlayBtn();updateHUD();tutorialCheck()}
+function finishChallenge(res){const c=S.ch;if(c.phase==='done')return;c.phase='done';S.running=false;updatePlayBtn();const d=c.def,D=DIFFS[c.diff];const win=res.r==='win';const secs=((performance.now()-c.startTime)/1000)|0;
+ if(win){const prev=PROG.stars[d.id]||0;if(D.stars>prev)PROG.stars[d.id]=D.stars;PROG.stats.wins++;award('first');if(d.id==='gun')award('gun');if(d.id==='wire3')award('clock');if(c.diff==='M')award('master');if(CHALLENGES.every(x=>PROG.stars[x.id]))award('all');burst(cw/2,chh/2,180);sfx('win');toast('Challenge complete!','ok');log('WIN: '+d.name)}
+ else{PROG.stats.fails++;sfx('fail');toast('Failed: '+res.why,'bad',5000);log('FAIL: '+res.why)}
+ saveProgress();S.tut=null;$('#hint').classList.add('hidden');if(d.id==='spark'&&win){SET.tutorialDone=true;saveSettings()}
+ setTimeout(()=>{if(S.ch===c&&S.screen==='game')showEnd(res,win,secs)},win?900:600)}
+function showEnd(res,win,secs){const c=S.ch,d=c.def,D=DIFFS[c.diff];const box=$('#end-box');box.className='box '+(win?'win':'fail');const idx=CHALLENGES.indexOf(d);const hasNext=idx<CHALLENGES.length-1;
+ box.innerHTML=`<h2>${win?'✔ Challenge complete':'✖ Challenge failed'}</h2><p><b>${d.name}</b> · ${D.name}${res.note?' · '+res.note:''}</p>${win?'':'<p style="color:var(--bad)">'+res.why+'</p>'}
+ <div class="stat-grid"><div class="stat"><div class="v">${S.gen}</div><div class="k">generations</div></div><div class="stat"><div class="v">${S.sess.peakPop}</div><div class="k">peak ${MODES[S.mode].popLabel.toLowerCase()}</div></div>${c.budget?`<div class="stat"><div class="v">${c.used}/${c.budget}</div><div class="k">budget used</div></div>`:''}<div class="stat"><div class="v">${secs}s</div><div class="k">run time</div></div><div class="stat"><div class="v">${win?'★'.repeat(D.stars):'—'}</div><div class="k">stars</div></div><div class="stat"><div class="v">${S.entropy.toFixed(2)}</div><div class="k">final entropy</div></div></div>
+ <canvas id="end-chart" width="560" height="110" style="width:100%;height:110px;background:#0a0f1c;border-radius:8px"></canvas><p class="small">Population (cyan) and activity (amber) over the run.</p>
+ <div class="actions">${win&&hasNext?'<button class="primary" data-act="next">Next challenge →</button>':''}<button ${win?'':'class="primary"'} data-act="retry">${win?'Play again':'Retry (keep my build)'}</button>${win?'<button data-act="keep">Keep tinkering in sandbox</button>':''}<button data-act="select">Scenario select</button><button data-act="title">Title</button></div>`;
+ openModal('modal-end');drawMiniHist($('#end-chart'))}
+function drawMiniHist(c){const x=c.getContext('2d'),W=c.width,H=c.height,h=S.hist;x.fillStyle='#0a0f1c';x.fillRect(0,0,W,H);const n=h.gen.length;if(n<2)return;const ser=(arr,col)=>{let mx=0;for(const v of arr)if(v>mx)mx=v;if(mx<=0)mx=1;x.strokeStyle=col;x.lineWidth=1.5;x.beginPath();for(let i=0;i<n;i++){const px=i/(n-1)*W,py=H-4-arr[i]/mx*(H-8);if(i)x.lineTo(px,py);else x.moveTo(px,py)}x.stroke()};ser(h.pop,'#5ff0ff');ser(h.act,'#ffcc55')}
+
+/* ============================ SESSION LIFECYCLE ============================ */
+function hudRule(){switch(S.mode){case 'life':return ruleString();case 'elem':return 'Rule '+S.elemRule;case 'ant':return S.antRule;case 'lenia':return leniaLabel();case 'brain':return 'B2/S · refractory';case 'wire':return 'head→tail→wire';case 'sand':return 'topple at 4';}return ''}
+function sandboxDefault(m){const W=S.GW,H=S.GH;switch(m){case 'life':S.soupDensity=0.3;soup();break;case 'brain':S.soupDensity=0.1;soup();break;
+ case 'wire':{placeArt(art(WIRE_CLOCK,WMAP),8,H>>1);const y=(H>>1)+5;for(let x=15;x<W-10;x++)S.grid[y*W+x]=1;break}
+ case 'ant':S.ants=[{x:W>>1,y:H>>1,d:0,minx:W>>1,maxx:W>>1,miny:H>>1,maxy:H>>1,steps:0}];break;case 'sand':S.sandDrip=true;break;case 'elem':S.grid[W>>1]=1;break;case 'lenia':soup();break}recountPop();S.running=true}
+function initSession(o){S.lastInit=o;S.sandbox=!o.challenge;S.mode=o.mode;const [W,H]=o.size;S.wrap=o.wrap!==undefined?o.wrap:((o.mode==='wire'||o.mode==='sand')?false:SET.wrap);allocGrid(W,H);
+ Object.assign(S,{gen:0,running:false,acc:0,pop:0,changed:0,entropy:0,period:0,ants:[],elemRow:0,particles:[],floaters:[],log:[],speed:1,tool:'draw',stamp:null,stampRot:0,stampFlip:false,sandRain:0,sandDrip:false,antDir:0,stableCount:0,oscCount:0,stateLabel:'—',extinctFlag:false,ch:null,tut:null,hover:null,leniaMass:0,leniaAct:0,autoPaused:false});
+ closeAll();S.hashes.fill(0);S.hist={gen:[],pop:[],act:[],ent:[]};S.sess={cells:0,peakPop:0,time:0,gens:0};$('#log').innerHTML='';$('#hint').classList.add('hidden');$('#panel').classList.remove('open');
+ if(o.mode==='life'){if(!setRuleString(o.rule||store.get('lastRule','B3/S23')))setRuleString('B3/S23')}
+ if(o.mode==='elem')S.elemRule=o.elemRule!=null?o.elemRule:store.get('lastElem',30);if(o.mode==='ant')S.antRule=o.antRule||'RL';
+ if(o.mode==='lenia'){S.lenia=o.lenia?{...o.lenia}:{R:10,mu:0.15,sigma:0.017,dt:0.1};buildKernel()}
+ S.drawState=o.mode==='sand'?10:1;S.brush=o.mode==='lenia'?3:1;S.soupDensity=0.35;
+ if(o.challenge)setupChallenge(o.challenge,o.diff);else if(o.restore)applySave(o.restore);else sandboxDefault(o.mode);
+ S.initial=takeSnapshot();PROG.stats.sessions++;saveProgress();
+ $('#hud-mode').textContent=MODES[S.mode].name;$('#hud-rule').textContent=hudRule();$('#btn-mute').textContent=SET.muted?'🔇':'🔊';
+ showScreen('game');fitView();buildToolbar();buildRulesPanel();buildLibrary();buildExplorer();updatePlayBtn();updateHUD();S.hashes[0]=gridHash();
+ log('Session: '+MODES[S.mode].name+(o.challenge?' — '+o.challenge.name+' ('+DIFFS[o.diff].name+')':' sandbox'));
+ if(o.challenge){toast(o.challenge.goal,'',5000);if(o.challenge.id==='spark'&&(o.tut||!SET.tutorialDone))startTutorial()}else if(!o.restore)toast('Sandbox ready — draw, stamp, mutate rules. Press H for help.','',3500)}
+function startChallenge(def,diff,tut){initSession({mode:def.mode,size:[CH_W,CH_H],wrap:def.wrap!==undefined?def.wrap:true,rule:def.rule,challenge:def,diff,tut:!!tut})}
+function startSandbox(m){initSession({mode:m,size:GRID_SIZES[SET.gridSize]||GRID_SIZES.M})}
+function restartScenario(){if(S.lastInit)initSession(S.lastInit)}
+function nextChallenge(){const idx=CHALLENGES.indexOf(S.ch?S.ch.def:null);const n=CHALLENGES[idx+1];if(n&&unlocked(idx+1))startChallenge(n,S.ch.diff);else{S.running=false;renderSelect();showScreen('select')}}
+function keepSandbox(){const diff=S.ch?S.ch.diff:'J';S.ch=null;S.sandbox=true;S.running=false;S.lastInit={mode:S.mode,size:[S.GW,S.GH]};buildToolbar();buildRulesPanel();buildLibrary();buildExplorer();updatePlayBtn();updateHUD();toast('Now in sandbox mode — the grid is yours.','ok')}
+function resetSession(){S.running=false;S.acc=0;S.gen=0;S.hist={gen:[],pop:[],act:[],ent:[]};S.hashes.fill(0);S.period=0;S.stableCount=0;S.oscCount=0;S.stateLabel='—';S.extinctFlag=false;S.sess.peakPop=0;S.floaters=[];S.particles=[];
+ if(S.ch){const c=S.ch,d=c.def;restoreSnapshot(c.build||c.base);c.phase='build';c.stable=0;c.arrivals=0;c.lastArrival=-99;c.hits=0;c.idle=0;if(c.targets)c.targets.forEach(t=>{t.hit=0;t.wasHead=false});if(d.autoRun){restoreSnapshot(c.base);c.used=0;c.phase='run';S.running=true}c.startTime=performance.now();toast(d.autoRun?'Scenario reset':'Back to build mode','',1200)}
+ else{restoreSnapshot(S.initial);toast('Reset to session start','',1200)}
+ S.hashes[0]=gridHash();buildToolbar();buildRulesPanel();updatePlayBtn();updateHUD();sfx('pause')}
+function togglePlay(){audioInit();if(S.ch){if(S.ch.phase==='build'){startRun();return}if(S.ch.phase==='done'){toast('Challenge over — press ⟲ to rebuild or open the menu.','warn');return}}S.running=!S.running;S.acc=0;S.autoPaused=false;sfx(S.running?'play':'pause');updatePlayBtn()}
+function stepManual(){if(S.ch){if(S.ch.phase==='build'){startRun();if(S.ch.phase!=='run')return;S.running=false}if(S.ch.phase==='done')return}S.running=false;stepOnce();sampleStats();updatePlayBtn()}
+function setSpeed(v){S.speed=v;updatePlayBtn();sfx('click')}
+function encodeGrid(arr){const out=[];let prev=arr[0],cnt=0;for(let i=0;i<arr.length;i++){const v=arr[i];if(v===prev)cnt++;else{out.push(prev,cnt);prev=v;cnt=1}}out.push(prev,cnt);return out}
+function decodeGrid(enc,N){const a=new Uint16Array(N);let p=0;for(let i=0;i<enc.length;i+=2){const v=enc[i],c=enc[i+1];for(let k=0;k<c&&p<N;k++)a[p++]=v}return a}
+function saveSandbox(){if(!S.sandbox){toast('Only sandbox sessions can be saved.','warn');return}if(!store.ok){toast('Storage unavailable in this browser — cannot save.','bad');return}
+ const o={mode:S.mode,W:S.GW,H:S.GH,wrap:S.wrap,gen:S.gen,rule:ruleString(),elemRule:S.elemRule,elemRow:S.elemRow,antRule:S.antRule,ants:S.ants,lenia:S.lenia,sandDrip:S.sandDrip,sandRain:S.sandRain,grid:encodeGrid(S.mode==='lenia'?Uint16Array.from(S.F,v=>Math.round(v*1000)):S.grid)};store.set('sandbox',o);toast('Sandbox saved','ok');$('#btn-continue').classList.remove('hidden')}
+function loadSandbox(){const o=store.get('sandbox',null);if(!o||!GRID_SIZES){toast('No saved sandbox found.','warn');return}initSession({mode:o.mode,size:[o.W,o.H],wrap:o.wrap,rule:o.rule,elemRule:o.elemRule,antRule:o.antRule,lenia:o.lenia,restore:o})}
+function applySave(o){const N=S.GW*S.GH;const g=decodeGrid(o.grid||[],N);if(S.mode==='lenia'){for(let i=0;i<N;i++)S.F[i]=g[i]/1000}else{S.grid.set(g);for(let i=0;i<N;i++)S.age[i]=g[i]?1:0}S.ants=(o.ants||[]).map(a=>({...a}));S.elemRow=o.elemRow||0;S.gen=o.gen||0;S.sandDrip=!!o.sandDrip;S.sandRain=o.sandRain||0;recountPop();toast('Sandbox restored at generation '+S.gen,'ok')}
+
+/* ============================ SCREENS & MODALS ============================ */
+function showScreen(n){S.screen=n;['title','select','game'].forEach(k=>$('#scr-'+k).classList.toggle('hidden',k!==n));if(n==='title')renderTitleProgress();if(n==='select')renderSelect();if(n==='game')sizeCanvas()}
+S.modalStack=[];
+function openModal(id){$$('.modal').forEach(m=>m.classList.add('hidden'));$('#'+id).classList.remove('hidden');if(!S.modalStack.includes(id))S.modalStack.push(id);S.modalOpen=true}
+function closeModal(){const id=S.modalStack.pop();if(id)$('#'+id).classList.add('hidden');const prev=S.modalStack[S.modalStack.length-1];if(prev)$('#'+prev).classList.remove('hidden');else{S.modalOpen=false;if(id==='modal-pause'&&S.wasRunning){S.running=true;S.wasRunning=false;updatePlayBtn()}}}
+function closeAll(){S.modalStack=[];$$('.modal').forEach(m=>m.classList.add('hidden'));S.modalOpen=false}
+function openPause(){if(S.modalOpen)return;S.wasRunning=S.running;S.running=false;updatePlayBtn();$('#pause-info').textContent=`${MODES[S.mode].name} · generation ${S.gen} · ${S.ch?S.ch.def.name+' ('+DIFFS[S.ch.diff].name+')':'Sandbox'}`;$('#btn-save').classList.toggle('hidden',!S.sandbox);openModal('modal-pause')}
+function openSettings(){refreshSettingsUI();openModal('modal-settings')}
+function quitToTitle(){closeAll();S.running=false;S.tut=null;$('#hint').classList.add('hidden');saveProgress();showScreen('title');$('#btn-continue').classList.toggle('hidden',!store.get('sandbox',null))}
+function selectTab(name){$$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));$('#sel-challenges').classList.toggle('hidden',name!=='challenges');$('#sel-sandbox').classList.toggle('hidden',name!=='sandbox')}
+function renderSelect(){$$('.diff').forEach(b=>b.classList.toggle('active',b.dataset.diff===SET.diff));$('#diff-desc').textContent=DIFFS[SET.diff].desc;const g=$('#chal-grid');g.innerHTML='';
+ CHALLENGES.forEach((c,i)=>{const un=unlocked(i);const st=PROG.stars[c.id]||0;const d=document.createElement('div');d.className='card'+(un?'':' locked')+(c.capstone?' capstone':'');d.innerHTML=`<h3><span class="icon">${MODES[c.mode].icon}</span>${i+1}. ${c.name}${c.capstone?' <span class="small" style="color:var(--acc2)">CAPSTONE</span>':''}</h3><p>${c.desc}</p><div class="meta"><span>${MODES[c.mode].name}${c.budget?' · budget '+Math.ceil(c.budget*DIFFS[SET.diff].budget):''}${c.time?' · '+(c.fixedTime?c.time:Math.round(c.time*DIFFS[SET.diff].time))+' gens':''}</span><span class="stars">${'★'.repeat(st)}${'☆'.repeat(3-st)}</span></div>${un?'':'<div class="small">🔒 Clear the previous challenge first</div>'}`;if(un)d.addEventListener('click',()=>{audioInit();sfx('click');startChallenge(c,SET.diff)});g.appendChild(d)});
+ const mg=$('#mode-grid');mg.innerHTML='';Object.entries(MODES).forEach(([k,m])=>{const d=document.createElement('div');d.className='card';d.innerHTML=`<h3><span class="icon">${m.icon}</span>${m.name}</h3><p>${m.desc}</p><div class="meta"><span>${(GRID_SIZES[SET.gridSize]||GRID_SIZES.M).join('×')} grid</span><span>${m.gps} gen/s base</span></div>`;d.addEventListener('click',()=>{audioInit();sfx('click');startSandbox(k)});mg.appendChild(d)})}
+function renderTitleProgress(){const cleared=CHALLENGES.filter(c=>PROG.stars[c.id]).length;const stars=CHALLENGES.reduce((a,c)=>a+(PROG.stars[c.id]||0),0);const ach=Object.keys(PROG.ach).length;$('#title-progress').innerHTML=`Challenges cleared <b>${cleared}/${CHALLENGES.length}</b> · Stars <b>${stars}/${CHALLENGES.length*3}</b> · Achievements <b>${ach}/${Object.keys(ACH).length}</b><br>${PROG.stats.gens.toLocaleString()} generations simulated across ${PROG.stats.sessions} sessions${store.ok?'':' · <span style="color:var(--warn)">storage unavailable — progress will not persist</span>'}`}
+function openStats(){const st=PROG.stats;const cleared=CHALLENGES.filter(c=>PROG.stars[c.id]).length;const stars=CHALLENGES.reduce((a,c)=>a+(PROG.stars[c.id]||0),0);
+ $('#stats-box').innerHTML=`<h2>Statistics</h2><div class="stat-grid">${[[st.gens.toLocaleString(),'generations simulated'],[st.cells.toLocaleString(),'cells placed'],[st.sessions,'sessions'],[st.wins,'challenge wins'],[st.fails,'challenge fails'],[st.maxPop.toLocaleString(),'largest population'],[Math.round(st.time/60)+' min','time simulating'],[cleared+'/'+CHALLENGES.length,'challenges cleared'],[stars+'/'+CHALLENGES.length*3,'stars']].map(([v,k])=>`<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('')}</div>
+ <h3>Challenge record</h3><div class="kv">${CHALLENGES.map(c=>`<span>${c.name}</span><b class="stars">${'★'.repeat(PROG.stars[c.id]||0)||'—'}</b>`).join('')}</div>
+ <h3>Achievements</h3><div class="ach">${Object.entries(ACH).map(([k,v])=>`<span class="${PROG.ach[k]?'got':''}">${PROG.ach[k]?'🏆 ':''}${v}</span>`).join('')}</div>
+ ${S.screen==='game'?`<h3>This session</h3><div class="kv"><span>Generations</span><b>${S.sess.gens}</b><span>Peak ${MODES[S.mode].popLabel.toLowerCase()}</span><b>${S.sess.peakPop}</b><span>Cells placed</span><b>${S.sess.cells}</b><span>Entropy now</span><b>${S.entropy.toFixed(3)}</b></div>`:''}
+ <div class="actions"><button class="primary" data-act="close">Close</button></div>`;openModal('modal-stats')}
+const HELP={
+ basics:`<p>A <b>cellular automaton</b> is a grid of cells that all update at once by a simple local rule. Simple rules make complex, lifelike behaviour emerge.</p><ul><li><b>Sandbox</b>: pick any of the seven rule families, draw, stamp library patterns, mutate rules and watch the live charts.</li><li><b>Challenges</b>: 13 puzzles with budgets and time limits across all families, ending in two capstones (Gun Factory, Grand Clock). Each clear unlocks the next; stars depend on difficulty.</li><li><b>Build → Run → Adjust</b>: in a challenge you draw in <i>build mode</i>, press ▶ to run, and press ⟲ to come back and tweak your layout.</li></ul><p>The HUD shows generation, population, your budget and remaining time. The <b>state tag</b> reports whether the grid is growing, chaotic, oscillating, a still life or extinct. Charts tab: population (cyan), activity (amber) and 2×2-block spatial entropy (purple).</p>`,
+ controls:`<ul><li><kbd>Left drag</kbd> paint with the current tool · <kbd>Right drag</kbd> erase · <kbd>Wheel</kbd> zoom · <kbd>Middle drag</kbd> / <kbd>Space</kbd>+drag pan · touch: one finger paints, two fingers pinch &amp; pan</li><li><kbd>Space</kbd> play / pause (starts the run in challenges) · <kbd>N</kbd> single step · <kbd>1</kbd>–<kbd>5</kbd> speed ½× 1× 2× 4× 8× · <kbd>Backspace</kbd> reset / back to build</li><li><kbd>D</kbd> draw · <kbd>E</kbd> erase · <kbd>S</kbd> stamp · <kbd>P</kbd> pan · <kbd>Q</kbd> rotate stamp · <kbd>F</kbd> flip stamp</li><li><kbd>R</kbd> random soup · <kbd>C</kbd> clear · <kbd>G</kbd> grid lines · <kbd>+</kbd>/<kbd>−</kbd>/<kbd>0</kbd> zoom in/out/fit · arrows pan</li><li><kbd>Tab</kbd> side panel · <kbd>M</kbd> mute · <kbd>H</kbd> help · <kbd>Esc</kbd> pause menu</li></ul>`,
+ families:`<p><b>Life-like (B/S)</b>: a dead cell is born with a neighbour count in B; a live cell survives with a count in S. Conway's Life is B3/S23. Cell colour shifts with age; dying cells leave a brief trail.</p><p><b>Brian's Brain</b>: off → firing when exactly 2 neighbours fire; firing → dying → off. Nothing is ever stable.</p><p><b>WireWorld</b>: empty, conductor, electron head, electron tail. Head → tail → conductor; a conductor becomes a head if 1 or 2 of its 8 neighbours are heads. 3+ heads block, which makes diodes and gates possible. A loop of wire with one head+tail is a clock. Grey walls are inert.</p><p><b>Langton's Ant</b>: an ant turns R on colour 0 and L on colour 1, flips the cell and steps forward. Longer rule strings (LRRRRRLLR…) use more colours and build very different structures.</p><p><b>Sandpile</b>: each cell holds grains; at 4+ it topples one grain to each of its 4 neighbours. Grains leaving the edge vanish. Avalanche sizes follow a power law.</p><p><b>Elementary 1D</b>: each row depends only on the row above via one of 256 rules. Rule 30 is chaotic, 90 is a fractal, 110 is Turing complete, 184 is traffic.</p><p><b>Lenia</b>: continuous states 0–1. A ring kernel of radius R measures neighbourhood density u; the cell grows by 2·exp(−(u−μ)²/2σ²)−1 scaled by dt. Narrow σ gives delicate creatures, wide σ gives robust blobs.</p>`,
+ challenges:`<ul>${CHALLENGES.map((c,i)=>`<li><b>${i+1}. ${c.name}</b> <i>(${MODES[c.mode].name})</i> — ${c.goal}</li>`).join('')}</ul><p><b>Difficulties:</b> Apprentice ×1.5 budget and time; Journeyman standard; Master standard values with the pattern library disabled. Stars 1/2/3 respectively; your best is kept.</p>`,
+ tips:`<ul><li>Still lifes: block, beehive, loaf, boat. Oscillators: blinker, toad, beacon, pulsar.</li><li>Spaceships move: glider diagonally at c/4, LWSS/MWSS horizontally at c/2. Press <kbd>F</kbd> to flip the direction before stamping.</li><li>The R-pentomino (5 cells) grows for 1,100 generations. The Gosper gun (36 cells) emits a glider every 30 generations toward the south-east.</li><li>WireWorld: tap a clock from a <i>corner</i> cell going diagonally outward so the signal cannot flow back into the loop. A 14-cell loop fires every 14 generations.</li><li>Sandpile: a point source grows a near-circular pile whose radius scales with √grains — pour everything in one spot.</li><li>Lenia: paint at the density you want to sustain, then set μ near that neighbourhood density. If everything melts, widen σ.</li><li>Ants that cross each other's trails undo each other's painting — spread them out.</li></ul>`};
+function openHelp(){openModal('modal-help');showHelpTab('basics')}
+function showHelpTab(t){$$('.help-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.htab===t));$('#help-body').innerHTML=HELP[t]}
+$$('.help-tabs button').forEach(b=>b.addEventListener('click',()=>{showHelpTab(b.dataset.htab);sfx('click')}));
+$$('.tab').forEach(b=>b.addEventListener('click',()=>{selectTab(b.dataset.tab);sfx('click')}));
+$$('.diff').forEach(b=>b.addEventListener('click',()=>{SET.diff=b.dataset.diff;saveSettings();renderSelect();sfx('click')}));
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;audioInit();sfx('click');switch(b.dataset.act){
+ case 'tutorial':startChallenge(CHALLENGES[0],'J',true);break;case 'challenges':showScreen('select');selectTab('challenges');break;case 'sandbox':showScreen('select');selectTab('sandbox');break;case 'continue':loadSandbox();break;
+ case 'help':openHelp();break;case 'settings':openSettings();break;case 'stats':openStats();break;case 'title':quitToTitle();break;case 'resume':closeModal();break;case 'restart':closeAll();restartScenario();break;
+ case 'select':closeAll();S.running=false;showScreen('select');break;case 'save':saveSandbox();break;case 'close':closeModal();break;case 'next':closeAll();nextChallenge();break;case 'retry':closeAll();resetSession();break;case 'keep':closeAll();keepSandbox();break}});
+$('#btn-menu').addEventListener('click',()=>{audioInit();sfx('click');openPause()});$('#btn-play').addEventListener('click',togglePlay);$('#btn-step').addEventListener('click',()=>{audioInit();stepManual()});$('#btn-reset').addEventListener('click',()=>{audioInit();resetSession()});
+$$('.speeds button').forEach(b=>b.addEventListener('click',()=>{audioInit();setSpeed(+b.dataset.speed)}));$('#btn-mute').addEventListener('click',()=>{audioInit();toggleMute()});$('#btn-help2').addEventListener('click',()=>{audioInit();sfx('click');openHelp()});$('#btn-panel').addEventListener('click',()=>{$('#panel').classList.toggle('open');sfx('click')});
+$('#hint-skip').addEventListener('click',()=>{S.tut=null;$('#hint').classList.add('hidden');SET.tutorialDone=true;saveSettings()});
+function setupSettingsUI(){const v=$('#set-volume');v.value=SET.volume;$('#set-volume-v').textContent=Math.round(SET.volume*100)+'%';v.addEventListener('input',()=>{audioInit();setVolume(+v.value);$('#set-volume-v').textContent=Math.round(SET.volume*100)+'%';sfx('click')});
+ $('#set-mute').addEventListener('click',()=>{audioInit();toggleMute()});$$('[data-gs]').forEach(b=>b.addEventListener('click',()=>{SET.gridSize=b.dataset.gs;saveSettings();refreshSettingsUI();sfx('click')}));
+ $('#set-wrap').addEventListener('click',()=>{SET.wrap=!SET.wrap;saveSettings();if(S.sandbox&&S.screen==='game'&&S.mode!=='wire'&&S.mode!=='sand'){S.wrap=SET.wrap;buildNb();buildRulesPanel()}refreshSettingsUI();sfx('click')});
+ $('#set-gridlines').addEventListener('click',()=>{SET.gridLines=!SET.gridLines;saveSettings();refreshSettingsUI();sfx('click')});
+ $$('[data-theme]').forEach(b=>b.addEventListener('click',()=>{SET.theme=b.dataset.theme;saveSettings();refreshSettingsUI();if(S.screen==='game'){buildToolbar();buildRulesPanel();buildLibrary();buildExplorer()}sfx('click')}));
+ $('#set-effects').addEventListener('click',()=>{SET.effects=!SET.effects;saveSettings();refreshSettingsUI();sfx('click')});
+ $('#set-wipe').addEventListener('click',()=>{if(confirm('Erase all progress, achievements, settings and the saved sandbox?')){store.del('progress');store.del('sandbox');store.del('settings');store.del('lastRule');store.del('lastElem');location.reload()}})}
+function refreshSettingsUI(){$('#set-mute').textContent=SET.muted?'Muted':'Sound on';$$('[data-gs]').forEach(b=>b.classList.toggle('active',b.dataset.gs===SET.gridSize));$('#set-wrap').textContent=SET.wrap?'On':'Off';$('#set-gridlines').textContent=SET.gridLines?'On':'Off';$$('[data-theme]').forEach(b=>b.classList.toggle('active',b.dataset.theme===SET.theme));$('#set-effects').textContent=SET.effects?'On':'Off';$('#btn-mute').textContent=SET.muted?'🔇':'🔊'}
+
+/* ============================ TUTORIAL ============================ */
+const TUT=[{t:"Welcome to the Workshop! This is Conway's Life. Pick the ✏️ <b>Draw</b> tool (D) and click or drag on the grid to place a cluster of 5–10 cells.",ok:()=>S.ch&&S.ch.used>=3},
+{t:'Each generation a live cell with 2–3 neighbours survives and an empty cell with exactly 3 neighbours is born. Press <b>▶ Play</b> (Space) to start the run.',ok:()=>S.ch&&S.ch.phase!=='build'},
+{t:'Watch the HUD: generation, population, time left and a <b>state tag</b>. Speed keys 1–5 go faster. Open the <b>Charts</b> tab on the right for live graphs.',ok:()=>S.gen>=8},
+{t:'Right-drag erases, the wheel zooms, Space+drag pans. The <b>Library</b> tab has stamps, <b>Explore</b> mutates rules. Survive to generation 20 — then try the next challenge!',ok:()=>false}];
+function startTutorial(){S.tut={i:0};showHint()}
+function showHint(){const h=$('#hint');if(!S.tut){h.classList.add('hidden');return}h.classList.remove('hidden');$('#hint-text').innerHTML=TUT[S.tut.i].t;$('#hint-step').textContent=`Tutorial ${S.tut.i+1}/${TUT.length}`}
+function tutorialCheck(){if(!S.tut)return;const st=TUT[S.tut.i];if(st.ok()&&S.tut.i<TUT.length-1){S.tut.i++;showHint();sfx('click')}}
+
+/* ============================ TITLE BACKGROUND ============================ */
+const BG={W:120,H:68,g:null,t:null,acc:0,n:0};
+function sizeBg(){const c=$('#bgcanvas');c.width=innerWidth;c.height=innerHeight}
+function titleBg(dt){if(!BG.g){BG.g=new Uint8Array(BG.W*BG.H);BG.t=new Uint8Array(BG.W*BG.H);const r=mulberry32(7);for(let i=0;i<BG.g.length;i++)BG.g[i]=r()<0.3?1:0}
+ BG.acc+=dt*9;let guard=0;while(BG.acc>1&&guard++<4){BG.acc--;const n=BG.W,m=BG.H,g=BG.g,t=BG.t;for(let y=0;y<m;y++){const yu=((y-1+m)%m)*n,yd=((y+1)%m)*n,r=y*n;for(let x=0;x<n;x++){const xl=(x-1+n)%n,xr=(x+1)%n;const c=g[yu+xl]+g[yu+x]+g[yu+xr]+g[r+xl]+g[r+xr]+g[yd+xl]+g[yd+x]+g[yd+xr];t[r+x]=g[r+x]?(c===2||c===3?1:0):(c===3?1:0)}}BG.g=t;BG.t=g;BG.n++;if(BG.n%700===0){const r=mulberry32(BG.n);for(let i=0;i<BG.g.length;i++)if(r()<0.08)BG.g[i]=1}}
+ const c=$('#bgcanvas'),x=c.getContext('2d'),th=T();x.fillStyle=`rgb(${th.bg[0]},${th.bg[1]},${th.bg[2]})`;x.fillRect(0,0,c.width,c.height);const cs=Math.max(c.width/BG.W,c.height/BG.H);x.fillStyle=`rgba(${th.live[0]},${th.live[1]},${th.live[2]},0.35)`;for(let y=0;y<BG.H;y++)for(let xx=0;xx<BG.W;xx++)if(BG.g[y*BG.W+xx])x.fillRect(xx*cs+1,y*cs+1,cs-2,cs-2)}
+
+/* ============================ MAIN LOOP ============================ */
+let last=performance.now(),frame=0,saveTimer=0;
+function update(dt){if(S.running&&!S.modalOpen){const gps=MODES[S.mode].gps*S.speed;S.acc+=dt*gps;let steps=Math.floor(S.acc);const cap=S.mode==='lenia'?3:Math.max(1,Math.ceil(gps/12));if(steps>cap){steps=cap;S.acc=0}else S.acc-=steps;
+  for(let k=0;k<steps&&S.running;k++)stepOnce();if(steps>0){sampleStats();audioTick()}}
+ updateParticles(dt);S.sess.time+=dt;PROG.stats.time+=dt;if(frame%20===0)updateHUD()}
+function loop(ts){const dt=Math.min(0.1,Math.max(0,(ts-last)/1000));last=ts;frame++;
+ try{if(S.screen==='game'){update(dt);render();if(S.tut&&frame%10===0)tutorialCheck()}else if(S.screen==='title')titleBg(dt);audioFrame()}catch(err){console.error(err)}
+ saveTimer+=dt;if(saveTimer>10){saveTimer=0;saveProgress()}
+ requestAnimationFrame(loop)}
+function boot(){if(!DIFFS[SET.diff])SET.diff='J';if(!THEMES[SET.theme])SET.theme='neon';if(!GRID_SIZES[SET.gridSize])SET.gridSize='M';SET.volume=clamp(+SET.volume||0,0,1);sizeBg();setupSettingsUI();refreshSettingsUI();renderSelect();showScreen('title');$('#btn-continue').classList.toggle('hidden',!store.get('sandbox',null));window.addEventListener('beforeunload',saveProgress);requestAnimationFrame(loop)}
+boot();
+</script>
+</body>
+</html>

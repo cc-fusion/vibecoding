@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Soft Body Physics Lab — Verlet Sandbox & Engineering Challenges</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  html,body{height:100%;margin:0;background:#070b14;font-family:Inter,ui-sans-system,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+  *{scrollbar-width:thin;scrollbar-color:#334155 transparent}
+  *::-webkit-scrollbar{width:6px;height:6px}*::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}
+  .glass{background:rgba(13,20,36,.86);backdrop-filter:blur(14px);border:1px solid rgba(148,163,184,.14)}
+  .glass2{background:rgba(10,16,30,.92);backdrop-filter:blur(16px);border:1px solid rgba(148,163,184,.16)}
+  .tool-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:12px;border:1px solid transparent;color:#94a3b8;font-size:9px;font-weight:600;letter-spacing:.02em;cursor:pointer;transition:all .15s;background:transparent;width:100%}
+  .tool-btn:hover{background:rgba(56,189,248,.1);color:#e2e8f0}
+  .tool-btn.active{background:rgba(56,189,248,.18);border-color:rgba(56,189,248,.5);color:#7dd3fc;box-shadow:0 0 14px rgba(56,189,248,.18)}
+  .tool-btn svg{width:19px;height:19px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:99px;background:linear-gradient(90deg,#0ea5e9,#334155);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#e0f2fe;border:2px solid #38bdf8;box-shadow:0 0 8px rgba(56,189,248,.6);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:#e0f2fe;border:2px solid #38bdf8;cursor:pointer}
+  .seg-btn{padding:6px 10px;border-radius:9px;font-size:11px;font-weight:700;color:#94a3b8;cursor:pointer;border:1px solid transparent;transition:all .15s;background:transparent}
+  .seg-btn:hover{color:#e2e8f0}.seg-btn.active{background:rgba(56,189,248,.2);color:#7dd3fc;border-color:rgba(56,189,248,.45)}
+  .scen-card{border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.72);border-radius:18px;padding:16px;cursor:pointer;transition:all .2s;text-align:left;width:100%}
+  .scen-card:hover{border-color:rgba(56,189,248,.5);transform:translateY(-2px)}
+  .scen-card.active{border-color:#38bdf8;background:rgba(14,60,90,.55);box-shadow:0 0 0 1px #38bdf8,0 12px 32px -12px rgba(56,189,248,.45)}
+  .btn-primary{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#0284c7,#2563eb);color:#fff;font-weight:800;border-radius:12px;padding:11px 20px;font-size:13px;cursor:pointer;border:1px solid rgba(125,211,252,.5);box-shadow:0 10px 26px -8px rgba(37,99,235,.7);transition:all .15s}
+  .btn-primary:hover{filter:brightness(1.15);transform:translateY(-1px)}
+  .btn-ghost{display:inline-flex;align-items:center;gap:7px;background:rgba(30,41,59,.8);color:#cbd5e1;font-weight:700;border-radius:11px;padding:9px 15px;font-size:12px;cursor:pointer;border:1px solid rgba(148,163,184,.25);transition:all .15s}
+  .btn-ghost:hover{background:rgba(51,65,85,.9);color:#fff}
+  .btn-danger{display:inline-flex;align-items:center;gap:7px;background:rgba(127,29,29,.7);color:#fecaca;font-weight:700;border-radius:11px;padding:9px 15px;font-size:12px;cursor:pointer;border:1px solid rgba(248,113,113,.4)}
+  .hud-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(15,23,42,.85);border:1px solid rgba(148,163,184,.2);border-radius:10px;padding:5px 10px;font-size:11px;font-weight:700;color:#cbd5e1;white-space:nowrap}
+  .meter{height:7px;border-radius:99px;background:#1e293b;overflow:hidden}
+  .meter>div{height:100%;border-radius:99px;transition:width .25s ease}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(8px)}12%{opacity:1}100%{opacity:0;transform:translateY(-34px)}}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-10px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(56,189,248,.45)}50%{box-shadow:0 0 0 7px rgba(56,189,248,0)}}
+  @keyframes titleDrift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,-30px) scale(1.15)}}
+  .toast{animation:toastIn .25s ease both}
+  .pulse-glow{animation:pulseGlow 1.6s infinite}
+  .log-item{border-left:2px solid #334155;padding:3px 0 3px 8px;font-size:10.5px;color:#94a3b8;line-height:1.45}
+  .log-item.warn{border-color:#f59e0b;color:#fcd34d}.log-item.good{border-color:#22c55e;color:#86efac}.log-item.bad{border-color:#ef4444;color:#fca5a5}
+  select{background:#0f172a;border:1px solid rgba(148,163,184,.3);border-radius:9px;color:#e2e8f0;font-size:11px;padding:6px 8px;outline:none;width:100%}
+  .kbd{display:inline-block;background:#1e293b;border:1px solid #475569;border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:10px;font-weight:700;color:#e2e8f0;font-family:ui-monospace,monospace}
+  .tab-btn{flex:1;padding:7px 4px;font-size:10.5px;font-weight:800;color:#7d8aa0;border-radius:9px;cursor:pointer;text-align:center;transition:all .15s;background:transparent;border:none}
+  .tab-btn.active{background:rgba(56,189,248,.16);color:#7dd3fc}
+  .hold-btn{user-select:none;-webkit-user-select:none;touch-action:none}
+  .hold-btn:active{background:rgba(56,189,248,.35)!important;color:#fff!important}
+  #simCanvas{touch-action:none;cursor:crosshair;display:block}
+  .modal-bg{background:rgba(2,6,16,.72);backdrop-filter:blur(6px)}
+  .star-on{color:#fbbf24}.star-off{color:#334155}
+  .check-done{color:#4ade80}.check-todo{color:#475569}
+</style>
+</head>
+<body class="text-slate-100 overflow-hidden select-none">
+
+<!-- ══════════════ TITLE SCREEN ══════════════ -->
+<div id="titleScreen" class="fixed inset-0 z-40 overflow-y-auto" style="background:radial-gradient(1100px 600px at 75% -10%,rgba(14,116,233,.28),transparent 60%),radial-gradient(800px 500px at 10% 110%,rgba(168,85,247,.16),transparent 60%),linear-gradient(160deg,#070b14,#0a1120 55%,#0b1226)">
+  <div class="absolute rounded-full pointer-events-none" style="width:420px;height:420px;right:-120px;top:-120px;background:radial-gradient(circle,rgba(56,189,248,.16),transparent 65%);animation:titleDrift 9s ease-in-out infinite alternate"></div>
+  <div class="absolute rounded-full pointer-events-none" style="width:340px;height:340px;left:-100px;bottom:-80px;background:radial-gradient(circle,rgba(244,114,182,.1),transparent 65%);animation:titleDrift 11s ease-in-out infinite alternate-reverse"></div>
+  <div class="relative max-w-6xl mx-auto px-5 py-8 md:py-12">
+    <div class="flex items-center gap-3 mb-2">
+      <div class="w-11 h-11 rounded-2xl flex items-center justify-center" style="background:linear-gradient(135deg,#0ea5e9,#6366f1);box-shadow:0 10px 28px -8px rgba(56,189,248,.8)"><i data-lucide="waves" class="w-6 h-6 text-white"></i></div>
+      <div>
+        <div class="text-[10px] font-black tracking-[.3em] text-sky-400">VERLET PHYSICS SANDBOX</div>
+        <h1 class="text-3xl md:text-5xl font-black tracking-tight leading-none">SOFT BODY <span class="text-transparent bg-clip-text" style="background-image:linear-gradient(90deg,#38bdf8,#a78bfa,#f472b6)">PHYSICS LAB</span></h1>
+      </div>
+      <div class="ml-auto hidden md:flex items-center gap-2">
+        <span class="hud-chip"><i data-lucide="trophy" class="w-3.5 h-3.5 text-amber-400"></i><span id="titleRank">Rank 1 · 0 XP</span></span>
+        <button class="btn-ghost" onclick="openSettings()"><i data-lucide="settings-2" class="w-4 h-4"></i>Settings</button>
+        <button class="btn-ghost" onclick="openHelp()"><i data-lucide="circle-help" class="w-4 h-4"></i>Help</button>
+      </div>
+    </div>
+    <p class="text-slate-400 text-sm md:text-[15px] max-w-2xl leading-relaxed mb-7">Build tearable cloth, pressurized blobs, ropes and rigid frames from particles and springs. Bend them, break them, float them — then engineer structures that survive a load cart, a crane lift and a shake table.</p>
+
+    <div class="text-[10px] font-black tracking-[.25em] text-slate-500 mb-2">1 · CHOOSE A SCENARIO</div>
+    <div id="scenGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6"></div>
+
+    <div class="flex flex-wrap items-end gap-5 mb-7">
+      <div>
+        <div class="text-[10px] font-black tracking-[.25em] text-slate-500 mb-2">2 · DIFFICULTY</div>
+        <div class="flex gap-1.5 p-1 rounded-xl glass" id="diffGroup">
+          <button class="seg-btn" data-diff="calm" onclick="setDifficulty('calm')">Calm Lab</button>
+          <button class="seg-btn active" data-diff="standard" onclick="setDifficulty('standard')">Standard</button>
+          <button class="seg-btn" data-diff="extreme" onclick="setDifficulty('extreme')">Extreme</button>
+        </div>
+        <div id="diffDesc" class="text-[11px] text-slate-500 mt-1.5">Normal gravity, standard material strength and weather.</div>
+      </div>
+      <div>
+        <div class="text-[10px] font-black tracking-[.25em] text-slate-500 mb-2">3 · ENTER THE LAB</div>
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn-primary text-sm" onclick="startFromTitle()"><i data-lucide="play" class="w-4 h-4"></i><span id="startBtnLabel">Start Simulation</span></button>
+          <button class="btn-ghost md:hidden" onclick="openHelp()"><i data-lucide="circle-help" class="w-4 h-4"></i>Help</button>
+          <button class="btn-ghost md:hidden" onclick="openSettings()"><i data-lucide="settings-2" class="w-4 h-4"></i>Settings</button>
+        </div>
+      </div>
+      <div class="ml-auto hidden lg:block text-right">
+        <div class="text-[10px] font-black tracking-[.25em] text-slate-500 mb-1">LAB PROGRESS</div>
+        <div id="titleProgress" class="text-xs text-slate-400">No scenarios completed yet.</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+      <div class="glass rounded-2xl p-3"><div class="text-sky-300 font-black text-lg">7</div><div class="text-[10px] text-slate-500 font-bold tracking-wider">BUILD TOOLS</div></div>
+      <div class="glass rounded-2xl p-3"><div class="text-violet-300 font-black text-lg">4</div><div class="text-[10px] text-slate-500 font-bold tracking-wider">MATERIALS</div></div>
+      <div class="glass rounded-2xl p-3"><div class="text-emerald-300 font-black text-lg">5</div><div class="text-[10px] text-slate-500 font-bold tracking-wider">LINKED SYSTEMS</div></div>
+      <div class="glass rounded-2xl p-3"><div class="text-pink-300 font-black text-lg">3</div><div class="text-[10px] text-slate-500 font-bold tracking-wider">ENGINEERING TESTS</div></div>
+    </div>
+    <p class="text-[11px] text-slate-600 mt-5">Progress, unlocks and settings save automatically to this browser. Press <span class="kbd">H</span> in the lab for help, <span class="kbd">P</span> to pause.</p>
+  </div>
+</div>
+
+<!-- ══════════════ SIM SCREEN ══════════════ -->
+<div id="simScreen" class="fixed inset-0 z-10 hidden flex-col" style="background:#070b14">
+  <!-- Header -->
+  <header class="flex items-center gap-2 px-2.5 md:px-4 py-2 glass2 z-20 flex-wrap">
+    <button class="btn-ghost !px-2.5" onclick="backToTitle()" title="Back to title"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
+    <div class="min-w-0">
+      <div class="font-black text-[13px] md:text-sm leading-none truncate" id="hudScenario">Free Lab</div>
+      <div class="text-[10px] text-slate-500 truncate max-w-[180px] md:max-w-[340px]" id="hudObjective">Experiment freely.</div>
+    </div>
+    <div class="hidden md:flex items-center gap-1.5 ml-1">
+      <span class="hud-chip" title="Simulation clock"><i data-lucide="timer" class="w-3.5 h-3.5 text-sky-400"></i><span id="hudTime">00:00</span></span>
+      <span class="hud-chip" title="Structural integrity"><i data-lucide="shield" class="w-3.5 h-3.5 text-emerald-400"></i><span id="hudIntegrity">100%</span></span>
+      <span class="hud-chip" title="Material budget"><i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i><span id="hudBudget">—</span></span>
+      <span class="hud-chip" title="Score"><i data-lucide="star" class="w-3.5 h-3.5 text-yellow-300"></i><span id="hudScore">0</span></span>
+    </div>
+    <div class="ml-auto flex items-center gap-1.5">
+      <div class="flex gap-1 p-1 rounded-[10px] glass" role="group" aria-label="Simulation speed">
+        <button class="seg-btn !px-2" data-speed="0.5" onclick="setSpeed(0.5)">0.5×</button>
+        <button class="seg-btn !px-2 active" data-speed="1" onclick="setSpeed(1)">1×</button>
+        <button class="seg-btn !px-2" data-speed="2" onclick="setSpeed(2)">2×</button>
+        <button class="seg-btn !px-2" data-speed="4" onclick="setSpeed(4)">4×</button>
+      </div>
+      <button id="pauseBtn" class="btn-ghost !px-2.5" onclick="togglePause()" title="Pause / resume (P)"><i data-lucide="pause" class="w-4 h-4"></i></button>
+      <button id="muteBtn" class="btn-ghost !px-2.5" onclick="toggleMute()" title="Mute (M)"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+      <button class="btn-ghost !px-2.5" onclick="openHelp()" title="Help (H)"><i data-lucide="circle-help" class="w-4 h-4"></i></button>
+      <button class="btn-ghost !px-2.5" onclick="openSettings()" title="Settings"><i data-lucide="settings-2" class="w-4 h-4"></i></button>
+      <button class="btn-ghost !px-2.5 lg:hidden" onclick="togglePanel()" title="Toggle control panel"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i></button>
+    </div>
+  </header>
+
+  <div class="flex flex-1 min-h-0 relative">
+    <!-- Toolbar -->
+    <nav class="w-[62px] md:w-[70px] shrink-0 glass2 z-20 flex flex-col items-center py-2 gap-1 overflow-y-auto px-1.5" id="toolbar" aria-label="Tools"></nav>
+
+    <!-- Canvas zone -->
+    <main class="flex-1 relative min-w-0" id="canvasWrap">
+      <canvas id="simCanvas" class="absolute inset-0 w-full h-full"></canvas>
+      <div id="toasts" class="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-none w-full px-4"></div>
+      <div id="phaseBanner" class="absolute top-3 left-3 z-20 hud-chip !py-1.5 hidden"></div>
+      <!-- Scenario action bar -->
+      <div id="actionBar" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 glass2 rounded-2xl p-1.5 max-w-[96%] flex-wrap justify-center"></div>
+      <!-- Tutorial coach -->
+      <div id="coach" class="absolute bottom-16 md:bottom-3 left-3 z-20 glass2 rounded-2xl p-3.5 w-[270px] hidden">
+        <div class="flex items-center gap-2 mb-1"><i data-lucide="graduation-cap" class="w-4 h-4 text-sky-300"></i><span class="text-[11px] font-black tracking-wider text-sky-300">GUIDED FIRST LAB</span><span class="ml-auto text-[10px] text-slate-500" id="coachStep">1 / 5</span></div>
+        <p class="text-xs text-slate-300 leading-relaxed" id="coachText"></p>
+        <div class="flex gap-1.5 mt-2.5">
+          <button class="btn-ghost !py-1.5 !px-3 !text-[11px]" onclick="coachNext(true)">Skip step</button>
+          <button class="btn-ghost !py-1.5 !px-3 !text-[11px]" onclick="endTutorial()">End tour</button>
+        </div>
+      </div>
+      <!-- Crane touch controls -->
+      <div id="cranePad" class="absolute bottom-16 right-3 z-20 hidden flex-col gap-1.5 items-end">
+        <div class="flex gap-1.5">
+          <button class="btn-ghost hold-btn !px-3" data-hold="left"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
+          <button class="btn-ghost hold-btn !px-3" data-hold="right"><i data-lucide="arrow-right" class="w-4 h-4"></i></button>
+        </div>
+        <div class="flex gap-1.5">
+          <button class="btn-ghost hold-btn !px-3" data-hold="up"><i data-lucide="arrow-up" class="w-4 h-4"></i></button>
+          <button class="btn-ghost hold-btn !px-3" data-hold="down"><i data-lucide="arrow-down" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right panel -->
+    <aside id="sidePanel" class="w-[292px] shrink-0 glass2 z-20 overflow-y-auto p-3 space-y-4 absolute lg:static right-0 top-0 bottom-0 hidden lg:block">
+      <div>
+        <div class="flex rounded-[10px] bg-slate-900/70 p-1 mb-3">
+          <button class="tab-btn active" data-tab="lab" onclick="switchTab('lab')">LAB</button>
+          <button class="tab-btn" data-tab="data" onclick="switchTab('data')">DATA</button>
+          <button class="tab-btn" data-tab="goals" onclick="switchTab('goals')">GOALS</button>
+        </div>
+        <!-- LAB TAB -->
+        <div id="tab-lab" class="space-y-4">
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-2">BEAM MATERIAL</div>
+            <select id="materialSel" onchange="setMaterial(this.value)">
+              <option value="wood">Wood Beam — cheap, tears at 38% strain</option>
+              <option value="ropeM">Elastic Cord — stretchy, never pushes</option>
+              <option value="steel" id="optSteel">Steel Beam — strong (unlock: finish 1 test)</option>
+              <option value="carbon" id="optCarbon">Carbon Beam — elite (unlock: finish 2 tests)</option>
+            </select>
+            <p class="text-[10.5px] text-slate-500 mt-1.5 leading-relaxed" id="materialHint">Drag with the Beam tool between glowing nodes to reinforce structures.</p>
+          </section>
+          <section class="space-y-3">
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500">ENVIRONMENT & SOLVER</div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span class="flex items-center gap-1"><i data-lucide="arrow-down-to-line" class="w-3 h-3"></i>Gravity</span><span id="vGravity" class="text-sky-300">980</span></div><input type="range" id="sGravity" min="0" max="1600" value="980" oninput="envChange()"></div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span class="flex items-center gap-1"><i data-lucide="wind" class="w-3 h-3"></i>Wind</span><span id="vWind" class="text-sky-300">0</span></div><input type="range" id="sWind" min="-30" max="30" value="0" oninput="envChange()"></div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span class="flex items-center gap-1"><i data-lucide="repeat" class="w-3 h-3"></i>Solver stiffness (iterations)</span><span id="vIter" class="text-sky-300">5</span></div><input type="range" id="sIter" min="2" max="10" value="5" oninput="envChange()"></div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span class="flex items-center gap-1"><i data-lucide="gauge" class="w-3 h-3"></i>Blob pressure</span><span id="vPressure" class="text-sky-300">1.00×</span></div><input type="range" id="sPressure" min="20" max="220" value="100" oninput="envChange()"></div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span class="flex items-center gap-1"><i data-lucide="droplets" class="w-3 h-3"></i>Air damping</span><span id="vDamp" class="text-sky-300">0.4%</span></div><input type="range" id="sDamp" min="0" max="30" value="4" oninput="envChange()"></div>
+            <label class="flex items-center gap-2 text-[11px] font-bold text-slate-400 cursor-pointer"><input type="checkbox" id="chkStress" checked class="accent-sky-500" onchange="envChange()"> Stress heat colouring</label>
+            <label class="flex items-center gap-2 text-[11px] font-bold text-slate-400 cursor-pointer"><input type="checkbox" id="chkNodes" checked class="accent-sky-500" onchange="envChange()"> Show nodes & anchors</label>
+          </section>
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-2">WORLD EVENTS</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button class="btn-ghost justify-center !text-[11px]" onclick="triggerGust()"><i data-lucide="tornado" class="w-3.5 h-3.5"></i>Gust front</button>
+              <button class="btn-ghost justify-center !text-[11px]" onclick="dropWeight()"><i data-lucide="weight" class="w-3.5 h-3.5"></i>Drop weight</button>
+              <button class="btn-ghost justify-center !text-[11px]" onclick="toggleWater()"><i data-lucide="waves" class="w-3.5 h-3.5"></i>Water tank</button>
+              <button class="btn-ghost justify-center !text-[11px]" onclick="microQuake()"><i data-lucide="activity" class="w-3.5 h-3.5"></i>Micro-quake</button>
+            </div>
+            <p class="text-[10.5px] text-slate-500 mt-2 leading-relaxed">Wind loads cloth and blobs. Water adds buoyancy and drag. Every system feeds the stress solver — watch members turn red before they snap.</p>
+          </section>
+        </div>
+        <!-- DATA TAB -->
+        <div id="tab-data" class="space-y-4 hidden">
+          <section class="space-y-2.5">
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500">LIVE TELEMETRY</div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span>Integrity</span><span id="mIntegrity" class="text-emerald-300">100%</span></div><div class="meter"><div id="barIntegrity" style="width:100%;background:linear-gradient(90deg,#059669,#34d399)"></div></div></div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span>Peak member stress</span><span id="mStress" class="text-amber-300">0%</span></div><div class="meter"><div id="barStress" style="width:0%;background:linear-gradient(90deg,#f59e0b,#ef4444)"></div></div></div>
+            <div><div class="flex justify-between text-[11px] font-bold text-slate-400"><span>Kinetic energy</span><span id="mEnergy" class="text-sky-300">0</span></div><div class="meter"><div id="barEnergy" style="width:0%;background:linear-gradient(90deg,#0369a1,#38bdf8)"></div></div></div>
+            <div class="grid grid-cols-3 gap-1.5 text-center pt-1">
+              <div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-sm" id="stParticles">0</div><div class="text-[9px] text-slate-500 font-bold">NODES</div></div>
+              <div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-sm" id="stLinks">0</div><div class="text-[9px] text-slate-500 font-bold">MEMBERS</div></div>
+              <div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-sm text-red-300" id="stBroken">0</div><div class="text-[9px] text-slate-500 font-bold">SNAPPED</div></div>
+              <div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-sm" id="stObjects">0</div><div class="text-[9px] text-slate-500 font-bold">OBJECTS</div></div>
+              <div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-sm" id="stSpent">0</div><div class="text-[9px] text-slate-500 font-bold">SPENT</div></div>
+              <div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-sm" id="stFps">60</div><div class="text-[9px] text-slate-500 font-bold">FPS</div></div>
+            </div>
+          </section>
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-1.5">HISTORY — integrity / stress / energy</div>
+            <canvas id="chart" width="264" height="86" class="w-full rounded-xl bg-slate-900/70 border border-slate-800"></canvas>
+            <div class="flex gap-3 text-[9.5px] font-bold mt-1"><span class="text-emerald-400">— Integrity</span><span class="text-red-400">— Stress</span><span class="text-sky-400">— Energy</span></div>
+          </section>
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-1.5">EVENT LOG</div>
+            <div id="eventLog" class="space-y-1 max-h-[220px] overflow-y-auto pr-1"></div>
+          </section>
+        </div>
+        <!-- GOALS TAB -->
+        <div id="tab-goals" class="space-y-4 hidden">
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-2">OBJECTIVE</div>
+            <p class="text-xs text-slate-300 leading-relaxed" id="goalText"></p>
+            <div class="meter mt-2"><div id="goalBar" style="width:0%;background:linear-gradient(90deg,#0284c7,#a78bfa)"></div></div>
+            <div class="text-[10.5px] text-slate-500 mt-1" id="goalSub"></div>
+          </section>
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-2">LAB MILESTONES · <span id="xpLabel" class="text-sky-300">0 XP</span></div>
+            <div id="milestoneList" class="space-y-1.5 text-[11.5px]"></div>
+          </section>
+          <section>
+            <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-2">CAMPAIGN</div>
+            <div id="campaignList" class="space-y-1.5 text-[11.5px]"></div>
+          </section>
+        </div>
+      </div>
+      <section class="border-t border-slate-800 pt-3">
+        <div class="text-[10px] font-black tracking-[.2em] text-slate-500 mb-2">SESSION</div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button class="btn-ghost justify-center !text-[11px]" onclick="undoLast()"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i>Undo build</button>
+          <button class="btn-ghost justify-center !text-[11px]" onclick="clearUserObjects()"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Clear mine</button>
+          <button class="btn-ghost justify-center !text-[11px]" onclick="restartScenario()"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>Restart</button>
+          <button class="btn-danger justify-center !text-[11px]" onclick="openPause()"><i data-lucide="menu" class="w-3.5 h-3.5"></i>Menu</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<!-- ══════════════ HELP MODAL ══════════════ -->
+<div id="helpModal" class="fixed inset-0 z-50 modal-bg hidden items-center justify-center p-4">
+  <div class="glass2 rounded-3xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-6">
+    <div class="flex items-center gap-2 mb-4"><i data-lucide="book-open" class="w-5 h-5 text-sky-300"></i><h2 class="font-black text-lg">How the Lab Works</h2><button class="btn-ghost !px-2 ml-auto" onclick="closeModal('helpModal')"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+    <div class="space-y-4 text-[13px] text-slate-300 leading-relaxed">
+      <div><h3 class="font-black text-sky-300 text-xs tracking-widest mb-1">THE CORE LOOP</h3><p>Everything is made of <b>nodes</b> joined by <b>spring members</b>, simulated with Verlet integration. Build or spawn a structure, press play, watch stress flow through it as colour (green → amber → red), then reinforce, cut or re-pin and test again. Members snap when strain passes their material limit.</p></div>
+      <div><h3 class="font-black text-sky-300 text-xs tracking-widest mb-1">FIVE LINKED SYSTEMS</h3>
+        <ul class="list-disc pl-5 space-y-1 text-slate-400">
+          <li><b class="text-slate-200">Structures</b> — cloth, ropes, beams and rigid frames share one solver; loading one part strains its neighbours.</li>
+          <li><b class="text-slate-200">Pressure bodies</b> — blobs hold gas pressure: raise pressure and they stiffen and push harder on whatever they touch; puncture one and it leaks and sags.</li>
+          <li><b class="text-slate-200">Environment</b> — gravity, wind gusts and water buoyancy/drag all feed forces into the same nodes.</li>
+          <li><b class="text-slate-200">Materials & budget</b> — wood is cheap and weak, steel and carbon (unlocked by passing tests) carry far more strain per credit.</li>
+          <li><b class="text-slate-200">Damage</b> — snapped members redistribute load, so one failure can cascade. Integrity and peak stress chart it live.</li>
+        </ul></div>
+      <div><h3 class="font-black text-sky-300 text-xs tracking-widest mb-1">TOOLS (keys 1–0)</h3>
+        <p class="text-slate-400"><b class="text-slate-200">Grab</b> drag nodes (throw them!). <b class="text-slate-200">Pin</b> toggles anchors; clicking empty space plants an anchor node. <b class="text-slate-200">Cut</b> slices members you drag across. <b class="text-slate-200">Erase</b> deletes nodes. <b class="text-slate-200">Cloth / Rope / Blob / Crate</b> spawn by click-dragging a size. <b class="text-slate-200">Beam</b> drags a structural member between snapped nodes. <b class="text-slate-200">Weight</b> drops a heavy ball.</p></div>
+      <div><h3 class="font-black text-sky-300 text-xs tracking-widest mb-1">CONTROLS</h3>
+        <p class="text-slate-400"><span class="kbd">P</span> pause · <span class="kbd">M</span> mute · <span class="kbd">H</span> help · <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undo · <span class="kbd">Space</span> scenario action (start test / attach crate) · Crane: <span class="kbd">A</span><span class="kbd">D</span> trolley, <span class="kbd">W</span><span class="kbd">S</span> winch · Speed keys <span class="kbd">,</span> <span class="kbd">.</span></p></div>
+      <div><h3 class="font-black text-sky-300 text-xs tracking-widest mb-1">THE THREE TESTS</h3>
+        <p class="text-slate-400"><b class="text-slate-200">Bridge Under Load</b> — reinforce the rope deck in build phase, then send the heavy cart across. <b class="text-slate-200">Crane Lift</b> — drive the trolley, winch the hook, attach the crate and set it in the target zone gently. <b class="text-slate-200">Shake Tower</b> — brace the tower, then survive 30 s of rising earthquake. Passing tests earns stars, XP and stronger materials. Fail any test by letting the load fall, the crate smash, or the tower collapse.</p></div>
+    </div>
+    <div class="flex gap-2 mt-5 flex-wrap">
+      <button class="btn-primary" onclick="closeModal('helpModal');if(sim.active)startTutorial()"><i data-lucide="graduation-cap" class="w-4 h-4"></i>Start guided tour</button>
+      <button class="btn-ghost" onclick="closeModal('helpModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SETTINGS MODAL ══════════════ -->
+<div id="settingsModal" class="fixed inset-0 z-50 modal-bg hidden items-center justify-center p-4">
+  <div class="glass2 rounded-3xl max-w-md w-full p-6">
+    <div class="flex items-center gap-2 mb-4"><i data-lucide="settings-2" class="w-5 h-5 text-sky-300"></i><h2 class="font-black text-lg">Settings</h2><button class="btn-ghost !px-2 ml-auto" onclick="closeModal('settingsModal')"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+    <div class="space-y-4 text-[12px] font-bold text-slate-300">
+      <div><div class="flex justify-between mb-1"><span>Master volume</span><span id="volLabel">70%</span></div><input type="range" id="setVolume" min="0" max="100" value="70" oninput="settingsChanged()"></div>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="setMuted" class="accent-sky-500" onchange="settingsChanged()"> Mute all audio</label>
+      <div><div class="mb-1">Simulation quality</div>
+        <select id="setQuality" onchange="settingsChanged()"><option value="performance">Performance — fewer solver passes</option><option value="balanced" selected>Balanced</option><option value="ultra">Ultra — stiffest solver, most nodes</option></select>
+        <p class="text-slate-500 font-semibold mt-1 text-[11px]">Quality changes solver iterations and the node cap. Applies immediately.</p></div>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="setStress" checked class="accent-sky-500" onchange="settingsChanged()"> Stress heat colouring</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="setShake" checked class="accent-sky-500" onchange="settingsChanged()"> Screen shake on big failures</label>
+      <div class="border-t border-slate-800 pt-3 flex gap-2 flex-wrap">
+        <button class="btn-ghost" onclick="resetProgress()"><i data-lucide="eraser" class="w-3.5 h-3.5"></i>Reset saved progress</button>
+        <button class="btn-primary !py-2" onclick="closeModal('settingsModal')">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAUSE MODAL ══════════════ -->
+<div id="pauseModal" class="fixed inset-0 z-50 modal-bg hidden items-center justify-center p-4">
+  <div class="glass2 rounded-3xl max-w-sm w-full p-6 text-center">
+    <i data-lucide="pause-circle" class="w-10 h-10 text-sky-300 mx-auto mb-2"></i>
+    <h2 class="font-black text-xl mb-1">Paused</h2><p class="text-xs text-slate-500 mb-5" id="pauseSub">Simulation frozen. Your structures are safe.</p>
+    <div class="flex flex-col gap-2">
+      <button class="btn-primary justify-center" onclick="closeModal('pauseModal');setPaused(false)"><i data-lucide="play" class="w-4 h-4"></i>Resume</button>
+      <button class="btn-ghost justify-center" onclick="closeModal('pauseModal');restartScenario()"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Restart scenario</button>
+      <button class="btn-ghost justify-center" onclick="closeModal('pauseModal');openHelp()"><i data-lucide="circle-help" class="w-4 h-4"></i>Help & controls</button>
+      <button class="btn-ghost justify-center" onclick="closeModal('pauseModal');openSettings()"><i data-lucide="settings-2" class="w-4 h-4"></i>Settings</button>
+      <button class="btn-ghost justify-center" onclick="closeModal('pauseModal');backToTitle()"><i data-lucide="home" class="w-4 h-4"></i>Title screen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ END MODAL ══════════════ -->
+<div id="endModal" class="fixed inset-0 z-50 modal-bg hidden items-center justify-center p-4">
+  <div class="glass2 rounded-3xl max-w-md w-full p-6 text-center">
+    <div id="endIcon" class="mx-auto mb-2"></div>
+    <h2 class="font-black text-2xl" id="endTitle">Test Passed</h2>
+    <div id="endStars" class="text-2xl my-1.5 tracking-[.3em]"></div>
+    <p class="text-[13px] text-slate-400 leading-relaxed" id="endText"></p>
+    <div class="grid grid-cols-3 gap-1.5 my-4 text-center" id="endStats"></div>
+    <div class="flex gap-2 justify-center flex-wrap">
+      <button class="btn-primary" id="endNextBtn" onclick="endNext()"><i data-lucide="arrow-right" class="w-4 h-4"></i>Next test</button>
+      <button class="btn-ghost" onclick="closeModal('endModal');restartScenario()"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Retry</button>
+      <button class="btn-ghost" onclick="closeModal('endModal');startScenario('sandbox')"><i data-lucide="flask-conical" class="w-4 h-4"></i>Free lab</button>
+      <button class="btn-ghost" onclick="closeModal('endModal');backToTitle()"><i data-lucide="home" class="w-4 h-4"></i>Title</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ═══════════════════════ UTILITIES ═══════════════════════ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry(seed){let t=seed>>>0;return function(){t+=0x6D2B79F5;let r=Math.imul(t^t>>>15,1|t);r^=r+Math.imul(r^r>>>7,61|r);return((r^r>>>14)>>>0)/4294967296}}
+let rng=mulberry(1337);
+const fmtTime=s=>{s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")};
+function storageOK(){try{localStorage.setItem("__t","1");localStorage.removeItem("__t");return true}catch(e){return false}}
+const canStore=storageOK();
+function saveData(){if(!canStore)return;try{localStorage.setItem("softbodyLabV1",JSON.stringify({settings:S,persist:P}))}catch(e){}}
+function loadData(){if(!canStore)return null;try{return JSON.parse(localStorage.getItem("softbodyLabV1"))}catch(e){return null}}
+
+/* ═══════════════════════ SETTINGS & PROGRESS ═══════════════════════ */
+let S={volume:.7,muted:false,quality:"balanced",stress:true,shake:true};
+let P={xp:0,completions:{},unlocked:["wood","ropeM"],milestones:{},tutorialDone:false,lastScenario:"sandbox",lastDiff:"standard"};
+const saved=loadData();if(saved){if(saved.settings)S=Object.assign(S,saved.settings);if(saved.persist)P=Object.assign(P,saved.persist)}
+const DIFFS={calm:{label:"Calm Lab",gravity:820,breakMult:1.4,windMult:.55,budgetMult:1.35,scoreMult:.9,desc:"Lower gravity, tougher materials, bigger budgets. Learn the ropes."},standard:{label:"Standard",gravity:980,breakMult:1,windMult:1,budgetMult:1,scoreMult:1,desc:"Normal gravity, standard material strength and weather."},extreme:{label:"Extreme",gravity:1160,breakMult:.76,windMult:1.55,budgetMult:.85,scoreMult:1.4,desc:"Heavy gravity, brittle members, violent gusts. Experts only."}};
+const MATERIALS={wood:{label:"Wood",color:"#c98d54",breakStrain:.38,costPerPx:.16,stiff:.85,width:4},ropeM:{label:"Elastic Cord",color:"#7dd3fc",breakStrain:.95,costPerPx:.1,stiff:.3,width:2.5,rope:true},steel:{label:"Steel",color:"#cbd5e1",breakStrain:.78,costPerPx:.34,stiff:.95,width:5},carbon:{label:"Carbon",color:"#e879f9",breakStrain:1.2,costPerPx:.55,stiff:.98,width:5}};
+const SCENARIOS=[
+ {id:"sandbox",name:"Free Lab Sandbox",icon:"flask-conical",tag:"SANDBOX",color:"#38bdf8",desc:"Open laboratory. Spawn every body type, flood the tank, start a storm — chase milestones, no failure.",goal:"Free experimentation. Complete milestones to earn XP and unlock materials."},
+ {id:"bridge",name:"Bridge Under Load",icon:"landmark",tag:"TEST 1",color:"#f59e0b",desc:"A sagging rope deck spans a gorge. Reinforce it in build phase, then drive the heavy cart across.",goal:"Get the load cart to the far cliff. Keep the deck (and cart) out of the gorge."},
+ {id:"crane",name:"Crane Lift",icon:"construction",tag:"TEST 2",color:"#a78bfa",desc:"Drive the trolley, winch the hook, attach the crate and place it gently inside the target zone.",goal:"Set the crate inside the green target zone and hold it steady for 3 seconds."},
+ {id:"tower",name:"Shake Tower",icon:"building-2",tag:"TEST 3 · CAPSTONE",color:"#f472b6",desc:"Brace a stacked tower, then survive 30 seconds of earthquake that grows the longer it runs.",goal:"Survive the full 30 s quake with the tower top still standing tall."}];
+let selectedScenario=P.lastScenario||"sandbox", selectedDiff=P.lastDiff||"standard";
+if(!SCENARIOS.find(s=>s.id===selectedScenario))selectedScenario="sandbox";
+if(!DIFFS[selectedDiff])selectedDiff="standard";
+
+/* ═══════════════════════ AUDIO (synthesized) ═══════════════════════ */
+const AudioSys={ctx:null,master:null,noiseGain:null,noiseFilter:null,
+ init(){if(this.ctx)return;try{const C=new(window.AudioContext||window.webkitAudioContext)();this.ctx=C;this.master=C.createGain();this.master.gain.value=S.muted?0:S.volume;this.master.connect(C.destination);
+  const len=C.sampleRate*2,buf=C.createBuffer(1,len,C.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+  const src=C.createBufferSource();src.buffer=buf;src.loop=true;this.noiseFilter=C.createBiquadFilter();this.noiseFilter.type="bandpass";this.noiseFilter.frequency.value=500;this.noiseFilter.Q.value=.6;this.noiseGain=C.createGain();this.noiseGain.gain.value=0;src.connect(this.noiseFilter);this.noiseFilter.connect(this.noiseGain);this.noiseGain.connect(this.master);src.start();}catch(e){}},
+ resume(){if(this.ctx&&this.ctx.state==="suspended")this.ctx.resume()},
+ setVol(){if(this.master)this.master.gain.value=S.muted?0:S.volume},
+ tone(f0,f1,dur,type,vol,delay){if(!this.ctx||S.muted)return;const C=this.ctx,t=C.currentTime+(delay||0);const o=C.createOscillator(),g=C.createGain();o.type=type||"sine";o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);g.gain.setValueAtTime(vol||.16,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+.02)},
+ noiseHit(dur,vol,freq){if(!this.ctx||S.muted)return;const C=this.ctx,t=C.currentTime;const len=C.sampleRate*dur,buf=C.createBuffer(1,len,C.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);const s=C.createBufferSource();s.buffer=buf;const f=C.createBiquadFilter();f.type="lowpass";f.frequency.value=freq||900;const g=C.createGain();g.gain.value=vol||.2;s.connect(f);f.connect(g);g.connect(this.master);s.start(t)},
+ click(){this.tone(660,520,.06,"triangle",.08)},snap(){this.noiseHit(.09,.22,2400);this.tone(190,60,.1,"square",.1)},thud(v){this.noiseHit(.12,clamp(v,.04,.3),300)},splash(){this.noiseHit(.25,.14,900)},
+ clank(){this.tone(320,180,.09,"square",.12);this.tone(940,700,.05,"triangle",.07,.02)},
+ success(){[523,659,784,1047].forEach((f,i)=>this.tone(f,f,.22,"triangle",.14,i*.09))},
+ fail(){[392,330,262,196].forEach((f,i)=>this.tone(f,f*.94,.26,"sawtooth",.09,i*.11))},
+ updateAmbient(wind){if(!this.ctx||!this.noiseGain)return;const target=S.muted?0:clamp(Math.abs(wind)/30,.0,1)*.14*S.volume;this.noiseGain.gain.setTargetAtTime(target,this.ctx.currentTime,.2);if(this.noiseFilter)this.noiseFilter.frequency.setTargetAtTime(350+Math.abs(wind)*22,this.ctx.currentTime,.3)}};
+
+/* ═══════════════════════ SIMULATION STATE ═══════════════════════ */
+const W=1280,H=720;
+const sim={active:false,scenario:"sandbox",phase:"play",paused:false,speed:1,time:0,acc:0,particles:[],constraints:[],bodies:[],statics:[],waters:[],effects:[],floaters:[],windStreaks:[],groups:[],tool:"grab",material:"wood",
+ budget:Infinity,spent:0,score:0,brokenCount:0,spawnedLinks:0,maxStressSeen:0,ended:false,nextId:1,shake:0,gust:0,gustDir:1,quakeT:0,eventTimer:18,chartT:0,fpsT:0,frames:0,fps:60,
+ grabbed:null,mouse:{x:0,y:0,down:false,sx:0,sy:0,inside:false},keys:{},hold:{},crane:{trolley:null,hook:null,chain:[],crate:null,attached:false,winch:110,holdT:0,impact:0},bridge:{cart:null,started:false},tower:{top:null,timer:0,started:false},history:[],milestoneSession:{},spawnTypes:new Set(),waterOn:false,checkT:0};
+let env={gravity:980,wind:0,iterations:5,pressure:1,damping:.996};
+const QUALITY={performance:{iterMult:.6,cap:650},balanced:{iterMult:1,cap:950},ultra:{iterMult:1.5,cap:1400}};
+
+/* ── particles & constraints ── */
+function addParticle(x,y,o={}){const p={id:sim.nextId++,x,y,px:x-(o.vx||0)/60,py:y-(o.vy||0)/60,mass:o.mass||1,radius:o.radius||3.5,pinned:!!o.pinned,kinematic:!!o.kinematic,solid:!!o.solid,cloth:!!o.cloth,color:o.color||"#e2e8f0",kind:o.kind||"node",fx:0,fy:0,wet:0,adj:new Set(),group:o.group||null,dead:false};sim.particles.push(p);return p}
+function addConstraint(a,b,o={}){if(a===b)return null;const rest=o.rest||Math.hypot(b.x-a.x,b.y-a.y)||1;const c={id:sim.nextId++,a,b,rest,type:o.type||"beam",stiff:o.stiff??.8,breakStrain:o.breakStrain??9,stress:0,broken:false,color:o.color||"#94a3b8",width:o.width||2,group:o.group||null,structural:o.structural!==false};a.adj.add(b.id);b.adj.add(a.id);sim.constraints.push(c);sim.spawnedLinks++;return c}
+function registerGroup(kind,pids,cids,player=true){const g={kind,pids:new Set(pids),cids:new Set(cids),player};sim.groups.push(g);sim.spawnTypes.add(kind);return g}
+
+/* ── factories ── */
+function createCloth(x,y,w,h,pinTop=true){w=Math.max(50,w);h=Math.max(40,h);const cols=clamp(Math.round(w/26),4,18),rows=clamp(Math.round(h/26),3,14);const pts=[],pids=[],cids=[];
+ for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const px=x-w/2+(w*i)/(cols-1),py=y-h/2+(h*j)/(rows-1);const p=addParticle(px,py,{cloth:true,mass:.6,radius:3,color:"#7dd3fc",kind:"cloth"});pts.push(p);pids.push(p.id)}
+ const idx=(i,j)=>pts[j*cols+i];
+ for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){if(i<cols-1)cids.push(addConstraint(idx(i,j),idx(i+1,j),{type:"cloth",stiff:.7,breakStrain:.55,color:"#38bdf8",width:1.6}).id);if(j<rows-1)cids.push(addConstraint(idx(i,j),idx(i,j+1),{type:"cloth",stiff:.7,breakStrain:.55,color:"#38bdf8",width:1.6}).id)}
+ if(pinTop)for(let i=0;i<cols;i+=Math.max(1,Math.floor(cols/4)))idx(i,0).pinned=true;
+ const g=registerGroup("cloth",pids,cids);pts.forEach(p=>p.group=g);sim.constraints.forEach(c=>{if(cids.includes(c.id))c.group=g});charge(60);logEvent("Cloth spawned — top edge pinned. Drag it, cut it, blow on it.","good");coachAction("cloth");return g}
+function createRope(x1,y1,x2,y2){const len=Math.hypot(x2-x1,y2-y1),n=clamp(Math.round(len/22),2,30),pts=[],pids=[],cids=[];
+ for(let i=0;i<=n;i++){const t=i/n;const p=addParticle(lerp(x1,x2,t),lerp(y1,y2,t),{mass:.7,radius:3,kind:"rope",color:"#fcd34d"});pts.push(p);pids.push(p.id)}
+ for(let i=0;i<n;i++)cids.push(addConstraint(pts[i],pts[i+1],{type:"rope",stiff:.55,breakStrain:.8,color:"#f59e0b",width:2.2}).id);
+ const g=registerGroup("rope",pids,cids);pts.forEach(p=>p.group=g);charge(35);logEvent("Rope strung. Ropes only pull — they go slack when pushed.");return g}
+function createBlob(cx,cy,r){r=clamp(r,22,110);const n=16,pts=[],pids=[],cids=[];let cxp=addParticle(cx,cy,{mass:1.2,radius:4,kind:"blobcore",color:"#f0abfc"});pids.push(cxp.id);
+ for(let i=0;i<n;i++){const a=i/n*Math.PI*2;const p=addParticle(cx+Math.cos(a)*r,cy+Math.sin(a)*r,{mass:.8,radius:5,solid:false,kind:"blob",color:"#f0abfc"});pts.push(p);pids.push(p.id)}
+ for(let i=0;i<n;i++){cids.push(addConstraint(pts[i],pts[(i+1)%n],{type:"skin",stiff:.6,breakStrain:1.4,color:"#e879f9",width:2.4}).id);cids.push(addConstraint(cxp,pts[i],{type:"spoke",stiff:.25,breakStrain:2.5,color:"#f0abfc",width:1,structural:false}).id)}
+ const body={pts,center:cxp,targetArea:Math.PI*r*r,leak:0,r};sim.bodies.push(body);
+ const g=registerGroup("blob",pids,cids);pts.forEach(p=>p.group=g);cxp.group=g;charge(80);logEvent("Pressurized blob inflated. Raise Blob pressure to stiffen it.");coachAction("blob");return g}
+function createBox(x,y,w,h,o={}){w=clamp(w,26,220);h=clamp(h,22,180);const m=o.mass||2.2,col=o.color||"#fbbf24";const cs=[[x-w/2,y-h/2],[x+w/2,y-h/2],[x+w/2,y+h/2],[x-w/2,y+h/2]].map(([px,py])=>addParticle(px,py,{mass:m,radius:o.radius||7,solid:true,kind:o.kind||"crate",color:col}));
+ const cids=[];for(let i=0;i<4;i++)cids.push(addConstraint(cs[i],cs[(i+1)%4],{type:"rigid",stiff:.95,breakStrain:o.breakStrain??1.6,color:col,width:3.4}).id);cids.push(addConstraint(cs[0],cs[2],{type:"rigid",stiff:.95,breakStrain:o.breakStrain??1.6,color:col,width:1.4,structural:false}).id);cids.push(addConstraint(cs[1],cs[3],{type:"rigid",stiff:.95,breakStrain:o.breakStrain??1.6,color:col,width:1.4,structural:false}).id);
+ const g=registerGroup(o.kind||"crate",cs.map(p=>p.id),cids,!o.scenario);cs.forEach(p=>p.group=g);charge(o.free?0:70);return{pts:cs,group:g}}
+function createWeight(x,y){const p=addParticle(x,y,{mass:14,radius:15,solid:true,kind:"weight",color:"#f8fafc"});const g=registerGroup("weight",[p.id],[]);p.group=g;charge(40);spawnRing(x,y,"#f8fafc",6);return p}
+function createBeamBetween(a,b,matKey){const m=MATERIALS[matKey];const len=Math.hypot(b.x-a.x,b.y-a.y);if(len<14)return false;if(!charge(Math.round(len*m.costPerPx),"beam"))return false;
+ const c=addConstraint(a,b,{type:matKey==="ropeM"?"rope":"beam",stiff:m.stiff,breakStrain:m.breakStrain,color:m.color,width:m.width});const g=registerGroup("beam",[],[c.id]);c.group=g;logEvent(m.label+" beam placed ("+Math.round(len)+" px).");coachAction("beam");return true}
+function charge(cost,what){if(cost<=0)return true;if(sim.scenario!=="sandbox"){if(sim.budget<cost){toast("Not enough budget for that","warn");AudioSys.tone(160,110,.15,"square",.12);return false}sim.budget-=cost}sim.spent+=cost;return true}
+
+/* ═══════════════════════ SCENARIOS ═══════════════════════ */
+function groundRect(x,y,w,h,label,color){const s={type:"rect",x,y,w,h,label:label||"",color:color||"#1e293b"};sim.statics.push(s);return s}
+function resetSim(scenario){sim.particles=[];sim.constraints=[];sim.bodies=[];sim.statics=[];sim.waters=[];sim.effects=[];sim.floaters=[];sim.groups=[];sim.time=0;sim.acc=0;sim.brokenCount=0;sim.spawnedLinks=0;sim.spent=0;sim.maxStressSeen=0;sim.ended=false;sim.shake=0;sim.gust=0;sim.quakeT=0;sim.eventTimer=16+rng()*14;sim.history=[];sim.spawnTypes=new Set();sim.grabbed=null;sim.waterOn=false;sim.milestoneSession={};sim.crane={trolley:null,hook:null,chain:[],crate:null,attached:false,winch:110,holdT:0,impact:0};sim.bridge={cart:null,started:false};sim.tower={top:null,timer:0,started:false};sim.checkT=0;sim.phase="play";sim.score=0;
+ const d=DIFFS[selectedDiff];env.gravity=d.gravity;$("sGravity").value=d.gravity;$("sWind").value=0;env.wind=0;
+ sim.budget=scenario==="sandbox"?Infinity:Math.round((scenario==="bridge"?950:scenario==="tower"?850:600)*d.budgetMult);
+ rng=mulberry(scenario.length*7919+selectedDiff.length*131+42)}
+function startScenario(scenario){AudioSys.init();AudioSys.resume();selectedScenario=scenario;P.lastScenario=scenario;P.lastDiff=selectedDiff;saveData();resetSim(scenario);sim.scenario=scenario;sim.active=true;sim.paused=false;
+ $("titleScreen").style.display="none";$("simScreen").style.display="flex";$("simScreen").classList.remove("hidden");$("simScreen").classList.add("flex");
+ const sc=SCENARIOS.find(s=>s.id===scenario);$("hudScenario").textContent=sc.name+" · "+DIFFS[selectedDiff].label;$("goalText").textContent=sc.goal;buildToolbar();buildActionBar();updateMaterialOptions();
+ const log=$("eventLog");log.innerHTML="";
+ if(scenario==="sandbox")setupSandbox();else if(scenario==="bridge")setupBridge();else if(scenario==="crane")setupCrane();else setupTower();
+ $("hudObjective").textContent=sc.goal;$("coach").classList.add("hidden");
+ if(scenario==="sandbox"&&!P.tutorialDone)startTutorial(); else if(scenario!=="sandbox")toast(sc.name+" — check the GOALS tab for the brief","info");
+ resizeCanvas();refreshStaticHUD();renderMilestones();lucide.createIcons()}
+function setupSandbox(){groundRect(0,652,1280,68,"LAB FLOOR");groundRect(120,520,230,16,"SHELF");groundRect(880,470,270,16,"TEST PLATFORM");sim.waters=[{x:905,y:566,w:300,h:86,on:true,label:"BUOYANCY TANK"}];sim.waterOn=true;
+ createCloth(320,215,270,190);const b=createBlob(660,300,52);const bx=createBox(1015,425,76,58,{});createRope(120,90,430,90);sim.particles.forEach(p=>{if(p.kind==="rope"&&(p.x===120||p.x===430))p.pinned=true});
+ logEvent("Welcome to the Free Lab. A cloth, blob, crate and rope are ready to abuse.","good");logEvent("Try: Grab a node and throw it. Then cut the cloth with the Cut tool.")}
+function setupBridge(){groundRect(0,420,300,300,"WEST CLIFF","#273449");groundRect(980,420,300,300,"EAST CLIFF","#273449");groundRect(0,700,1280,20,"GORGE FLOOR","#111827");
+ const deckY=436,n=15,deck=[],lower=[];for(let i=0;i<=n;i++){const x=290+(700*i)/n;deck.push(addParticle(x,deckY,{mass:1.4,radius:5,solid:true,kind:"deck",color:"#fcd34d"}));lower.push(addParticle(x,deckY+52,{mass:1.1,radius:4,kind:"decklow",color:"#d97706"}))}
+ deck[0].pinned=true;deck[n].pinned=true;lower[0].pinned=true;lower[n].pinned=true;
+ for(let i=0;i<n;i++){addConstraint(deck[i],deck[i+1],{type:"beam",stiff:.72,breakStrain:.34,color:"#b45309",width:4});addConstraint(lower[i],lower[i+1],{type:"rope",stiff:.4,breakStrain:.5,color:"#92400e",width:2});addConstraint(deck[i],lower[i],{type:"beam",stiff:.5,breakStrain:.4,color:"#d97706",width:2});if(i<n-0)addConstraint(deck[i+1],lower[i],{type:"rope",stiff:.35,breakStrain:.45,color:"#92400e",width:1.6})}
+ sim.phase="build";sim.paused=true;updatePauseBtn();showPhase("BUILD PHASE — reinforce the deck, then start the load test");
+ logEvent("Build phase: physics is paused. Drag Beams between deck nodes to triangulate the span.","warn");logEvent("Diagonals carry load best. Steel unlocks after your first passed test — wood must be clever.");}
+function setupCrane(){groundRect(0,652,1280,68,"DOCK FLOOR");groundRect(70,190,26,462,"","#334155");groundRect(70,164,1090,26,"CRANE GIRDER","#334155");groundRect(880,505,300,18,"DELIVERY PLATFORM","#273449");groundRect(905,523,20,129,"","#1e293b");groundRect(1140,523,20,129,"","#1e293b");
+ const trolley=addParticle(430,204,{pinned:true,kinematic:true,radius:9,solid:true,kind:"trolley",color:"#facc15"});sim.crane.trolley=trolley;
+ const chain=[];const N=6;let prev=trolley;for(let i=1;i<=N;i++){const p=addParticle(430,204+(sim.crane.winch*i)/N,{mass:.6,radius:4,kind:"hookchain",color:"#e2e8f0"});chain.push(p);addConstraint(prev,p,{type:"chain",stiff:.9,breakStrain:1.1,color:"#cbd5e1",width:2.4});prev=p}
+ sim.crane.chain=chain;sim.crane.hook=chain[N-1];sim.crane.hook.radius=8;sim.crane.hook.solid=true;sim.crane.hook.mass=2.5;
+ const crate=createBox(300,615,74,56,{mass:3.4,color:"#fb923c",kind:"crate",free:true,scenario:true});sim.crane.crate=crate;
+ logEvent("Crane ready. A/D or ◀ ▶ move the trolley, W/S winch, SPACE attaches the hook to the crate.","good");logEvent("Set the crate down gently in the green zone — hard impacts fail the lift.");$("cranePad").classList.remove("hidden");$("cranePad").classList.add("flex")}
+function setupTower(){groundRect(0,652,1280,68,"SHAKE TABLE");groundRect(490,636,300,16,"FOUNDATION","#334155");
+ let prevTop=null;const levels=4;let topMarker=null;
+ for(let l=0;l<levels;l++){const y=600-l*86;const bx=createBox(640,y,132-l*8,74,{mass:2.6,color:["#38bdf8","#818cf8","#e879f9","#f472b6"][l],kind:"towerblock",breakStrain:1.1,free:true,scenario:true});if(l===levels-1)topMarker=bx.pts[0];
+  if(prevTop){addConstraint(prevTop[2],bx.pts[3],{type:"beam",stiff:.7,breakStrain:.7,color:"#94a3b8",width:2.5});addConstraint(prevTop[3],bx.pts[2],{type:"beam",stiff:.7,breakStrain:.7,color:"#94a3b8",width:2.5})}prevTop=bx.pts}
+ sim.tower.top=topMarker;sim.phase="build";sim.paused=true;updatePauseBtn();showPhase("BUILD PHASE — brace the tower, then start the quake");
+ logEvent("Build phase: criss-cross Beams between the blocks so the tower bends instead of toppling.","warn");logEvent("When ready, press Start Quake. Survive 30 seconds.");}
+
+/* scenario flow */
+function showPhase(txt){const b=$("phaseBanner");b.textContent=txt;b.classList.remove("hidden")}
+function hidePhase(){$("phaseBanner").classList.add("hidden")}
+function startBridgeTest(){if(sim.scenario!=="bridge"||sim.bridge.started)return;sim.bridge.started=true;sim.phase="test";sim.checkT=0;hidePhase();setPaused(false);buildActionBar();
+ const body=createBox(150,368,86,44,{mass:5.5,color:"#f87171",kind:"cartbody",breakStrain:2.2,free:true,scenario:true});const w1=addParticle(118,414,{mass:5,radius:12,solid:true,kind:"wheel",color:"#f8fafc"});const w2=addParticle(184,414,{mass:5,radius:12,solid:true,kind:"wheel",color:"#f8fafc"});
+ [w1,w2].forEach(w=>{body.pts.forEach(c=>addConstraint(w,c,{type:"rigid",stiff:.9,breakStrain:2.2,color:"#fca5a5",width:1.6,structural:false}))});addConstraint(w1,w2,{type:"rigid",stiff:.9,breakStrain:2.2,color:"#fca5a5",width:2,structural:false});
+ sim.bridge.cart={pts:[...body.pts,w1,w2],wheels:[w1,w2],body:body.pts};logEvent("Load test started — the cart is heavy and the deck knows it.","warn");toast("Load test running","warn");AudioSys.clank()}
+function startQuake(){if(sim.scenario!=="tower"||sim.tower.started)return;sim.tower.started=true;sim.tower.timer=0;sim.phase="test";hidePhase();setPaused(false);logEvent("Earthquake started. Amplitude ramps for 30 seconds. Hold on.","bad");toast("Earthquake!","bad")}
+function craneAttachToggle(){const cr=sim.crane;if(sim.scenario!=="crane"||!cr.crate)return;
+ if(cr.attached){cr.attached=false;sim.constraints.forEach(c=>{if(c.type==="sling")c.broken=true});logEvent("Sling released.");AudioSys.clank();buildActionBar();return}
+ const hook=cr.hook,top=cr.crate.pts.slice(0,2);const cx=(cr.crate.pts[0].x+cr.crate.pts[1].x)/2,cy=(cr.crate.pts[0].y+cr.crate.pts[1].y)/2;const d=Math.hypot(hook.x-cx,hook.y-cy);
+ if(d<95){top.forEach(p=>addConstraint(hook,p,{type:"sling",stiff:.85,breakStrain:1.3,color:"#4ade80",width:2.6}));cr.attached=true;logEvent("Crate attached. Winch up slowly — swinging loads strain the sling.","good");AudioSys.clank();coachAction("beam")}
+ else{toast("Move the hook closer to the crate top to attach","warn");AudioSys.tone(150,110,.14,"square",.1)}buildActionBar()}
+
+/* ═══════════════════════ PHYSICS ═══════════════════════ */
+function windAt(p){const gust=sim.gust*26*DIFFS[selectedDiff].windMult;return (env.wind*DIFFS[selectedDiff].windMult+gust*(0.7+0.3*Math.sin(sim.time*2.1+p.y*.01)))}
+function physicsStep(dt){sim.time+=dt;const sub=dt;
+ if(sim.gust>0)sim.gust=Math.max(0,sim.gust-dt*.5);
+ if(sim.scenario==="tower"&&sim.tower.started&&!sim.ended){sim.tower.timer+=dt;sim.quakeT=sim.tower.timer}
+ // crane trolley control
+ const cr=sim.crane;
+ if(sim.scenario==="crane"&&cr.trolley){let mv=0;if(sim.keys["a"]||sim.keys["arrowleft"]||sim.hold.left)mv-=1;if(sim.keys["d"]||sim.keys["arrowright"]||sim.hold.right)mv+=1;cr.trolley.x=clamp(cr.trolley.x+mv*150*dt,120,1095);cr.trolley.px=cr.trolley.x;cr.trolley.py=cr.trolley.y;
+  let wv=0;if(sim.keys["w"]||sim.keys["arrowup"]||sim.hold.up)wv-=1;if(sim.keys["s"]||sim.keys["arrowdown"]||sim.hold.down)wv+=1;if(wv){cr.winch=clamp(cr.winch+wv*90*dt,45,330);const seg=cr.winch/cr.chain.length;for(let i=0;i<cr.chain.length;i++){const c=sim.constraints.find(cc=>cc.type==="chain"&&(cc.b===cr.chain[i]));if(c)c.rest=seg}}}
+ // bridge cart motor (force is applied inside the force loop below, after fx reset)
+ // random ambient events in challenges
+ if(sim.active&&!sim.ended&&(sim.scenario!=="sandbox")){sim.eventTimer-=dt;if(sim.eventTimer<=0){sim.eventTimer=22+rng()*20;if(rng()<.65){triggerGust(true);logEvent("Weather front: gust rolling through the site.","warn")}}}
+ // forces + integrate
+ const dampF=env.damping, grav=env.gravity;
+ for(const p of sim.particles){if(p.dead)continue;p.fx=0;p.fy=p.mass*grav;
+  if(sim.scenario==="bridge"&&sim.phase==="test"&&p.kind==="wheel")p.fx+=p.mass*700;
+  if(p.cloth||p.kind==="blob")p.fx+=windAt(p)*(p.cloth?2.4:1.2)*(p.mass);
+  else p.fx+=windAt(p)*.18*p.mass;
+  if(sim.scenario==="tower"&&sim.tower.started){const amp=Math.min(1,sim.tower.timer/30)*1500;p.fx+=Math.sin(sim.time*7.3)*amp*p.mass*(720-p.y)/720}
+  if(sim.quakeT>0&&sim.scenario==="sandbox")p.fx+=Math.sin(sim.time*22)*sim.quakeT*300*p.mass;
+  // water buoyancy
+  p.wet=0;for(const wz of sim.waters){if(!wz.on)continue;if(p.x>wz.x&&p.x<wz.x+wz.w&&p.y>wz.y&&p.y<wz.y+wz.h){p.wet=1;p.fy-=p.mass*grav*1.55;p.fx-= (p.x-p.px)*38*p.mass}}
+ }
+ // pressure bodies
+ for(const b of sim.bodies){const area=polyArea(b.pts);const ratio=clamp(b.targetArea/Math.max(60,Math.abs(area)),.45,2.2);const leakF=b.leak>0?.25:1;const pres=900*env.pressure*ratio*leakF*(b.leak>0?Math.max(.15,1-b.leak*.02):1);
+  const n=b.pts.length;for(let i=0;i<n;i++){const p=b.pts[i],q=b.pts[(i+1)%n];if(p.dead||q.dead)continue;const ex=q.x-p.x,ey=q.y-p.y,len=Math.hypot(ex,ey)||1;let nx=ey/len,ny=-ex/len;const mx=(p.x+q.x)/2-b.center.x,my=(p.y+q.y)/2-b.center.y;if(nx*mx+ny*my<0){nx=-nx;ny=-ny}const f=pres*len*.5;p.fx+=nx*f;p.fy+=ny*f;q.fx+=nx*f;q.fy+=ny*f}
+  if(b.leak>0)b.leak+=dt}
+ for(const p of sim.particles){if(p.dead||p.pinned)continue;let vx=(p.x-p.px)*dampF,vy=(p.y-p.py)*dampF;if(p.wet){vx*=.9;vy*=.9}const sp=Math.hypot(vx,vy);if(sp>16){vx*=16/sp;vy*=16/sp}p.px=p.x;p.py=p.y;p.x+=vx+(p.fx/p.mass)*sub*sub;p.y+=vy+(p.fy/p.mass)*sub*sub}
+ // grabbed spring
+ if(sim.grabbed&&!sim.grabbed.dead&&!sim.grabbed.pinned){const p=sim.grabbed;p.x=lerp(p.x,sim.mouse.x,.45);p.y=lerp(p.y,sim.mouse.y,.45)}
+ // constraint iterations
+ const iters=Math.max(2,Math.round(env.iterations*QUALITY[S.quality].iterMult));let brokeNow=[];
+ for(let it=0;it<iters;it++){for(const c of sim.constraints){if(c.broken)continue;const a=c.a,b=c.b;if(a.dead||b.dead)continue;const dx=b.x-a.x,dy=b.y-a.y;const d=Math.hypot(dx,dy)||.0001;
+   if(it===0){const strain=c.type==="rope"||c.type==="chain"||c.type==="sling"?Math.max(0,(d-c.rest)/c.rest):Math.abs(d-c.rest)/c.rest;c.stress=lerp(c.stress||0,strain,.5);if(strain>sim.maxStressSeen)sim.maxStressSeen=strain}
+   if((c.type==="rope")&&d<c.rest)continue;const corr=(d-c.rest)/d*c.stiff;const wa=a.pinned?0:1,wb=b.pinned?0:1,ws=wa+wb;if(!ws)continue;
+   a.x+=dx*corr*(wa/ws);a.y+=dy*corr*(wa/ws);b.x-=dx*corr*(wb/ws);b.y-=dy*corr*(wb/ws);
+  }
+  for(const p of sim.particles){if(!p.dead)collideStatics(p)}}
+ // break checks
+ for(const c of sim.constraints){if(c.broken||!c.structural)continue;const lim=c.breakStrain*DIFFS[selectedDiff].breakMult;if(c.stress>lim&&c.breakStrain<5){c.broken=true;brokeNow.push(c)}}
+ if(brokeNow.length){sim.brokenCount+=brokeNow.length;brokeNow.slice(0,14).forEach(c=>{const mx=(c.a.x+c.b.x)/2,my=(c.a.y+c.b.y)/2;spawnSparks(mx,my,c.color,5);if(c.type==="skin"||c.type==="spoke"){const body=sim.bodies.find(b=>b.pts.includes(c.a)||b.pts.includes(c.b));if(body&&body.leak===0){body.leak=.01;logEvent("Blob punctured! Pressure is leaking — it will sag and push less.","bad");toast("Blob punctured — pressure leaking","bad")}}});
+  AudioSys.snap();if(sim.shake<6)sim.shake=Math.min(7,2+brokeNow.length*.5);if(brokeNow.length>=5)logEvent(brokeNow.length+" members snapped in a cascade — load redistributed to survivors.","bad")}
+ // solid particle collisions
+ collideSolids();
+ // world bounds
+ for(const p of sim.particles){if(p.dead)continue;if(p.y>H-8){p.y=H-8;if(p.py<p.y)p.py=p.y}if(p.x<4)p.x=4;if(p.x>W-4)p.x=W-4}
+ if(sim.quakeT>0&&sim.scenario==="sandbox")sim.quakeT=Math.max(0,sim.quakeT-dt*2);
+ updateEffects(dt);scenarioLogic(dt);
+ sim.chartT+=dt;if(sim.chartT>.25){sim.chartT=0;pushHistory()}}
+function polyArea(pts){let a=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length];a+=p.x*q.y-q.x*p.y}return a/2}
+function collideStatics(p){for(const s of sim.statics){if(s.type==="rect"){const cx=clamp(p.x,s.x,s.x+s.w),cy=clamp(p.y,s.y,s.y+s.h);let dx=p.x-cx,dy=p.y-cy;const d2=dx*dx+dy*dy;
+  if(d2>p.radius*p.radius&&!(p.x>s.x&&p.x<s.x+s.w&&p.y>s.y&&p.y<s.y+s.h))continue;
+  if(d2<.0001){const l=p.x-s.x,r=s.x+s.w-p.x,t=p.y-s.y,bo=s.y+s.h-p.y;const m=Math.min(l,r,t,bo);if(m===t)p.y=s.y-p.radius;else if(m===bo)p.y=s.y+s.h+p.radius;else if(m===l)p.x=s.x-p.radius;else p.x=s.x+s.w+p.radius}
+  else{const d=Math.sqrt(d2);p.x=cx+dx/d*p.radius;p.y=cy+dy/d*p.radius}
+  const vx=p.x-p.px,vy=p.y-p.py;const impact=Math.abs(vy);p.px=p.x-vx*.82;if(p.y<=s.y-p.radius+2)p.py=p.y-Math.abs(vy)*.12;if(impact>9&&Math.random()<.3){AudioSys.thud(impact*.012);spawnSparks(p.x,p.y,"#94a3b8",2)}}}}
+function collideSolids(){const solids=sim.particles.filter(p=>p.solid&&!p.dead);if(!solids.length)return;
+ for(const s of solids){for(const q of sim.particles){if(q.dead||q===s||q.pinned)continue;if(s.adj.has(q.id))continue;const dx=q.x-s.x,dy=q.y-s.y;const min=s.radius+q.radius;const d2=dx*dx+dy*dy;if(d2>min*min||d2<.01)continue;const d=Math.sqrt(d2),push=(min-d)/d;const total=s.mass+q.mass;const qs=push*(s.mass/total)*.8,ss=push*(q.mass/total)*.8;q.x+=dx*qs;q.y+=dy*qs;if(!s.pinned){s.x-=dx*ss;s.y-=dy*ss}}}}
+
+/* scenario logic + end states */
+function integrityVal(){const total=Math.max(1,sim.spawnedLinks);const alive=sim.constraints.filter(c=>!c.broken).length;return clamp(Math.round(alive/total*100),0,100)}
+function scenarioLogic(dt){if(sim.ended)return;sim.checkT+=dt;
+ if(sim.scenario==="bridge"&&sim.phase==="test"&&sim.bridge.cart){const cart=sim.bridge.cart;const cx=cart.body.reduce((a,p)=>a+p.x,0)/4,cy=cart.body.reduce((a,p)=>a+p.y,0)/4;
+  if(cx>1015&&cy<470)return endScenario(true,"The cart rolled onto the east cliff. The span held under full load.");
+  if(cy>640||cart.wheels.some(w=>w.y>660))return endScenario(false,"The cart plunged into the gorge. Triangulate the deck and add supports under the wheel path.");
+  if(integrityVal()<38)return endScenario(false,"The deck disintegrated under the load. Too many members snapped — spread the load with diagonals.");
+  if(sim.checkT>150)return endScenario(false,"Time expired with the cart still on the span.")}
+ if(sim.scenario==="crane"){const cr=sim.crane;if(cr.crate){const cx=cr.crate.pts.reduce((a,p)=>a+p.x,0)/4,cy=cr.crate.pts.reduce((a,p)=>a+p.y,0)/4;const spd=Math.max(...cr.crate.pts.map(p=>Math.hypot(p.x-p.px,p.y-p.py)));
+  cr.crate.pts.forEach(p=>{const vy=Math.abs(p.y-p.py);if(p.y>640&&vy>7.5&&cr.impact<vy)cr.impact=vy});
+  if(cr.impact>10.5)return endScenario(false,"The crate smashed into the dock (impact "+cr.impact.toFixed(1)+"). Lower it slowly and kill the swing before release.");
+  const inZone=cx>905&&cx<1155&&cy>400&&cy<500;
+  if(inZone&&spd<.55){cr.holdT+=dt;$("goalSub").textContent="Holding steady… "+cr.holdT.toFixed(1)+" / 3.0 s";if(cr.holdT>=3)return endScenario(true,"Crate placed in the target zone, steady and intact. Textbook lift.")}
+  else cr.holdT=Math.max(0,cr.holdT-dt*2);
+  if(sim.time>300)return endScenario(false,"Shift over — the crate never settled in the zone. Plan the trolley path before you lift.")}}
+ if(sim.scenario==="tower"&&sim.tower.started){const t=sim.tower;const top=t.top;$("goalSub").textContent="Quake: "+Math.max(0,30-t.timer).toFixed(0)+" s remaining · tower top height "+Math.max(0,Math.round(636-(top?top.y:636)))+" px";
+  if(top&&(top.y>560||integrityVal()<40))return endScenario(false,"The tower collapsed at "+t.timer.toFixed(1)+" s. Cross-brace every level so it sways as one frame.");
+  if(t.timer>=30)return endScenario(true,"The tower rode out the full earthquake, still standing tall.")}
+ // sandbox milestones progress text
+ if(sim.scenario==="sandbox"){$("goalSub").textContent=sim.spawnTypes.size+" body types created · "+sim.brokenCount+" members snapped this session"}}
+function computeScore(success){const integ=integrityVal();let sc=success?600:Math.round(sim.time*2);sc+=integ*3;sc-=sim.brokenCount*12;if(sim.budget!==Infinity)sc+=Math.max(0,Math.round(sim.budget*.35));sc-=Math.round(sim.time*(sim.scenario==="sandbox"?0:1.2));return Math.max(50,Math.round(sc*DIFFS[selectedDiff].scoreMult))}
+function endScenario(success,msg){if(sim.ended)return;sim.ended=true;const sc=sim.scenario;const score=computeScore(success);sim.score=score;
+ const stars=success?(integrityVal()>=85&&sim.brokenCount<=4?3:integrityVal()>=60?2:1):0;
+ if(success&&sc!=="sandbox"){const prev=P.completions[sc];if(!prev||score>prev.score)P.completions[sc]={stars:Math.max(stars,prev?prev.stars:0),score};P.xp+=100+stars*25;
+  const done=Object.keys(P.completions).length;if(done>=1&&!P.unlocked.includes("steel")){P.unlocked.push("steel");toast("Unlocked: STEEL beams","good")}if(done>=2&&!P.unlocked.includes("carbon")){P.unlocked.push("carbon");toast("Unlocked: CARBON beams","good")}saveData()}
+ if(success)AudioSys.success();else AudioSys.fail();sim.shake=S.shake?10:sim.shake;
+ $("endIcon").innerHTML='<i data-lucide="'+(success?"trophy":"triangle-alert")+'" class="w-12 h-12 '+(success?"text-amber-400":"text-red-400")+' mx-auto"></i>';
+ $("endTitle").textContent=success?(sc==="sandbox"?"Milestone Reached":"Test Passed — "+SCENARIOS.find(s=>s.id===sc).name):"Test Failed";
+ $("endStars").innerHTML=sc==="sandbox"?"":('<span class="'+(stars>=1?"star-on":"star-off")+'">★</span><span class="'+(stars>=2?"star-on":"star-off")+'">★</span><span class="'+(stars>=3?"star-on":"star-off")+'">★</span>');
+ $("endText").textContent=msg+(success&&sc!=="sandbox"?" +"+(100+stars*25)+" XP earned.":"");
+ const stats=[["Score",score],["Time",fmtTime(sim.time)],["Integrity",integrityVal()+"%"],["Snapped",sim.brokenCount],["Peak stress",Math.round(sim.maxStressSeen*100)+"%"],["Spent",sim.spent+" cr"]];
+ $("endStats").innerHTML=stats.map(([k,v])=>'<div class="bg-slate-900/70 rounded-xl p-2"><div class="font-black text-[13px]">'+v+'</div><div class="text-[9px] text-slate-500 font-bold">'+k.toUpperCase()+'</div></div>').join("");
+ const order=["sandbox","bridge","crane","tower"];const next=order[order.indexOf(sc)+1];$("endNextBtn").style.display=success&&next?"inline-flex":"none";$("endNextBtn").dataset.next=next||"";
+ openModal("endModal");logEvent(success?"TEST PASSED — score "+score:"TEST FAILED — "+msg,success?"good":"bad");renderMilestones();updateTitleProgress()}
+function endNext(){const n=$("endNextBtn").dataset.next;closeModal("endModal");if(n)startScenario(n)}
+
+/* ═══════════════════════ EFFECTS ═══════════════════════ */
+function spawnSparks(x,y,color,n){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=40+Math.random()*130;sim.effects.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-40,life:.5+Math.random()*.3,t:0,color,size:1.5+Math.random()*2})}}
+function spawnRing(x,y,color,n){for(let i=0;i<n;i++){const a=i/n*Math.PI*2;sim.effects.push({x:x+Math.cos(a)*14,y:y+Math.sin(a)*14,vx:Math.cos(a)*36,vy:Math.sin(a)*36,life:.4,t:0,color,size:2})}}
+function floater(x,y,text,color){sim.floaters.push({x,y,text,color:color||"#7dd3fc",t:0})}
+function updateEffects(dt){for(const e of sim.effects){e.t+=dt;e.x+=e.vx*dt;e.y+=e.vy*dt;e.vy+=300*dt}sim.effects=sim.effects.filter(e=>e.t<e.life);for(const f of sim.floaters)f.t+=dt;sim.floaters=sim.floaters.filter(f=>f.t<1.1);
+ if(Math.random()<.5){const wv=windAt({y:300});if(Math.abs(wv)>4)sim.windStreaks.push({x:wv>0?-20:1300,y:40+Math.random()*560,vx:wv*22,life:1.4,t:0})}
+ for(const s of sim.windStreaks){s.t+=dt;s.x+=s.vx*dt}sim.windStreaks=sim.windStreaks.filter(s=>s.t<s.life&&s.x>-40&&s.x<1320)}
+
+/* ═══════════════════════ RENDERING ═══════════════════════ */
+const canvas=$("simCanvas"),ctx=canvas.getContext("2d");let view={scale:1,ox:0,oy:0,w:0,h:0,dpr:1};
+function resizeCanvas(){const wrap=$("canvasWrap");if(!wrap)return;const r=wrap.getBoundingClientRect();view.dpr=Math.min(2,window.devicePixelRatio||1);view.w=r.width;view.h=r.height;canvas.width=Math.max(1,r.width*view.dpr);canvas.height=Math.max(1,r.height*view.dpr);view.scale=Math.min(r.width/W,r.height/H);view.ox=(r.width-W*view.scale)/2;view.oy=(r.height-H*view.scale)/2}
+function toWorld(cx,cy){const r=canvas.getBoundingClientRect();return{x:(cx-r.left-view.ox)/view.scale,y:(cy-r.top-view.oy)/view.scale}}
+function stressColor(s){s=clamp(s,0,1);if(s<.5)return"rgb("+Math.round(lerp(52,245,s*2))+","+Math.round(lerp(211,158,s*2))+","+Math.round(lerp(153,11,s*2))+")";return"rgb(239,"+Math.round(lerp(158,68,(s-.5)*2))+","+Math.round(lerp(11,68,(s-.5)*2))+")"}
+function draw(){ctx.setTransform(view.dpr,0,0,view.dpr,0,0);ctx.fillStyle="#070b14";ctx.fillRect(0,0,view.w,view.h);ctx.save();
+ const shx=sim.shake>0?(Math.random()-.5)*sim.shake:0,shy=sim.shake>0?(Math.random()-.5)*sim.shake:0;sim.shake*=.88;if(sim.shake<.2)sim.shake=0;
+ ctx.translate(view.ox+shx,view.oy+shy);ctx.scale(view.scale,view.scale);
+ const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,"#0a1428");bg.addColorStop(.7,"#0a1120");bg.addColorStop(1,"#0d1526");ctx.fillStyle=bg;ctx.fillRect(-60,-60,W+120,H+120);
+ ctx.strokeStyle="rgba(56,189,248,.05)";ctx.lineWidth=1;for(let x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ // waters
+ for(const wz of sim.waters){if(!wz.on)continue;const wg=ctx.createLinearGradient(0,wz.y,0,wz.y+wz.h);wg.addColorStop(0,"rgba(56,189,248,.35)");wg.addColorStop(1,"rgba(2,60,110,.55)");ctx.fillStyle=wg;ctx.fillRect(wz.x,wz.y,wz.w,wz.h);ctx.strokeStyle="rgba(125,211,252,.5)";ctx.strokeRect(wz.x,wz.y,wz.w,wz.h);ctx.fillStyle="rgba(186,230,253,.75)";ctx.font="700 10px Inter";ctx.fillText(wz.label,wz.x+8,wz.y+15);ctx.beginPath();for(let x=wz.x;x<wz.x+wz.w;x+=8){const wy=wz.y+Math.sin(x*.06+sim.time*2.4)*2.2;x===wz.x?ctx.moveTo(x,wy):ctx.lineTo(x,wy)}ctx.strokeStyle="rgba(186,230,253,.65)";ctx.stroke()}
+ // scenario zones
+ if(sim.scenario==="crane"){ctx.save();ctx.setLineDash([8,6]);ctx.strokeStyle="rgba(74,222,128,.85)";ctx.lineWidth=2;ctx.fillStyle="rgba(74,222,128,.08)";ctx.fillRect(905,408,250,97);ctx.strokeRect(905,408,250,97);ctx.setLineDash([]);ctx.fillStyle="#4ade80";ctx.font="800 12px Inter";ctx.fillText("TARGET ZONE",915,428);ctx.restore()}
+ if(sim.scenario==="bridge"&&sim.phase==="test"){ctx.save();ctx.setLineDash([8,6]);ctx.strokeStyle="rgba(74,222,128,.8)";ctx.strokeRect(1000,352,250,64);ctx.setLineDash([]);ctx.fillStyle="#4ade80";ctx.font="800 12px Inter";ctx.fillText("FINISH",1012,376);ctx.restore()}
+ if(sim.scenario==="tower"&&sim.tower.started){ctx.save();ctx.strokeStyle="rgba(244,114,182,.55)";ctx.setLineDash([6,6]);ctx.beginPath();ctx.moveTo(490,560);ctx.lineTo(790,560);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#f9a8d4";ctx.font="800 11px Inter";ctx.fillText("COLLAPSE LINE",500,552);ctx.restore()}
+ // statics
+ for(const s of sim.statics){if(s.type==="rect"){ctx.fillStyle=s.color;ctx.beginPath();ctx.roundRect(s.x,s.y,s.w,s.h,4);ctx.fill();ctx.fillStyle="rgba(148,163,184,.14)";ctx.fillRect(s.x,s.y,s.w,3);if(s.label){ctx.fillStyle="rgba(203,213,225,.6)";ctx.font="800 10px Inter";ctx.fillText(s.label,s.x+8,s.y+16)}}}
+ // pressure bodies fill
+ for(const b of sim.bodies){if(b.pts.some(p=>p.dead))continue;ctx.beginPath();b.pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();const g=ctx.createRadialGradient(b.center.x,b.center.y,4,b.center.x,b.center.y,b.r*1.5);const leak=b.leak>0;g.addColorStop(0,leak?"rgba(232,121,249,.10)":"rgba(232,121,249,.30)");g.addColorStop(1,leak?"rgba(168,85,247,.03)":"rgba(168,85,247,.12)");ctx.fillStyle=g;ctx.fill()}
+ // constraints
+ for(const c of sim.constraints){if(c.broken)continue;const a=c.a,b=c.b;if(a.dead||b.dead)continue;const showStress=S.stress;const lim=Math.max(.05,c.breakStrain*DIFFS[selectedDiff].breakMult);ctx.strokeStyle=showStress?stressColor(clamp(c.stress/lim,0,1)):c.color;ctx.lineWidth=c.width;ctx.globalAlpha=c.type==="spoke"?.35:.92;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.globalAlpha=1;
+  if(c.type==="beam"&&c.width>=4){ctx.fillStyle=ctx.strokeStyle;const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;ctx.beginPath();ctx.arc(mx,my,2.2,0,7);ctx.fill()}}
+ // crate / cart fills
+ drawBoxFill(sim.crane.crate,"rgba(251,146,60,.16)","#fb923c");if(sim.bridge.cart)drawBoxFill({pts:sim.bridge.cart.body},"rgba(248,113,113,.16)","#f87171");
+ // particles
+ const showNodes=$("chkNodes")?$("chkNodes").checked:true;
+ for(const p of sim.particles){if(p.dead)continue;if(p.kind==="wheel"){ctx.fillStyle="#0f172a";ctx.beginPath();ctx.arc(p.x,p.y,p.radius,0,7);ctx.fill();ctx.strokeStyle="#e2e8f0";ctx.lineWidth=2.5;ctx.stroke();ctx.beginPath();ctx.arc(p.x,p.y,3,0,7);ctx.fillStyle="#e2e8f0";ctx.fill();continue}
+  if(p.kind==="weight"){const g=ctx.createRadialGradient(p.x-4,p.y-5,2,p.x,p.y,16);g.addColorStop(0,"#f8fafc");g.addColorStop(1,"#64748b");ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,p.radius,0,7);ctx.fill();ctx.fillStyle="#0f172a";ctx.font="900 10px Inter";ctx.textAlign="center";ctx.fillText("25",p.x,p.y+3.5);ctx.textAlign="left";continue}
+  if(p.kind==="trolley"){ctx.fillStyle="#854d0e";ctx.fillRect(p.x-20,p.y-10,40,20);ctx.strokeStyle="#facc15";ctx.strokeRect(p.x-20,p.y-10,40,20);continue}
+  if(p.kind==="hookchain"&&p===sim.crane.hook){ctx.strokeStyle="#4ade80";ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(p.x,p.y,9,0,7);ctx.stroke();ctx.beginPath();ctx.moveTo(p.x,p.y+9);ctx.quadraticCurveTo(p.x+8,p.y+16,p.x+2,p.y+20);ctx.stroke();continue}
+  if(!showNodes&&(p.cloth||p.kind==="rope"))continue;
+  ctx.fillStyle=p.pinned?"#facc15":p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.pinned?4.5:Math.max(2.4,p.radius*.7),0,7);ctx.fill();
+  if(p.pinned){ctx.strokeStyle="#facc15";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x,p.y-11);ctx.stroke();ctx.beginPath();ctx.moveTo(p.x,p.y-11);ctx.lineTo(p.x+7,p.y-8);ctx.lineTo(p.x,p.y-5);ctx.closePath();ctx.fillStyle="#facc15";ctx.fill()}}
+ // crane cables guide
+ if(sim.scenario==="crane"&&sim.crane.trolley){ctx.strokeStyle="rgba(250,204,21,.35)";ctx.setLineDash([4,5]);ctx.beginPath();ctx.moveTo(120,177);ctx.lineTo(1095,177);ctx.stroke();ctx.setLineDash([])}
+ // effects
+ for(const e of sim.effects){ctx.globalAlpha=1-e.t/e.life;ctx.fillStyle=e.color;ctx.beginPath();ctx.arc(e.x,e.y,e.size,0,7);ctx.fill()}ctx.globalAlpha=1;
+ for(const s of sim.windStreaks){ctx.globalAlpha=.28*(1-s.t/s.life);ctx.strokeStyle="#7dd3fc";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x-s.vx*.14,s.y);ctx.stroke()}ctx.globalAlpha=1;
+ for(const f of sim.floaters){ctx.globalAlpha=1-f.t/1.1;ctx.fillStyle=f.color;ctx.font="800 13px Inter";ctx.fillText(f.text,f.x,f.y-f.t*34)}ctx.globalAlpha=1;
+ // drag preview + grab line
+ if(sim.mouse.down&&sim.mouse.inside){const{x,y,sx,sy}=sim.mouse;ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle="rgba(125,211,252,.9)";ctx.lineWidth=1.6;
+  if(["cloth","blob","box"].includes(sim.tool)){const w=Math.abs(x-sx)*2,h=Math.abs(y-sy)*2;if(sim.tool==="blob"){ctx.beginPath();ctx.arc(sx,sy,Math.max(10,Math.hypot(x-sx,y-sy)),0,7);ctx.stroke()}else ctx.strokeRect(sx-w/2,sy-h/2,w,h)}
+  else if(["rope","beam"].includes(sim.tool)){ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(x,y);ctx.stroke();const snap=nearestParticle(x,y,46);if(snap){ctx.beginPath();ctx.arc(snap.x,snap.y,10,0,7);ctx.strokeStyle="#4ade80";ctx.stroke()}}
+  ctx.restore()}
+ if(sim.grabbed&&!sim.grabbed.dead){ctx.strokeStyle="rgba(250,204,21,.65)";ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(sim.grabbed.x,sim.grabbed.y);ctx.lineTo(sim.mouse.x,sim.mouse.y);ctx.stroke();ctx.setLineDash([])}
+ // wind compass
+ const wv=windAt({y:200});ctx.fillStyle="rgba(7,11,20,.55)";ctx.beginPath();ctx.roundRect(W-158,14,144,40,10);ctx.fill();ctx.strokeStyle="rgba(148,163,184,.3)";ctx.stroke();ctx.fillStyle="#94a3b8";ctx.font="700 9px Inter";ctx.fillText("WIND",W-148,29);ctx.fillStyle=Math.abs(wv)<2?"#64748b":"#7dd3fc";ctx.font="900 15px Inter";const dir=wv>1?"→":wv<-1?"←":"·";ctx.fillText(dir+" "+Math.abs(wv).toFixed(0)+" m/s",W-148,47);
+ ctx.restore()}
+function drawBoxFill(obj,color,stroke){if(!obj||!obj.pts||obj.pts.some(p=>p.dead))return;ctx.beginPath();obj.pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fillStyle=color;ctx.fill();ctx.strokeStyle=stroke;ctx.lineWidth=1.4;ctx.stroke()}
+
+/* ═══════════════════════ MAIN LOOP ═══════════════════════ */
+let lastTs=0,rafId=null;
+function loop(ts){rafId=requestAnimationFrame(loop);const dtms=lastTs?ts-lastTs:16;lastTs=ts;sim.frames++;sim.fpsT+=dtms;if(sim.fpsT>500){sim.fps=Math.round(sim.frames/(sim.fpsT/1000));sim.frames=0;sim.fpsT=0}
+ if(!sim.active)return;const dt=Math.min(.05,dtms/1000);
+ if(!sim.paused&&!anyModalOpen()){sim.acc+=dt*sim.speed;const step=1/60;let n=0;while(sim.acc>=step&&n<10){physicsStep(step);sim.acc-=step;n++}if(n===10)sim.acc=0}
+ draw();hudTick(dt)}
+function anyModalOpen(){return["helpModal","settingsModal","pauseModal","endModal"].some(id=>!$(id).classList.contains("hidden"))}
+let hudAcc=0;
+function hudTick(dt){hudAcc+=dt;AudioSys.updateAmbient(env.wind+(sim.gust*20));if(hudAcc<.12)return;hudAcc=0;refreshStaticHUD()}
+function pushHistory(){const integ=integrityVal();let ke=0;for(const p of sim.particles){if(p.dead||p.pinned)continue;ke+=(p.x-p.px)**2+(p.y-p.py)**2}const maxS=sim.constraints.reduce((m,c)=>Math.max(m,c.broken?0:c.stress/Math.max(.05,c.breakStrain)),0);
+ sim.history.push({i:integ,s:clamp(maxS,0,1.4),e:clamp(ke/900,0,1)});if(sim.history.length>110)sim.history.shift();drawChart();checkMilestones()}
+function drawChart(){const c=$("chart");if(!c)return;const g=c.getContext("2d");g.clearRect(0,0,c.width,c.height);g.strokeStyle="rgba(148,163,184,.12)";for(let y=0;y<4;y++){g.beginPath();g.moveTo(0,12+y*22);g.lineTo(c.width,12+y*22);g.stroke()}
+ const series=[["i","#34d399",v=>86-v*.78],["s","#f87171",v=>86-clamp(v,0,1.3)/1.3*78],["e","#38bdf8",v=>86-v*.78]];
+ for(const[key,col,map]of series){g.strokeStyle=col;g.lineWidth=1.6;g.beginPath();sim.history.forEach((h,idx)=>{const x=idx/(109)*c.width,y=map(h[key]);idx?g.lineTo(x,y):g.moveTo(x,y)});g.stroke()}g.lineWidth=1}
+
+/* ═══════════════════════ HUD / LOG / TOASTS ═══════════════════════ */
+function refreshStaticHUD(){$("hudTime").textContent=fmtTime(sim.time);const integ=integrityVal();$("hudIntegrity").textContent=integ+"%";$("hudBudget").textContent=sim.budget===Infinity?"Unlimited":Math.max(0,Math.round(sim.budget))+" cr";$("hudScore").textContent=sim.score||computeScore(false);
+ $("mIntegrity").textContent=integ+"%";$("barIntegrity").style.width=integ+"%";$("barIntegrity").style.background=integ>60?"linear-gradient(90deg,#059669,#34d399)":integ>35?"linear-gradient(90deg,#d97706,#fbbf24)":"linear-gradient(90deg,#dc2626,#f87171)";
+ let maxS=0,ke=0;for(const c of sim.constraints)if(!c.broken)maxS=Math.max(maxS,c.stress/Math.max(.05,c.breakStrain));for(const p of sim.particles)if(!p.dead)ke+=(p.x-p.px)**2+(p.y-p.py)**2;
+ $("mStress").textContent=Math.round(clamp(maxS,0,2)*100)+"%";$("barStress").style.width=clamp(maxS*100,0,100)+"%";$("mEnergy").textContent=Math.round(ke);$("barEnergy").style.width=clamp(ke/9,0,100)+"%";
+ $("stParticles").textContent=sim.particles.filter(p=>!p.dead).length;$("stLinks").textContent=sim.constraints.filter(c=>!c.broken).length;$("stBroken").textContent=sim.brokenCount;$("stObjects").textContent=sim.groups.length;$("stSpent").textContent=sim.spent;$("stFps").textContent=sim.fps;
+ if(sim.scenario==="bridge"){$("goalBar").style.width=(sim.bridge.cart?clamp((Math.max(...sim.bridge.cart.body.map(p=>p.x))-110)/920*100,0,100):sim.bridge.started?8:2)+"%";if(sim.phase==="build")$("goalSub").textContent="Budget "+Math.round(sim.budget)+" cr · reinforce, then start the test. Cart progress shows here."}
+ if(sim.scenario==="tower"&&!sim.tower.started)$("goalSub").textContent="Budget "+Math.round(sim.budget)+" cr · brace all four levels before starting."}
+function logEvent(msg,cls){const el=$("eventLog");if(!el)return;const d=document.createElement("div");d.className="log-item "+(cls||"");d.textContent="["+fmtTime(sim.time)+"] "+msg;el.prepend(d);while(el.children.length>40)el.lastChild.remove()}
+function toast(msg,type){const t=document.createElement("div");t.className="toast pointer-events-none text-[12px] font-bold px-4 py-2 rounded-xl border";t.style.background=type==="bad"?"rgba(127,29,29,.92)":type==="warn"?"rgba(120,80,10,.92)":type==="good"?"rgba(6,80,50,.92)":"rgba(15,35,60,.92)";t.style.borderColor=type==="bad"?"#f87171":type==="warn"?"#fbbf24":type==="good"?"#4ade80":"#38bdf8";t.style.color="#fff";t.textContent=msg;$("toasts").appendChild(t);setTimeout(()=>{t.style.transition="opacity .4s";t.style.opacity="0";setTimeout(()=>t.remove(),420)},2600)}
+
+/* milestones & progression */
+const MILESTONES=[{id:"creator",label:"Creator — spawn 4 different body types",check:()=>sim.spawnTypes.size>=4||(P.milestones.creator)},{id:"demolition",label:"Demolition — snap 25 members in one session",check:()=>sim.brokenCount>=25},{id:"surgeon",label:"Surgeon — cut a cloth freehand",check:()=>!!sim.milestoneSession.cut},{id:"engineer",label:"Engineer — pass any engineering test",check:()=>Object.keys(P.completions).length>=1},{id:"master",label:"Master — pass all three tests",check:()=>Object.keys(P.completions).length>=3},{id:"gentle",label:"Gentle hands — pass Crane Lift",check:()=>!!P.completions.crane}];
+function checkMilestones(){for(const m of MILESTONES){if(P.milestones[m.id])continue;let ok=false;try{ok=m.check()}catch(e){}if(ok){P.milestones[m.id]=true;P.xp+=25;saveData();toast("Milestone: "+m.label.split("—")[0].trim()+" (+25 XP)","good");floater(640,120,"+25 XP","#4ade80");AudioSys.tone(880,1320,.18,"triangle",.12);renderMilestones()}}}
+function renderMilestones(){$("xpLabel").textContent=P.xp+" XP · Rank "+(1+Math.floor(P.xp/300));const ml=$("milestoneList");if(ml)ml.innerHTML=MILESTONES.map(m=>{const done=!!P.milestones[m.id];return '<div class="flex items-center gap-2"><i data-lucide="'+(done?"circle-check":"circle")+'" class="w-3.5 h-3.5 '+(done?"check-done":"check-todo")+'"></i><span class="'+(done?"text-slate-300":"text-slate-500")+'">'+m.label+'</span></div>'}).join("");
+ const cl=$("campaignList");if(cl)cl.innerHTML=SCENARIOS.filter(s=>s.id!=="sandbox").map(s=>{const c=P.completions[s.id];return '<div class="flex items-center gap-2"><i data-lucide="'+(c?"trophy":"circle-dashed")+'" class="w-3.5 h-3.5 '+(c?"text-amber-400":"text-slate-600")+'"></i><span class="'+(c?"text-slate-200":"text-slate-500")+'">'+s.name+'</span>'+(c?'<span class="ml-auto text-amber-300 text-[10px] font-black">'+("★".repeat(c.stars))+" · "+c.score+'</span>':'<span class="ml-auto text-[10px] text-slate-600 font-bold">NOT PASSED</span>')+'</div>'}).join("");
+ if(window.lucide)lucide.createIcons();updateTitleProgress()}
+function updateTitleProgress(){const done=Object.keys(P.completions).length;$("titleRank").textContent="Rank "+(1+Math.floor(P.xp/300))+" · "+P.xp+" XP";$("titleProgress").innerHTML=done?done+" of 3 engineering tests passed · "+P.xp+" XP banked":"No scenarios completed yet. Steel beams unlock after your first pass.";$("startBtnLabel").textContent=done||P.xp?"Continue the campaign":"Start Simulation"}
+
+/* ═══════════════════════ TOOLS & INPUT ═══════════════════════ */
+const TOOLS=[{id:"grab",icon:"hand",label:"Grab"},{id:"pin",icon:"pin",label:"Pin"},{id:"cut",icon:"scissors",label:"Cut"},{id:"erase",icon:"eraser",label:"Erase"},{id:"cloth",icon:"grid-3x3",label:"Cloth"},{id:"rope",icon:"spline",label:"Rope"},{id:"blob",icon:"circle-dot",label:"Blob"},{id:"box",icon:"box",label:"Crate"},{id:"beam",icon:"ruler",label:"Beam"},{id:"weight",icon:"weight",label:"Weight"}];
+function buildToolbar(){$("toolbar").innerHTML=TOOLS.map((t,i)=>'<button class="tool-btn '+(sim.tool===t.id?"active":"")+'" data-tool="'+t.id+'" onclick="setTool(\''+t.id+'\')" title="'+t.label+' ('+(i+1)%10+')"><i data-lucide="'+t.icon+'"></i>'+t.label+'</button>').join("")+'<div class="mt-auto pt-2 border-t border-slate-800 w-full"><button class="tool-btn" onclick="undoLast()" title="Undo (Ctrl+Z)"><i data-lucide="undo-2"></i>Undo</button></div>';lucide.createIcons()}
+function setTool(t){sim.tool=t;document.querySelectorAll(".tool-btn[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===t));canvas.style.cursor=t==="grab"?"grab":t==="cut"?"cell":"crosshair";AudioSys.click();coachAction("tool:"+t)}
+function setMaterial(m){if((m==="steel"&&!P.unlocked.includes("steel"))||(m==="carbon"&&!P.unlocked.includes("carbon"))){toast("Material locked — pass engineering tests to unlock it","warn");$("materialSel").value=sim.material;return}sim.material=m;AudioSys.click()}
+function updateMaterialOptions(){$("optSteel").disabled=!P.unlocked.includes("steel");$("optSteel").textContent=P.unlocked.includes("steel")?"Steel Beam — strong, 78% strain limit":"Steel Beam — LOCKED (pass 1 test)";$("optCarbon").disabled=!P.unlocked.includes("carbon");$("optCarbon").textContent=P.unlocked.includes("carbon")?"Carbon Beam — elite, 120% strain limit":"Carbon Beam — LOCKED (pass 2 tests)";if(!P.unlocked.includes(sim.material))sim.material="wood";$("materialSel").value=sim.material}
+function nearestParticle(x,y,maxD){let best=null,bd=maxD;for(const p of sim.particles){if(p.dead)continue;const d=Math.hypot(p.x-x,p.y-y);if(d<bd){bd=d;best=p}}return best}
+function cutSegment(x1,y1,x2,y2){let n=0;for(const c of sim.constraints){if(c.broken||c.dead)continue;if(segInt(x1,y1,x2,y2,c.a.x,c.a.y,c.b.x,c.b.y)||pointSegDist(c.a.x,c.a.y,x1,y1,x2,y2)<7||pointSegDist(c.b.x,c.b.y,x1,y1,x2,y2)<7){c.broken=true;n++;spawnSparks((c.a.x+c.b.x)/2,(c.a.y+c.b.y)/2,"#7dd3fc",2)}}if(n){sim.brokenCount+=n;sim.milestoneSession.cut=true;AudioSys.snap();logEvent("Cut "+n+" member"+(n>1?"s":"")+".");coachAction("cut")}return n}
+function segInt(x1,y1,x2,y2,x3,y3,x4,y4){const d=(x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);if(!d)return false;const t=((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/d,u=((x3-x1)*(y2-y1)-(y3-y1)*(x2-x1))/d;return t>=0&&t<=1&&u>=0&&u<=1}
+function pointSegDist(px,py,x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy||1;const t=clamp(((px-x1)*dx+(py-y1)*dy)/l2,0,1);return Math.hypot(px-(x1+t*dx),py-(y1+t*dy))}
+function removeParticle(p){p.dead=true;sim.constraints.forEach(c=>{if(c.a===p||c.b===p)c.broken=true});sim.bodies=sim.bodies.filter(b=>!b.pts.includes(p)&&b.center!==p);spawnSparks(p.x,p.y,"#f87171",6)}
+canvas.addEventListener("pointerdown",e=>{if(!sim.active)return;AudioSys.init();AudioSys.resume();canvas.setPointerCapture(e.pointerId);const w=toWorld(e.clientX,e.clientY);sim.mouse.x=w.x;sim.mouse.y=w.y;sim.mouse.sx=w.x;sim.mouse.sy=w.y;sim.mouse.down=true;sim.mouse.inside=true;
+ const tool=sim.tool;
+ if(tool==="grab"){const p=nearestParticle(w.x,w.y,52);if(p&&!p.pinned){sim.grabbed=p;coachAction("grab")}}
+ else if(tool==="pin"){const p=nearestParticle(w.x,w.y,34);if(p){p.pinned=!p.pinned;if(p.pinned){p.px=p.x;p.py=p.y}logEvent(p.pinned?"Node anchored.":"Anchor released.");spawnRing(p.x,p.y,"#facc15",5);AudioSys.clank()}else{const a=addParticle(w.x,w.y,{pinned:true,radius:4,kind:"anchor",color:"#facc15"});const g=registerGroup("anchor",[a.id],[]);a.group=g;logEvent("Anchor node planted — drag Beams to it.")}coachAction("pin")}
+ else if(tool==="cut"){sim.mouse.cutX=w.x;sim.mouse.cutY=w.y}
+ else if(tool==="erase"){const p=nearestParticle(w.x,w.y,30);if(p&&p.kind!=="trolley"){removeParticle(p);AudioSys.noiseHit(.08,.15,700)}}
+ else if(tool==="weight"){if(sim.particles.length<QUALITY[S.quality].cap){createWeight(w.x,w.y);AudioSys.thud(.2)}}});
+canvas.addEventListener("pointermove",e=>{const w=toWorld(e.clientX,e.clientY);const lx=sim.mouse.x,ly=sim.mouse.y;sim.mouse.x=w.x;sim.mouse.y=w.y;sim.mouse.inside=true;
+ if(sim.mouse.down&&sim.tool==="cut"){cutSegment(sim.mouse.cutX??lx,sim.mouse.cutY??ly,w.x,w.y);sim.mouse.cutX=w.x;sim.mouse.cutY=w.y}});
+canvas.addEventListener("pointerup",e=>{if(!sim.mouse.down)return;sim.mouse.down=false;const w=toWorld(e.clientX,e.clientY);const{x,y,sx,sy}=sim.mouse;const tool=sim.tool;
+ if(sim.grabbed){sim.grabbed=null}
+ else if(tool==="cloth"){if(capCheck()){createCloth((sx+x)/2,(sy+y)/2,Math.max(50,Math.abs(x-sx)*2)||170,Math.max(40,Math.abs(y-sy)*2)||130)}}
+ else if(tool==="blob"){if(capCheck())createBlob(sx,sy,Math.max(24,Math.hypot(x-sx,y-sy)||48))}
+ else if(tool==="box"){if(capCheck()){createBox((sx+x)/2,(sy+y)/2,Math.max(30,Math.abs(x-sx)*2)||70,Math.max(26,Math.abs(y-sy)*2)||54,{})}}
+ else if(tool==="rope"){if(capCheck())createRope(sx,sy,x,y)}
+ else if(tool==="beam"){const a=nearestParticle(sx,sy,48)||addParticle(sx,sy,{radius:4,kind:"beamnode",color:"#e2e8f0"});const b=nearestParticle(x,y,48)||addParticle(x,y,{radius:4,kind:"beamnode",color:"#e2e8f0"});if(a!==b)createBeamBetween(a,b,sim.material)}
+ sim.mouse.cutX=null});
+canvas.addEventListener("pointerleave",()=>{sim.mouse.inside=false;if(sim.tool!=="cut")sim.mouse.down=false;sim.grabbed=null});
+function capCheck(){if(sim.particles.length>=QUALITY[S.quality].cap){toast("Node cap reached for this quality setting","warn");return false}return true}
+function undoLast(){for(let i=sim.groups.length-1;i>=0;i--){const g=sim.groups[i];if(!g.player)continue;sim.particles.forEach(p=>{if(g.pids.has(p.id))p.dead=true});sim.constraints.forEach(c=>{if(g.cids.has(c.id))c.broken=true});sim.groups.splice(i,1);sim.particles=sim.particles.filter(p=>!p.dead);sim.bodies=sim.bodies.filter(b=>b.pts.every(p=>!p.dead)&&!b.center.dead);logEvent("Undid last "+g.kind+".");AudioSys.click();return}toast("Nothing of yours to undo","warn")}
+function clearUserObjects(){sim.groups.filter(g=>g.player).forEach(g=>{sim.particles.forEach(p=>{if(g.pids.has(p.id))p.dead=true});sim.constraints.forEach(c=>{if(g.cids.has(c.id))c.broken=true})});sim.groups=sim.groups.filter(g=>!g.player);sim.particles=sim.particles.filter(p=>!p.dead);sim.bodies=sim.bodies.filter(b=>b.pts.every(p=>!p.dead));logEvent("Cleared everything you built. Scenario structures remain.");AudioSys.click()}
+
+/* ═══════════════════════ ACTIONS / EVENTS ═══════════════════════ */
+function buildActionBar(){const bar=$("actionBar");let h="";
+ if(sim.scenario==="bridge"&&!sim.bridge.started)h+='<button class="btn-primary !py-2" onclick="startBridgeTest()"><i data-lucide="truck" class="w-4 h-4"></i>Start Load Test</button>';
+ if(sim.scenario==="tower"&&!sim.tower.started)h+='<button class="btn-primary !py-2" onclick="startQuake()"><i data-lucide="activity" class="w-4 h-4"></i>Start Quake</button>';
+ if(sim.scenario==="crane")h+='<button class="btn-primary !py-2" onclick="craneAttachToggle()"><i data-lucide="'+(sim.crane.attached?"unlink":"link")+'" class="w-4 h-4"></i>'+(sim.crane.attached?"Release crate":"Attach crate")+'</button><span class="hud-chip hidden md:inline-flex">A/D trolley · W/S winch</span>';
+ if(sim.scenario==="sandbox")h+='<button class="btn-ghost !py-2" onclick="dropWeight()"><i data-lucide="weight" class="w-3.5 h-3.5"></i>Drop weight</button><button class="btn-ghost !py-2" onclick="triggerGust()"><i data-lucide="tornado" class="w-3.5 h-3.5"></i>Gust</button>';
+ h+='<button class="btn-ghost !py-2" onclick="undoLast()"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i>Undo</button><button class="btn-ghost !py-2" onclick="restartScenario()"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>Restart</button>';
+ bar.innerHTML=h;lucide.createIcons()}
+function triggerGust(silent){sim.gust=1.6+rng()*.8;sim.gustDir=rng()<.5?-1:1;env.wind=clamp(env.wind, -8,8);if(!silent){logEvent("Gust front rolling through — cloth and blobs take the load first.","warn");toast("Gust front incoming","warn")}coachAction("gust")}
+function dropWeight(){const x=200+rng()*880;createWeight(x,60);logEvent("Test weight dropped from the rig.");AudioSys.thud(.15)}
+function toggleWater(){sim.waters.forEach(w=>w.on=!w.on);if(sim.scenario==="sandbox"&&!sim.waters.length)sim.waters=[{x:905,y:566,w:300,h:86,on:true,label:"BUOYANCY TANK"}];const on=sim.waters.some(w=>w.on);sim.waterOn=on;logEvent(on?"Buoyancy tank filled. Blobs float, everything drags.":"Tank drained.");if(on)AudioSys.splash();coachAction("water")}
+function microQuake(){sim.quakeT=1.2;logEvent("Micro-quake! The whole lab rattles for a moment.","warn");sim.shake=5;AudioSys.noiseHit(.4,.2,140)}
+function envChange(){env.gravity=+$("sGravity").value;env.wind=+$("sWind").value;env.iterations=+$("sIter").value;env.pressure=+$("sPressure").value/100;env.damping=1-(+$("sDamp").value/1000);S.stress=$("chkStress").checked;
+ $("vGravity").textContent=env.gravity;$("vWind").textContent=env.wind;$("vIter").textContent=Math.max(2,Math.round(env.iterations*QUALITY[S.quality].iterMult));$("vPressure").textContent=env.pressure.toFixed(2)+"×";$("vDamp").textContent=(+$("sDamp").value/10).toFixed(1)+"%";
+ if(Math.abs(env.wind)>3)coachAction("wind")}
+
+/* ═══════════════════════ UI FLOW ═══════════════════════ */
+function openModal(id){const m=$(id);m.classList.remove("hidden");m.classList.add("flex");if(window.lucide)lucide.createIcons()}
+function closeModal(id){const m=$(id);m.classList.add("hidden");m.classList.remove("flex")}
+function openHelp(){openModal("helpModal")}
+function openSettings(){$("setVolume").value=Math.round(S.volume*100);$("volLabel").textContent=Math.round(S.volume*100)+"%";$("setMuted").checked=S.muted;$("setQuality").value=S.quality;$("setStress").checked=S.stress;$("setShake").checked=S.shake;openModal("settingsModal")}
+function settingsChanged(){S.volume=+$("setVolume").value/100;S.muted=$("setMuted").checked;S.quality=$("setQuality").value;S.stress=$("setStress").checked;S.shake=$("setShake").checked;$("volLabel").textContent=$("setVolume").value+"%";const cs=$("chkStress");if(cs)cs.checked=S.stress;AudioSys.init();AudioSys.setVol();updateMuteBtn();saveData();envChange()}
+function resetProgress(){P={xp:0,completions:{},unlocked:["wood","ropeM"],milestones:{},tutorialDone:false,lastScenario:"sandbox",lastDiff:selectedDiff};saveData();updateMaterialOptions();renderMilestones();updateTitleProgress();toast("Saved progress reset","warn")}
+function toggleMute(){S.muted=!S.muted;AudioSys.init();AudioSys.setVol();updateMuteBtn();saveData()}
+function updateMuteBtn(){$("muteBtn").innerHTML='<i data-lucide="'+(S.muted?"volume-x":"volume-2")+'" class="w-4 h-4"></i>';lucide.createIcons()}
+function setPaused(v){sim.paused=v;updatePauseBtn();if(v)openPauseSilent()}
+function openPauseSilent(){}
+function togglePause(){if(!sim.active)return;if(!$("pauseModal").classList.contains("hidden")){closeModal("pauseModal");sim.paused=false}else{sim.paused=true;openModal("pauseModal")}updatePauseBtn()}
+function openPause(){sim.paused=true;updatePauseBtn();openModal("pauseModal")}
+function updatePauseBtn(){$("pauseBtn").innerHTML='<i data-lucide="'+(sim.paused?"play":"pause")+'" class="w-4 h-4"></i>';lucide.createIcons()}
+function setSpeed(v){sim.speed=v;document.querySelectorAll("[data-speed]").forEach(b=>b.classList.toggle("active",+b.dataset.speed===v));AudioSys.click()}
+function restartScenario(){closeModal("endModal");closeModal("pauseModal");$("cranePad").classList.add("hidden");$("cranePad").classList.remove("flex");startScenario(sim.scenario);toast("Scenario reset","info")}
+function backToTitle(){sim.active=false;sim.paused=false;$("simScreen").style.display="none";$("simScreen").classList.add("hidden");$("titleScreen").style.display="block";closeModal("endModal");closeModal("pauseModal");buildTitleCards();updateTitleProgress();window.scrollTo(0,0)}
+function togglePanel(){const p=$("sidePanel");p.classList.toggle("hidden")}
+function switchTab(t){document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));["lab","data","goals"].forEach(x=>$("tab-"+x).classList.toggle("hidden",x!==t));if(t==="data")drawChart();AudioSys.click()}
+
+/* title screen */
+function buildTitleCards(){$("scenGrid").innerHTML=SCENARIOS.map(s=>{const c=P.completions[s.id];return '<button class="scen-card '+(selectedScenario===s.id?"active":"")+'" onclick="selectScenario(\''+s.id+'\')"><div class="flex items-center gap-2 mb-1.5"><span class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:'+s.color+'22;color:'+s.color+'"><i data-lucide="'+s.icon+'" class="w-4.5 h-4.5"></i></span><span class="text-[9px] font-black tracking-[.2em]" style="color:'+s.color+'">'+s.tag+'</span>'+(c?'<span class="ml-auto text-amber-300 text-[11px] font-black">'+"★".repeat(c.stars)+'</span>':'')+'</div><div class="font-black text-[15px] mb-1">'+s.name+'</div><p class="text-[11.5px] text-slate-400 leading-relaxed">'+s.desc+'</p></button>'}).join("");lucide.createIcons();
+ document.querySelectorAll("#diffGroup .seg-btn").forEach(b=>b.classList.toggle("active",b.dataset.diff===selectedDiff));$("diffDesc").textContent=DIFFS[selectedDiff].desc}
+function selectScenario(id){selectedScenario=id;AudioSys.init();AudioSys.click();buildTitleCards()}
+function setDifficulty(d){selectedDiff=d;P.lastDiff=d;saveData();buildTitleCards();AudioSys.click()}
+function startFromTitle(){startScenario(selectedScenario)}
+
+/* ═══════════════════════ TUTORIAL ═══════════════════════ */
+const COACH=[{text:"Welcome! First, drag on the canvas with the CLOTH tool (key 5) to hang a sheet. Drag a rectangle, then let go.",done:null},{text:"Now pick GRAB (key 1) and drag any glowing node. Throw it and watch stress colours ripple through the springs.",done:"grab"},{text:"Slide the WIND control in the right panel (LAB tab) up and down. Cloth catches wind far more than crates do.",done:"wind"},{text:"Pick CUT (key 3) and drag across the cloth to slice members freehand.",done:"cut"},{text:"Finally, PIN (key 2): click a swinging node to anchor it, or click empty space to plant an anchor for beams. Tour complete — the GOALS tab tracks your milestones.",done:"pin"}];
+let coachIdx=0,coachActive=false;
+function startTutorial(){if(sim.scenario!=="sandbox")startScenario("sandbox");coachIdx=0;coachActive=true;$("coach").classList.remove("hidden");showCoach()}
+function showCoach(){$("coachText").textContent=COACH[coachIdx].text;$("coachStep").textContent=(coachIdx+1)+" / "+COACH.length;if(window.lucide)lucide.createIcons()}
+function coachNext(manual){coachIdx++;if(coachIdx>=COACH.length)endTutorial();else showCoach()}
+function coachAction(a){if(!coachActive)return;const step=COACH[coachIdx];if(!step)return;if(step.done===a||(coachIdx===0&&a==="cloth"))coachNext()}
+function endTutorial(){coachActive=false;$("coach").classList.add("hidden");P.tutorialDone=true;saveData()}
+
+/* ═══════════════════════ KEYBOARD ═══════════════════════ */
+window.addEventListener("keydown",e=>{const tag=(e.target.tagName||"").toLowerCase();if(tag==="input"||tag==="select"||tag==="textarea")return;const k=e.key.toLowerCase();sim.keys[k]=true;
+ if(k==="p"||k==="escape"){if(sim.active){if(k==="escape"&&anyModalOpen()){["helpModal","settingsModal","pauseModal"].forEach(closeModal);sim.paused=false;updatePauseBtn()}else togglePause()}return}
+ if(!sim.active)return;
+ if(k==="m")toggleMute();if(k==="h")openHelp();
+ if((e.ctrlKey||e.metaKey)&&k==="z"){e.preventDefault();undoLast()}
+ if(k>="1"&&k<="9")setTool(TOOLS[+k-1].id);if(k==="0")setTool(TOOLS[9].id);
+ if(k===",")setSpeed(sim.speed<=.5?.5:sim.speed/2);if(k===".")setSpeed(clamp(sim.speed*2,.5,4));
+ if(k===" "){e.preventDefault();if(sim.scenario==="bridge")startBridgeTest();else if(sim.scenario==="tower")startQuake();else if(sim.scenario==="crane")craneAttachToggle()}});
+window.addEventListener("keyup",e=>{sim.keys[e.key.toLowerCase()]=false});
+document.querySelectorAll("[data-hold]").forEach(b=>{const key=b.dataset.hold;const on=e=>{e.preventDefault();sim.hold[key]=true};const off=()=>sim.hold[key]=false;b.addEventListener("pointerdown",on);b.addEventListener("pointerup",off);b.addEventListener("pointerleave",off);b.addEventListener("pointercancel",off)});
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&sim.active&&!sim.ended){sim.paused=true;updatePauseBtn();logEvent("Tab hidden — simulation auto-paused.")}});
+window.addEventListener("resize",resizeCanvas);
+
+/* ═══════════════════════ INIT ═══════════════════════ */
+if(!window.lucide)window.lucide={createIcons:function(){}};
+buildTitleCards();updateTitleProgress();updateMuteBtn();
+$("setVolume").value=Math.round(S.volume*100);
+if(S.stress===false)$("chkStress").checked=false;
+rafId=requestAnimationFrame(loop);resizeCanvas();
+lucide.createIcons();
+</script>
+</body>
+</html>

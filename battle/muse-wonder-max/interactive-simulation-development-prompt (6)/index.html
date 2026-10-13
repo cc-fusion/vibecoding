@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canopy — Forest Dynamics Simulator</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{scrollbar-width:thin;scrollbar-color:#3f6212 transparent}
+  ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#365314;border-radius:99px}
+  body{font-family:'Inter',system-ui,sans-serif;background:#0a120b;color:#ecfdf5}
+  .font-display{font-family:'Fraunces',serif}.font-mono2{font-family:'JetBrains Mono',monospace}
+  .glass{background:rgba(16,28,18,.82);backdrop-filter:blur(14px);border:1px solid rgba(163,230,53,.14)}
+  .glass2{background:rgba(24,40,26,.72);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.08)}
+  .btn{transition:all .18s cubic-bezier(.34,1.56,.64,1)}
+  .btn:hover{transform:translateY(-1px)} .btn:active{transform:translateY(1px) scale(.98)}
+  .tool-btn.active{background:linear-gradient(135deg,#65a30d,#16a34a);color:#fff;border-color:#a3e635;box-shadow:0 6px 20px -6px rgba(101,163,13,.7)}
+  .tab-btn.active{background:#365314;color:#d9f99d;border-color:rgba(163,230,53,.4)}
+  .scen-card{transition:all .25s cubic-bezier(.22,1,.36,1);cursor:pointer}
+  .scen-card:hover{transform:translateY(-4px);border-color:rgba(163,230,53,.55)}
+  .scen-card.selected{border-color:#a3e635;background:linear-gradient(160deg,rgba(54,83,20,.65),rgba(20,35,20,.9));box-shadow:0 12px 34px -12px rgba(163,230,53,.45)}
+  .diff-btn.active{background:#a3e635;color:#1a2e05;font-weight:800}
+  input[type=range]{accent-color:#84cc16}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(8px)}15%{opacity:1}100%{opacity:0;transform:translateY(-44px)}}
+  .float-txt{animation:floatUp 1.8s ease-out forwards;pointer-events:none;text-shadow:0 2px 8px rgba(0,0,0,.8)}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+  .alert-glow{animation:pulseGlow 1.2s infinite}
+  @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+  .log-item{animation:slideIn .35s ease-out}
+  @keyframes sway{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg)}}
+  .leaf-sway{display:inline-block;animation:sway 3.4s ease-in-out infinite;transform-origin:bottom center}
+  .prog{transition:width .8s cubic-bezier(.22,1,.36,1)}
+  .modal-bg{background:rgba(4,10,5,.78);backdrop-filter:blur(6px)}
+  .species-card.selected{border-color:#a3e635;background:rgba(54,83,20,.55)}
+  .research-card.bought{border-color:rgba(163,230,53,.6);background:rgba(54,83,20,.4);opacity:.85}
+  canvas{display:block}
+  .kbd{font-family:'JetBrains Mono',monospace;font-size:10px;background:#1c2b1a;border:1px solid #3f6212;border-bottom-width:2px;border-radius:4px;padding:1px 5px;color:#bef264}
+  @media (max-width:1023px){ #rightPanel{position:fixed;right:0;top:0;bottom:0;z-index:40;transform:translateX(105%);transition:transform .3s} #rightPanel.open{transform:none;box-shadow:-20px 0 50px rgba(0,0,0,.6)} }
+</style>
+</head>
+<body class="overflow-x-hidden min-h-screen">
+
+<!-- ══════════ TITLE SCREEN ══════════ -->
+<div id="titleScreen" class="fixed inset-0 z-[90] overflow-y-auto" style="background:radial-gradient(1100px 600px at 70% -10%,rgba(132,204,22,.22),transparent 60%),radial-gradient(800px 500px at 10% 110%,rgba(22,101,52,.35),transparent),linear-gradient(170deg,#0d1f10,#07130a 70%)">
+  <div class="max-w-6xl mx-auto px-4 py-8 md:py-12">
+    <div class="flex items-center gap-3 mb-2">
+      <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-lime-400 to-green-700 flex items-center justify-center shadow-lg shadow-lime-900/50"><i data-lucide="trees" class="w-7 h-7 text-white"></i></div>
+      <div>
+        <h1 class="font-display text-4xl md:text-5xl font-extrabold tracking-tight text-lime-50">CANOPY</h1>
+        <p class="text-lime-300/80 text-xs font-semibold tracking-[0.3em] uppercase">Forest Dynamics Simulator</p>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <button onclick="openHelp()" class="btn glass rounded-xl px-3 py-2 text-sm flex items-center gap-2"><i data-lucide="circle-help" class="w-4 h-4"></i><span class="hidden sm:inline">How to Play</span></button>
+        <button onclick="openSettings()" class="btn glass rounded-xl px-3 py-2 text-sm flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i><span class="hidden sm:inline">Settings</span></button>
+      </div>
+    </div>
+    <p class="text-emerald-100/70 max-w-2xl text-sm md:text-base leading-relaxed mt-3">Grow a living forest tree by tree. Every canopy shades the saplings below it, every root drinks from shared soil, and every harvest opens a gap where the next generation races for light. Survive fire, beetles, drought and deer — across decades of succession.</p>
+
+    <div id="continueRow" class="hidden mt-5">
+      <button onclick="continueGame()" class="btn w-full sm:w-auto bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-2xl px-6 py-3 flex items-center gap-3 shadow-lg shadow-orange-950/50"><i data-lucide="history" class="w-5 h-5"></i><span id="continueLabel">Continue saved forest</span></button>
+    </div>
+
+    <h2 class="font-display text-xl font-bold mt-8 mb-3 flex items-center gap-2"><i data-lucide="map" class="w-5 h-5 text-lime-400"></i>Choose your forest</h2>
+    <div id="scenGrid" class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3"></div>
+
+    <h2 class="font-display text-xl font-bold mt-7 mb-3 flex items-center gap-2"><i data-lucide="gauge" class="w-5 h-5 text-lime-400"></i>Stewardship difficulty</h2>
+    <div class="flex flex-wrap gap-2" id="diffRow">
+      <button data-diff="0" onclick="setDifficulty(0)" class="diff-btn btn glass rounded-xl px-4 py-2.5 text-sm">Novice Steward<span class="block text-[11px] opacity-70 font-normal">Generous budget · rare disturbances</span></button>
+      <button data-diff="1" onclick="setDifficulty(1)" class="diff-btn btn glass rounded-xl px-4 py-2.5 text-sm">Forest Ranger<span class="block text-[11px] opacity-70 font-normal">Balanced economy &amp; ecology</span></button>
+      <button data-diff="2" onclick="setDifficulty(2)" class="diff-btn btn glass rounded-xl px-4 py-2.5 text-sm">Wildland Veteran<span class="block text-[11px] opacity-70 font-normal">Lean budget · harsh, frequent events</span></button>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3 mt-8">
+      <button onclick="startGame()" class="btn bg-gradient-to-r from-lime-500 to-green-600 hover:from-lime-400 text-white font-extrabold text-lg rounded-2xl px-8 py-4 flex items-center gap-3 shadow-xl shadow-lime-950/60"><i data-lucide="play" class="w-6 h-6"></i>Plant the First Seed</button>
+      <button onclick="startGame(true)" class="btn glass rounded-2xl px-5 py-4 text-sm flex items-center gap-2" title="Same scenario, reproducible seed"><i data-lucide="dices" class="w-4 h-4"></i>Seeded run (seed 27)</button>
+      <div id="bestScores" class="text-xs text-emerald-200/60 ml-auto"></div>
+    </div>
+
+    <div class="grid md:grid-cols-4 gap-3 mt-10 text-[13px]">
+      <div class="glass2 rounded-2xl p-4"><i data-lucide="sun" class="w-5 h-5 text-amber-300 mb-2"></i><b class="block mb-1">Light competition</b><span class="text-emerald-100/60">Tall crowns steal light. Shade-tolerant maple &amp; spruce wait in the dark; birch must race or die.</span></div>
+      <div class="glass2 rounded-2xl p-4"><i data-lucide="droplets" class="w-5 h-5 text-sky-300 mb-2"></i><b class="block mb-1">Soil water &amp; nutrients</b><span class="text-emerald-100/60">Roots drain shared soil cells. Rain refills them; litter feeds them; drought starves the thirsty willow first.</span></div>
+      <div class="glass2 rounded-2xl p-4"><i data-lucide="flame" class="w-5 h-5 text-orange-400 mb-2"></i><b class="block mb-1">Disturbance &amp; wildlife</b><span class="text-emerald-100/60">Fire, windthrow and beetles reset succession. Deer browse saplings; wolves and birds tip the balance back.</span></div>
+      <div class="glass2 rounded-2xl p-4"><i data-lucide="axe" class="w-5 h-5 text-lime-300 mb-2"></i><b class="block mb-1">Manage &amp; profit</b><span class="text-emerald-100/60">Harvest timber, earn carbon credits, fund research. Every clear gap is tomorrow's nursery — or tomorrow's thicket of deer food.</span></div>
+    </div>
+    <p class="text-center text-[11px] text-emerald-200/30 mt-8">Canopy · Forest Dynamics Sim · Progress, best scores &amp; settings save locally in your browser.</p>
+  </div>
+</div>
+
+<!-- ══════════ GAME SCREEN ══════════ -->
+<div id="gameScreen" class="hidden min-h-screen flex flex-col" style="background:linear-gradient(180deg,#0a140b,#060d07)">
+  <!-- HUD -->
+  <header class="glass sticky top-0 z-30 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+    <button onclick="backToTitle()" class="btn flex items-center gap-2 font-display font-bold text-lg"><span class="w-8 h-8 rounded-lg bg-gradient-to-br from-lime-400 to-green-700 flex items-center justify-center"><i data-lucide="trees" class="w-5 h-5"></i></span><span class="hidden md:inline">CANOPY</span></button>
+    <div class="flex items-center gap-1.5 text-sm"><i data-lucide="calendar-days" class="w-4 h-4 text-lime-400"></i><span id="hudYear" class="font-mono2 font-bold">2026</span><span id="hudSeason" class="text-[11px] px-2 py-0.5 rounded-full bg-lime-900/60 text-lime-200">Spring</span><span id="hudWeather" class="text-[11px] text-sky-200/80"></span></div>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-mono2">
+      <span title="Budget — go below −$2,000 and the trust goes bankrupt"><i data-lucide="wallet" class="w-4 h-4 inline text-amber-300 -mt-0.5"></i> <b id="hudCash">$0</b></span>
+      <span title="Knowledge — earned from biodiversity & monitoring, spent on research"><i data-lucide="flask-conical" class="w-4 h-4 inline text-violet-300 -mt-0.5"></i> <b id="hudKnow">0</b></span>
+      <span title="Total carbon stored in living trees"><i data-lucide="cloud" class="w-4 h-4 inline text-teal-300 -mt-0.5"></i> <b id="hudCarbon">0t</b></span>
+      <span title="Biodiversity index (species evenness + age structure + wildlife)"><i data-lucide="bug" class="w-4 h-4 inline text-pink-300 -mt-0.5"></i> <b id="hudBio">0.00</b></span>
+      <span title="Canopy cover"><i data-lucide="leaf" class="w-4 h-4 inline text-lime-300 -mt-0.5"></i> <b id="hudCover">0%</b></span>
+      <span title="Living trees"><i data-lucide="tree-pine" class="w-4 h-4 inline text-green-300 -mt-0.5"></i> <b id="hudTrees">0</b></span>
+    </div>
+    <div class="ml-auto flex items-center gap-1.5">
+      <button id="panelToggle" onclick="togglePanel()" class="btn glass rounded-lg p-2 lg:hidden"><i data-lucide="panel-right" class="w-4 h-4"></i></button>
+      <button onclick="toggleMute()" id="muteBtn" class="btn glass rounded-lg p-2" title="Mute (M)"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+      <button onclick="openSettings()" class="btn glass rounded-lg p-2" title="Settings"><i data-lucide="settings-2" class="w-4 h-4"></i></button>
+      <button onclick="openHelp()" class="btn glass rounded-lg p-2" title="Help (H)"><i data-lucide="circle-help" class="w-4 h-4"></i></button>
+      <button onclick="openPause()" class="btn glass rounded-lg p-2" title="Pause menu (Esc)"><i data-lucide="menu" class="w-4 h-4"></i></button>
+    </div>
+  </header>
+
+  <!-- Objective strip -->
+  <div class="px-3 pt-2"><div class="glass2 rounded-2xl px-3 py-2 flex flex-wrap items-center gap-x-5 gap-y-2">
+    <span class="text-[11px] font-bold tracking-widest text-lime-300 uppercase flex items-center gap-1.5"><i data-lucide="target" class="w-4 h-4"></i><span id="objTitle">Objectives</span></span>
+    <div id="objBars" class="flex flex-wrap gap-x-5 gap-y-1.5 flex-1"></div>
+    <span id="objDeadline" class="text-[11px] font-mono2 text-amber-200/80"></span>
+  </div></div>
+
+  <main class="flex-1 flex flex-col lg:flex-row gap-3 p-3 min-h-0">
+    <!-- Toolbar -->
+    <nav class="flex lg:flex-col flex-row gap-1.5 shrink-0 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0" id="toolBar"></nav>
+
+    <!-- Map column -->
+    <section class="flex-1 min-w-0 flex flex-col gap-2">
+      <div id="mapWrap" class="relative rounded-3xl overflow-hidden border border-lime-900/60 shadow-2xl shadow-black/50 bg-[#16240f]">
+        <canvas id="mapCanvas" class="w-full touch-none cursor-crosshair" style="aspect-ratio:8/5"></canvas>
+        <div id="floatLayer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+        <div id="eventBanner" class="hidden absolute top-3 left-1/2 -translate-x-1/2 w-[min(560px,94%)] glass rounded-2xl p-4 z-20 shadow-2xl"></div>
+        <div id="coach" class="absolute left-3 bottom-3 max-w-[320px] glass rounded-2xl p-3 z-10 text-[12px] hidden">
+          <div class="flex items-center gap-2 font-bold text-lime-200 mb-1.5"><i data-lucide="graduation-cap" class="w-4 h-4"></i>Steward's Field Guide <button onclick="dismissCoach()" class="ml-auto opacity-60 hover:opacity-100"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+          <ul id="coachSteps" class="space-y-1.5"></ul>
+        </div>
+        <div class="absolute right-3 top-3 flex flex-col gap-1.5 z-10">
+          <select id="overlaySel" onchange="setOverlay(this.value)" class="glass rounded-lg text-[12px] px-2 py-1.5 outline-none cursor-pointer" title="Map data overlay">
+            <option value="normal">View: Forest</option><option value="moisture">View: Soil moisture</option><option value="nutrients">View: Soil nutrients</option><option value="light">View: Canopy light</option><option value="health">View: Tree health</option>
+          </select>
+          <div class="glass rounded-lg px-2 py-1.5 text-[11px] flex items-center gap-2"><i data-lucide="brush" class="w-3.5 h-3.5 text-lime-300"></i><input id="brushRange" type="range" min="1" max="6" value="2" class="w-20" oninput="G.brush=+this.value"><span id="brushVal" class="font-mono2">2</span></div>
+        </div>
+        <div id="mapLegend" class="absolute left-3 top-3 glass rounded-lg px-2.5 py-1.5 text-[11px] z-10 flex flex-wrap gap-x-3 gap-y-0.5 max-w-[70%]"></div>
+      </div>
+
+      <!-- Time controls -->
+      <div class="glass2 rounded-2xl px-3 py-2 flex flex-wrap items-center gap-2">
+        <button id="playBtn" onclick="togglePlay()" class="btn bg-lime-600 hover:bg-lime-500 rounded-xl px-4 py-2 font-bold text-sm flex items-center gap-2"><i data-lucide="pause" class="w-4 h-4" id="playIcon"></i><span id="playLabel">Pause</span></button>
+        <div class="flex rounded-xl overflow-hidden border border-lime-900" id="speedRow">
+          <button data-speed="0.5" onclick="setSpeed(0.5)" class="btn px-3 py-2 text-xs font-mono2 bg-black/30">0.5×</button>
+          <button data-speed="1" onclick="setSpeed(1)" class="btn px-3 py-2 text-xs font-mono2 bg-black/30">1×</button>
+          <button data-speed="2" onclick="setSpeed(2)" class="btn px-3 py-2 text-xs font-mono2 bg-black/30">2×</button>
+          <button data-speed="4" onclick="setSpeed(4)" class="btn px-3 py-2 text-xs font-mono2 bg-black/30">4×</button>
+        </div>
+        <button onclick="stepYearBtn()" class="btn glass rounded-xl px-3 py-2 text-xs flex items-center gap-1.5" title="Advance one year"><i data-lucide="step-forward" class="w-4 h-4"></i>+1 Year</button>
+        <div class="flex items-center gap-2 text-[12px] ml-1"><i data-lucide="cloud-rain-wind" class="w-4 h-4 text-sky-300"></i><span id="climateInfo" class="font-mono2 text-sky-100/80">—</span></div>
+        <div class="ml-auto flex items-center gap-2 text-[12px]"><i data-lucide="volume-2" class="w-4 h-4 text-lime-300"></i><input id="volRange" type="range" min="0" max="100" value="70" class="w-24" oninput="setVolume(this.value)"></div>
+        <span class="hidden md:flex items-center gap-2 text-[11px] text-emerald-200/40"><span class="kbd">Space</span> pause · <span class="kbd">1–8</span> tools · <span class="kbd">H</span> help · <span class="kbd">Esc</span> menu</span>
+      </div>
+
+      <!-- Inspector -->
+      <div id="inspector" class="glass2 rounded-2xl px-4 py-3 text-[13px] min-h-[64px] flex items-center gap-4">
+        <i data-lucide="mouse-pointer-click" class="w-5 h-5 text-lime-400 shrink-0"></i><p class="text-emerald-100/60">Select the <b class="text-lime-200">Inspect</b> tool and click any tree or patch of soil to examine it. Drag with Plant, Harvest and other tools to work an area.</p>
+      </div>
+    </section>
+
+    <!-- Right panel -->
+    <aside id="rightPanel" class="w-[330px] shrink-0 glass rounded-3xl flex flex-col overflow-hidden max-lg:h-full">
+      <div class="flex border-b border-lime-900/50" id="tabRow">
+        <button data-tab="stand" onclick="setTab('stand')" class="tab-btn flex-1 py-2.5 text-[12px] font-semibold border-b-2 border-transparent flex items-center justify-center gap-1"><i data-lucide="trees" class="w-3.5 h-3.5"></i>Stand</button>
+        <button data-tab="research" onclick="setTab('research')" class="tab-btn flex-1 py-2.5 text-[12px] font-semibold border-b-2 border-transparent flex items-center justify-center gap-1"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i>Research</button>
+        <button data-tab="charts" onclick="setTab('charts')" class="tab-btn flex-1 py-2.5 text-[12px] font-semibold border-b-2 border-transparent flex items-center justify-center gap-1"><i data-lucide="chart-line" class="w-3.5 h-3.5"></i>Data</button>
+        <button data-tab="log" onclick="setTab('log')" class="tab-btn flex-1 py-2.5 text-[12px] font-semibold border-b-2 border-transparent flex items-center justify-center gap-1"><i data-lucide="scroll-text" class="w-3.5 h-3.5"></i>Log <span id="logBadge" class="hidden bg-red-500 text-white text-[9px] rounded-full px-1.5 py-px font-bold">!</span></button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-3" id="tabBody"></div>
+    </aside>
+  </main>
+</div>
+
+<!-- ══════════ MODALS ══════════ -->
+<div id="helpModal" class="hidden fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4" onclick="if(event.target===this)closeHelp()">
+  <div class="glass rounded-3xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-6">
+    <div class="flex items-center gap-3 mb-4"><i data-lucide="book-open" class="w-6 h-6 text-lime-400"></i><h2 class="font-display text-2xl font-bold">How to Steward a Forest</h2><button onclick="closeHelp()" class="ml-auto btn glass rounded-lg p-2"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+    <div class="space-y-4 text-sm text-emerald-100/80 leading-relaxed">
+      <div><h3 class="font-bold text-lime-200 mb-1 flex items-center gap-2"><i data-lucide="sprout" class="w-4 h-4"></i>The core loop</h3><p>Time flows in years (watch seasons sweep the map). Trees grow, compete, seed new saplings and die — opening gaps. <b class="text-white">Plant</b> species where they fit, <b class="text-white">harvest</b> mature timber for income, <b class="text-white">thin</b> crowded thickets, and keep canopy cover, carbon and biodiversity climbing toward your scenario goals before the deadline year.</p></div>
+      <div><h3 class="font-bold text-lime-200 mb-1 flex items-center gap-2"><i data-lucide="sun" class="w-4 h-4"></i>Four systems that talk to each other</h3>
+      <ul class="list-disc pl-5 space-y-1">
+        <li><b class="text-white">Light:</b> each tree's growth depends on how much taller neighbours shade it. Pioneers (birch) need full sun; maple &amp; spruce tolerate deep shade and inherit the forest floor.</li>
+        <li><b class="text-white">Soil:</b> every cell holds moisture &amp; nutrients. Roots drain them, rain and leaf-litter refill them. Willow collapses in drought; pine shrugs it off.</li>
+        <li><b class="text-white">Wildlife:</b> deer multiply on sapling forage and browse your regeneration to death unless wolves (Wildlife Corridors research, or old-growth habitat) check them. Birds in old trees carry seeds further.</li>
+        <li><b class="text-white">Disturbance:</b> fire races through dry conifers but stops at firebreaks and wet willow stands; beetles spread tree-to-tree through spruce &amp; pine; windthrow fells the tallest. Each resets succession — and pays out in nutrient-rich ash and light.</li>
+      </ul></div>
+      <div><h3 class="font-bold text-lime-200 mb-1 flex items-center gap-2"><i data-lucide="coins" class="w-4 h-4"></i>Money &amp; knowledge</h3><p>Harvesting mature trees pays by species and size (oak is precious, willow is pulp). Each year you receive an ecosystem-services grant scaled by canopy cover and biodiversity, plus carbon credits for <i>net new</i> carbon stored. Knowledge (violet flask) accrues from a diverse, monitored forest and buys permanent research. Drop below <b class="text-red-300">−$2,000</b> and the trust is bankrupt — game over.</p></div>
+      <div><h3 class="font-bold text-lime-200 mb-1 flex items-center gap-2"><i data-lucide="keyboard" class="w-4 h-4"></i>Controls</h3><p><span class="kbd">Space</span> pause/resume · <span class="kbd">1</span>–<span class="kbd">8</span> select tool · <span class="kbd">[</span><span class="kbd">]</span> brush size · <span class="kbd">+</span><span class="kbd">−</span> speed · <span class="kbd">M</span> mute · <span class="kbd">H</span> help · <span class="kbd">Esc</span> pause menu. Mouse: click/drag on the map with the active tool; works with touch too. Hover any species card or stat for explanations.</p></div>
+      <div><h3 class="font-bold text-lime-200 mb-1 flex items-center gap-2"><i data-lucide="trophy" class="w-4 h-4"></i>Winning &amp; losing</h3><p>Meet <b class="text-white">all</b> scenario goals before the deadline to win (you may keep playing in sandbox mode). You lose if the trust goes bankrupt, canopy cover stays under 4% for 3 straight years (ecological collapse), the deadline passes with goals unmet — or, in Ember Frontier, the town burns.</p></div>
+    </div>
+    <button onclick="closeHelp()" class="btn w-full mt-5 bg-lime-600 hover:bg-lime-500 rounded-xl py-3 font-bold">Back to the forest</button>
+  </div>
+</div>
+
+<div id="settingsModal" class="hidden fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4" onclick="if(event.target===this)closeSettings()">
+  <div class="glass rounded-3xl max-w-md w-full p-6">
+    <div class="flex items-center gap-3 mb-5"><i data-lucide="settings-2" class="w-6 h-6 text-lime-400"></i><h2 class="font-display text-2xl font-bold">Settings</h2><button onclick="closeSettings()" class="ml-auto btn glass rounded-lg p-2"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+    <div class="space-y-4 text-sm">
+      <label class="flex items-center justify-between gap-4">Master volume <input id="setVol" type="range" min="0" max="100" class="w-40" oninput="setVolume(this.value)"></label>
+      <label class="flex items-center justify-between gap-4">Mute all audio <button id="setMute" onclick="toggleMute()" class="btn glass rounded-lg px-3 py-1.5 text-xs font-bold">Off</button></label>
+      <label class="flex items-center justify-between gap-4">Ambient wildlife sounds <button id="setAmbient" onclick="toggleAmbient()" class="btn glass rounded-lg px-3 py-1.5 text-xs font-bold">On</button></label>
+      <label class="flex items-center justify-between gap-4">Particle effects <select id="setParticles" onchange="setParticles(this.value)" class="glass rounded-lg px-2 py-1.5 text-xs outline-none"><option value="high">High</option><option value="low">Low</option><option value="off">Off</option></select></label>
+      <label class="flex items-center justify-between gap-4">Species labels on map <button id="setLabels" onclick="toggleLabels()" class="btn glass rounded-lg px-3 py-1.5 text-xs font-bold">Off</button></label>
+      <label class="flex items-center justify-between gap-4">Autosave each year <button id="setAutosave" onclick="toggleAutosave()" class="btn glass rounded-lg px-3 py-1.5 text-xs font-bold">On</button></label>
+      <div class="border-t border-lime-900/60 pt-4">
+        <p class="text-emerald-100/50 text-xs mb-2">Erase unlocked scenarios, best scores and any saved forest.</p>
+        <button onclick="wipeProgress()" class="btn bg-red-900/60 hover:bg-red-800 border border-red-700 rounded-xl px-4 py-2 text-xs font-bold flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i>Reset all saved progress</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="pauseModal" class="hidden fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4">
+  <div class="glass rounded-3xl max-w-sm w-full p-6 text-center">
+    <i data-lucide="circle-pause" class="w-10 h-10 text-lime-400 mx-auto mb-2"></i>
+    <h2 class="font-display text-2xl font-bold mb-1">Forest at Rest</h2>
+    <p class="text-xs text-emerald-100/50 mb-5" id="pauseSub">Simulation paused</p>
+    <div class="space-y-2">
+      <button onclick="closePause()" class="btn w-full bg-lime-600 hover:bg-lime-500 rounded-xl py-3 font-bold flex items-center justify-center gap-2"><i data-lucide="play" class="w-4 h-4"></i>Resume</button>
+      <button onclick="saveGame(true);closePause()" class="btn w-full glass rounded-xl py-3 font-semibold flex items-center justify-center gap-2"><i data-lucide="save" class="w-4 h-4"></i>Save forest now</button>
+      <button onclick="closePause();openHelp()" class="btn w-full glass rounded-xl py-3 font-semibold flex items-center justify-center gap-2"><i data-lucide="book-open" class="w-4 h-4"></i>Help &amp; guide</button>
+      <button onclick="closePause();openSettings()" class="btn w-full glass rounded-xl py-3 font-semibold flex items-center justify-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i>Settings</button>
+      <button onclick="restartRun()" class="btn w-full glass rounded-xl py-3 font-semibold flex items-center justify-center gap-2"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Restart this scenario</button>
+      <button onclick="backToTitle()" class="btn w-full bg-red-950/60 border border-red-900 rounded-xl py-3 font-semibold flex items-center justify-center gap-2"><i data-lucide="log-out" class="w-4 h-4"></i>Abandon &amp; title screen</button>
+    </div>
+  </div>
+</div>
+
+<div id="endModal" class="hidden fixed inset-0 z-[100] modal-bg flex items-center justify-center p-4">
+  <div class="glass rounded-3xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div id="endHead" class="text-center mb-4"></div>
+    <div id="endStats" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4"></div>
+    <div id="endGoals" class="space-y-2 mb-5"></div>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <button id="endContinue" onclick="continueSandbox()" class="btn flex-1 glass rounded-xl py-3 font-bold hidden items-center justify-center gap-2"><i data-lucide="infinity" class="w-4 h-4"></i>Keep growing (sandbox)</button>
+      <button onclick="restartRun()" class="btn flex-1 bg-lime-600 hover:bg-lime-500 rounded-xl py-3 font-bold flex items-center justify-center gap-2"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Play again</button>
+      <button onclick="backToTitle()" class="btn flex-1 glass rounded-xl py-3 font-bold flex items-center justify-center gap-2"><i data-lucide="map" class="w-4 h-4"></i>Scenarios</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastWrap" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[95] flex flex-col items-center gap-2 pointer-events-none w-[min(480px,92vw)]"></div>
+
+<script>
+/* ═══════════════════════ CANOPY — Forest Dynamics Simulator ═══════════════════════ */
+'use strict';
+/* ---------- utilities ---------- */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let rng=mulberry32(27);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+
+/* ---------- species ---------- */
+const SPECIES=[
+ {name:'Silver Birch',short:'Birch',icon:'sprout',color:'#b7d94e',dark:'#7ba32e',growth:1.5,longevity:65,shadeTol:.15,droughtTol:.45,timber:.55,dispersal:9,seedAge:6,crownR:1.5,flam:.55,decid:1,desc:'Fast pioneer. Colonises gaps, dies young, feeds the soil for others.'},
+ {name:'Scots Pine',short:'Pine',icon:'tree-pine',color:'#3e9e4f',dark:'#256b33',growth:1.05,longevity:190,shadeTol:.3,droughtTol:.85,timber:.9,dispersal:6,seedAge:10,crownR:1.6,flam:.85,decid:0,desc:'Drought-hardy conifer of dry ridges. Flammable resin — beware fire.'},
+ {name:'English Oak',short:'Oak',icon:'tree-deciduous',color:'#5da544',dark:'#3a7028',growth:.72,longevity:380,shadeTol:.5,droughtTol:.6,timber:1.5,dispersal:3.5,seedAge:18,crownR:2.2,flam:.35,decid:1,desc:'Slow, mighty, priceless timber. Acorns need birds & luck to travel.'},
+ {name:'Sugar Maple',short:'Maple',icon:'leaf',color:'#8fce4a',dark:'#4d7d24',growth:.8,longevity:260,shadeTol:.88,droughtTol:.42,timber:1.05,dispersal:5,seedAge:14,crownR:1.9,flam:.3,decid:1,desc:'Waits decades in deep shade, then inherits the canopy. Autumn fire of colour, not flame.'},
+ {name:'Norway Spruce',short:'Spruce',icon:'triangle',color:'#2f7d46',dark:'#1c522c',growth:.92,longevity:290,shadeTol:.82,droughtTol:.32,timber:.85,dispersal:5.5,seedAge:12,crownR:1.5,flam:.9,decid:0,desc:'Shade-tolerant climax conifer. Thirsty, flammable, and beetle candy.'},
+ {name:'River Willow',short:'Willow',icon:'waves',color:'#a4d65e',dark:'#6d9c37',growth:1.15,longevity:95,shadeTol:.35,droughtTol:.12,timber:.4,dispersal:11,seedAge:5,crownR:1.8,flam:.18,decid:1,desc:'Drinks deeply and grows fast near water. A living firebreak — and the first to die in drought.'},
+];
+const RESEARCH=[
+ {id:'nursery',name:'Advanced Nursery',icon:'sprout',cost:6,desc:'Planting costs −35%, sapling survival +, grown stock starts sturdier.'},
+ {id:'myco',name:'Mycorrhizal Network',icon:'network',cost:8,desc:'Fungal partners share nutrients: all trees draw 30% less soil nutrient, litter feeds soil faster.'},
+ {id:'selective',name:'Selective Harvest',icon:'axe',cost:8,desc:'Skilled felling: timber revenue +30%, harvested gaps damage neighbours far less.'},
+ {id:'firecrew',name:'Firebreak Crews',icon:'flame-kindling',cost:7,desc:'Firebreaks cost half, and fire spreads 35% slower through managed stands.'},
+ {id:'corridor',name:'Wildlife Corridors',icon:'paw-print',cost:9,desc:'Wolves return and hold deer in check (−60% browsing). Bird seed dispersal +40%. Biodiversity +.'},
+ {id:'provenance',name:'Resilient Provenance',icon:'thermometer-sun',cost:10,desc:'Climate-matched seed stock: every species gains +25% drought tolerance.'},
+ {id:'mrv',name:'Carbon MRV & Trading',icon:'chart-candlestick',cost:7,desc:'Verified carbon credits pay 2.2× for net new stored carbon each year.'},
+ {id:'seedbank',name:'Community Seed Bank',icon:'archive',cost:6,desc:'Stored seed rains into bare gaps: empty fertile cells can sprout wild saplings after disturbance.'},
+];
+const SCENARIOS=[
+ {id:'rebirth',name:'Verdant Rebirth',icon:'sprout',diff:'Tutorial · Easy',years:50,budget:5200,trees:70,rain:1.05,temp:14,town:false,dist:0.7,seed:1101,desc:'A clear-cut hillside, a hopeful trust, and fifty years to bring the green back. The guided scenario — follow the Field Guide coach.',goals:[['cover','Canopy cover',42],['carbon','Carbon stored (t)',1200],['bio','Biodiversity index',0.62],['trees','Living trees',320]]},
+ {id:'timber',name:'Timber Trust',icon:'axe',diff:'Management · Medium',years:40,budget:4200,trees:190,rain:.95,temp:15,town:false,dist:1,seed:2202,desc:'The sawmill town needs profit, not a museum. Earn serious timber revenue — without liquidating the forest that pays you.',goals:[['revenue','Cumulative timber revenue ($)',65000],['cover','Canopy cover kept above (%)',30],['carbon','Carbon stored (t)',6000]]},
+ {id:'sanctuary',name:'Old-Growth Sanctuary',icon:'owl',diff:'Ecology · Medium-Hard',years:100,budget:6000,trees:240,rain:1.1,temp:13,town:false,dist:1.05,winAfter:50,seed:3303,desc:'A century of patience. Grow ancients, shelter wolves and owls, and let succession write the ending. Objectives can only be certified after 50 years of stewardship.',goals:[['old','Old-growth trees (80+ yrs)',120],['bio','Biodiversity index',0.75],['carbon','Carbon stored (t)',16000],['cover','Canopy cover (%)',60]]},
+ {id:'ember',name:'Ember Frontier',icon:'flame',diff:'Survival · Hard — Capstone',years:60,budget:4800,trees:210,rain:.72,temp:19,town:true,dist:1.7,winAfter:45,seed:4404,desc:'Hot, dry pine country above the town of Ember Falls. Fire will come, again and again. Firebreaks, willow belts and fast crews are the only wall between the flames and the rooftops. Hold every objective for at least 45 years to win.',goals:[['cover','Canopy cover (%)',40],['carbon','Carbon stored (t)',14000],['houses','Town houses standing',6]]},
+];
+const DIFFS=[{budget:1.45,dist:.55,goal:.85,label:'Novice Steward'},{budget:1,dist:1,goal:1,label:'Forest Ranger'},{budget:.72,dist:1.5,goal:1.12,label:'Wildland Veteran'}];
+const COLS=64,ROWS=40,MAXTREES=950;
+
+/* ---------- state ---------- */
+let G=null, selScenario=0, selDiff=1, tab='stand', overlayMode='normal';
+let settings=Object.assign({vol:70,muted:false,ambient:true,particles:'high',labels:false,autosave:true},store.get('canopy_settings',{}));
+let meta=store.get('canopy_meta',{unlocked:1,best:{},wins:0});
+let audioCtx=null,masterGain=null,noiseGain=null;
+
+function newState(scen,diff,seed){
+ rng=mulberry32(seed);
+ const d=DIFFS[diff];
+ return {scen:scen.id,scenIdx:SCENARIOS.indexOf(scen),diff,seed,year:2026,startYear:2026,endYear:2026+scen.years,
+  yearFrac:0,speed:1,playing:true,over:false,sandbox:false,tool:'inspect',plantSpecies:2,brush:2,
+  cash:Math.round(scen.budget*d.budget),knowledge:4,revenue:0,harvested:0,planted:0,deaths:0,born:0,
+  trees:[],nextId:1,moist:new Float32Array(COLS*ROWS),nutr:new Float32Array(COLS*ROWS),elev:new Float32Array(COLS*ROWS),
+  burn:new Float32Array(COLS*ROWS),breakT:new Float32Array(COLS*ROWS),light:new Float32Array(COLS*ROWS),
+  rain:scen.rain,temp:scen.temp,droughtYrs:0,beetleYrs:0,lowCoverYrs:0,deer:14,wolves:scen.id==='sanctuary'?3:0,birds:8,
+  research:{},history:[],log:[],particles:[],floats:[],deerAgents:[],birdAgents:[],burning:[],houses:scen.town?8:0,housesLost:0,
+  tut:{inspect:false,plant:0,time:false,harvest:false,research:false,done:scen.id!=='rebirth'},
+  stats:{fires:0,storms:0,beetles:0,peakCarbon:0,peakBio:0},grant:0,lastCarbon:0,fire:null,pendingEvent:null,
+  cumCO2:0,townCells:scen.town};
+}
+
+/* ---------- map generation ---------- */
+function cellIdx(x,y){return y*COLS+x}
+function genMap(scen){
+ // elevation: layered sine noise + rng bumps, smoothed
+ const raw=new Float32Array(COLS*ROWS);
+ for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){raw[cellIdx(x,y)]=Math.sin(x*.11+scen.seed)*Math.cos(y*.13)+Math.sin((x+y)*.05)*1.4+rng()*0.9}
+ for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){let s=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=clamp(x+dx,0,COLS-1),yy=clamp(y+dy,0,ROWS-1);s+=raw[cellIdx(xx,yy)];n++}G.elev[cellIdx(x,y)]=s/n}
+ // a river / wet lowland winding through
+ const riverY=[];let ry=ROWS*0.62;
+ for(let x=0;x<COLS;x++){ry+= (rng()-.5)*1.6;ry=clamp(ry,8,ROWS-9);riverY.push(ry)}
+ for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+   const dRiver=Math.abs(y-riverY[x]), e=G.elev[cellIdx(x,y)];
+   let m=clamp(.55 - dRiver*.09 + (e<-.4?.12:0) + scen.rain*.12 + (rng()-.5)*.1,.06,1);
+   if(dRiver<1.4)m=Math.max(m,.88);
+   G.moist[cellIdx(x,y)]=m;
+   G.nutr[cellIdx(x,y)]=clamp(.45+ (rng()-.5)*.3 + (dRiver<5?.12:0),.08,1);
+ }
+ G.riverY=riverY;
+}
+function habitatScore(sp,x,y){
+ const i=cellIdx(clamp(Math.round(x),0,COLS-1),clamp(Math.round(y),0,COLS-1)),m=G.moist[i],e=G.elev[i];
+ switch(sp){case 0:return .5+m*.3;case 1:return .35+(e>0?.35:.05)+(1-m)*.25;case 2:return .3+m*.45;case 3:return .25+m*.5;case 4:return .3+m*.45+(e<0?.1:0);case 5:return m>.68?1:.08}
+ return .5;
+}
+function addTree(sp,x,y,age,dbh){
+ if(G.trees.length>=MAXTREES)return null;
+ const t={id:G.nextId++,sp,x,y,age:age||0,dbh:dbh||1.2,h:0,health:.85+rng()*.15,vigor:1,infected:0,snag:0,burnT:0};
+ t.h=treeHeight(t);G.trees.push(t);return t;
+}
+function treeHeight(t){const s=SPECIES[t.sp];return clamp(2+t.dbh*1.05*(0.8+s.crownR*.18),1.5,34)}
+function seedInitialForest(scen){
+ const comp=scen.id==='rebirth'?[0,0,1,2,3]:scen.id==='timber'?[1,1,4,2,0,3]:scen.id==='ember'?[1,1,1,0,4,5]:[2,3,4,1,0,2,3];
+ let tries=0,placed=0;
+ while(placed<scen.trees&&tries<scen.trees*30){tries++;
+  const sp=comp[Math.floor(rng()*comp.length)],x=2+rng()*(COLS-4),y=2+rng()*(ROWS-4);
+  if(habitatScore(sp,x,y)<rng()*.85)continue;
+  if(G.townCells&&x>COLS-7)continue;
+  const age=scen.id==='rebirth'?2+rng()*14:6+rng()*(SPECIES[sp].longevity*.45);
+  const dbh=clamp(2+age*SPECIES[sp].growth*.55*(0.7+rng()*.6),1,46);
+  addTree(sp,x,y,Math.round(age),dbh);placed++;
+ }
+}
+function metrics(){
+ const n=G.trees.length;let carbon=0,canopy=0,old=0;const counts=[0,0,0,0,0,0];let ageYoung=0,ageMid=0;
+ for(const t of G.trees){const s=SPECIES[t.sp];counts[t.sp]++;
+  carbon+=0.028*t.dbh*t.dbh*(t.h/10)*(0.7+s.timber*.25);
+  canopy+=Math.PI*Math.pow(s.crownR*(0.35+t.dbh/16)*0.62,2);
+  if(t.age>=80)old++; if(t.age<10)ageYoung++;else if(t.age<40)ageMid++;}
+ const cover=clamp(canopy/(COLS*ROWS)*100,0,96);
+ let shannon=0;for(const c of counts)if(c>0){const p=c/n;shannon-=p*Math.log(p)}
+ const spDiv=n?shannon/Math.log(6):0;
+ const ageDiv=n?1-Math.abs(ageYoung/n-.33)-Math.abs(ageMid/n-.34):0;
+ const wild=clamp((G.wolves>0?.12:0)+(G.birds/60)*.2+(G.deer>4&&G.deer<40?.06:0),0,.3);
+ const bio=clamp(spDiv*.72+clamp(ageDiv,0,1)*.18+wild,0,1);
+ return {n,carbon:Math.round(carbon),cover,bio,old,counts,shannon};
+}
+function goalVal(key,m){switch(key){case 'cover':return m.cover;case 'carbon':return m.carbon;case 'bio':return m.bio;case 'trees':return m.n;case 'revenue':return G.revenue;case 'old':return m.old;case 'houses':return G.houses}return 0}
+function goalTarget(g){return Math.round(g[2]*DIFFS[G.diff].goal*(g[0]==='bio'?1/DIFFS[G.diff].goal:1)*10)/10}
+
+/* ---------- audio ---------- */
+function initAudio(){if(audioCtx)return;try{audioCtx=new (window.AudioContext||window.webkitAudioContext)();masterGain=audioCtx.createGain();masterGain.gain.value=settings.muted?0:settings.vol/100*.8;masterGain.connect(audioCtx.destination);
+ // ambient wind: looped filtered noise
+ const len=2*audioCtx.sampleRate,buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+ const src=audioCtx.createBufferSource();src.buffer=buf;src.loop=true;const f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.value=420;
+ noiseGain=audioCtx.createGain();noiseGain.gain.value=settings.ambient?.028:0;src.connect(f);f.connect(noiseGain);noiseGain.connect(masterGain);src.start();
+ const lfo=audioCtx.createOscillator(),lg=audioCtx.createGain();lfo.frequency.value=.07;lg.gain.value=.012;lfo.connect(lg);lg.connect(noiseGain.gain);lfo.start();
+}catch(e){}}
+function tone(freq,dur,type='sine',vol=.15,when=0,slide=0){if(!audioCtx||settings.muted)return;try{const t=audioCtx.currentTime+when,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+slide),t+dur);g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(masterGain);o.start(t);o.stop(t+dur+.05)}catch(e){}}
+function noiseBurst(dur=.2,vol=.2,freq=1200){if(!audioCtx||settings.muted)return;try{const t=audioCtx.currentTime,len=dur*audioCtx.sampleRate,buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);const s=audioCtx.createBufferSource();s.buffer=buf;const f=audioCtx.createBiquadFilter();f.type='bandpass';f.frequency.value=freq;const g=audioCtx.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(masterGain);s.start()}catch(e){}}
+const sfx={click:()=>tone(660,.06,'triangle',.08),plant:()=>{tone(420,.12,'sine',.14,0,260);noiseBurst(.08,.06,900)},coin:()=>{tone(880,.09,'square',.07);tone(1320,.14,'square',.07,.07)},saw:()=>{tone(140,.35,'sawtooth',.12,0,-60);noiseBurst(.3,.1,700)},water:()=>noiseBurst(.35,.16,500),fire:()=>{noiseBurst(.6,.2,300);tone(90,.5,'sawtooth',.08,0,-30)},rain:()=>noiseBurst(.7,.1,1800),good:()=>[523,659,784,1046].forEach((f,i)=>tone(f,.22,'triangle',.12,i*.09)),bad:()=>[330,262,196].forEach((f,i)=>tone(f,.3,'triangle',.13,i*.13)),chirp:()=>{if(settings.ambient)tone(2200+Math.random()*800,.09,'sine',.025,0,600)}};
+function setVolume(v){settings.vol=+v;const r=$('volRange');if(r)r.value=v;const s=$('setVol');if(s)s.value=v;if(masterGain)masterGain.gain.value=settings.muted?0:settings.vol/100*.8;saveSettings()}
+function toggleMute(){settings.muted=!settings.muted;if(masterGain)masterGain.gain.value=settings.muted?0:settings.vol/100*.8;$('muteBtn').innerHTML='<i data-lucide="'+(settings.muted?'volume-x':'volume-2')+'" class="w-4 h-4"></i>';$('setMute').textContent=settings.muted?'On':'Off';lucide.createIcons();saveSettings()}
+function toggleAmbient(){settings.ambient=!settings.ambient;if(noiseGain)noiseGain.gain.value=settings.ambient?.028:0;$('setAmbient').textContent=settings.ambient?'On':'Off';saveSettings()}
+function toggleLabels(){settings.labels=!settings.labels;$('setLabels').textContent=settings.labels?'On':'Off';saveSettings()}
+function toggleAutosave(){settings.autosave=!settings.autosave;$('setAutosave').textContent=settings.autosave?'On':'Off';saveSettings()}
+function setParticles(v){settings.particles=v;saveSettings()}
+function saveSettings(){store.set('canopy_settings',settings)}
+
+/* ---------- logging / feedback ---------- */
+function log(msg,icon='info',tone_=''){if(!G)return;G.log.unshift({y:G.year,msg,icon});if(G.log.length>60)G.log.pop();if(tab==='log')renderTab();else{$('logBadge').classList.remove('hidden')}}
+function toast(msg,icon='check',color='text-lime-300'){const el=document.createElement('div');el.className='glass rounded-xl px-4 py-2.5 text-sm flex items-center gap-2 pointer-events-auto shadow-xl';el.innerHTML='<i data-lucide="'+icon+'" class="w-4 h-4 '+color+' shrink-0"></i><span>'+msg+'</span>';$('toastWrap').appendChild(el);lucide.createIcons();setTimeout(()=>{el.style.transition='all .4s';el.style.opacity='0';el.style.transform='translateY(8px)';setTimeout(()=>el.remove(),420)},3400)}
+function floatText(cx,cy,txt,color){const wrap=$('mapWrap'),r=wrap.getBoundingClientRect();const el=document.createElement('div');el.className='float-txt absolute font-mono2 font-bold text-[13px] z-10';el.style.left=(cx/r.width*100)+'%';el.style.top=(cy/r.height*100)+'%';el.style.color=color;el.textContent=txt;$('floatLayer').appendChild(el);setTimeout(()=>el.remove(),1900)}
+function spawnParticles(x,y,n,color,spread=1,up=0){if(settings.particles==='off')return;if(settings.particles==='low')n=Math.ceil(n/3);for(let i=0;i<n;i++)G.particles.push({x,y,vx:(Math.random()-.5)*spread,vy:(Math.random()-.5)*spread-up,life:1,decay:.012+Math.random()*.025,color,size:1+Math.random()*2.4})}
+
+/* ---------- ecology core ---------- */
+function buildLightField(){
+ G.light.fill(1);
+ // taller trees shade cells beneath/around canopy
+ for(const t of G.trees){const s=SPECIES[t.sp];const r=s.crownR*(0.4+t.dbh/15);const shade=clamp((t.h-4)/30,0,.75);
+  const x0=Math.max(0,Math.floor(t.x-r)),x1=Math.min(COLS-1,Math.ceil(t.x+r)),y0=Math.max(0,Math.floor(t.y-r)),y1=Math.min(ROWS-1,Math.ceil(t.y+r));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const d=Math.hypot(x-t.x,y-t.y);if(d<r)G.light[cellIdx(x,y)]-=shade*(1-d/r)*.8}}
+ for(let i=0;i<G.light.length;i++)G.light[i]=clamp(G.light[i],.04,1);
+}
+function yearStep(){
+ const scen=SCENARIOS[G.scenIdx];
+ // climate for the year
+ const trend=(G.year-2026)*0.012*(scen.id==='ember'?1.6:1);
+ let rainF=scen.rain*(0.78+rng()*.5)-G.droughtYrs*.28, temp=scen.temp+(rng()-.5)*2.4+trend;
+ if(G.droughtYrs>0)G.droughtYrs--;
+ G.rainNow=rainF;G.tempNow=temp;
+ // soil water / nutrients
+ const myco=G.research.myco?.7:1;
+ for(let i=0;i<COLS*ROWS;i++){
+   G.moist[i]=clamp(G.moist[i]+rainF*.16-.055-G.burn[i]*0,G.moist[i]<0?0:0,1);
+   if(G.burn[i]>0){G.burn[i]--;G.nutr[i]=clamp(G.nutr[i]+.05,0,1)} // ash pulse
+ }
+ // tree growth & mortality
+ buildLightField();
+ const dead=[];
+ const droughtRes=G.research.provenance?1.25:1;
+ for(const t of G.trees){
+   const s=SPECIES[t.sp],i=cellIdx(clamp(Math.round(t.x),0,COLS-1),clamp(Math.round(t.y),0,COLS-1));
+   const ownShade=clamp((t.h-4)/30,0,.75)*.32; // a crown does not shade its own leaves
+   const li=clamp(G.light[i]+ownShade,0,1), water=G.moist[i], nut=G.nutr[i];
+   const lightNeed=1-s.shadeTol*.82;
+   const lightF=clamp(li/Math.max(.12,lightNeed),.12,1.25);
+   const waterNeed=1-s.droughtTol*droughtRes*.75;
+   const waterF=clamp(water/Math.max(.1,waterNeed*.72),.15,1.2);
+   const nutF=clamp(.35+nut*.85,.3,1.2);
+   const ageF=t.age<8?.75:t.age<s.longevity*.5?1:t.age<s.longevity*.85?.62:.3;
+   let g=s.growth*lightF*waterF*nutF*ageF;
+   if(t.infected)g*=.45;
+   t.vigor=clamp(g,0,1.6);
+   t.dbh=clamp(t.dbh+g*.62,0,60);t.h=treeHeight(t);
+   // soil draw
+   G.moist[i]=clamp(G.moist[i]-(.006+t.dbh*.0006)*(t.sp===5?1.7:1),0,1);
+   G.nutr[i]=clamp(G.nutr[i]-.004*myco*(t.dbh/20+.3),0,1);
+   if(s.decid)G.nutr[i]=clamp(G.nutr[i]+.0022*(G.research.myco?1.6:1),0,1); // litter
+   // health drift
+   let stress=(1-Math.min(lightF,1))*.5+(1-Math.min(waterF,1))*.8+(1-Math.min(nutF,1))*.3;
+   if(t.infected)stress+=.5;
+   t.health=clamp(t.health+(stress<.25?.05:-stress*.16),0,1);
+   t.age++;
+   let pDie=0;
+   if(t.age>s.longevity)pDie+=.25+(t.age-s.longevity)*.04;
+   if(t.health<.25)pDie+=.18; if(t.health<=.02)pDie=1;
+   if(t.age<4&&li<.18&&s.shadeTol<.4)pDie+=.3; // suppressed pioneers
+   if(G.beetleYrs>0&&t.infected)pDie+=.16;
+   if(rng()<pDie)dead.push(t);
+ }
+ if(dead.length){G.trees=G.trees.filter(t=>!dead.includes(t));G.deaths+=dead.length;for(const t of dead)spawnParticles(t.x,t.y,3,'#a16207')}
+ // reproduction
+ let births=0;const birdBoost=(G.research.corridor?1.4:1)*(1+G.birds/120);
+ const mothers=G.trees.filter(t=>t.age>=SPECIES[t.sp].seedAge&&t.health>.45);
+ for(const m of mothers){
+   const s=SPECIES[m.sp];let seeds=Math.round((1+m.dbh/9)*m.vigor*(m.sp===2?0.8:1.2));
+   seeds=Math.min(seeds,7);
+   for(let k=0;k<seeds;k++){
+     if(G.trees.length>=MAXTREES)break;
+     const ang=rng()*Math.PI*2,dist=Math.abs((rng()+rng()-1))*s.dispersal*birdBoost+1;
+     const nx=m.x+Math.cos(ang)*dist,ny=m.y+Math.sin(ang)*dist*.72;
+     if(nx<1||ny<1||nx>COLS-2||ny>ROWS-2)continue;
+     if(G.townCells&&nx>COLS-7)continue;
+     const i=cellIdx(Math.round(nx),Math.round(ny));
+     if(G.breakT[i]>G.year)continue;
+     const li=G.light[i];
+     const lightOK=s.shadeTol>.6?li>.08:li>.38;
+     if(!lightOK)continue;
+     if(G.moist[i]<.18||G.nutr[i]<.12)continue;
+     let p=.16*habitatScore(m.sp,nx,ny)*(G.research.nursery?1.25:1);
+     if(G.deer>26&&rng()<.4)p*=.4; // browsing pressure at germination
+     if(rng()<p){addTree(m.sp,nx,ny,0,0.7);births++}
+   }
+ }
+ // seed bank wild recruitment in gaps
+ if(G.research.seedbank){for(let k=0;k<26;k++){const x=1+rng()*(COLS-2),y=1+rng()*(ROWS-2),i=cellIdx(Math.round(x),Math.round(y));if(G.light[i]>.55&&G.moist[i]>.3&&G.trees.length<MAXTREES&&rng()<.3){const sp=[0,2,3,5][Math.floor(rng()*4)];if(habitatScore(sp,x,y)>.4){addTree(sp,x,y,0,.7);births++}}}}
+ G.born+=births;
+ // deer browse saplings when herd is large
+ if(G.deer>24){const saps=G.trees.filter(t=>t.age<5);const browsed=Math.min(saps.length,Math.round((G.deer-22)*.5*(G.research.corridor?.35:1)));for(let k=0;k<browsed;k++){const t=saps[Math.floor(rng()*saps.length)];if(t){t.health-=.4;if(t.health<=0&&rng()<.6){G.trees.splice(G.trees.indexOf(t),1);G.deaths++}}}}
+ // wildlife dynamics
+ const forage=G.trees.filter(t=>t.age<8).length;
+ const deerTarget=clamp(6+forage*.06,6,64);
+ G.wolves=clamp(G.wolves+( (metrics().old>18||G.research.corridor)? .4:-.25) + (G.deer>30?.3:-.1),0,G.research.corridor?9:6);
+ if(G.scen==='sanctuary'&&G.wolves<2)G.wolves=2;
+ G.deer=clamp(G.deer+(deerTarget-G.deer)*.22-G.wolves*.9+(rng()-.5)*2,2,70);
+ G.birds=clamp(G.birds+(metrics().bio*22-G.birds)*.15+(rng()-.5)*1.5,2,60);
+ // economy
+ const m=metrics();
+ const grant=Math.round(90+m.cover*2.6+m.bio*260);
+ const co2gain=Math.max(0,m.carbon-G.lastCarbon);
+ const credit=Math.round(co2gain*(G.research.mrv?2.6:1.2));
+ const upkeep=Math.round(120+G.trees.length*.16);
+ G.cash+=grant+credit-upkeep;G.grant=grant+credit-upkeep;
+ G.knowledge+=Math.round(1+m.bio*4+(G.trees.length>0?1:0));
+ G.cumCO2=co2gain;G.lastCarbon=m.carbon;
+ G.stats.peakCarbon=Math.max(G.stats.peakCarbon,m.carbon);G.stats.peakBio=Math.max(G.stats.peakBio,m.bio);
+ G.history.push({y:G.year,c:m.carbon,b:+m.bio.toFixed(3),t:m.n,cash:G.cash,cov:Math.round(m.cover)});
+ if(G.history.length>140)G.history.shift();
+ if(m.cover<4)G.lowCoverYrs++;else G.lowCoverYrs=0;
+ // disturbances
+ maybeDisturbance(rainF,temp);
+ if(G.beetleYrs>0){G.beetleYrs--;spreadBeetles()}
+ updateTileCache();
+ // checks
+ if(G.cash<-2000)return endGame(false,'Bankruptcy','The trust\'s accounts fell below −$2,000. Creditors seized the land and sold it for development. A forest cannot grow on a balance sheet written in red.');
+ if(G.lowCoverYrs>=3&&G.year>G.startYear+8)return endGame(false,'Ecological Collapse','Canopy cover stayed under 4% for three straight years. With no seed trees left, the hillside slipped into scrub and erosion — succession has nothing left to work with.');
+ const scenDef=SCENARIOS[G.scenIdx];
+ const allMet=scenDef.goals.every(g=>goalVal(g[0],m)>=goalTarget(g));
+ if(allMet&&!G.sandbox&&(G.year-G.startYear>=(scenDef.winAfter||0)))return endGame(true,'All Objectives Met','Every stewardship goal stands achieved'+(scenDef.winAfter?' after '+scenDef.winAfter+'+ years of verified stewardship':' with years to spare')+'. The forest is writing its own future now.');
+ if(G.year>=G.endYear&&!G.sandbox){const met=scenDef.goals.filter(g=>goalVal(g[0],m)>=goalTarget(g)).length;return endGame(met===scenDef.goals.length,'The Deadline Arrives',met===scenDef.goals.length?'Goals complete at the deadline.':'The deadline year arrived with '+ (scenDef.goals.length-met) +' goal(s) unmet. The trustees hand the forest to another steward.')}
+ if(G.year%5===0)log('Ecosystem grant '+(G.grant>=0?'+':'')+'$'+G.grant+' · carbon +'+co2gain+'t this year','landmark');
+ if(settings.autosave)saveGame(false);
+}
+
+/* ---------- disturbances ---------- */
+function maybeDisturbance(rainF,temp){
+ const scen=SCENARIOS[G.scenIdx],mult=scen.dist*DIFFS[G.diff].dist;
+ const roll=rng();
+ if(G.year<G.startYear+3)return;
+ if(roll<.045*mult&&G.droughtYrs===0){G.droughtYrs=2+Math.floor(rng()*2);G.stats.storms++;showEvent({icon:'sun',color:'text-amber-400',title:'Drought settles in',body:'Forecasters see '+G.droughtYrs+' dry years ahead. Soil moisture will fall; thirsty willow and spruce suffer first, deep-rooted pine and oak endure. Irrigation buys time at a price.',choices:[{label:'Accept the forecast',sub:'No cost — ride it out',fn:()=>{}},{label:'Emergency irrigation program',sub:'−$650 · soil moisture +, drought shortened',fn:()=>{if(!pay(650))return;for(let i=0;i<G.moist.length;i++)G.moist[i]=clamp(G.moist[i]+.3,0,1);G.droughtYrs=Math.max(0,G.droughtYrs-1);sfx.water()}}]});log('Drought forecast: '+G.droughtYrs+' dry years','cloud-sun','warn');return}
+ if(roll<.045*mult+.05*mult&&rainF<1.05){startFire();return}
+ if(roll<.15*mult){windthrow();return}
+ if(roll<.21*mult&&G.trees.some(t=>(t.sp===4||t.sp===1)&&t.age>15)){startBeetles();return}
+ if(roll<.26*mult){rainEvent()}
+}
+function startFire(){
+ const dry=G.trees.filter(t=>SPECIES[t.sp].flam>.6&&G.moist[cellIdx(Math.round(t.x),Math.round(t.y))]<.55);
+ const src=dry.length?dry[Math.floor(rng()*dry.length)]:G.trees[Math.floor(rng()*G.trees.length)];
+ if(!src)return;
+ G.stats.fires++;sfx.fire();
+ log('Lightning strike! Fire igniting in dry '+(SPECIES[src.sp].short)+' stand','flame','bad');
+ showEvent({icon:'flame',color:'text-orange-400',title:'Wildfire ignition!',body:'Lightning has lit a dry stand. Fire spreads fastest through pine and spruce, slows in wet willow and stops at firebreaks. You can spend now to knock down much of the front, or let it burn and take the nutrient pulse and light gaps it leaves behind.',choices:[{label:'Call in air tankers',sub:'−$900 · saves roughly 55% of the trees in the fire front',fn:()=>{if(pay(900)){let saved=0;for(const b of G.burning){if(Math.random()<.55){b.t.burnT=0;b.saved=true;saved++}}G.burning=G.burning.filter(b=>!b.saved);log('Air tankers knocked down the front — about '+saved+' trees saved','plane','good');sfx.water()}}},{label:'Let it burn',sub:'No cost · natural disturbance runs its course',fn:()=>{}}]});
+ // BFS spread
+ const windX=.6+rng()*.6,windY=(rng()-.5)*.8;
+ const seen=new Set(),queue=[[src.x,src.y,0]],burnList=[];
+ while(queue.length){const [x,y,d]=queue.shift();const key=Math.round(x)+','+Math.round(y);if(seen.has(key))continue;seen.add(key);
+   const i=cellIdx(clamp(Math.round(x),0,COLS-1),clamp(Math.round(y),0,ROWS-1));
+   if(G.breakT[i]>G.year)continue;
+   const moistF=1-G.moist[i]*.9;
+   burnList.push({x,y,d});
+   const dirs=[[1,0,windX],[-1,0,.3],[0,1,.5+windY*.3],[0,-1,.5-windY*.3],[1,1,.35],[1,-1,.35],[-1,1,.25],[-1,-1,.25]];
+   for(const [dx,dy,w] of dirs){const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=COLS||ny>=ROWS)continue;
+     const ni=cellIdx(Math.round(nx),Math.round(ny));if(G.breakT[ni]>G.year)continue;
+     // local fuel: trees near?
+     let fuel=.12;for(const t of G.trees){if(Math.abs(t.x-nx)<1.6&&Math.abs(t.y-ny)<1.6){fuel=Math.max(fuel,SPECIES[t.sp].flam)}if(fuel>.85)break}
+     let p=fuel*moistF*w*.55*(G.research.firecrew?.65:1)*(G.fireResist? .45:1);
+     if(rng()<p)queue.push([nx,ny,d+1]);}
+   if(burnList.length>900)break;
+ }
+ G.fireResist=0;
+ // apply damage with animation queue
+ let killed=0,housesHit=0;
+ for(const b of burnList){const i=cellIdx(clamp(Math.round(b.x),0,COLS-1),clamp(Math.round(b.y),0,ROWS-1));G.burn[i]=6;G.moist[i]=clamp(G.moist[i]-.25,0,1);
+   if(G.townCells&&b.x>COLS-6&&G.houses>0&&rng()<.5){G.houses--;G.housesLost++;housesHit++}
+   for(const t of G.trees){if(Math.abs(t.x-b.x)<1.3&&Math.abs(t.y-b.y)<1.3&&!t.burnT){const p=SPECIES[t.sp].flam*(t.dbh<6?1.15:.8);if(rng()<p){t.burnT=1;G.burning.push({t,at:performance.now()+b.d*90});killed++}}}}
+ const fireState=G;
+ setTimeout(()=>{if(!G||G!==fireState)return;const before=G.trees.length;G.trees=G.trees.filter(t=>!t.burnT);G.deaths+=before-G.trees.length;G.burning=[];updateTileCache();
+   log('Fire burned out — approx. '+killed+' trees lost, ash enriches the soil','flame','warn');
+   if(housesHit)log(housesHit+' house(s) in Ember Falls burned!','house','bad');
+   if(G.townCells&&G.houses<=2&&!G.over)endGame(false,'Ember Falls Burns','The fire front reached the town and most of Ember Falls is ash. The inquiry is blunt: the wall of fuel between forest and rooftops was never broken.');
+ },Math.min(12000,5000+burnList.length*8));
+}
+function windthrow(){
+ const cx=8+rng()*(COLS-16),cy=6+rng()*(ROWS-12);
+ let felled=0;for(const t of [...G.trees]){const d=Math.hypot(t.x-cx,(t.y-cy)*1.4);if(d<6&&t.h>14&&rng()<.55*(t.h/30)){G.trees.splice(G.trees.indexOf(t),1);felled++;G.deaths++;spawnParticles(t.x,t.y,5,'#84cc16')}}
+ G.stats.storms++;sfx.rain();log('Windthrow storm flattened '+felled+' tall trees — a new light gap opens','wind','warn');toast('Storm: '+felled+' trees windthrown','wind','text-sky-300');
+}
+function rainEvent(){for(let i=0;i<G.moist.length;i++)G.moist[i]=clamp(G.moist[i]+.25,0,1);sfx.rain();log('A wet front parks over the forest — soils recharge, willows rejoice','cloud-rain','good');toast('Heavy rain: soil moisture recharged','cloud-rain','text-sky-300')}
+function startBeetles(){
+ const hosts=G.trees.filter(t=>(t.sp===4||t.sp===1)&&t.age>12);if(!hosts.length)return;
+ const src=hosts[Math.floor(rng()*hosts.length)];src.infected=3;G.beetleYrs=3;G.stats.beetles++;sfx.bad();
+ log('Bark beetles detected in '+SPECIES[src.sp].short+' — they spread tree to tree','bug','bad');
+ showEvent({icon:'bug',color:'text-red-400',title:'Bark beetle outbreak',body:'Beetles are breeding under the bark of a mature conifer and will hop to neighbouring spruce and pine for about 3 years. Sanitation-felling infected trees stops the spread but sacrifices the timber.',choices:[{label:'Fund sanitation crews',sub:'−$500 · outbreak halved, infected trees treated',fn:()=>{if(!pay(500))return;G.beetleYrs=1;for(const t of G.trees)if(t.infected)t.infected=Math.max(0,t.infected-2);sfx.saw()}},{label:'Let nature take its course',sub:'No cost · beetles feed woodpeckers, kill conifers',fn:()=>{}}]});
+}
+function spreadBeetles(){
+ const infected=G.trees.filter(t=>t.infected>0);
+ for(const t of infected){t.infected--;t.health-=.22;
+  for(const n of G.trees){if(n!==t&&(n.sp===4||n.sp===1)&&!n.infected&&Math.hypot(n.x-t.x,n.y-t.y)<2.6&&rng()<.4)n.infected=2+Math.floor(rng()*2)}}
+}
+function pay(n){if(G.cash<n){toast('Not enough budget — need $'+n,'wallet','text-red-400');sfx.bad();return false}G.cash-=n;return true}
+
+/* ---------- event banner ---------- */
+function showEvent(ev){
+ G.pendingEvent=ev;G.playing=false;updatePlayBtn();
+ const b=$('eventBanner');
+ b.innerHTML='<div class="flex items-start gap-3"><i data-lucide="'+ev.icon+'" class="w-7 h-7 '+ev.color+' shrink-0 mt-0.5"></i><div class="min-w-0"><h3 class="font-display font-bold text-lg leading-tight">'+ev.title+'</h3><p class="text-[12.5px] text-emerald-100/70 leading-relaxed mt-1">'+ev.body+'</p><div class="flex flex-col gap-2 mt-3">'+ev.choices.map((c,i)=>'<button onclick="chooseEvent('+i+')" class="btn text-left glass rounded-xl px-3 py-2.5 hover:border-lime-400/60"><b class="text-[13px] block">'+c.label+'</b><span class="text-[11px] text-emerald-100/55">'+c.sub+'</span></button>').join('')+'</div></div></div>';
+ b.classList.remove('hidden');lucide.createIcons();
+}
+function chooseEvent(i){const ev=G.pendingEvent;if(!ev)return;ev.choices[i].fn();G.pendingEvent=null;$('eventBanner').classList.add('hidden');G.playing=true;updatePlayBtn();sfx.click()}
+
+/* ---------- tools ---------- */
+const TOOLS=[
+ {id:'inspect',name:'Inspect',icon:'mouse-pointer-click',key:'1',hint:'Click a tree or soil cell'},
+ {id:'plant',name:'Plant',icon:'sprout',key:'2',hint:'Plant selected species (cost by species)'},
+ {id:'harvest',name:'Harvest',icon:'axe',key:'3',hint:'Fell mature trees for timber $'},
+ {id:'thin',name:'Thin',icon:'scissors',key:'4',hint:'Remove weakest saplings in brush — frees neighbours'},
+ {id:'irrigate',name:'Irrigate',icon:'droplets',key:'5',hint:'+$8/cell moisture in brush'},
+ {id:'fertilize',name:'Mulch',icon:'sparkles',key:'6',hint:'+$7/cell nutrients in brush'},
+ {id:'firebreak',name:'Firebreak',icon:'construction',key:'7',hint:'Clear a fire-stopping strip (lasts 12 yrs)'},
+ {id:'sanitize',name:'Sanitize',icon:'shield-plus',key:'8',hint:'Fell beetle-infected trees in brush'},
+];
+function toolCost(){return {plant:Math.round((14+SPECIES[G.plantSpecies].timber*10)*(G.research.nursery?.65:1)),irrigate:8,fertilize:7,firebreak:G.research.firecrew?9:18,thin:3,sanitize:5}}
+function applyTool(cx,cy,dragging){
+ if(!G||G.over)return;
+ const rect=$('mapCanvas').getBoundingClientRect();
+ const gx=(cx-rect.left)/rect.width*COLS, gy=(cy-rect.top)/rect.height*ROWS;
+ const r=G.brush;
+ if(G.tool==='inspect'){if(!dragging)inspectAt(gx,gy);return}
+ let acted=false;
+ for(let y=Math.floor(gy-r);y<=gy+r;y++)for(let x=Math.floor(gx-r);x<=gx+r;x++){
+   if(x<0||y<0||x>=COLS||y>=ROWS||Math.hypot(x-gx,y-gy)>r)continue;
+   const i=cellIdx(x,y);
+   if(G.tool==='irrigate'&&G.cash>=2){G.moist[i]=clamp(G.moist[i]+.07,0,1);acted=true}
+   if(G.tool==='fertilize'&&G.cash>=2){G.nutr[i]=clamp(G.nutr[i]+.07,0,1);acted=true}
+   if(G.tool==='firebreak'){const fc=toolCost().firebreak;if(G.breakT[i]<=G.year&&G.cash>=fc){G.cash-=fc;G.breakT[i]=G.year+12;acted=true}}
+ }
+ if(acted&&(G.tool==='irrigate'||G.tool==='fertilize'||G.tool==='firebreak')){
+   if(G.tool==='irrigate'){G.cash-=r*r*2;sfx.water();spawnParticles(gx,gy,10,'#38bdf8',1.4,.4)}
+   if(G.tool==='fertilize'){G.cash-=r*r*2;spawnParticles(gx,gy,8,'#c084fc',1.2)}
+   if(G.tool==='firebreak'){spawnParticles(gx,gy,8,'#d6d3d1',1.2)} updateTileCache();updateHUD();return;
+ }
+ // tree-targeting tools
+ const inBrush=G.trees.filter(t=>Math.hypot(t.x-gx,t.y-gy)<=r+0.6);
+ if(G.tool==='plant'){
+   if(dragging&&Math.random()<.5)return;
+   const px=gx+(Math.random()-.5)*1.2,py=gy+(Math.random()-.5)*1.2;
+   if(G.townCells&&px>COLS-7){if(!dragging)toast('Too close to Ember Falls to plant','house','text-amber-300');return}
+   const cost=toolCost().plant;
+   if(G.cash<cost){if(!dragging){toast('Planting a '+SPECIES[G.plantSpecies].short+' costs $'+cost,'wallet','text-red-400');sfx.bad()}return}
+   if(inBrush.some(t=>Math.hypot(t.x-px,t.y-py)<.8)){return}
+   G.cash-=cost;const t=addTree(G.plantSpecies,px,py,0,G.research.nursery?1.6:1.0);
+   if(t){G.planted++;G.tut.plant++;spawnParticles(px,py,7,'#a3e635',1,.5);sfx.plant();floatText(cx,cy,'−$'+cost,'#fca5a5');checkTut()}
+   return;
+ }
+ if(G.tool==='harvest'){
+   const mature=inBrush.filter(t=>t.dbh>=10).sort((a,b)=>b.dbh-a.dbh);
+   if(!mature.length){if(!dragging)toast('No harvestable trees here (need trunk Ø ≥ 10)','axe','text-amber-300');return}
+   const t=mature[0];const val=Math.round((t.dbh*2.1)*SPECIES[t.sp].timber*(G.research.selective?1.3:1));
+   G.trees.splice(G.trees.indexOf(t),1);G.cash+=val;G.revenue+=val;G.harvested++;G.tut.harvest=true;
+   const i=cellIdx(clamp(Math.round(t.x),0,COLS-1),clamp(Math.round(t.y),0,ROWS-1));G.nutr[i]=clamp(G.nutr[i]+.06,0,1);
+   spawnParticles(t.x,t.y,12,'#fbbf24',1.6);sfx.saw();setTimeout(()=>sfx.coin(),160);floatText(cx,cy,'+$'+val+' '+SPECIES[t.sp].short,'#fde68a');checkTut();updateHUD();return;
+ }
+ if(G.tool==='thin'){
+   const weak=inBrush.filter(t=>t.age<16).sort((a,b)=>a.vigor-b.vigor);
+   if(!weak.length){if(!dragging)toast('Nothing young enough to thin here','scissors','text-amber-300');return}
+   if(!pay(3))return;const t=weak[0];G.trees.splice(G.trees.indexOf(t),1);G.deaths++;
+   for(const n of inBrush)if(n!==t)n.health=clamp(n.health+.09,0,1);
+   spawnParticles(t.x,t.y,6,'#a3e635',1.2);sfx.saw();floatText(cx,cy,'thinned','#bef264');return;
+ }
+ if(G.tool==='sanitize'){
+   const inf=inBrush.filter(t=>t.infected>0);
+   if(!inf.length){if(!dragging)toast('No beetle-infected trees in brush','shield-plus','text-amber-300');return}
+   for(const t of inf){G.trees.splice(G.trees.indexOf(t),1);G.deaths++;spawnParticles(t.x,t.y,6,'#f87171',1.2)}
+   sfx.saw();toast('Sanitation-felled '+inf.length+' infected tree(s)','shield-plus','text-lime-300');return;
+ }
+}
+function inspectAt(gx,gy){
+ G.tut.inspect=true;checkTut();
+ let best=null,bd=2.2;for(const t of G.trees){const d=Math.hypot(t.x-gx,t.y-gy);if(d<bd){bd=d;best=t}}
+ const i=cellIdx(clamp(Math.round(gx),0,COLS-1),clamp(Math.round(gy),0,ROWS-1));
+ G.selected=best?{type:'tree',t:best}:{type:'soil',x:Math.round(gx),y:Math.round(gy)};
+ renderInspector();
+}
+function renderInspector(){
+ const el=$('inspector');if(!G.selected)return;
+ if(G.selected.type==='tree'){const t=G.selected.t;if(!G.trees.includes(t)){el.innerHTML='<p class="text-emerald-100/60 text-[13px]">That tree is gone. The forest moves on.</p>';return}
+  const s=SPECIES[t.sp];const stage=t.age<6?'Sapling':t.age<25?'Pole-stage':t.age<80?'Mature':'Old-growth';
+  el.innerHTML='<span class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background:'+s.dark+'"><i data-lucide="'+s.icon+'" class="w-5 h-5 text-white"></i></span><div class="min-w-0"><b>'+s.name+'</b> <span class="text-[11px] px-2 py-0.5 rounded-full bg-lime-900/70 text-lime-200">'+stage+'</span> '+(t.infected?'<span class="text-[11px] px-2 py-0.5 rounded-full bg-red-900 text-red-200 font-bold">BEETLE-INFECTED</span>':'')+'<div class="flex flex-wrap gap-x-4 text-[12px] text-emerald-100/70 mt-0.5"><span>Age <b class="text-white">'+t.age+' yrs</b></span><span>Trunk Ø <b class="text-white">'+t.dbh.toFixed(1)+'</b></span><span>Height <b class="text-white">'+t.h.toFixed(1)+' m</b></span><span>Health <b class="'+(t.health<.35?'text-red-300':'text-white')+'">'+Math.round(t.health*100)+'%</b></span><span>Vigour <b class="text-white">'+t.vigor.toFixed(2)+'</b></span><span>Carbon <b class="text-white">'+(0.028*t.dbh*t.dbh*(t.h/10)).toFixed(1)+' kg×40</b></span></div><p class="text-[11.5px] text-emerald-100/50 mt-0.5">'+s.desc+'</p></div>';}
+ else{const {x,y}=G.selected;const i=cellIdx(x,y);
+  el.innerHTML='<span class="w-10 h-10 rounded-xl bg-sky-950 flex items-center justify-center shrink-0"><i data-lucide="layers" class="w-5 h-5 text-sky-300"></i></span><div><b>Soil cell ('+x+', '+y+')</b><div class="flex flex-wrap gap-x-4 text-[12px] text-emerald-100/70 mt-0.5"><span>Moisture <b class="text-sky-200">'+Math.round(G.moist[i]*100)+'%</b></span><span>Nutrients <b class="text-violet-200">'+Math.round(G.nutr[i]*100)+'%</b></span><span>Light at floor <b class="text-amber-200">'+Math.round(G.light[i]*100)+'%</b></span><span>Elevation <b class="text-white">'+G.elev[i].toFixed(2)+'</b></span>'+(G.breakT[i]>G.year?'<span class="text-orange-200 font-bold">Firebreak until '+G.breakT[i]+'</span>':'')+(G.burn[i]>0?'<span class="text-orange-300 font-bold">Recently burned (ash fertilising)</span>':'')+'</div><p class="text-[11.5px] text-emerald-100/50 mt-0.5">Shade-tolerant maple &amp; spruce seedlings survive below 25% light; birch needs &gt;60%. Willow wants moisture above 65%.</p></div>'}
+ lucide.createIcons();
+}
+function checkTut(){if(!G||G.tut.done)return;renderCoach()}
+function dismissCoach(){G.tut.done=true;$('coach').classList.add('hidden')}
+function renderCoach(){
+ if(!G||G.tut.done||G.scen!=='rebirth'){$('coach').classList.add('hidden');return}
+ $('coach').classList.remove('hidden');
+ const steps=[['Inspect any tree (tool 1)',G.tut.inspect],['Plant 5 saplings (tool 2, pick a species below)',G.tut.plant>=5],['Let 3 years pass — watch the seasons',G.year>=G.startYear+3],['Harvest one mature tree (tool 3)',G.tut.harvest],['Buy any research in the Research tab',Object.keys(G.research).length>0]];
+ $('coachSteps').innerHTML=steps.map(([s,d])=>'<li class="flex gap-2 '+(d?'text-lime-300 line-through opacity-70':'text-emerald-50/85')+'"><i data-lucide="'+(d?'circle-check':'circle')+'" class="w-4 h-4 shrink-0 mt-px"></i>'+s+'</li>').join('');
+ if(steps.every(s=>s[1])){G.tut.done=true;G.cash+=300;toast('Field Guide complete: +$300 trust grant','graduation-cap');sfx.good();setTimeout(()=>$('coach').classList.add('hidden'),2500)}
+ lucide.createIcons();
+}
+
+/* ---------- rendering ---------- */
+const cv=$('mapCanvas'),ctx=cv.getContext('2d');
+const tileCv=document.createElement('canvas');tileCv.width=COLS*8;tileCv.height=ROWS*8;const tctx=tileCv.getContext('2d');
+function updateTileCache(){
+ if(!G)return;
+ for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const i=cellIdx(x,y);let c;
+  if(G.breakT[i]>G.year)c='#78716c';
+  else if(G.burn[i]>0)c='#292524';
+  else if(overlayMode==='moisture'){const m=G.moist[i];c='rgb('+Math.round(30+m*20)+','+Math.round(60+m*80)+','+Math.round(90+m*150)+')'}
+  else if(overlayMode==='nutrients'){const n=G.nutr[i];c='rgb('+Math.round(50+n*160)+','+Math.round(40+n*90)+','+Math.round(90+n*60)+')'}
+  else if(overlayMode==='light'){const l=G.light[i];c='rgb('+Math.round(15+l*60)+','+Math.round(25+l*110)+','+Math.round(10+l*40)+')'}
+  else if(overlayMode==='health'){const m=G.moist[i];c='rgb('+Math.round(70-m*20)+','+Math.round(95+m*40)+','+Math.round(50)+')'}
+  else{const e=G.elev[i],m=G.moist[i];const rC=Math.round(52+e*14+(1-m)*22),gC=Math.round(88+e*10+m*22),bC=Math.round(34+e*6);c='rgb('+rC+','+gC+','+bC+')'}
+  tctx.fillStyle=c;tctx.fillRect(x*8,y*8,8,8);
+ }
+ // river sheen
+ if(overlayMode==='normal'&&G.riverY){tctx.fillStyle='rgba(56,150,200,.75)';for(let x=0;x<COLS;x++){tctx.fillRect(x*8,(G.riverY[x]-0.7)*8,8,11)}}
+}
+function resizeCanvas(){const w=$('mapWrap').clientWidth,h=w*5/8;const dpr=Math.min(2,window.devicePixelRatio||1);cv.width=w*dpr;cv.height=h*dpr;cv.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+function draw(){
+ if(!G)return;
+ const W=$('mapWrap').clientWidth,H=W*5/8,cw=W/COLS,ch=H/ROWS;
+ const season=G.yearFrac; // 0 spring .25 summer .5 autumn .75 winter
+ ctx.clearRect(0,0,W,H);
+ ctx.drawImage(tileCv,0,0,W,H);
+ // season tint
+ if(season>.42&&season<.72){ctx.fillStyle='rgba(217,119,6,.07)';ctx.fillRect(0,0,W,H)}
+ if(season>=.72){ctx.fillStyle='rgba(186,230,253,.10)';ctx.fillRect(0,0,W,H)}
+ // firebreak scorch edges already in tiles; town
+ if(G.townCells){for(let k=0;k<8;k++){const hx=(COLS-3.4)*cw,hy=(5+k*4.2)*ch;const alive=k<G.houses;
+   ctx.fillStyle=alive?'#fef3c7':'#1c1917';ctx.fillRect(hx,hy,cw*1.5,ch*1.2);ctx.fillStyle=alive?'#b45309':'#0c0a09';ctx.beginPath();ctx.moveTo(hx-2,hy);ctx.lineTo(hx+cw*.75,hy-ch*.8);ctx.lineTo(hx+cw*1.5+2,hy);ctx.fill();
+   if(alive){ctx.fillStyle='#fbbf24';ctx.fillRect(hx+cw*.55,hy+ch*.4,3,3)}}
+  ctx.fillStyle='rgba(254,243,199,.85)';ctx.font='700 10px Inter';ctx.fillText('EMBER FALLS', (COLS-6.6)*cw, 3.6*ch);}
+ // burning glow
+ for(const b of G.burning){const t=b.t;ctx.fillStyle='rgba(249,115,22,.5)';ctx.beginPath();ctx.arc(t.x*cw,t.y*ch,cw*1.6+Math.sin(performance.now()*.02+t.id)*2,0,7);ctx.fill()}
+ // trees sorted by y
+ const sorted=[...G.trees].sort((a,b)=>a.y-b.y);
+ for(const t of sorted){
+  const s=SPECIES[t.sp],x=t.x*cw,y=t.y*ch;
+  const r=Math.max(2.2,(s.crownR*(0.35+t.dbh/16))*cw*.62);
+  const sway=Math.sin(performance.now()*.001+t.id*1.7)*1.1;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(x+r*.25,y+r*.3,r*.95,r*.4,0,0,7);ctx.fill();
+  // trunk
+  ctx.strokeStyle='#5b4232';ctx.lineWidth=Math.max(1,t.dbh*.09);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+sway*.3,y-r*.5);ctx.stroke();
+  let col=s.color;
+  if(overlayMode==='health')col=t.health>.66?'#4ade80':t.health>.38?'#facc15':'#f87171';
+  if(s.decid&&season>.42&&season<.72)col=['#e8930c','#d97706','#ea580c'][t.id%3];
+  if(season>=.72&&s.decid)col='#9ca3af';
+  ctx.fillStyle=s.dark;ctx.beginPath();ctx.arc(x+sway,y-r*.62,r,0,7);ctx.fill();
+  ctx.fillStyle=col;ctx.globalAlpha=.92;ctx.beginPath();ctx.arc(x-r*.28+sway,y-r*.8,r*.68,0,7);ctx.fill();ctx.beginPath();ctx.arc(x+r*.3+sway,y-r*.55,r*.55,0,7);ctx.fill();ctx.globalAlpha=1;
+  if(t.age>=80){ctx.strokeStyle='rgba(254,240,138,.85)';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(x+sway,y-r*.62,r+1.5,0,7);ctx.stroke()}
+  if(t.infected){ctx.fillStyle='#ef4444';ctx.beginPath();ctx.arc(x+r*.4,y-r*1.05,2.4,0,7);ctx.fill();ctx.fillStyle='#fca5a5';ctx.font='bold 8px Inter';ctx.fillText('!',x+r*.4-1,y-r*1.02)}
+  if(t.burnT){ctx.fillStyle='rgba(249,115,22,.9)';ctx.beginPath();ctx.arc(x,y-r*.6,r*.8+Math.random()*2,0,7);ctx.fill()}
+  if(settings.labels&&t.dbh>8){ctx.fillStyle='rgba(255,255,255,.75)';ctx.font='8px Inter';ctx.fillText(s.short,x-8,y+8)}
+ }
+ // selected ring
+ if(G.selected&&G.selected.type==='tree'&&G.trees.includes(G.selected.t)){const t=G.selected.t;ctx.strokeStyle='#fde047';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();ctx.arc(t.x*cw,t.y*ch,(SPECIES[t.sp].crownR*(0.35+t.dbh/16))*cw*.62+6,0,7);ctx.stroke();ctx.setLineDash([])}
+ // wildlife
+ for(const d of G.deerAgents){ctx.fillStyle='#a07840';ctx.beginPath();ctx.ellipse(d.x*cw,d.y*ch,5,3.4,d.a,0,7);ctx.fill();ctx.fillStyle='#c49a5e';ctx.beginPath();ctx.arc(d.x*cw+Math.cos(d.a)*5,d.y*ch+Math.sin(d.a)*3,2.2,0,7);ctx.fill()}
+ for(const b of G.birdAgents){ctx.strokeStyle='rgba(224,242,254,.9)';ctx.lineWidth=1.4;const f=Math.sin(performance.now()*.02+b.ph)*3;ctx.beginPath();ctx.moveTo(b.x*cw-5,b.y*ch-f*.4);ctx.lineTo(b.x*cw,b.y*ch+f*.3);ctx.lineTo(b.x*cw+5,b.y*ch-f*.4);ctx.stroke()}
+ // particles
+ for(const p of G.particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.fillRect(p.x*cw-p.size/2,p.y*ch-p.size/2,p.size,p.size)}
+ ctx.globalAlpha=1;
+ // weather fx
+ if(G.weatherFx==='rain'){ctx.strokeStyle='rgba(147,197,253,.5)';ctx.lineWidth=1;const n=settings.particles==='low'?40:110;for(let i=0;i<n;i++){const rx=(i*97.3+performance.now()*.09)%W,ry=(i*57.7+performance.now()*.35)%H;ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(rx-2,ry+8);ctx.stroke()}}
+ if(G.droughtYrs>0){ctx.fillStyle='rgba(245,158,11,.05)';ctx.fillRect(0,0,W,H)}
+ // brush preview
+ if(G.hover){ctx.strokeStyle='rgba(253,224,71,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(G.hover.x*cw,G.hover.y*ch,G.brush*cw,0,7);ctx.stroke();ctx.fillStyle='rgba(253,224,71,.9)';ctx.font='10px Inter';const t=TOOLS.find(t=>t.id===G.tool);ctx.fillText(t?t.name:'',G.hover.x*cw+6,G.hover.y*ch-6)}
+}
+
+/* ---------- main loop ---------- */
+let lastT=performance.now(),chirpT=0;
+function loop(now){
+ requestAnimationFrame(loop);
+ const dt=Math.min(.1,(now-lastT)/1000);lastT=now;
+ if(!G||$('gameScreen').classList.contains('hidden'))return;
+ if(G.playing&&!G.over&&!G.pendingEvent){
+   G.yearFrac+=dt*G.speed*.22; // ~4.5s per year at 1x
+   if(G.yearFrac>=1){G.yearFrac=0;G.year++;yearStep();updateHUD();renderCoach();if(tab!=='log')renderTab()}
+ }
+ // season label & weather fx selection
+ const sf=G.yearFrac;const seasons=['Spring','Summer','Autumn','Winter'];const si=Math.min(3,Math.floor(sf*4));
+ if($('hudSeason').textContent!==seasons[si])$('hudSeason').textContent=seasons[si];
+ G.weatherFx=(G.rainNow>1.15&&sf>.1&&sf<.5)?'rain':null;
+ // wildlife agents drift
+ while(G.deerAgents.length<Math.min(14,Math.round(G.deer/4)))G.deerAgents.push({x:4+Math.random()*(COLS-8),y:4+Math.random()*(ROWS-8),a:Math.random()*7,t:0});
+ G.deerAgents.length=Math.min(14,Math.round(G.deer/4));
+ for(const d of G.deerAgents){d.t-=dt;if(d.t<=0){d.a=Math.random()*Math.PI*2;d.t=1+Math.random()*3}d.x=clamp(d.x+Math.cos(d.a)*dt*1.4,.5,COLS-.5);d.y=clamp(d.y+Math.sin(d.a)*dt*1.4,.5,ROWS-.5)}
+ while(G.birdAgents.length<Math.min(10,Math.round(G.birds/5)))G.birdAgents.push({x:-4,y:3+Math.random()*14,ph:Math.random()*7,v:.8+Math.random()});
+ for(const b of G.birdAgents){b.x+=dt*b.v*3;b.y+=Math.sin(now*.001+b.ph)*dt*.5;if(b.x>COLS+4){b.x=-4;b.y=3+Math.random()*16}}
+ G.birdAgents=G.birdAgents.slice(0,Math.max(0,Math.min(10,Math.round(G.birds/5))));
+ // particles update
+ for(const p of G.particles){p.x+=p.vx*dt*3;p.y+=p.vy*dt*3;p.life-=p.decay}
+ G.particles=G.particles.filter(p=>p.life>0);
+ if(settings.particles!=='off'&&Math.random()<dt*.7)spawnParticles(Math.random()*COLS,Math.random()*ROWS,1,seasonLeaf(),.4,.2);
+ draw();updateClockHUD();
+ chirpT-=dt;if(chirpT<=0){chirpT=3+Math.random()*6;if(G.birds>6&&settings.ambient)sfx.chirp()}
+}
+function seasonLeaf(){const s=G?G.yearFrac:0;return s>.42&&s<.72?'#f59e0b':s>=.72?'#e0f2fe':'#84cc16'}
+function updateClockHUD(){if(!G)return;$('hudYear').textContent=G.year;$('hudWeather').textContent=G.droughtYrs>0?'· Drought yr '+G.droughtYrs:G.weatherFx==='rain'?'· Rain':'';$('climateInfo').textContent=(G.tempNow?G.tempNow.toFixed(1)+'°C · rain ×':'')+(G.rainNow?G.rainNow.toFixed(2):'—')+(G.droughtYrs?' · DROUGHT':'')}
+
+/* ---------- HUD / panels ---------- */
+function updateHUD(){
+ if(!G)return;const m=metrics();
+ $('hudCash').textContent='$'+G.cash.toLocaleString();$('hudCash').parentElement.style.color=G.cash<300?'#fca5a5':'';
+ $('hudKnow').textContent=G.knowledge;$('hudCarbon').textContent=m.carbon.toLocaleString()+'t';$('hudBio').textContent=m.bio.toFixed(2);
+ $('hudCover').textContent=Math.round(m.cover)+'%';$('hudTrees').textContent=m.n;
+ const scen=SCENARIOS[G.scenIdx];
+ $('objTitle').textContent=scen.name+' — Objectives';
+ $('objDeadline').textContent=G.sandbox?'SANDBOX MODE':'Deadline: end of '+G.endYear+' · '+Math.max(0,G.endYear-G.year)+' yrs left'+(scen.winAfter?' · certify after yr '+(G.startYear+scen.winAfter):'');
+ $('objBars').innerHTML=scen.goals.map(g=>{const v=goalVal(g[0],m),tgt=goalTarget(g);const pct=clamp(v/tgt*100,0,100);const done=v>=tgt;const fmt=g[0]==='bio'?v.toFixed(2):Math.round(v).toLocaleString();const tfmt=g[0]==='bio'?tgt.toFixed(2):Math.round(tgt).toLocaleString();
+  return '<div class="min-w-[150px] flex-1 max-w-[230px]"><div class="flex justify-between text-[11px]"><span class="'+(done?'text-lime-300 font-bold':'text-emerald-100/70')+'">'+(done?'✓ ':'')+g[1]+'</span><span class="font-mono2">'+fmt+' / '+tfmt+'</span></div><div class="h-1.5 bg-black/50 rounded-full mt-0.5 overflow-hidden"><div class="prog h-full rounded-full '+(done?'bg-lime-400':'bg-gradient-to-r from-lime-600 to-lime-400')+'" style="width:'+pct+'%"></div></div></div>'}).join('');
+ $('mapLegend').innerHTML=SPECIES.map(s=>'<span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:'+s.color+'"></span>'+s.short+'</span>').join('')+(G.townCells?'<span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-100 inline-block"></span>Town</span>':'');
+ if(G.selected)renderInspector();
+}
+function setTab(t){tab=t;document.querySelectorAll('#tabRow .tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));if(t==='log')$('logBadge').classList.add('hidden');renderTab();lucide.createIcons()}
+function renderTab(){
+ if(!G)return;const el=$('tabBody');const m=metrics();
+ if(tab==='stand'){
+  el.innerHTML='<h3 class="font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="sprout" class="w-4 h-4 text-lime-400"></i>Plant a species <span class="text-[10px] font-normal text-emerald-100/50">(tool 2)</span></h3>'+
+  SPECIES.map((s,i)=>{const c=toolCostFor(i);return '<div onclick="pickSpecies('+i+')" class="species-card btn glass2 rounded-xl p-2.5 mb-2 cursor-pointer border '+(G.plantSpecies===i?'selected':'border-transparent')+'"><div class="flex items-center gap-2"><span class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background:'+s.dark+'"><i data-lucide="'+s.icon+'" class="w-4.5 h-4.5 text-white"></i></span><div class="min-w-0 flex-1"><b class="text-[13px]">'+s.name+'</b> <span class="text-[10px] text-emerald-100/50">×'+m.counts[i]+' in forest</span><div class="text-[11px] text-amber-200/90 font-mono2">$'+c+' / sapling</div></div></div>'+traitBar('Growth',s.growth/1.5)+traitBar('Shade tol.',s.shadeTol)+traitBar('Drought tol.',s.droughtTol)+traitBar('Timber value',s.timber/1.5)+'<p class="text-[11px] text-emerald-100/55 mt-1">'+s.desc+'</p><p class="text-[10px] text-emerald-100/40">Lives ~'+s.longevity+' yrs · seeds from age '+s.seedAge+' · spreads '+s.dispersal+' cells</p></div>'}).join('')+
+  '<div class="glass2 rounded-xl p-3 mt-3 text-[12px]"><b class="flex items-center gap-2 mb-1.5"><i data-lucide="paw-print" class="w-4 h-4 text-pink-300"></i>Wildlife</b><div class="space-y-1 text-emerald-100/70"><div class="flex justify-between"><span>Deer herd</span><b class="font-mono2 '+(G.deer>26?'text-red-300':'text-white')+'">'+Math.round(G.deer)+'</b></div><div class="flex justify-between"><span>Wolves</span><b class="font-mono2 text-white">'+G.wolves.toFixed(1)+'</b></div><div class="flex justify-between"><span>Songbirds</span><b class="font-mono2 text-white">'+Math.round(G.birds)+'</b></div></div><p class="text-[11px] text-emerald-100/45 mt-1.5">Deer over ~26 browse saplings hard. Wolves (old-growth or Corridors research) and birds in old trees restore the balance — birds also carry seed further.</p></div>'+
+  '<div class="glass2 rounded-xl p-3 mt-2 text-[12px]"><b class="flex items-center gap-2 mb-1"><i data-lucide="wallet" class="w-4 h-4 text-amber-300"></i>Last year\'s ledger</b><p class="text-emerald-100/70">Grants + carbon credits − upkeep: <b class="font-mono2 '+(G.grant>=0?'text-lime-300':'text-red-300')+'">'+(G.grant>=0?'+':'')+'$'+G.grant+'</b><br>Cumulative timber revenue: <b class="font-mono2 text-white">$'+G.revenue.toLocaleString()+'</b> · '+G.harvested+' trees felled · '+G.planted+' planted · '+G.born+' wild-born</p></div>';
+ } else if(tab==='research'){
+  el.innerHTML='<h3 class="font-bold text-sm mb-1 flex items-center gap-2"><i data-lucide="flask-conical" class="w-4 h-4 text-violet-300"></i>Research — <span class="text-violet-300 font-mono2">'+G.knowledge+' knowledge</span></h3><p class="text-[11px] text-emerald-100/50 mb-3">Knowledge accrues each year from biodiversity and stand size. Unlocks are permanent for this forest.</p>'+
+  RESEARCH.map(r=>{const owned=!!G.research[r.id];return '<div class="research-card glass2 rounded-xl p-3 mb-2 border border-transparent '+(owned?'bought':'')+'"><div class="flex items-center gap-2"><span class="w-8 h-8 rounded-lg bg-violet-950 flex items-center justify-center shrink-0"><i data-lucide="'+r.icon+'" class="w-4 h-4 text-violet-300"></i></span><b class="text-[13px] flex-1">'+r.name+'</b>'+(owned?'<span class="text-[10px] font-bold text-lime-300 flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i>ACTIVE</span>':'<button onclick="buyResearch(\''+r.id+'\')" class="btn bg-violet-700 hover:bg-violet-600 rounded-lg px-3 py-1.5 text-[11px] font-bold shrink-0">'+r.cost+' know.</button>')+'</div><p class="text-[11.5px] text-emerald-100/60 mt-1.5">'+r.desc+'</p></div>'}).join('');
+ } else if(tab==='charts'){
+  el.innerHTML='<h3 class="font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="chart-line" class="w-4 h-4 text-teal-300"></i>Forest telemetry</h3><canvas id="chartMain" width="300" height="120" class="w-full rounded-xl bg-black/30"></canvas><div class="flex gap-4 text-[10px] mt-1 mb-3"><span class="text-teal-300">— Carbon (t)</span><span class="text-lime-300">— Canopy %</span><span class="text-pink-300">— Biodiversity ×100</span></div><canvas id="chartCash" width="300" height="80" class="w-full rounded-xl bg-black/30"></canvas><div class="text-[10px] mt-1 mb-3"><span class="text-amber-300">— Budget ($)</span></div><h4 class="font-bold text-[12px] mb-1.5">Species composition</h4>'+SPECIES.map((s,i)=>'<div class="flex items-center gap-2 text-[11px] mb-1"><span class="w-14">'+s.short+'</span><div class="flex-1 h-2.5 bg-black/40 rounded-full overflow-hidden"><div class="h-full prog" style="width:'+(m.n?m.counts[i]/m.n*100:0)+'%;background:'+s.color+'"></div></div><span class="font-mono2 w-10 text-right">'+m.counts[i]+'</span></div>').join('')+'<div class="glass2 rounded-xl p-3 mt-3 text-[12px] space-y-1"><div class="flex justify-between"><span>Old-growth trees (80+)</span><b class="font-mono2">'+m.old+'</b></div><div class="flex justify-between"><span>Peak carbon</span><b class="font-mono2">'+G.stats.peakCarbon+' t</b></div><div class="flex justify-between"><span>Disturbances survived</span><b class="font-mono2">'+(G.stats.fires+G.stats.storms+G.stats.beetles)+' (fires '+G.stats.fires+')</b></div><div class="flex justify-between"><span>Deaths / births</span><b class="font-mono2">'+G.deaths+' / '+G.born+'</b></div>'+(G.townCells?'<div class="flex justify-between"><span>Ember Falls houses</span><b class="font-mono2 '+(G.houses<=3?'text-red-300':'')+'">'+G.houses+' / 8</b></div>':'')+'</div>';
+  drawCharts();
+ } else if(tab==='log'){
+  el.innerHTML='<h3 class="font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="scroll-text" class="w-4 h-4 text-lime-400"></i>Forest log</h3>'+(G.log.length?G.log.map(l=>'<div class="log-item glass2 rounded-lg px-2.5 py-2 mb-1.5 text-[12px] flex gap-2"><span class="font-mono2 text-lime-400/80 shrink-0">'+l.y+'</span><span class="text-emerald-50/85">'+l.msg+'</span></div>').join(''):'<p class="text-emerald-100/50 text-sm">Nothing yet. Time will write here.</p>');
+ }
+ lucide.createIcons();
+}
+function traitBar(label,v){return '<div class="flex items-center gap-2 mt-1"><span class="text-[9.5px] w-[62px] text-emerald-100/45 uppercase tracking-wide">'+label+'</span><div class="flex-1 h-1.5 bg-black/50 rounded-full overflow-hidden"><div class="h-full bg-lime-500/80 rounded-full" style="width:'+Math.round(clamp(v,0,1)*100)+'%"></div></div></div>'}
+function toolCostFor(i){const save=G.plantSpecies;const c=Math.round((14+SPECIES[i].timber*10)*(G.research.nursery?.65:1));return c}
+function pickSpecies(i){G.plantSpecies=i;G.tool='plant';syncTools();renderTab();sfx.click();const ins=$('inspector');ins.innerHTML='<i data-lucide="sprout" class="w-5 h-5 text-lime-400 shrink-0"></i><p class="text-[13px] text-emerald-100/70">Planting <b class="text-white">'+SPECIES[i].name+'</b> — $'+toolCostFor(i)+' each. Click or drag on the map. '+(i===5?'Willow demands wet soil near the river.':i===0?'Birch needs open light — plant in gaps, not under canopy.':i===3||i===4?'Happy to start life in shade under taller trees.':'')+'</p>';lucide.createIcons()}
+function buyResearch(id){const r=RESEARCH.find(x=>x.id===id);if(!r||G.research[id])return;if(G.knowledge<r.cost){toast('Need '+r.cost+' knowledge (have '+G.knowledge+')','flask-conical','text-violet-300');sfx.bad();return}G.knowledge-=r.cost;G.research[id]=true;G.tut.research=true;log('Research unlocked: '+r.name,'flask-conical');toast(r.name+' active','flask-conical','text-violet-300');sfx.good();if(id==='corridor'&&G.wolves<3)G.wolves=3;checkTut();updateHUD();renderTab()}
+function drawCharts(){
+ const c1=$('chartMain');if(!c1)return;const h=G.history;if(h.length<2){const x=c1.getContext('2d');x.fillStyle='rgba(236,253,245,.4)';x.font='11px Inter';x.fillText('Data accrues each year…',10,20);return}
+ const line=(cvEl,data,color,max)=>{const x=cvEl.getContext('2d');x.strokeStyle=color;x.lineWidth=1.8;x.beginPath();data.forEach((v,i)=>{const px=i/(Math.max(1,h.length-1))*(cvEl.width-8)+4,py=cvEl.height-6-clamp(v/max,0,1)*(cvEl.height-14);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()};
+ const x1=c1.getContext('2d');x1.clearRect(0,0,c1.width,c1.height);
+ line(c1,h.map(d=>d.c),'#2dd4bf',Math.max(600,...h.map(d=>d.c)));
+ line(c1,h.map(d=>d.cov),'#a3e635',100);
+ line(c1,h.map(d=>d.b*100),'#f472b6',100);
+ const c2=$('chartCash'),x2=c2.getContext('2d');x2.clearRect(0,0,c2.width,c2.height);
+ const maxC=Math.max(2000,...h.map(d=>Math.abs(d.cash)));x2.strokeStyle='rgba(255,255,255,.15)';x2.beginPath();x2.moveTo(0,c2.height/2);x2.lineTo(c2.width,c2.height/2);x2.stroke();
+ line(c2,h.map(d=>d.cash+maxC),'#fbbf24',maxC*2);
+}
+
+/* ---------- toolbar / controls ---------- */
+function buildToolbar(){
+ $('toolBar').innerHTML=TOOLS.map(t=>'<button data-tool="'+t.id+'" onclick="setTool(\''+t.id+'\')" title="'+t.name+' — '+t.hint+' ['+t.key+']" class="tool-btn btn glass rounded-xl lg:w-[74px] px-2.5 py-2 flex lg:flex-col items-center gap-1.5 shrink-0"><i data-lucide="'+t.icon+'" class="w-5 h-5"></i><span class="text-[10px] font-semibold leading-none">'+t.name+'</span><span class="kbd hidden lg:inline">'+t.key+'</span></button>').join('');
+ lucide.createIcons();
+}
+function setTool(id){if(!G)return;G.tool=id;syncTools();sfx.click();
+ const t=TOOLS.find(x=>x.id===id);const c=toolCost();
+ const extra=id==='plant'?' Selected: '+SPECIES[G.plantSpecies].name+' ($'+c.plant+'). Pick species in the Stand tab.':id==='firebreak'?' $'+c.firebreak+' per cell cleared, lasts 12 years. Drag a line between fire and what you love.':id==='harvest'?' Only trunks Ø ≥ 10 pay. Oak pays most; every felling opens a light gap for seedlings.':'';
+ $('inspector').innerHTML='<i data-lucide="'+t.icon+'" class="w-5 h-5 text-lime-400 shrink-0"></i><p class="text-[13px] text-emerald-100/70"><b class="text-white">'+t.name+':</b> '+t.hint+'.'+extra+'</p>';lucide.createIcons()}
+function syncTools(){document.querySelectorAll('.tool-btn').forEach(b=>b.classList.toggle('active',b.dataset.tool===G.tool))}
+function togglePlay(){if(!G||G.over)return;G.playing=!G.playing;updatePlayBtn();sfx.click()}
+function updatePlayBtn(){$('playIcon').setAttribute('data-lucide',G.playing?'pause':'play');$('playLabel').textContent=G.playing?'Pause':'Resume';lucide.createIcons()}
+function setSpeed(s){if(!G)return;G.speed=s;document.querySelectorAll('#speedRow button').forEach(b=>{const on=+b.dataset.speed===s;b.style.background=on?'#365314':'';b.style.color=on?'#d9f99d':''});sfx.click()}
+function stepYearBtn(){if(!G||G.over)return;G.year++;G.yearFrac=0;yearStep();updateHUD();renderTab();toast('Advanced to '+G.year,'step-forward')}
+function setOverlay(v){overlayMode=v;buildLightField();updateTileCache();sfx.click()}
+function togglePanel(){$('rightPanel').classList.toggle('open')}
+
+/* ---------- end / scoring ---------- */
+function scoreGame(won){const m=metrics();const scen=SCENARIOS[G.scenIdx];let gp=0;for(const g of scen.goals)gp+=clamp(goalVal(g[0],m)/goalTarget(g),0,1);gp/=scen.goals.length;
+ return Math.round(gp*600+m.carbon*.08+m.bio*180+G.revenue*.004+(won?400:0)-G.housesLost*120)}
+function endGame(won,title,body){
+ if(G.over)return;G.over=true;G.playing=false;sfx[won?'good':'bad']();
+ const m=metrics();const sc=scoreGame(won);const grade=sc>1150?'S':sc>850?'A':sc>600?'B':sc>350?'C':'D';
+ const key=G.scen+'_'+G.diff;const prev=meta.best[key]||0;if(sc>prev)meta.best[key]=sc;
+ if(won){meta.wins++;const idx=SCENARIOS.indexOf(SCENARIOS[G.scenIdx]);if(idx+1>=meta.unlocked&&meta.unlocked<SCENARIOS.length)meta.unlocked=idx+2}
+ store.set('canopy_meta',meta);store.del('canopy_save');
+ log((won?'Scenario complete: ':'Scenario failed: ')+title,'trophy');
+ $('endHead').innerHTML='<div class="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-3 '+(won?'bg-lime-600/30 border border-lime-500/50':'bg-red-900/40 border border-red-700/50')+'"><i data-lucide="'+(won?'trophy':'skull')+'" class="w-8 h-8 '+(won?'text-lime-300':'text-red-300')+'"></i></div><h2 class="font-display text-3xl font-extrabold">'+title+'</h2><p class="text-sm text-emerald-100/65 mt-2 leading-relaxed">'+body+'</p><div class="mt-3 inline-flex items-center gap-3 glass rounded-2xl px-4 py-2"><span class="text-[11px] uppercase tracking-widest text-emerald-100/50">Final score</span><b class="font-mono2 text-2xl text-lime-300">'+sc.toLocaleString()+'</b><span class="font-display font-extrabold text-xl '+(grade==='S'?'text-amber-300':'text-emerald-100')+'">Grade '+grade+'</span>'+(sc>prev&&prev>0?'<span class="text-[10px] bg-amber-500 text-black font-bold rounded px-1.5 py-0.5">NEW BEST</span>':'')+'</div>';
+ const stats=[['Years stewarded',G.year-G.startYear],['Living trees',m.n],['Canopy cover',Math.round(m.cover)+'%'],['Carbon stored',m.carbon+' t'],['Biodiversity',m.bio.toFixed(2)],['Old-growth trees',m.old],['Timber revenue','$'+G.revenue.toLocaleString()],['Trees planted / born',G.planted+' / '+G.born],['Disturbances survived',G.stats.fires+G.stats.storms+G.stats.beetles]];
+ $('endStats').innerHTML=stats.map(([k,v])=>'<div class="glass2 rounded-xl p-2.5 text-center"><div class="text-[10px] uppercase tracking-wide text-emerald-100/45">'+k+'</div><div class="font-mono2 font-bold text-[15px] mt-0.5">'+v+'</div></div>').join('');
+ const scen=SCENARIOS[G.scenIdx];
+ $('endGoals').innerHTML='<h3 class="font-bold text-sm mb-1">Objectives</h3>'+scen.goals.map(g=>{const v=goalVal(g[0],m),tgt=goalTarget(g);const ok=v>=tgt;return '<div class="flex items-center gap-2 text-[13px] glass2 rounded-lg px-3 py-2"><i data-lucide="'+(ok?'circle-check':'circle-x')+'" class="w-4 h-4 '+(ok?'text-lime-400':'text-red-400')+'"></i><span class="flex-1">'+g[1]+'</span><span class="font-mono2">'+(g[0]==='bio'?v.toFixed(2):Math.round(v).toLocaleString())+' / '+(g[0]==='bio'?tgt.toFixed(2):Math.round(tgt).toLocaleString())+'</span></div>'}).join('');
+ $('endContinue').classList.toggle('hidden',!won);$('endContinue').classList.toggle('flex',won);
+ $('endModal').classList.remove('hidden');lucide.createIcons();renderBestScores();
+}
+function continueSandbox(){G.over=false;G.sandbox=true;G.playing=true;$('endModal').classList.add('hidden');updatePlayBtn();updateHUD();toast('Sandbox mode — grow forever. Autosave resumes.','infinity');log('Entered free-growth sandbox mode','infinity')}
+
+/* ---------- save / load ---------- */
+function saveGame(manual){
+ if(!G||G.over)return;
+ const data={v:1,scenIdx:G.scenIdx,diff:G.diff,seed:G.seed,year:G.year,cash:G.cash,knowledge:G.knowledge,revenue:G.revenue,harvested:G.harvested,planted:G.planted,deaths:G.deaths,born:G.born,deer:G.deer,wolves:G.wolves,birds:G.birds,houses:G.houses,housesLost:G.housesLost,research:G.research,lastCarbon:G.lastCarbon,history:G.history.slice(-80),stats:G.stats,tut:G.tut,
+  trees:G.trees.map(t=>[t.sp,+t.x.toFixed(1),+t.y.toFixed(1),t.age,+t.dbh.toFixed(1),+t.health.toFixed(2),t.infected]),
+  moist:Array.from(G.moist,v=>+v.toFixed(2)),nutr:Array.from(G.nutr,v=>+v.toFixed(2)),elev:Array.from(G.elev,v=>+v.toFixed(2)),riverY:G.riverY,log:G.log.slice(0,25)};
+ store.set('canopy_save',data);if(manual)toast('Forest saved — resume from the title screen','save');
+}
+function continueGame(){
+ const d=store.get('canopy_save',null);if(!d){toast('No saved forest found','save','text-amber-300');return}
+ initAudio();const scen=SCENARIOS[d.scenIdx]||SCENARIOS[0];
+ G=newState(scen,d.diff,d.seed);
+ G.year=d.year;G.endYear=G.startYear+scen.years;G.cash=d.cash;G.knowledge=d.knowledge;G.revenue=d.revenue;G.harvested=d.harvested;G.planted=d.planted;G.deaths=d.deaths;G.born=d.born;G.deer=d.deer;G.wolves=d.wolves;G.birds=d.birds;G.houses=d.houses;G.housesLost=d.housesLost||0;G.research=d.research||{};G.lastCarbon=d.lastCarbon||0;G.history=d.history||[];G.stats=d.stats||G.stats;G.tut=d.tut||G.tut;G.log=d.log||[];
+ G.moist=Float32Array.from(d.moist);G.nutr=Float32Array.from(d.nutr);G.elev=Float32Array.from(d.elev);G.riverY=d.riverY;
+ G.trees=[];for(const a of d.trees){const t=addTree(a[0],a[1],a[2],a[3],a[4]);if(t){t.health=a[5];t.infected=a[6]||0}}
+ enterGame();log('Saved forest restored — welcome back, steward','history');toast('Saved forest loaded ('+G.year+')','history');
+}
+
+/* ---------- flow ---------- */
+function renderScenarios(){
+ $('scenGrid').innerHTML=SCENARIOS.map((s,i)=>{const locked=i>=meta.unlocked;const best=meta.best[s.id+'_1'];
+ return '<div onclick="'+(locked?'':'pickScenario('+i+')')+'" class="scen-card glass2 rounded-3xl p-4 relative '+(selScenario===i&&!locked?'selected':'')+' '+(locked?'opacity-50 cursor-not-allowed':'')+'">'+(locked?'<div class="absolute inset-0 flex flex-col items-center justify-center gap-1 z-10"><i data-lucide="lock" class="w-6 h-6 text-emerald-100/70"></i><span class="text-[11px] font-bold">Complete the previous scenario</span></div>':'')+'<div class="flex items-center gap-2 mb-1.5"><span class="w-9 h-9 rounded-xl bg-lime-900/70 flex items-center justify-center"><i data-lucide="'+s.icon+'" class="w-5 h-5 text-lime-300"></i></span><div><b class="block leading-tight">'+s.name+'</b><span class="text-[10px] text-amber-200/80 font-semibold">'+s.diff+'</span></div></div><p class="text-[12px] text-emerald-100/60 leading-relaxed min-h-[48px]">'+s.desc+'</p><div class="text-[11px] mt-2 space-y-0.5 text-emerald-100/55"><div class="flex justify-between"><span>Horizon</span><b class="font-mono2 text-emerald-50">'+s.years+' yrs</b></div><div class="flex justify-between"><span>Start budget</span><b class="font-mono2 text-emerald-50">$'+s.budget.toLocaleString()+'</b></div>'+(best?'<div class="flex justify-between"><span>Best score</span><b class="font-mono2 text-amber-300">'+best+'</b></div>':'')+'</div><div class="mt-2 flex flex-wrap gap-1">'+s.goals.map(g=>'<span class="text-[9.5px] bg-black/40 border border-lime-900 rounded-full px-2 py-0.5">'+g[1].split('(')[0]+'</span>').join('')+'</div></div>'}).join('');
+ lucide.createIcons();
+ const sv=store.get('canopy_save',null);
+ if(sv&&SCENARIOS[sv.scenIdx]){$('continueRow').classList.remove('hidden');$('continueLabel').textContent='Continue: '+SCENARIOS[sv.scenIdx].name+' · Year '+sv.year+' · '+sv.trees.length+' trees'}
+ renderBestScores();
+}
+function renderBestScores(){const w=meta.wins;const bs=Object.values(meta.best);$('bestScores').innerHTML=(w||bs.length)?'Scenarios won: <b class="text-lime-300">'+w+'</b> · Best score: <b class="text-amber-300">'+(bs.length?Math.max(...bs):0)+'</b>':'No forests stewarded yet. Your first hillside awaits.'}
+function pickScenario(i){selScenario=i;renderScenarios();sfx.click()}
+function setDifficulty(d){selDiff=d;document.querySelectorAll('#diffRow .diff-btn').forEach(b=>b.classList.toggle('active',+b.dataset.diff===d));initAudio();sfx.click()}
+function startGame(seeded){
+ initAudio();if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();
+ const scen=SCENARIOS[selScenario];
+ const seed=seeded?27:scen.seed+selDiff*77;
+ G=newState(scen,selDiff,seed);
+ genMap(scen);seedInitialForest(scen);buildLightField();
+ const m=metrics();G.lastCarbon=m.carbon;
+ G.history.push({y:G.year,c:m.carbon,b:+m.bio.toFixed(3),t:m.n,cash:G.cash,cov:Math.round(m.cover)});
+ enterGame();
+ log('The trust deeds you "'+scen.name+'" — '+scen.trees+' trees, $'+G.cash+', and '+scen.years+' years on the clock','scroll');
+ log('Tip: birch races for light, maple waits in shade, willow hugs the river','lightbulb');
+ if(scen.id==='rebirth')setTimeout(()=>toast('Follow the Field Guide in the corner','graduation-cap'),600);
+ sfx.good();
+}
+function enterGame(){
+ $('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('endModal').classList.add('hidden');
+ buildToolbar();setTool('inspect');setTab('stand');setSpeed(G.speed);updatePlayBtn();
+ updateTileCache();resizeCanvas();updateHUD();renderCoach();
+ $('volRange').value=settings.vol;
+ requestAnimationFrame(()=>{resizeCanvas();updateTileCache()});
+}
+function restartRun(){ $('endModal').classList.add('hidden');$('pauseModal').classList.add('hidden');const scen=SCENARIOS[G?G.scenIdx:selScenario];const diff=G?G.diff:selDiff;selScenario=SCENARIOS.indexOf(scen);selDiff=diff;store.del('canopy_save');startGame(false) }
+function backToTitle(){ if(G&&!G.over)saveGame(false);G=null;$('gameScreen').classList.add('hidden');$('pauseModal').classList.add('hidden');$('endModal').classList.add('hidden');$('titleScreen').classList.remove('hidden');renderScenarios();window.scrollTo(0,0) }
+function wipeProgress(){if(!confirm('Erase all Canopy progress, best scores and saved forest?'))return;store.del('canopy_meta');store.del('canopy_save');meta={unlocked:1,best:{},wins:0};renderScenarios();toast('All saved progress erased','trash-2','text-red-300')}
+
+/* ---------- modals ---------- */
+function openHelp(){$('helpModal').classList.remove('hidden');lucide.createIcons()}
+function closeHelp(){$('helpModal').classList.add('hidden')}
+function openSettings(){const s=$('setVol');if(s)s.value=settings.vol;$('setMute').textContent=settings.muted?'On':'Off';$('setAmbient').textContent=settings.ambient?'On':'Off';$('setLabels').textContent=settings.labels?'On':'Off';$('setAutosave').textContent=settings.autosave?'On':'Off';$('setParticles').value=settings.particles;$('settingsModal').classList.remove('hidden');lucide.createIcons()}
+function closeSettings(){$('settingsModal').classList.add('hidden')}
+function openPause(){if(G){G.playing=false;updatePlayBtn()}$('pauseSub').textContent=G?(SCENARIOS[G.scenIdx].name+' · Year '+G.year+' · '+G.trees.length+' trees'):'Simulation paused';$('pauseModal').classList.remove('hidden');lucide.createIcons()}
+function closePause(){$('pauseModal').classList.add('hidden');if(G&&!G.over){G.playing=true;updatePlayBtn()}}
+
+/* ---------- input ---------- */
+let pointerDown=false;
+function canvasPos(e){const r=cv.getBoundingClientRect();return {x:e.clientX,y:e.clientY}}
+cv.addEventListener('pointerdown',e=>{initAudio();if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();pointerDown=true;cv.setPointerCapture(e.pointerId);const p=canvasPos(e);applyTool(p.x,p.y,false)});
+cv.addEventListener('pointermove',e=>{if(!G)return;const r=cv.getBoundingClientRect();G.hover={x:(e.clientX-r.left)/r.width*COLS,y:(e.clientY-r.top)/r.height*ROWS};if(pointerDown){const p=canvasPos(e);applyTool(p.x,p.y,true)}});
+window.addEventListener('pointerup',()=>pointerDown=false);
+cv.addEventListener('pointerleave',()=>{if(G)G.hover=null});
+$('brushRange').addEventListener('input',e=>{$('brushVal').textContent=e.target.value});
+document.addEventListener('keydown',e=>{
+ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;
+ if(!$('gameScreen').classList.contains('hidden')){
+  if(e.code==='Space'){e.preventDefault();togglePlay()}
+  else if(e.key>='1'&&e.key<='8')setTool(TOOLS[+e.key-1].id);
+  else if(e.key==='['&&G){G.brush=Math.max(1,G.brush-1);$('brushRange').value=G.brush;$('brushVal').textContent=G.brush}
+  else if(e.key===']'&&G){G.brush=Math.min(6,G.brush+1);$('brushRange').value=G.brush;$('brushVal').textContent=G.brush}
+  else if(e.key==='+'||e.key==='=')setSpeed(G.speed>=4?4:G.speed*2);
+  else if(e.key==='-')setSpeed(Math.max(.5,G.speed/2));
+  else if(e.key==='m'||e.key==='M')toggleMute();
+  else if(e.key==='h'||e.key==='H')openHelp();
+  else if(e.key==='Escape'){if(!$('helpModal').classList.contains('hidden'))closeHelp();else if(!$('settingsModal').classList.contains('hidden'))closeSettings();else openPause()}
+ } else if(e.key==='Escape'){closeHelp();closeSettings()}
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&G&&G.playing){G.playing=false;updatePlayBtn();if(settings.autosave)saveGame(false)}});
+let resizeT;window.addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>{if(G)resizeCanvas()},120)});
+
+/* ---------- boot ---------- */
+setDifficulty(1);renderScenarios();
+$('volRange')&&($('volRange').value=settings.vol);
+lucide.createIcons();
+requestAnimationFrame(loop);
+setInterval(()=>{if(G&&!$('gameScreen').classList.contains('hidden')&&tab==='charts')drawCharts()},4000);
+</script>
+</body>
+</html>

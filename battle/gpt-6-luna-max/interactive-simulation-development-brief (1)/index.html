@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#101b1a">
+  <title>Voxel Biosphere - Field Station 01</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #edf3e9;
+      --muted: #a5b2a9;
+      --faint: #74847a;
+      --panel: rgba(12, 23, 23, .82);
+      --panel-strong: rgba(13, 25, 25, .96);
+      --line: rgba(214, 235, 207, .15);
+      --lime: #c9ee82;
+      --cyan: #8de1d0;
+      --amber: #ffcb77;
+      --red: #ff8c76;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background: #111c1b;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: -.012em;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    .hidden { display: none !important; }
+    #worldScene { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: linear-gradient(#a4c7b8, #708f78 62%, #283f32); }
+    #worldCanvas, #fallbackCanvas { display: block; width: 100%; height: 100%; outline: none; }
+    #worldCanvas { touch-action: none; }
+    #sceneShade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(12,22,22,.16), transparent 21%, transparent 65%, rgba(11,20,19,.2)); }
+    #simulationUI { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+    #simulationUI button, #simulationUI input, #simulationUI select, #simulationUI canvas, #simulationUI .panel { pointer-events: auto; }
+    .topbar {
+      height: 66px; position: absolute; inset: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; gap: 18px; border-bottom: 1px solid rgba(227,240,223,.12);
+      background: linear-gradient(180deg, rgba(10,18,18,.92), rgba(10,18,18,.72)); backdrop-filter: blur(18px); pointer-events: auto;
+    }
+    .brand-lockup { display: flex; align-items: center; min-width: 220px; gap: 11px; }
+    .brand-mark { width: 29px; height: 29px; border: 1px solid rgba(201,238,130,.68); border-radius: 50%; position: relative; flex: none; }
+    .brand-mark:before, .brand-mark:after { content: ""; position: absolute; border: 1px solid var(--lime); border-radius: 50%; inset: 5px 2px; transform: rotate(-38deg); }
+    .brand-mark:after { transform: rotate(38deg); inset: 2px 5px; opacity: .64; }
+    .brand-name { font-size: 11px; font-weight: 800; letter-spacing: .16em; line-height: 1.2; }
+    .brand-sub { margin-top: 3px; color: var(--faint); font-size: 9px; letter-spacing: .13em; text-transform: uppercase; }
+    .top-status { display: flex; align-items: center; gap: 18px; color: var(--muted); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; }
+    .top-status strong { display: block; color: var(--ink); font: 600 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: .01em; text-transform: none; }
+    .top-status .status-divider { height: 25px; width: 1px; background: var(--line); }
+    .top-actions { display: flex; align-items: center; gap: 7px; }
+    .small-action, .icon-action, .speed-btn, .ghost-btn, .solid-btn, .tool-btn, .scenario-choice, .difficulty-btn, .tech-button, .species-row, .chart-tab {
+      border: 1px solid var(--line); background: rgba(232,242,224,.055); color: var(--ink); cursor: pointer; transition: border-color .2s, background .2s, color .2s, transform .2s, opacity .2s;
+    }
+    .small-action:hover, .icon-action:hover, .speed-btn:hover, .ghost-btn:hover, .tool-btn:hover, .scenario-choice:hover, .tech-button:hover, .species-row:hover, .chart-tab:hover { border-color: rgba(201,238,130,.52); background: rgba(201,238,130,.11); }
+    .small-action:active, .icon-action:active, .speed-btn:active, .solid-btn:active, .tool-btn:active { transform: translateY(1px) scale(.985); }
+    .icon-action { width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 10px; font-size: 13px; }
+    .small-action { height: 34px; border-radius: 10px; padding: 0 11px; color: var(--muted); font-size: 11px; }
+    .speed-control { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: rgba(0,0,0,.24); }
+    .speed-btn { min-width: 37px; height: 27px; padding: 0 5px; border: 0; border-radius: 7px; background: transparent; color: var(--faint); font: 10px ui-monospace, monospace; }
+    .speed-btn.active { color: #162018; background: var(--lime); font-weight: 800; }
+    .workspace { position: absolute; inset: 80px 16px 16px; display: grid; grid-template-columns: minmax(220px, 258px) minmax(250px, 1fr) minmax(255px, 290px); gap: 13px; pointer-events: none; }
+    .panel { min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); backdrop-filter: blur(17px); box-shadow: 0 14px 45px rgba(4,12,11,.12); pointer-events: auto; }
+    .left-panel, .right-panel { padding: 15px 15px 13px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(201,238,130,.22) transparent; }
+    .panel-section { min-width: 0; }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 9px; color: #b7c6b9; font: 700 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .15em; }
+    .micro-label { color: var(--faint); font: 9px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .weather-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px 10px; padding: 11px 12px; border: 1px solid rgba(214,235,207,.11); border-radius: 12px; background: rgba(231,244,225,.035); }
+    .weather-main { font-size: 13px; font-weight: 700; }
+    .weather-note { color: var(--muted); font-size: 10px; }
+    .temperature { color: var(--lime); font: 600 19px/1 ui-monospace, monospace; }
+    .weather-mark { color: var(--cyan); font: 17px/1 ui-monospace, monospace; }
+    .climate-control { margin-top: 11px; }
+    .control-line { display: flex; align-items: center; justify-content: space-between; margin: 0 0 7px; color: var(--muted); font-size: 10px; }
+    input[type="range"] { width: 100%; height: 3px; border-radius: 9px; appearance: none; background: rgba(215,234,211,.21); accent-color: var(--lime); cursor: pointer; }
+    input[type="range"]::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; border: 2px solid #111c1b; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+    input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid #111c1b; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+    .select-control, .modal-select { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 9px; padding: 0 9px; outline: none; background: rgba(4,12,12,.48); color: var(--ink); font-size: 10px; }
+    .select-control:focus, .modal-select:focus { border-color: var(--lime); }
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .metric { padding: 9px 10px; min-width: 0; border-left: 1px solid rgba(201,238,130,.38); background: rgba(235,244,224,.035); }
+    .metric span { display: block; color: var(--faint); font: 8px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .1em; }
+    .metric strong { display: block; margin-top: 4px; font: 600 16px/1.1 ui-monospace, monospace; color: var(--ink); }
+    .metric small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+    .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
+    .chart-tabs { display: flex; gap: 3px; }
+    .chart-tab { border: 0; background: transparent; color: var(--faint); font-size: 9px; padding: 4px 7px; border-radius: 6px; }
+    .chart-tab.active { background: rgba(201,238,130,.13); color: var(--lime); }
+    #historyChart { width: 100%; height: 111px; display: block; }
+    .chart-legend { display: flex; align-items: center; gap: 12px; margin-top: 3px; color: var(--faint); font-size: 9px; }
+    .legend-dot { width: 6px; height: 6px; display: inline-block; margin-right: 4px; border-radius: 50%; vertical-align: 1px; }
+    .stage { position: relative; min-width: 0; min-height: 0; pointer-events: none; }
+    .stage-topline { position: absolute; left: 5px; right: 5px; top: 0; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+    .location-label { padding: 7px 10px; border: 1px solid rgba(222,240,215,.15); border-radius: 9px; color: var(--ink); background: rgba(10,20,18,.48); backdrop-filter: blur(8px); font-size: 10px; letter-spacing: .04em; }
+    .location-label span { margin-left: 7px; color: var(--muted); font: 9px ui-monospace, monospace; }
+    .view-hint { padding: 7px 9px; border-radius: 9px; color: #dae8d9; background: rgba(10,20,18,.42); font: 9px ui-monospace, monospace; }
+    .selected-readout { position: absolute; right: 6px; top: 46px; min-width: 150px; max-width: 210px; padding: 9px 11px; border: 1px solid rgba(222,240,215,.15); border-radius: 11px; background: rgba(10,20,18,.65); backdrop-filter: blur(9px); opacity: 0; transform: translateY(-3px); transition: opacity .2s, transform .2s; pointer-events: none; }
+    .selected-readout.visible { opacity: 1; transform: translateY(0); }
+    .selected-readout strong { display: block; font-size: 11px; }
+    .selected-readout span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; line-height: 1.4; }
+    .world-tools { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; max-width: calc(100% - 12px); padding: 6px; border: 1px solid rgba(225,242,218,.19); border-radius: 13px; background: rgba(12,22,21,.88); backdrop-filter: blur(18px); box-shadow: 0 12px 32px rgba(5,13,10,.19); pointer-events: auto; }
+    .tool-btn { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 62px; height: 36px; padding: 0 9px; border-radius: 9px; color: #bdcabe; font-size: 9px; white-space: nowrap; }
+    .tool-glyph { width: 16px; color: var(--lime); font: 12px ui-monospace, monospace; }
+    .tool-btn.active { border-color: rgba(201,238,130,.55); color: #122017; background: var(--lime); box-shadow: 0 2px 12px rgba(201,238,130,.17); }
+    .tool-btn.active .tool-glyph { color: #16231a; }
+    .tool-cost { margin-left: 1px; opacity: .7; font: 8px ui-monospace, monospace; }
+    .credits-readout { position: absolute; left: 7px; bottom: 14px; color: #e9f4df; font: 10px ui-monospace, monospace; pointer-events: none; }
+    .credits-readout b { color: var(--lime); }
+    .mission-box { padding: 12px; border: 1px solid rgba(201,238,130,.23); border-radius: 12px; background: linear-gradient(135deg, rgba(201,238,130,.08), rgba(231,244,225,.025)); }
+    .mission-kicker { color: var(--lime); font: 8px ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+    .mission-title { margin: 6px 0 4px; font-size: 13px; line-height: 1.25; font-weight: 700; }
+    .mission-copy { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .progress-line { height: 4px; margin-top: 10px; border-radius: 5px; background: rgba(224,238,216,.12); overflow: hidden; }
+    .progress-fill { width: 0; height: 100%; border-radius: inherit; background: var(--lime); transition: width .6s ease; }
+    .progress-foot { display: flex; justify-content: space-between; margin-top: 5px; color: var(--faint); font: 8px ui-monospace, monospace; }
+    .species-list { display: flex; flex-direction: column; gap: 4px; }
+    .species-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; min-height: 28px; padding: 4px 7px; border-radius: 8px; background: rgba(235,244,224,.025); text-align: left; }
+    .species-row.active { border-color: rgba(201,238,130,.52); background: rgba(201,238,130,.1); }
+    .species-dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 9px currentColor; }
+    .species-name { color: #dce7d9; font-size: 10px; }
+    .species-count { color: var(--muted); font: 10px ui-monospace, monospace; }
+    .species-trend { color: var(--faint); font: 8px ui-monospace, monospace; }
+    .tech-list { display: flex; flex-direction: column; gap: 5px; max-height: 154px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(201,238,130,.25) transparent; }
+    .tech-button { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 8px; border-radius: 8px; text-align: left; background: rgba(232,242,224,.035); }
+    .tech-button:disabled { opacity: .47; cursor: not-allowed; }
+    .tech-button:disabled:hover { border-color: var(--line); background: rgba(232,242,224,.035); }
+    .tech-name { font-size: 9px; font-weight: 700; }
+    .tech-cost { color: var(--lime); font: 9px ui-monospace, monospace; }
+    .tech-desc { grid-column: 1 / -1; color: var(--faint); font-size: 8px; line-height: 1.35; }
+    .tech-button.done { border-color: rgba(141,225,208,.3); background: rgba(141,225,208,.07); }
+    .log-list { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; min-height: 54px; max-height: 126px; padding-right: 3px; scrollbar-width: thin; scrollbar-color: rgba(201,238,130,.25) transparent; }
+    .log-item { display: grid; grid-template-columns: 27px 1fr; gap: 7px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+    .log-day { color: var(--faint); font: 8px ui-monospace, monospace; }
+    .log-item b { display: block; margin-bottom: 1px; color: #e2ece0; font-size: 9px; font-weight: 650; }
+    .log-item.alert b { color: var(--amber); }
+    .log-item.danger b { color: var(--red); }
+    .species-inspector { padding: 9px 10px; border: 1px solid rgba(214,235,207,.12); border-radius: 10px; background: rgba(235,244,224,.035); }
+    .species-inspector strong { font-size: 10px; }
+    .species-inspector p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .title-screen { position: fixed; inset: 0; z-index: 5; display: flex; align-items: center; overflow: auto; padding: 38px clamp(20px, 7vw, 100px); background: linear-gradient(90deg, rgba(9,18,18,.92) 0%, rgba(9,18,18,.84) 43%, rgba(9,18,18,.42) 74%, rgba(9,18,18,.18) 100%), linear-gradient(0deg, rgba(8,16,15,.58), transparent 40%); }
+    .title-content { width: min(100%, 1000px); margin: auto; animation: rise-in .75s cubic-bezier(.18,.82,.24,1) both; }
+    @keyframes rise-in { from { opacity: 0; transform: translateY(17px); } to { opacity: 1; transform: translateY(0); } }
+    .eyebrow { display: flex; align-items: center; gap: 10px; color: var(--lime); font: 10px ui-monospace, monospace; letter-spacing: .2em; text-transform: uppercase; }
+    .eyebrow:before { content: ""; display: inline-block; width: 26px; height: 1px; background: var(--lime); }
+    .hero-brand { margin: 12px 0 4px; font-size: clamp(48px, 8vw, 88px); line-height: .92; letter-spacing: -.075em; font-weight: 760; text-transform: uppercase; text-shadow: 0 4px 25px rgba(0,0,0,.22); }
+    .hero-brand span { color: var(--lime); }
+    .hero-title { max-width: 510px; margin: 16px 0 8px; color: #f0f2e9; font-size: clamp(18px, 2.1vw, 26px); line-height: 1.18; font-weight: 550; letter-spacing: -.045em; }
+    .hero-copy { max-width: 465px; margin: 0; color: #bcc9bf; font-size: 12px; line-height: 1.65; }
+    .start-block { max-width: 790px; margin-top: 25px; }
+    .scenario-caption { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #dce9da; font: 9px ui-monospace, monospace; letter-spacing: .13em; text-transform: uppercase; }
+    .scenario-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .scenario-choice { min-height: 91px; padding: 11px 12px; border-radius: 11px; background: rgba(17,32,29,.64); text-align: left; }
+    .scenario-choice.selected { border-color: rgba(201,238,130,.7); background: rgba(201,238,130,.11); box-shadow: inset 0 0 0 1px rgba(201,238,130,.12); }
+    .scenario-number { display: flex; align-items: center; justify-content: space-between; color: var(--faint); font: 8px ui-monospace, monospace; letter-spacing: .1em; }
+    .scenario-number i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+    .scenario-choice.selected .scenario-number i { background: var(--lime); box-shadow: 0 0 10px var(--lime); }
+    .scenario-choice strong { display: block; margin-top: 7px; font-size: 11px; }
+    .scenario-choice small { display: block; margin-top: 3px; color: #aab9ad; font-size: 9px; line-height: 1.35; }
+    .difficulty-row { display: flex; align-items: center; gap: 6px; margin-top: 11px; }
+    .difficulty-label { margin-right: 4px; color: var(--faint); font: 8px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .difficulty-btn { min-height: 27px; padding: 0 9px; border-radius: 7px; color: #acb9ae; background: rgba(13,27,24,.6); font-size: 9px; }
+    .difficulty-btn.selected { border-color: rgba(201,238,130,.5); color: var(--lime); background: rgba(201,238,130,.09); }
+    .launch-row { display: flex; align-items: center; gap: 9px; margin-top: 14px; }
+    .solid-btn { min-height: 41px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 17px; border: 0; border-radius: 9px; color: #132016; background: var(--lime); font-size: 11px; font-weight: 800; letter-spacing: .01em; box-shadow: 0 8px 28px rgba(164,205,103,.18); }
+    .solid-btn:hover { background: #d7f59c; transform: translateY(-1px); }
+    .solid-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .ghost-btn { min-height: 36px; padding: 0 12px; border-radius: 9px; color: #d3dfd2; background: rgba(10,19,18,.46); font-size: 10px; }
+    .title-foot { display: flex; align-items: center; gap: 13px; margin-top: 16px; color: #87978c; font: 8px ui-monospace, monospace; letter-spacing: .05em; }
+    .title-foot button { border: 0; padding: 0; color: #c3d1c5; background: transparent; font: inherit; text-decoration: underline; text-decoration-color: rgba(195,209,197,.35); text-underline-offset: 3px; cursor: pointer; }
+    .saved-label { margin-left: auto; color: var(--lime); }
+    .modal-layer { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 18px; background: rgba(5,12,12,.62); backdrop-filter: blur(10px); animation: fade-in .18s ease both; }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .modal-card { width: min(100%, 470px); max-height: min(88vh, 740px); overflow: auto; padding: 24px; border: 1px solid rgba(218,238,207,.2); border-radius: 17px; background: var(--panel-strong); box-shadow: 0 26px 90px rgba(0,0,0,.35); animation: modal-in .25s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes modal-in { from { transform: translateY(9px) scale(.99); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+    .modal-overline { color: var(--lime); font: 9px ui-monospace, monospace; letter-spacing: .17em; text-transform: uppercase; }
+    .modal-title { margin: 8px 0 6px; font-size: 24px; line-height: 1.05; letter-spacing: -.045em; }
+    .modal-copy { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+    .modal-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 19px; }
+    .modal-actions-right { display: flex; gap: 7px; margin-left: auto; }
+    .help-step { margin: 20px 0 4px; padding: 15px; border: 1px solid rgba(214,235,207,.13); border-radius: 12px; background: rgba(227,240,218,.04); }
+    .help-step .step-number { color: var(--faint); font: 9px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .11em; }
+    .help-step h3 { margin: 6px 0; font-size: 15px; }
+    .help-step p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .help-key { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin: 2px 2px 0 0; padding: 0 5px; border: 1px solid rgba(224,240,214,.18); border-radius: 5px; color: var(--lime); background: rgba(220,239,208,.05); font: 9px ui-monospace, monospace; }
+    .setting-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 11px; }
+    .setting-row small { display: block; margin-top: 3px; color: var(--faint); font-size: 9px; }
+    .toggle-btn { width: 42px; height: 24px; border: 1px solid var(--line); border-radius: 99px; background: #33433b; cursor: pointer; transition: background .2s; }
+    .toggle-btn:after { content: ""; display: block; width: 16px; height: 16px; margin-left: 3px; border-radius: 50%; background: #d8e5d3; transition: transform .2s; }
+    .toggle-btn.on { background: #779a48; }
+    .toggle-btn.on:after { transform: translateX(17px); background: #f5ffdf; }
+    .settings-volume { display: flex; align-items: center; gap: 10px; width: 170px; }
+    .volume-value { width: 28px; color: var(--ink); font: 9px ui-monospace, monospace; text-align: right; }
+    .pause-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+    .pause-actions button { width: 100%; }
+    .end-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 17px; }
+    .end-stats div { padding: 9px; border: 1px solid rgba(214,235,207,.12); border-radius: 9px; background: rgba(227,240,218,.04); }
+    .end-stats small { display: block; color: var(--faint); font: 8px ui-monospace, monospace; text-transform: uppercase; }
+    .end-stats strong { display: block; margin-top: 4px; font: 600 15px ui-monospace, monospace; }
+    #toast { position: fixed; z-index: 12; left: 50%; bottom: 27px; max-width: min(520px, calc(100vw - 32px)); padding: 10px 14px; border: 1px solid rgba(201,238,130,.28); border-radius: 10px; color: #eaf3e6; background: rgba(13,24,21,.94); box-shadow: 0 10px 35px rgba(0,0,0,.25); font-size: 10px; opacity: 0; transform: translate(-50%, 9px); transition: opacity .22s, transform .22s; pointer-events: none; }
+    #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+    .key-hint { color: var(--faint); font: 8px ui-monospace, monospace; }
+    .section-divider { height: 1px; background: rgba(214,235,207,.11); }
+    .stewardship-note { color: var(--faint); font-size: 8px; line-height: 1.4; }
+    @media (max-width: 1120px) {
+      .workspace { inset: 75px 12px 10px; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 218px; gap: 9px; }
+      .left-panel { grid-column: 1; grid-row: 1; }
+      .stage { grid-column: 2; grid-row: 1; }
+      .right-panel { grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: minmax(180px, 1fr) minmax(170px, .9fr) minmax(220px, 1.2fr); gap: 12px; }
+      .right-panel .log-section { min-height: 0; }
+      .right-panel .tech-list { max-height: 147px; }
+      .right-panel .log-list { max-height: 140px; }
+      .left-panel #historyChart { height: 90px; }
+      .top-status { gap: 11px; }
+      .brand-lockup { min-width: 170px; }
+    }
+    @media (max-width: 760px) {
+      html, body { overflow: auto; }
+      #simulationUI { position: fixed; overflow: auto; }
+      .topbar { position: sticky; height: 58px; padding: 0 10px; gap: 5px; }
+      .brand-lockup { min-width: 0; gap: 7px; }
+      .brand-mark { width: 24px; height: 24px; }
+      .brand-name { font-size: 9px; }
+      .brand-sub { font-size: 7px; }
+      .top-status { gap: 7px; font-size: 8px; }
+      .top-status strong { font-size: 10px; }
+      .top-status .status-divider { height: 20px; }
+      .top-status > div:nth-of-type(3) { display: none; }
+      .top-actions { gap: 4px; }
+      .small-action { height: 30px; padding: 0 7px; font-size: 9px; }
+      .speed-control { display: none; }
+      .icon-action { width: 30px; height: 30px; }
+      .workspace { position: relative; inset: auto; display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(300px, 42vh) minmax(205px, auto) minmax(290px, auto); gap: 8px; padding: 8px; overflow: visible; }
+      .stage { grid-column: 1; grid-row: 1; }
+      .left-panel { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .left-panel .chart-section { grid-column: 1 / -1; }
+      .left-panel #historyChart { height: 78px; }
+      .right-panel { grid-column: 1; grid-row: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+      .right-panel .mission-section, .right-panel .log-section { grid-column: 1 / -1; }
+      .right-panel .tech-list { max-height: 123px; }
+      .right-panel .log-list { max-height: 82px; }
+      .panel { border-radius: 13px; }
+      .left-panel, .right-panel { padding: 12px; }
+      .world-tools { bottom: 5px; width: max-content; max-width: calc(100% - 4px); gap: 3px; padding: 4px; }
+      .tool-btn { min-width: 41px; width: 45px; height: 34px; gap: 3px; padding: 0 3px; font-size: 8px; }
+      .tool-glyph { width: auto; font-size: 10px; }
+      .tool-cost { display: none; }
+      .credits-readout { left: 2px; bottom: 48px; font-size: 8px; }
+      .stage-topline { top: 0; left: 1px; right: 1px; }
+      .view-hint { display: none; }
+      .selected-readout { right: 0; top: 42px; }
+      .title-screen { align-items: flex-start; padding: 25px 17px; overflow-y: auto; }
+      .title-content { margin: auto 0; }
+      .hero-brand { font-size: clamp(46px, 15vw, 69px); }
+      .hero-title { margin-top: 12px; font-size: 19px; }
+      .hero-copy { max-width: 390px; font-size: 11px; }
+      .start-block { margin-top: 18px; }
+      .scenario-grid { grid-template-columns: 1fr; gap: 6px; }
+      .scenario-choice { min-height: 65px; padding: 8px 10px; }
+      .scenario-choice strong { margin-top: 4px; }
+      .scenario-choice small { max-width: 330px; }
+      .launch-row { flex-wrap: wrap; margin-top: 10px; }
+      .title-foot { flex-wrap: wrap; gap: 8px 12px; }
+      .saved-label { margin-left: 0; }
+      .modal-card { padding: 19px; }
+      #toast { bottom: 14px; }
+    }
+    @media (max-width: 390px) {
+      .top-status > div:nth-of-type(2) { display: none; }
+      .brand-name { letter-spacing: .1em; }
+      .world-tools { left: 50%; }
+      .tool-btn { min-width: 37px; width: 39px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="worldScene" aria-label="Interactive 3D voxel biosphere">
+    <canvas id="worldCanvas" aria-label="Three-dimensional habitat. Drag to orbit, scroll or pinch to zoom, click a tile to inspect or use an active field tool."></canvas>
+    <canvas id="fallbackCanvas" class="hidden" aria-hidden="true"></canvas>
+    <div id="sceneShade"></div>
+  </div>
+
+  <section id="titleScreen" class="title-screen" aria-label="Start a biosphere simulation">
+    <div class="title-content">
+      <div class="eyebrow">Field station 01 / Living systems</div>
+      <h1 class="hero-brand">Voxel<br><span>Biosphere</span></h1>
+      <h2 class="hero-title">A living world is a balance you can change.</h2>
+      <p class="hero-copy">Shape a small wild basin, then let water, soil, plants and animal instincts answer back. Every intervention travels through the food web.</p>
+
+      <div class="start-block">
+        <div class="scenario-caption"><span>Choose a field study</span><span id="seedReadout">Seed 18421</span></div>
+        <div class="scenario-grid" role="group" aria-label="Scenario selection">
+          <button class="scenario-choice selected" data-scenario="meadow" aria-pressed="true">
+            <span class="scenario-number">01 / REWILDING <i></i></span>
+            <strong>Wild Basin</strong>
+            <small>Restore a weathered valley. Learn the natural rhythm.</small>
+          </button>
+          <button class="scenario-choice" data-scenario="ice" aria-pressed="false">
+            <span class="scenario-number">02 / CLIMATE TRIAL <i></i></span>
+            <strong>Ice Age</strong>
+            <small>Cold seasons squeeze growth and test every refuge.</small>
+          </button>
+          <button class="scenario-choice" data-scenario="apex" aria-pressed="false">
+            <span class="scenario-number">03 / FOOD-WEB CRISIS <i></i></span>
+            <strong>Apex Surge</strong>
+            <small>An invasive predator has arrived. Protect the balance.</small>
+          </button>
+        </div>
+        <div class="difficulty-row" role="group" aria-label="Difficulty">
+          <span class="difficulty-label">Pressure</span>
+          <button class="difficulty-btn" data-difficulty="sanctuary">Sanctuary</button>
+          <button class="difficulty-btn selected" data-difficulty="field">Field Study</button>
+          <button class="difficulty-btn" data-difficulty="frontier">Frontier</button>
+        </div>
+        <div class="launch-row">
+          <button id="launchBtn" class="solid-btn">Enter the habitat <span aria-hidden="true">&#8594;</span></button>
+          <button id="continueBtn" class="ghost-btn hidden">Continue saved run</button>
+          <button id="newSeedBtn" class="ghost-btn" aria-label="Generate a new world seed">New seed</button>
+        </div>
+      </div>
+      <div class="title-foot">
+        <button id="titleHelpBtn">How to play</button>
+        <button id="titleSettingsBtn">Audio & settings</button>
+        <span>Mouse / touch / keyboard</span>
+        <span id="archiveReadout" class="saved-label"></span>
+      </div>
+    </div>
+  </section>
+
+  <div id="simulationUI" class="hidden">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div><div class="brand-name">VOXEL BIOSPHERE</div><div class="brand-sub">Field station 01</div></div>
+      </div>
+      <div class="top-status" aria-live="polite">
+        <div><span>Day / generation</span><strong id="dayLabel">Day 001 / Gen 01</strong></div>
+        <span class="status-divider"></span>
+        <div><span>Season / weather</span><strong id="seasonLabel">Spring / Clear</strong></div>
+        <span class="status-divider"></span>
+        <div><span>Wild population</span><strong id="populationLabel">0 animals</strong></div>
+      </div>
+      <div class="top-actions">
+        <div class="speed-control" aria-label="Simulation speed">
+          <button class="speed-btn" data-speed="0.5">0.5x</button>
+          <button class="speed-btn active" data-speed="1">1x</button>
+          <button class="speed-btn" data-speed="2">2x</button>
+          <button class="speed-btn" data-speed="4">4x</button>
+        </div>
+        <button id="saveBtn" class="small-action" title="Save this biosphere">Save</button>
+        <button id="audioToggle" class="icon-action" title="Mute or unmute audio" aria-label="Mute audio">S</button>
+        <button id="pauseBtn" class="small-action" title="Pause (Space)">Pause</button>
+        <button id="settingsBtn" class="icon-action" title="Settings" aria-label="Settings">&#9881;</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="panel left-panel" aria-label="Habitat conditions and charts">
+        <section class="panel-section">
+          <h2 class="section-heading"><span>Habitat conditions</span><span id="weatherCode" class="micro-label">LIVE</span></h2>
+          <div class="weather-card">
+            <div><div id="weatherName" class="weather-main">Clear skies</div><div id="weatherNote" class="weather-note">A calm growing window</div></div>
+            <div id="weatherGlyph" class="weather-mark">o</div>
+            <div id="temperatureLabel" class="temperature">16 C</div>
+            <div id="seasonDetail" class="micro-label">SPRING / DAY 1</div>
+          </div>
+          <div class="climate-control">
+            <div class="control-line"><label for="climateSlider">Climate dial</label><span id="climateValue">+0.0 C</span></div>
+            <input id="climateSlider" type="range" min="-6" max="6" step="0.5" value="0" aria-label="Climate temperature offset">
+            <div class="control-line" style="margin-top:5px"><span>cooler</span><span>warmer</span></div>
+          </div>
+          <div style="margin-top:10px">
+            <div class="control-line"><label for="overlaySelect">Terrain overlay</label><span class="micro-label">MAP</span></div>
+            <select id="overlaySelect" class="select-control" aria-label="Terrain visualization overlay">
+              <option value="habitat">Habitat / biome</option>
+              <option value="biomass">Plant biomass</option>
+              <option value="water">Soil moisture</option>
+              <option value="soil">Soil nutrients</option>
+            </select>
+          </div>
+        </section>
+
+        <div class="section-divider"></div>
+        <section class="panel-section">
+          <h2 class="section-heading"><span>Ecology at a glance</span><span id="healthGrade" class="micro-label">STABLE</span></h2>
+          <div class="metrics-grid">
+            <div class="metric"><span>Eco health</span><strong id="healthValue">--</strong><small id="healthChange">of 100</small></div>
+            <div class="metric"><span>Plant cover</span><strong id="coverValue">--</strong><small>living biomass</small></div>
+            <div class="metric"><span>Species</span><strong id="diversityValue">--</strong><small>of 5 present</small></div>
+            <div class="metric"><span>Stewardship</span><strong id="creditValue">--</strong><small>field credits</small></div>
+          </div>
+        </section>
+
+        <section class="panel-section chart-section">
+          <div class="chart-head">
+            <h2 class="section-heading" style="margin:0">Field record</h2>
+            <div class="chart-tabs" role="group" aria-label="Chart metric">
+              <button class="chart-tab active" data-chart="population">Life</button>
+              <button class="chart-tab" data-chart="habitat">Habitat</button>
+            </div>
+          </div>
+          <canvas id="historyChart" aria-label="Live ecosystem trends chart"></canvas>
+          <div id="chartLegend" class="chart-legend"><span><i class="legend-dot" style="background:#c9ee82"></i>Hare</span><span><i class="legend-dot" style="background:#ff9c70"></i>Fox</span><span><i class="legend-dot" style="background:#8de1d0"></i>Bee</span></div>
+        </section>
+        <div class="stewardship-note">Field tools change local conditions; the rest of the web responds on its own.</div>
+      </aside>
+
+      <section class="stage" aria-label="Habitat view">
+        <div class="stage-topline">
+          <div class="location-label"><b id="habitatName">WILD BASIN</b><span id="seedInHud">SEED 18421</span></div>
+          <div class="view-hint">DRAG ORBIT / SCROLL ZOOM / CLICK INSPECT</div>
+        </div>
+        <div id="selectedReadout" class="selected-readout"><strong id="selectedTitle">Habitat tile</strong><span id="selectedCopy">Select a living thing or land tile.</span></div>
+        <div class="credits-readout">FIELD CREDITS <b id="creditsOverlay">0</b></div>
+        <div id="toolBar" class="world-tools" role="toolbar" aria-label="Habitat field tools">
+          <button class="tool-btn active" data-tool="inspect" aria-label="Inspect tool, shortcut 1" title="Inspect - press 1"><span class="tool-glyph">+</span><span>Look</span></button>
+          <button class="tool-btn" data-tool="seed" aria-label="Seed tool, shortcut 2" title="Seed grass and flowers - press 2"><span class="tool-glyph">*</span><span>Seed</span><span class="tool-cost">2</span></button>
+          <button class="tool-btn" data-tool="water" aria-label="Restore water tool, shortcut 3" title="Restore soil moisture - press 3"><span class="tool-glyph">~</span><span>Water</span><span class="tool-cost">2</span></button>
+          <button class="tool-btn" data-tool="terra" aria-label="Terraform tool, shortcut 4" title="Raise or lower a tile - press 4"><span class="tool-glyph">^</span><span>Terrain</span><span class="tool-cost">3</span></button>
+          <button class="tool-btn" data-tool="cull" aria-label="Cull tool, shortcut 5" title="Cull selected species nearby - press 5"><span class="tool-glyph">-</span><span>Cull</span><span class="tool-cost">2</span></button>
+          <button class="tool-btn" data-tool="disease" aria-label="Disease tool, shortcut 6" title="Release a disease pulse - press 6"><span class="tool-glyph">!</span><span>Blight</span></button>
+        </div>
+      </section>
+
+      <aside class="panel right-panel" aria-label="Mission, species, research and event log">
+        <section class="panel-section mission-section">
+          <h2 class="section-heading"><span>Field objective</span><span id="objectiveStatus" class="micro-label">IN PROGRESS</span></h2>
+          <div class="mission-box">
+            <div id="missionKicker" class="mission-kicker">CAPSTONE / WILD BALANCE</div>
+            <div id="missionTitle" class="mission-title">Cross 20 generations</div>
+            <p id="missionCopy" class="mission-copy">Keep at least three animal populations alive while the seasons turn.</p>
+            <div class="progress-line"><div id="missionProgress" class="progress-fill"></div></div>
+            <div class="progress-foot"><span id="missionProgressLabel">0 / 20 generations</span><span id="missionHealthLabel">Health 0</span></div>
+          </div>
+        </section>
+
+        <section class="panel-section species-section">
+          <h2 class="section-heading"><span>Food-web populations</span><span class="micro-label">SELECT TO TRACK</span></h2>
+          <div id="speciesList" class="species-list"></div>
+          <div id="speciesInspector" class="species-inspector" style="margin-top:7px">
+            <strong>Living network</strong><p>Plants feed grazers. Predators regulate grazers; scavengers and decomposers return nutrients to the soil.</p>
+          </div>
+        </section>
+
+        <section class="panel-section research-section">
+          <h2 class="section-heading"><span>Field research</span><span id="researchPoints" class="micro-label">0 DATA</span></h2>
+          <div id="researchList" class="tech-list"></div>
+        </section>
+
+        <section class="panel-section log-section" style="display:flex;flex-direction:column;min-height:100px">
+          <h2 class="section-heading"><span>Field notes</span><span class="micro-label">LIVE FEED</span></h2>
+          <div id="logList" class="log-list" aria-live="polite"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div id="modalRoot" class="modal-layer hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div id="modalCard" class="modal-card"></div>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    (() => {
+      'use strict';
+
+      const N = 26;
+      const TILE_COUNT = N * N;
+      const MAX_POPULATION = 260;
+      const SPECIES = {
+        hare: { name: 'Hare', color: 0xc9ee82, hex: '#c9ee82', lifespan: 190, diet: 'grazer', move: 1.08, blurb: 'Fast grazers turn meadow growth into prey biomass. Low plant cover and dry soil hit them first.' },
+        fox: { name: 'Fox', color: 0xff9c70, hex: '#ff9c70', lifespan: 295, diet: 'predator', move: .92, blurb: 'Apex hunters regulate hares. When prey is scarce, too many foxes destabilize the whole web.' },
+        bee: { name: 'Pollinator', color: 0x8de1d0, hex: '#8de1d0', lifespan: 120, diet: 'pollinator', move: 1.25, blurb: 'Pollinators move between blooms, raising seed set and helping plants recover after stress.' },
+        raven: { name: 'Scavenger', color: 0xb9a4ea, hex: '#b9a4ea', lifespan: 340, diet: 'scavenger', move: .96, blurb: 'Scavengers consume carrion before it rots, returning a slower stream of nutrients to the ground.' },
+        beetle: { name: 'Decomposer', color: 0xf0c76f, hex: '#f0c76f', lifespan: 210, diet: 'decomposer', move: .72, blurb: 'Decomposers break down dead matter and replenish soil nutrients that power new growth.' }
+      };
+      const SPECIES_ORDER = ['hare', 'fox', 'bee', 'raven', 'beetle'];
+      const SCENARIOS = {
+        meadow: { name: 'Wild Basin', seed: 18421, climate: 0, rain: 1, start: { hare: 42, fox: 9, bee: 34, raven: 11, beetle: 19 }, goal: 20, objective: 'Restore a weathered valley and carry at least three animal populations through 20 generations.', difficultyFactor: 1 },
+        ice: { name: 'Ice Age', seed: 91173, climate: -4, rain: .78, start: { hare: 37, fox: 8, bee: 28, raven: 10, beetle: 17 }, goal: 20, objective: 'Survive 20 generations through a colder climate. A warmer climate dial can save refuges, but costs precious field time.', difficultyFactor: 1.2 },
+        apex: { name: 'Apex Surge', seed: 66239, climate: .5, rain: .9, start: { hare: 34, fox: 19, bee: 30, raven: 12, beetle: 16 }, goal: 16, objective: 'Contain the invasive fox surge: reach 16 generations with foxes below 18 and at least three other populations intact.', difficultyFactor: 1.25 }
+      };
+      const DIFFICULTIES = {
+        sanctuary: { name: 'Sanctuary', growth: 1.25, disease: .65, hazard: .7, credits: 18 },
+        field: { name: 'Field Study', growth: 1, disease: 1, hazard: 1, credits: 13 },
+        frontier: { name: 'Frontier', growth: .76, disease: 1.3, hazard: 1.35, credits: 9 }
+      };
+      const TECH = [
+        { id: 'seedbank', name: 'Resilient seed bank', cost: 3, desc: 'Seed tool costs 1 less; grass recovers faster after drought.' },
+        { id: 'myco', name: 'Mycorrhizal network', cost: 4, desc: 'Decomposers recycle more nutrients; plant growth improves.' },
+        { id: 'corridor', name: 'Pollinator corridors', cost: 3, desc: 'Blooms persist longer and pollinators recruit more reliably.' },
+        { id: 'canopy', name: 'Canopy shade', cost: 4, desc: 'Tree cover holds soil moisture through hot, dry periods.' },
+        { id: 'immunity', name: 'Wildlife disease watch', cost: 5, desc: 'Slower disease spread and better recovery from infection.' }
+      ];
+      const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
+      const WEATHER_INFO = {
+        Clear: { glyph: 'o', note: 'A calm growing window' },
+        Rain: { glyph: '/', note: 'Runoff feeds low ground' },
+        Drought: { glyph: '~', note: 'Dry soil is stressing plants' },
+        Heatwave: { glyph: '^', note: 'Heat is drawing water away' },
+        Frost: { glyph: '*', note: 'Cold slows growth and movement' },
+        Storm: { glyph: '+', note: 'Rain and wind move through' }
+      };
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+      const storage = {
+        get(key, fallback) { try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); } catch (_) { return fallback; } },
+        set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; } },
+        remove(key) { try { localStorage.removeItem(key); } catch (_) {} }
+      };
+      let settings = Object.assign({ volume: .32, muted: false, quality: 'balanced', tutorialSeen: false }, storage.get('biosphere-settings-v1', {}));
+      let meta = Object.assign({ bestGeneration: 0, wins: 0, runs: 0, legacyData: 0 }, storage.get('biosphere-meta-v1', {}));
+      let chosenScenario = 'meadow';
+      let chosenDifficulty = 'field';
+      let nextSeed = 18421;
+      let rngState = nextSeed >>> 0;
+      let sim = null;
+      let activeTool = 'inspect';
+      let selectedSpecies = 'fox';
+      let selectedAgentId = null;
+      let selectedTileId = null;
+      let chartMode = 'population';
+      let modalKind = null;
+      let modalWasPaused = true;
+      let helpStep = 0;
+      let toastTimer = 0;
+      let renderer = null;
+      let scene = null;
+      let camera = null;
+      let controls = null;
+      let worldGroup = null;
+      let terrainMesh = null;
+      let waterMesh = null;
+      let treeMesh = null;
+      let trunkMesh = null;
+      let groundPlane = null;
+      let pickPlane = null;
+      let marker = null;
+      let directionalLight = null;
+      let fallbackCtx = null;
+      let fallbackCanvas = $('#fallbackCanvas');
+      let canvas = $('#worldCanvas');
+      let raycaster = null;
+      let pointer = null;
+      let agentViews = new Map();
+      let particleViews = [];
+      let lastFrame = 0;
+      let dayAccumulator = 0;
+      let hudAccumulator = 0;
+      let saveAccumulator = 0;
+      let toastId = 0;
+      let soundEngine = null;
+      let lastRunConfig = { scenario: 'meadow', difficulty: 'field', seed: 18421 };
+
+      function clamp(value, min, max) { return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min)); }
+      function rand() {
+        rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
+        return (rngState >>> 0) / 4294967296;
+      }
+      function seededNoise(x, z, seed) {
+        let n = Math.imul(x + seed, 374761393) + Math.imul(z - seed, 668265263);
+        n = Math.imul(n ^ (n >>> 13), 1274126177);
+        return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+      }
+      function tileAt(x, z) {
+        const ix = clamp(Math.floor(x + N / 2), 0, N - 1);
+        const iz = clamp(Math.floor(z + N / 2), 0, N - 1);
+        return sim && sim.tiles ? sim.tiles[iz * N + ix] : null;
+      }
+      function tileWorld(ix) { return ix - N / 2 + .5; }
+      function tileHeight(tile) { return tile ? .42 + tile.elevation * .43 : .45; }
+      function speciesCounts(agents = sim && sim.agents || []) {
+        const counts = { hare: 0, fox: 0, bee: 0, raven: 0, beetle: 0 };
+        for (const agent of agents) if (agent && !agent.dead && counts[agent.kind] != null) counts[agent.kind]++;
+        return counts;
+      }
+      function calculateMetrics() {
+        if (!sim || !sim.tiles) return { counts: speciesCounts([]), population: 0, health: 0, cover: 0, biodiversity: 0, water: 0, soil: 0, balance: 0 };
+        const counts = speciesCounts();
+        const population = SPECIES_ORDER.reduce((sum, kind) => sum + counts[kind], 0);
+        const biodiversity = SPECIES_ORDER.reduce((sum, kind) => sum + (counts[kind] > 0 ? 1 : 0), 0);
+        let cover = 0, water = 0, soil = 0, nonWater = 0;
+        for (const tile of sim.tiles) {
+          cover += clamp(tile.grass * .56 + tile.canopy * .6 + tile.flowers * .18, 0, 1);
+          soil += tile.nutrients;
+          if (!tile.isWater) { water += tile.moisture; nonWater++; }
+        }
+        cover /= TILE_COUNT; soil /= TILE_COUNT; water /= Math.max(1, nonWater);
+        const normalizedKinds = SPECIES_ORDER.reduce((sum, kind) => sum + clamp(counts[kind] / (kind === 'hare' ? 12 : 7), 0, 1), 0) / SPECIES_ORDER.length;
+        const balance = clamp(population / 68, 0, 1) * .52 + normalizedKinds * .48;
+        const health = Math.round(clamp((biodiversity / SPECIES_ORDER.length * .25 + cover * .31 + water * .13 + soil * .14 + balance * .17) * 100, 0, 100));
+        return { counts, population, health, cover, biodiversity, water, soil, balance };
+      }
+
+      function initAudio() {
+        if (soundEngine) { if (soundEngine.ctx && soundEngine.ctx.state === 'suspended') soundEngine.ctx.resume().catch(() => {}); return; }
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        try {
+          const ctx = new AudioContextClass();
+          const master = ctx.createGain();
+          master.gain.value = settings.muted ? 0 : settings.volume;
+          master.connect(ctx.destination);
+          const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 390;
+          filter.connect(master);
+          const ambientGain = ctx.createGain(); ambientGain.gain.value = .11; ambientGain.connect(filter);
+          const oscA = ctx.createOscillator(); oscA.type = 'sine'; oscA.frequency.value = 55; oscA.connect(ambientGain); oscA.start();
+          const oscB = ctx.createOscillator(); oscB.type = 'triangle'; oscB.frequency.value = 82.4; oscB.detune.value = 4; oscB.connect(ambientGain); oscB.start();
+          soundEngine = { ctx, master, ambientGain, oscA, oscB };
+          updateAudioGain();
+        } catch (_) { soundEngine = null; }
+      }
+      function updateAudioGain() {
+        if (!soundEngine) return;
+        const { ctx, master, ambientGain } = soundEngine;
+        master.gain.setTargetAtTime(settings.muted ? 0 : clamp(settings.volume, 0, 1), ctx.currentTime, .07);
+        if (sim) {
+          const metrics = calculateMetrics();
+          ambientGain.gain.setTargetAtTime(.065 + metrics.health / 100 * .1, ctx.currentTime, .6);
+          soundEngine.oscB.frequency.setTargetAtTime(metrics.health < 28 ? 69.3 : 82.4 + metrics.biodiversity * 1.7, ctx.currentTime, 1.2);
+        }
+      }
+      function playSound(type = 'tap') {
+        initAudio();
+        if (!soundEngine || settings.muted) return;
+        const { ctx, master } = soundEngine;
+        try {
+          const tones = { tap: [450, .075, 'sine'], action: [570, .12, 'triangle'], event: [320, .24, 'sine'], win: [720, .5, 'triangle'], error: [155, .2, 'sawtooth'] };
+          const [freq, duration, wave] = tones[type] || tones.tap;
+          const osc = ctx.createOscillator(), gain = ctx.createGain();
+          osc.type = wave; osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          if (type === 'win') osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + duration);
+          if (type === 'error') osc.frequency.exponentialRampToValueAtTime(95, ctx.currentTime + duration);
+          gain.gain.setValueAtTime(.0001, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(type === 'tap' ? .12 : .17, ctx.currentTime + .018);
+          gain.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + duration);
+          osc.connect(gain); gain.connect(master); osc.start(); osc.stop(ctx.currentTime + duration + .03);
+          osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch (_) {} };
+        } catch (_) {}
+      }
+      function persistSettings() { storage.set('biosphere-settings-v1', settings); updateAudioGain(); }
+      function saveMeta() { storage.set('biosphere-meta-v1', meta); updateTitleArchive(); }
+      function updateTitleArchive() {
+        const archive = $('#archiveReadout');
+        if (archive) archive.textContent = `ARCHIVE / ${meta.runs} STUDIES / ${meta.wins} RESOLVED / BEST ${meta.bestGeneration} GEN / ${meta.legacyData} DATA`;
+      }
+
+      function initRenderer() {
+        if (!window.THREE) { initFallback(); return; }
+        try {
+          scene = new THREE.Scene();
+          scene.background = new THREE.Color(0x9dbdaf);
+          scene.fog = new THREE.FogExp2(0x9dbdaf, .021);
+          camera = new THREE.PerspectiveCamera(40, 1, .1, 180);
+          camera.position.set(29, 25, 32);
+          renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, settings.quality === 'crisp' ? 2 : 1.4));
+          renderer.shadowMap.enabled = settings.quality === 'crisp';
+          renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+          renderer.outputEncoding = THREE.sRGBEncoding;
+          renderer.toneMapping = THREE.ACESFilmicToneMapping;
+          renderer.toneMappingExposure = 1.05;
+          const hemi = new THREE.HemisphereLight(0xe3f4e8, 0x283d2a, 1.35); scene.add(hemi);
+          directionalLight = new THREE.DirectionalLight(0xfff0d4, 2.2);
+          directionalLight.position.set(-15, 30, 12); directionalLight.castShadow = settings.quality === 'crisp';
+          directionalLight.shadow.mapSize.set(1024, 1024); directionalLight.shadow.camera.left = -22; directionalLight.shadow.camera.right = 22; directionalLight.shadow.camera.top = 22; directionalLight.shadow.camera.bottom = -22;
+          scene.add(directionalLight);
+          const fill = new THREE.DirectionalLight(0x9bc7bf, .36); fill.position.set(16, 12, -15); scene.add(fill);
+          worldGroup = new THREE.Group(); scene.add(worldGroup);
+          const floorGeom = new THREE.PlaneGeometry(N + 5, N + 5);
+          const floorMat = new THREE.MeshStandardMaterial({ color: 0x35533e, roughness: 1 });
+          groundPlane = new THREE.Mesh(floorGeom, floorMat); groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.y = -.045; groundPlane.receiveShadow = true; worldGroup.add(groundPlane);
+          const pickMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0, depthWrite: false });
+          pickPlane = new THREE.Mesh(new THREE.PlaneGeometry(N, N), pickMat); pickPlane.rotation.x = -Math.PI / 2; pickPlane.position.y = -.02; pickPlane.userData.pickPlane = true; worldGroup.add(pickPlane);
+          marker = new THREE.Mesh(new THREE.TorusGeometry(.38, .035, 7, 28), new THREE.MeshBasicMaterial({ color: 0xe2ff99, transparent: true, opacity: .92 }));
+          marker.rotation.x = Math.PI / 2; marker.position.y = .6; marker.visible = false; scene.add(marker);
+          controls = new THREE.OrbitControls(camera, renderer.domElement);
+          controls.enableDamping = true; controls.dampingFactor = .07; controls.minDistance = 19; controls.maxDistance = 65; controls.maxPolarAngle = Math.PI * .48; controls.target.set(0, .5, 0); controls.update();
+          raycaster = new THREE.Raycaster(); pointer = new THREE.Vector2();
+          renderer.domElement.addEventListener('pointermove', onPointerMove, { passive: true });
+          renderer.domElement.addEventListener('click', onWorldClick);
+          window.addEventListener('resize', resizeRenderer);
+          resizeRenderer();
+        } catch (error) {
+          console.warn('3D rendering unavailable; using 2D habitat view.', error);
+          renderer = null; scene = null; initFallback();
+        }
+      }
+      function initFallback() {
+        canvas.classList.add('hidden'); fallbackCanvas.classList.remove('hidden'); fallbackCtx = fallbackCanvas.getContext('2d');
+        window.addEventListener('resize', resizeRenderer);
+        fallbackCanvas.addEventListener('pointerdown', (event) => { fallbackCanvas.dataset.x = event.clientX; fallbackCanvas.dataset.y = event.clientY; });
+        fallbackCanvas.addEventListener('click', onFallbackClick);
+        resizeRenderer();
+      }
+      function resizeRenderer() {
+        if (renderer && camera) {
+          const width = Math.max(1, window.innerWidth), height = Math.max(1, window.innerHeight);
+          renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix();
+        }
+        if (fallbackCanvas && fallbackCtx) {
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          fallbackCanvas.width = Math.max(1, Math.floor(window.innerWidth * dpr)); fallbackCanvas.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+          fallbackCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        sizeChartCanvas();
+      }
+      function clearThreeWorld() {
+        if (!worldGroup) return;
+        for (const group of agentViews.values()) { scene.remove(group); disposeObject(group); }
+        agentViews.clear(); particleViews.forEach(p => scene.remove(p.mesh)); particleViews = [];
+        [terrainMesh, waterMesh, treeMesh, trunkMesh].forEach(mesh => {
+          if (mesh) { worldGroup.remove(mesh); disposeObject(mesh); }
+        });
+        terrainMesh = waterMesh = treeMesh = trunkMesh = null;
+      }
+      function disposeObject(object) {
+        if (!object || !object.traverse) return;
+        object.traverse(child => {
+          if (child.geometry && child.geometry.dispose) child.geometry.dispose();
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach(material => material && material.dispose && material.dispose());
+          }
+        });
+      }
+      function clearScenarioWorld() {
+        if (worldGroup) clearThreeWorld();
+        selectedAgentId = null; selectedTileId = null;
+        if (marker) marker.visible = false;
+      }
+      function makeColor(hex) { return new THREE.Color(hex); }
+      function biomeColor(tile) {
+        if (tile.isWater) return 0x4d8b86;
+        if (tile.biome === 'alpine') return tile.elevation > 3 ? 0x93a195 : 0x768c70;
+        if (tile.biome === 'woodland') return 0x476d48 + Math.floor(tile.canopy * 0x08100a);
+        if (tile.biome === 'wetland') return 0x65886a;
+        if (tile.biome === 'rock') return 0x837f69;
+        return tile.elevation < 1 ? 0x7e9a62 : 0x87a56b;
+      }
+      function buildThreeWorld() {
+        if (!renderer || !worldGroup || !sim) return;
+        clearThreeWorld();
+        const box = new THREE.BoxGeometry(.96, 1, .96);
+        const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .93, flatShading: true });
+        terrainMesh = new THREE.InstancedMesh(box, material, TILE_COUNT); terrainMesh.castShadow = true; terrainMesh.receiveShadow = true;
+        const dummy = new THREE.Object3D();
+        for (let i = 0; i < TILE_COUNT; i++) {
+          const tile = sim.tiles[i], ix = i % N, iz = Math.floor(i / N), height = tileHeight(tile);
+          dummy.position.set(tileWorld(ix), height / 2, tileWorld(iz)); dummy.scale.set(1, height, 1); dummy.updateMatrix();
+          terrainMesh.setMatrixAt(i, dummy.matrix); terrainMesh.setColorAt(i, makeColor(biomeColor(tile)));
+        }
+        terrainMesh.instanceMatrix.needsUpdate = true; terrainMesh.instanceColor.needsUpdate = true; worldGroup.add(terrainMesh);
+        const waterIndices = sim.tiles.map((tile, i) => tile.isWater ? i : -1).filter(i => i >= 0);
+        if (waterIndices.length) {
+          waterMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(.96, .035, .96), new THREE.MeshPhongMaterial({ color: 0x6cb8b2, transparent: true, opacity: .78, shininess: 90, depthWrite: false }), waterIndices.length);
+          waterMesh.renderOrder = 2;
+          waterIndices.forEach((id, index) => { const ix = id % N, iz = Math.floor(id / N); dummy.position.set(tileWorld(ix), .82, tileWorld(iz)); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); waterMesh.setMatrixAt(index, dummy.matrix); });
+          worldGroup.add(waterMesh);
+        }
+        treeMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(.25, .64, 5), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .92, flatShading: true }), TILE_COUNT);
+        trunkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(.045, .07, .32, 5), new THREE.MeshStandardMaterial({ color: 0x614d36, roughness: 1 }), TILE_COUNT);
+        treeMesh.count = 0; trunkMesh.count = 0; worldGroup.add(treeMesh); worldGroup.add(trunkMesh); syncTrees();
+        for (const agent of sim.agents) if (!agent.dead) createAgentView(agent);
+        refreshTerrainColors();
+      }
+      function syncTrees() {
+        if (!treeMesh || !trunkMesh || !sim) return;
+        const dummy = new THREE.Object3D(); let count = 0;
+        for (let i = 0; i < TILE_COUNT; i++) {
+          const tile = sim.tiles[i];
+          if (tile.isWater || tile.canopy < .34 || tile.biome === 'rock') continue;
+          const ix = i % N, iz = Math.floor(i / N), baseY = tileHeight(tile), size = .58 + tile.canopy * .62;
+          dummy.position.set(tileWorld(ix) + (seededNoise(ix, iz, sim.seed) - .5) * .25, baseY + .22 * size, tileWorld(iz) + (seededNoise(iz, ix, sim.seed + 1) - .5) * .25);
+          dummy.scale.set(size, size, size); dummy.rotation.set(0, seededNoise(ix, iz, sim.seed + 4) * 2, 0); dummy.updateMatrix(); treeMesh.setMatrixAt(count, dummy.matrix);
+          treeMesh.setColorAt(count, makeColor(tile.biome === 'woodland' ? (tile.moisture < .25 ? 0x7c8d55 : 0x4a804b) : 0x728d4c));
+          dummy.position.y = baseY + .05; dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); trunkMesh.setMatrixAt(count, dummy.matrix); count++;
+        }
+        treeMesh.count = count; trunkMesh.count = count; treeMesh.instanceMatrix.needsUpdate = true; trunkMesh.instanceMatrix.needsUpdate = true;
+        if (treeMesh.instanceColor) treeMesh.instanceColor.needsUpdate = true;
+      }
+      function refreshTerrainColors() {
+        if (!terrainMesh || !sim) return;
+        const overlay = $('#overlaySelect') ? $('#overlaySelect').value : 'habitat';
+        const low = new THREE.Color(overlay === 'water' ? 0x9b754f : overlay === 'soil' ? 0xc68051 : 0x9b7057);
+        const high = new THREE.Color(overlay === 'water' ? 0x397c85 : overlay === 'soil' ? 0x73b080 : overlay === 'biomass' ? 0x4eb77d : 0x9bca76);
+        const color = new THREE.Color();
+        for (let i = 0; i < TILE_COUNT; i++) {
+          const tile = sim.tiles[i];
+          if (overlay === 'habitat') color.setHex(biomeColor(tile));
+          else {
+            const value = overlay === 'biomass' ? clamp(tile.grass * .56 + tile.canopy * .44, 0, 1) : overlay === 'water' ? tile.moisture : tile.nutrients;
+            color.copy(low).lerp(high, value);
+            if (tile.isWater) color.set(0x438c92);
+          }
+          terrainMesh.setColorAt(i, color);
+        }
+        terrainMesh.instanceColor.needsUpdate = true;
+      }
+      function createAgentView(agent) {
+        if (!scene || !sim || !window.THREE) return;
+        const info = SPECIES[agent.kind]; if (!info) return;
+        const color = info.color;
+        const group = new THREE.Group(); group.userData.agentId = agent.id;
+        const body = new THREE.Mesh(new THREE.SphereGeometry(.17, 9, 7), new THREE.MeshStandardMaterial({ color, roughness: .72 }));
+        body.scale.set(1.12, .8, 1.48); body.position.y = .2; body.castShadow = true; group.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(.11, 8, 6), new THREE.MeshStandardMaterial({ color: agent.kind === 'fox' ? 0xffc08a : color, roughness: .74 }));
+        head.position.set(0, .27, -.17); group.add(head);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1c241c });
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(.022, 5, 4), eyeMat); eye.position.set(.07, .29, -.26); group.add(eye);
+        if (agent.kind === 'hare') {
+          for (const side of [-1, 1]) {
+            const ear = new THREE.Mesh(new THREE.SphereGeometry(.035, 6, 5), new THREE.MeshStandardMaterial({ color: 0xb98967 }));
+            ear.scale.set(.82, 2.65, .82); ear.position.set(side * .055, .43, -.14); ear.rotation.z = side * -.15; group.add(ear);
+          }
+        } else if (agent.kind === 'fox') {
+          const tail = new THREE.Mesh(new THREE.SphereGeometry(.1, 7, 5), new THREE.MeshStandardMaterial({ color: 0xe98253 })); tail.scale.set(.75, .8, 1.8); tail.position.set(0, .19, .23); group.add(tail);
+        } else if (agent.kind === 'bee') {
+          const wingMat = new THREE.MeshStandardMaterial({ color: 0xeaf8dc, transparent: true, opacity: .68, side: THREE.DoubleSide });
+          for (const side of [-1, 1]) { const wing = new THREE.Mesh(new THREE.SphereGeometry(.1, 7, 5), wingMat); wing.scale.set(1.25, .24, .7); wing.position.set(side * .12, .31, 0); group.add(wing); }
+          const stripe = new THREE.Mesh(new THREE.SphereGeometry(.17, 8, 6), new THREE.MeshBasicMaterial({ color: 0x423821, wireframe: true, transparent: true, opacity: .5 })); stripe.scale.set(1.15, .81, 1.49); stripe.position.y = .2; group.add(stripe);
+        } else if (agent.kind === 'raven') {
+          const beak = new THREE.Mesh(new THREE.ConeGeometry(.045, .12, 4), new THREE.MeshStandardMaterial({ color: 0xd0b46c })); beak.rotation.x = Math.PI / 2; beak.position.set(0, .26, -.31); group.add(beak);
+        }
+        const ground = tileHeight(tileAt(agent.x, agent.z)) + .06;
+        group.position.set(agent.x, ground + (agent.kind === 'bee' ? .16 : 0), agent.z); scene.add(group); agentViews.set(agent.id, group);
+      }
+      function updateAgentViews(dt) {
+        if (!sim) return;
+        if (!renderer) return;
+        const ease = Math.min(1, dt * (sim.speed || 1) * 1.9);
+        for (const agent of sim.agents) {
+          const group = agentViews.get(agent.id);
+          if (!group || agent.dead) continue;
+          agent.x += (agent.tx - agent.x) * ease; agent.z += (agent.tz - agent.z) * ease;
+          const tile = tileAt(agent.x, agent.z);
+          const lift = tileHeight(tile) + .06 + (agent.kind === 'bee' ? .16 + Math.sin(performance.now() * .006 + agent.id) * .05 : 0);
+          group.position.set(agent.x, lift, agent.z);
+          const dx = agent.tx - agent.x, dz = agent.tz - agent.z;
+          if (Math.abs(dx) + Math.abs(dz) > .025) group.rotation.y = Math.atan2(dx, dz);
+          group.scale.setScalar(agent.kind === 'bee' ? .67 : agent.kind === 'beetle' ? .69 : .9 + clamp(agent.size || 0, 0, 1) * .22);
+          if (selectedAgentId === agent.id) group.scale.multiplyScalar(1.14);
+        }
+      }
+      function createAgent(kind, x, z, inherited = null) {
+        if (!sim || sim.agents.length >= MAX_POPULATION) return null;
+        const genes = inherited ? {
+          speed: clamp(inherited.speed + (rand() - .5) * .15, .62, 1.45),
+          metabolism: clamp(inherited.metabolism + (rand() - .5) * .12, .72, 1.35),
+          resistance: clamp(inherited.resistance + (rand() - .5) * .16, .1, .95),
+          vision: clamp(inherited.vision + (rand() - .5) * .22, .55, 1.5)
+        } : { speed: .75 + rand() * .5, metabolism: .78 + rand() * .46, resistance: .25 + rand() * .35, vision: .7 + rand() * .55 };
+        const agent = { id: sim.nextId++, kind, x, z, tx: x, tz: z, age: Math.floor(rand() * 24), energy: .62 + rand() * .32, hunger: rand() * .3, thirst: rand() * .28, health: .8 + rand() * .2, infection: 0, immune: 0, cooldown: 3 + rand() * 16, genes, size: .2 + rand() * .8, dead: false };
+        sim.agents.push(agent);
+        createAgentView(agent);
+        return agent;
+      }
+
+      function createWorld(seed, scenarioKey) {
+        if (worldGroup) clearThreeWorld();
+        selectedAgentId = null; selectedTileId = null;
+        if (marker) marker.visible = false;
+        rngState = (seed >>> 0) || 1;
+        const profile = SCENARIOS[scenarioKey] || SCENARIOS.meadow;
+        const difficulty = DIFFICULTIES[chosenDifficulty] || DIFFICULTIES.field;
+        const tiles = [];
+        for (let z = 0; z < N; z++) {
+          for (let x = 0; x < N; x++) {
+            const smooth = .48 + .17 * Math.sin(x * .31) + .13 * Math.cos(z * .27) + .1 * Math.sin((x + z) * .19) + .07 * Math.cos((x - z) * .17) + (seededNoise(x, z, seed) - .5) * .2;
+            const riverX = N * .5 + Math.sin(z * .34) * 3.4;
+            const riverDist = Math.abs(x - riverX);
+            const lakeDist = Math.hypot((x - N * .25) * 1.2, z - N * .26);
+            let elevation = clamp(Math.round((smooth + .3) * 2.25), 0, 4);
+            const isWater = riverDist < 1.0 || lakeDist < 2.35 || (x < 2 && seededNoise(x, z, seed + 17) > .67);
+            if (riverDist < 1.3 || lakeDist < 2.65) elevation = Math.min(elevation, 0);
+            const alpine = elevation >= 4 || (elevation >= 3 && z < 3);
+            const woodland = (x > 15 && z < 20) || (z > 18 && x < 11) || seededNoise(x, z, seed + 31) > .85;
+            const biome = isWater ? 'wetland' : alpine ? (elevation >= 4 ? 'rock' : 'alpine') : woodland ? 'woodland' : 'meadow';
+            const wetBias = isWater ? 1 : clamp(.74 - elevation * .095 + (biome === 'wetland' ? .18 : 0) + (rand() - .5) * .23, .16, .94);
+            const grass = isWater ? 0 : clamp((biome === 'meadow' ? .58 : biome === 'woodland' ? .3 : biome === 'alpine' ? .28 : .45) * (0.8 + rand() * .45) * (scenarioKey === 'ice' ? .89 : 1), 0, 1.15);
+            const canopy = isWater || biome === 'rock' || biome === 'alpine' ? 0 : biome === 'woodland' ? .5 + rand() * .42 : rand() * .18;
+            tiles.push({ x, z, elevation, biome, isWater, moisture: wetBias * profile.rain, nutrients: .42 + rand() * .5, organic: .24 + rand() * .35, grass, canopy, flowers: isWater ? 0 : clamp((biome === 'meadow' ? .25 : .1) + rand() * .22, 0, .65), pollination: 0, temperature: 12, erosion: 0 });
+          }
+        }
+        const state = {
+          scenario: scenarioKey, difficulty: chosenDifficulty, seed, tiles, agents: [], carrion: [],
+          day: 0, speed: 1, paused: false, ended: false, result: null, season: 0, weather: 'Clear', weatherDays: 4,
+          climateDial: 0, baselineClimate: profile.climate, credits: difficulty.credits, researchPoints: 2 + Math.min(5, Math.floor(meta.legacyData / 4)), tech: [],
+          nextId: 1, generation: 0, history: [], events: [], deaths: 0, births: 0, predation: 0, interventionCount: 0,
+          stressDays: 0, emptyDays: 0, apexDays: 0, time: 0, displayClock: 7, initialPopulation: 0, lastAutoSave: 0
+        };
+        sim = state;
+        const starts = Object.assign({}, profile.start);
+        if (scenarioKey === 'ice') { starts.hare = Math.max(24, starts.hare - 4); starts.beetle = Math.max(10, starts.beetle - 2); }
+        const spawnPools = {};
+        for (const kind of SPECIES_ORDER) {
+          spawnPools[kind] = tiles.map((tile, index) => ({ tile, index })).filter(o => !o.tile.isWater && (kind === 'bee' ? o.tile.flowers > .15 : kind === 'beetle' ? o.tile.organic > .2 : true));
+          const amount = Math.min(starts[kind] || 0, MAX_POPULATION);
+          for (let j = 0; j < amount; j++) {
+            const pool = spawnPools[kind]; const place = pool[Math.floor(rand() * Math.max(1, pool.length))] || { index: Math.floor(rand() * TILE_COUNT) };
+            const ix = place.index % N, iz = Math.floor(place.index / N);
+            createAgent(kind, tileWorld(ix) + (rand() - .5) * .4, tileWorld(iz) + (rand() - .5) * .4);
+          }
+        }
+        sim.initialPopulation = sim.agents.length;
+        sim.events.push({ day: 0, title: 'Field station online', text: `${profile.name} initialized from seed ${seed}. The food web is active.`, kind: 'normal' });
+        if (scenarioKey === 'apex') sim.events.push({ day: 0, title: 'Invasive foxes detected', text: 'A large predator group is already hunting in the basin.', kind: 'alert' });
+        calculateMetricsToHistory();
+        buildThreeWorld();
+        resetCamera();
+      }
+      function resetCamera() {
+        if (!camera || !controls) return;
+        camera.position.set(29, 25, 32); controls.target.set(0, .5, 0); controls.update();
+      }
+
+      function calculateMetricsToHistory() {
+        const metrics = calculateMetrics();
+        if (!sim) return;
+        sim.history.push({ day: sim.day, hare: metrics.counts.hare, fox: metrics.counts.fox, bee: metrics.counts.bee, raven: metrics.counts.raven, beetle: metrics.counts.beetle, biomass: metrics.cover, health: metrics.health, soil: metrics.soil, water: metrics.water });
+        if (sim.history.length > 120) sim.history.shift();
+      }
+      function localTiles(x, z, radius, predicate, scoreFn) {
+        const cx = Math.round(x + N / 2 - .5), cz = Math.round(z + N / 2 - .5);
+        const r = Math.ceil(radius); let best = null, bestScore = -Infinity;
+        for (let iz = Math.max(0, cz - r); iz <= Math.min(N - 1, cz + r); iz++) {
+          for (let ix = Math.max(0, cx - r); ix <= Math.min(N - 1, cx + r); ix++) {
+            const tile = sim.tiles[iz * N + ix], wx = tileWorld(ix), wz = tileWorld(iz), distance = Math.hypot(wx - x, wz - z);
+            if (distance > radius || !predicate(tile)) continue;
+            const score = scoreFn ? scoreFn(tile, distance) : -distance;
+            if (score > bestScore) { bestScore = score; best = { tile, x: wx, z: wz, distance }; }
+          }
+        }
+        return best;
+      }
+      function nearestAgent(agent, kind, radius = 9) {
+        let best = null, dist = radius;
+        for (const other of sim.agents) {
+          if (!other || other.dead || other.kind !== kind || other.id === agent.id) continue;
+          const d = Math.hypot(other.x - agent.x, other.z - agent.z);
+          if (d < dist) { best = other; dist = d; }
+        }
+        return best ? { agent: best, distance: dist } : null;
+      }
+      function setAgentTarget(agent, x, z) {
+        if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+        const d = Math.hypot(x - agent.x, z - agent.z), step = clamp((SPECIES[agent.kind].move * (agent.genes.speed || 1)) * .94, .45, 1.65);
+        if (d > step) { agent.tx = agent.x + (x - agent.x) / d * step; agent.tz = agent.z + (z - agent.z) / d * step; }
+        else { agent.tx = x; agent.tz = z; }
+      }
+      function nearestWater(agent) {
+        return localTiles(agent.x, agent.z, 11, tile => tile.isWater || tile.moisture > .78, (tile, d) => (tile.isWater ? 1.3 : tile.moisture) / (d + .75));
+      }
+      function markDead(agent, reason = 'natural') {
+        if (!agent || agent.dead) return;
+        agent.dead = true; sim.deaths++;
+        const tile = tileAt(agent.x, agent.z);
+        if (tile) sim.carrion.push({ x: agent.x, z: agent.z, remaining: agent.kind === 'fox' ? .55 : .34, source: agent.kind, age: 0 });
+        if (renderer) { const view = agentViews.get(agent.id); if (view) { scene.remove(view); disposeObject(view); } agentViews.delete(agent.id); }
+        if (reason === 'predation') sim.predation++;
+      }
+      function maybeReproduce(agent, newAgents) {
+        if (sim.agents.length + newAgents.length >= MAX_POPULATION || agent.age < 9 || agent.cooldown > 0 || agent.energy < .66 || agent.hunger > .47 || agent.thirst > .55 || agent.health < .56) return;
+        const chance = agent.kind === 'hare' ? .035 : agent.kind === 'bee' ? .035 : agent.kind === 'fox' ? .018 : agent.kind === 'raven' ? .015 : .024;
+        if (rand() > chance * (agent.genes.resistance > .65 && sim.tech.includes('immunity') ? 1.1 : 1)) return;
+        agent.cooldown = agent.kind === 'fox' ? 24 + rand() * 12 : agent.kind === 'bee' ? 15 + rand() * 12 : 18 + rand() * 17;
+        agent.energy -= .18;
+        const baby = {
+          id: sim.nextId++, kind: agent.kind, x: agent.x + (rand() - .5) * .8, z: agent.z + (rand() - .5) * .8,
+          tx: agent.x, tz: agent.z, age: 0, energy: .56, hunger: .05, thirst: .05, health: .86, infection: 0, immune: 0,
+          cooldown: 20 + rand() * 18, genes: { ...agent.genes, speed: clamp(agent.genes.speed + (rand() - .5) * .18, .62, 1.45), metabolism: clamp(agent.genes.metabolism + (rand() - .5) * .12, .72, 1.35), resistance: clamp(agent.genes.resistance + (rand() - .5) * .15, .1, .95), vision: clamp(agent.genes.vision + (rand() - .5) * .2, .55, 1.5) }, size: .15 + rand() * .35, dead: false
+        };
+        newAgents.push(baby); sim.births++;
+      }
+      function chooseWeather() {
+        const season = sim.season;
+        const pick = rand();
+        let next = 'Clear';
+        if (pick < (season === 3 ? .22 : .28)) next = 'Rain';
+        else if (pick < .38) next = 'Drought';
+        else if (pick < .49 && season === 1) next = 'Heatwave';
+        else if (pick < .58 && season === 3) next = 'Frost';
+        else if (pick < .63) next = 'Storm';
+        sim.weather = next; sim.weatherDays = 4 + Math.floor(rand() * 5);
+        if (next === 'Heatwave' || next === 'Drought' || next === 'Frost') addEvent(`${next} warning`, next === 'Frost' ? 'A frost front is slowing plant growth and exposing the smallest animals.' : 'Dry conditions will stress plants and drain moisture across exposed ground.', 'alert', false);
+        else if (next === 'Storm') addEvent('Storm front', 'Rain is replenishing the basin, but exposed slopes are losing soil.', 'normal', false);
+      }
+      function maybeWorldEvent() {
+        const chance = .018 * (DIFFICULTIES[sim.difficulty].hazard || 1);
+        if (rand() > chance) return;
+        const roll = rand();
+        if (roll < .24) {
+          const kinds = ['hare', 'bee', 'fox', 'raven'];
+          const kind = kinds[Math.floor(rand() * kinds.length)];
+          let infected = 0;
+          const candidates = sim.agents.filter(a => !a.dead && a.kind === kind && a.immune <= 0);
+          for (const agent of candidates) if (rand() < .23) { agent.infection = Math.max(agent.infection, 7); infected++; }
+          if (infected > 0) addEvent('Pathogen in the field', `A localized blight has infected ${infected} ${SPECIES[kind].name.toLowerCase()} agents. Isolate or improve disease resistance.`, 'alert');
+          else addEvent('Pathogen survey', 'A weak pathogen trace passed through the basin without finding many hosts.', 'normal');
+        } else if (roll < .48) {
+          const center = Math.floor(rand() * TILE_COUNT);
+          for (let i = 0; i < 10; i++) { const tile = sim.tiles[(center + i * 17) % TILE_COUNT]; if (!tile.isWater) tile.flowers = clamp(tile.flowers + .25, 0, 1); }
+          addEvent('Mass flowering', 'A synchronized bloom creates a short feeding window for pollinators.', 'normal');
+        } else if (roll < .69) {
+          const tile = sim.tiles[Math.floor(rand() * TILE_COUNT)];
+          if (!tile.isWater) { tile.moisture = clamp(tile.moisture + .3, 0, 1); tile.grass = clamp(tile.grass + .12, 0, 1.3); }
+          addEvent('Seed dispersal', 'A wind-borne seed patch has established on open ground.', 'normal');
+        } else if (sim.scenario !== 'apex' && roll < .84) {
+          const tile = sim.tiles[Math.floor(rand() * TILE_COUNT)];
+          if (!tile.isWater && sim.agents.length < MAX_POPULATION - 3) for (let i = 0; i < 2; i++) { const ix = tile.x, iz = tile.z; createAgent('fox', tileWorld(ix) + (rand() - .5), tileWorld(iz) + (rand() - .5)); }
+          addEvent('Predator dispersal', 'A young fox pair has moved into the basin. Watch the grazer population.', 'alert');
+        } else {
+          const rainfall = .2 + rand() * .12;
+          for (const tile of sim.tiles) if (!tile.isWater) tile.moisture = clamp(tile.moisture + rainfall, 0, 1);
+          addEvent('Watershed pulse', 'A brief upstream rain pulse has refilled wetlands and seed beds.', 'normal');
+        }
+      }
+      function addEvent(title, text, kind = 'normal', toast = true) {
+        if (!sim) return;
+        sim.events.unshift({ day: sim.day, title, text, kind });
+        if (sim.events.length > 12) sim.events.length = 12;
+        if (toast) { showToast(`${title}: ${text}`); playSound(kind === 'danger' ? 'error' : 'event'); }
+      }
+      function showToast(message) {
+        const el = $('#toast');
+        el.textContent = message; el.classList.add('visible');
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => el.classList.remove('visible'), 3300);
+      }
+      function updateEnvironment() {
+        const season = sim.season;
+        const seasonal = [8, 19, 9, -2][season];
+        const weatherTemp = sim.weather === 'Heatwave' ? 8 : sim.weather === 'Frost' ? -8 : sim.weather === 'Drought' ? 3 : 0;
+        const rainAmount = sim.weather === 'Rain' ? .16 : sim.weather === 'Storm' ? .25 : sim.weather === 'Drought' ? -.035 : sim.weather === 'Heatwave' ? -.018 : .006;
+        const difficulty = DIFFICULTIES[sim.difficulty];
+        const techGrowth = sim.tech.includes('myco') ? 1.18 : 1;
+        const seedGrowth = sim.tech.includes('seedbank') ? 1.12 : 1;
+        for (let i = 0; i < sim.tiles.length; i++) {
+          const tile = sim.tiles[i];
+          const temp = seasonal + sim.baselineClimate + sim.climateDial + weatherTemp - tile.elevation * 1.6;
+          tile.temperature = temp;
+          if (tile.isWater) { tile.moisture = 1; tile.flowers = Math.max(0, tile.flowers - .003); continue; }
+          const canopyHold = sim.tech.includes('canopy') ? tile.canopy * .012 : tile.canopy * .006;
+          tile.moisture = clamp(tile.moisture + rainAmount * (sim.scenario === 'ice' ? .9 : 1) - Math.max(0, temp) * .0008 - .004 + canopyHold, .025, 1);
+          const temperatureSuitability = clamp(1 - Math.abs(temp - 16) / 28, .03, 1);
+          const dryStress = clamp(tile.moisture * 1.55, .08, 1);
+          const nutrientFactor = clamp(.33 + tile.nutrients * .9, .2, 1.2);
+          const growth = (.008 + tile.moisture * .006) * temperatureSuitability * dryStress * difficulty.growth * seedGrowth * techGrowth;
+          tile.grass = clamp(tile.grass + growth * (tile.biome === 'meadow' ? 1.2 : .68) - (temp < -5 ? .016 : temp > 34 ? .014 : .002), 0, 1.25);
+          tile.flowers = clamp(tile.flowers + growth * (sim.tech.includes('corridor') ? 1.4 : .8) * (tile.biome === 'meadow' ? 1.2 : .55) - (sim.weather === 'Drought' ? .014 : .004), 0, 1);
+          const forestFactor = tile.biome === 'woodland' ? 1 : .3;
+          tile.canopy = clamp(tile.canopy + .0018 * forestFactor * temperatureSuitability * dryStress * (tile.nutrients + .3) - (tile.moisture < .15 ? .007 : .0003), 0, .98);
+          tile.nutrients = clamp(tile.nutrients + tile.organic * .00045 - growth * .16, .02, 1);
+          tile.organic = clamp(tile.organic + .0004 + (tile.grass < .12 ? .0003 : 0), .05, 1);
+          tile.pollination *= .78;
+          tile.erosion = clamp(tile.erosion + (sim.weather === 'Storm' ? .0009 * tile.elevation : 0) - tile.canopy * .0002, 0, 1);
+          if (tile.erosion > .62 && tile.nutrients > .04) { tile.nutrients = Math.max(.02, tile.nutrients - .001); tile.elevation = Math.max(0, tile.elevation - .0004); }
+        }
+        for (const carrion of sim.carrion) {
+          carrion.age++;
+          const tile = tileAt(carrion.x, carrion.z);
+          const rot = .014 * (sim.weather === 'Heatwave' ? 1.5 : 1);
+          carrion.remaining = Math.max(0, carrion.remaining - rot);
+          if (tile) { tile.organic = clamp(tile.organic + rot * .24, 0, 1); tile.nutrients = clamp(tile.nutrients + rot * .055, .02, 1); }
+        }
+        sim.carrion = sim.carrion.filter(c => c.remaining > .025);
+      }
+      function updateAgent(agent, newAgents) {
+        if (!agent || agent.dead) return;
+        agent.age++; agent.cooldown = Math.max(0, agent.cooldown - 1); agent.immune = Math.max(0, agent.immune - 1);
+        const genes = agent.genes || { speed: 1, metabolism: 1, resistance: .3, vision: 1 };
+        const metabolism = genes.metabolism || 1;
+        const energyCost = { hare: .013, fox: .016, bee: .022, raven: .014, beetle: .011 }[agent.kind] * metabolism;
+        agent.energy = clamp(agent.energy - energyCost, 0, 1);
+        if (agent.kind !== 'bee') agent.thirst = clamp(agent.thirst + .07 * metabolism, 0, 1);
+        agent.hunger = clamp(agent.hunger + (agent.kind === 'bee' ? .043 : .052) * metabolism, 0, 1);
+        if (agent.infection > 0) {
+          agent.infection--;
+          const diseaseResistance = (sim.tech.includes('immunity') ? .65 : 1) * (1 - (genes.resistance || .25) * .48) * DIFFICULTIES[sim.difficulty].disease;
+          agent.health = clamp(agent.health - .035 * diseaseResistance, 0, 1);
+          if (rand() < .085 * diseaseResistance) { markDead(agent, 'disease'); return; }
+          if (agent.infection === 0) agent.immune = 35;
+        } else agent.health = clamp(agent.health + .009, 0, 1);
+        if (agent.immune <= 0 && agent.infection <= 0) {
+          const nearby = nearestAgent(agent, agent.kind, genes.vision * 1.15);
+          if (nearby && nearby.agent.infection > 1 && rand() < (sim.tech.includes('immunity') ? .075 : .15) * DIFFICULTIES[sim.difficulty].disease) agent.infection = 6 + Math.floor(rand() * 4);
+        }
+        if (agent.hunger > .74 || agent.thirst > .8 || agent.energy < .06) agent.health = clamp(agent.health - .025, 0, 1);
+        if (agent.health <= .03 || agent.age > SPECIES[agent.kind].lifespan || (agent.age > SPECIES[agent.kind].lifespan * .7 && rand() < .006)) { markDead(agent, 'natural'); return; }
+
+        let seekingWater = false;
+        if (agent.thirst > .56 && agent.kind !== 'bee') {
+          const water = nearestWater(agent);
+          if (water) {
+            if (water.distance < 1.15) { agent.thirst = Math.max(0, agent.thirst - .52); agent.health = clamp(agent.health + .035, 0, 1); }
+            else { setAgentTarget(agent, water.x, water.z); seekingWater = true; }
+          }
+        }
+
+        if (!seekingWater && agent.kind === 'hare') {
+          const danger = nearestAgent(agent, 'fox', 2.7);
+          if (danger) {
+            const dx = agent.x - danger.agent.x, dz = agent.z - danger.agent.z, length = Math.max(.1, Math.hypot(dx, dz));
+            const flee = clamp(1.3 + genes.speed, 1.2, 2.5);
+            setAgentTarget(agent, clamp(agent.x + dx / length * flee, -N / 2 + .5, N / 2 - .5), clamp(agent.z + dz / length * flee, -N / 2 + .5, N / 2 - .5));
+            if (danger.distance < .75 && genes.speed > danger.agent.genes.speed * 1.07 && rand() < .55) { agent.health = clamp(agent.health - .06, 0, 1); }
+          } else if (agent.thirst <= .56) {
+            const food = localTiles(agent.x, agent.z, 5.5 * genes.vision, tile => !tile.isWater && tile.grass > .08, (tile, distance) => (tile.grass + tile.flowers * .18) / (distance + .65));
+            if (food) {
+              setAgentTarget(agent, food.x, food.z);
+              if (food.distance < 1.05) { const eat = Math.min(.075, food.tile.grass); food.tile.grass = Math.max(0, food.tile.grass - eat); agent.hunger = Math.max(0, agent.hunger - eat * 5.5); agent.energy = clamp(agent.energy + eat * 1.5, 0, 1); }
+            }
+          }
+          if (agent.hunger < .32 && agent.thirst < .47 && agent.energy > .6) maybeReproduce(agent, newAgents);
+        } else if (!seekingWater && agent.kind === 'fox') {
+          const prey = nearestAgent(agent, 'hare', 10 * genes.vision);
+          if (prey) {
+            setAgentTarget(agent, prey.agent.x, prey.agent.z);
+            if (prey.distance < .72) {
+              if (prey.agent.genes.speed > genes.speed * 1.3 && rand() < .35) setAgentTarget(agent, agent.x + (rand() - .5) * 2, agent.z + (rand() - .5) * 2);
+              else { markDead(prey.agent, 'predation'); agent.hunger = Math.max(0, agent.hunger - .61); agent.energy = clamp(agent.energy + .34, 0, 1); agent.health = clamp(agent.health + .06, 0, 1); }
+            }
+          } else {
+            const berries = localTiles(agent.x, agent.z, 6, tile => !tile.isWater && (tile.flowers + tile.grass) > .58, (tile, d) => (tile.flowers + tile.grass * .25) / (d + 1));
+            if (berries) { setAgentTarget(agent, berries.x, berries.z); if (berries.distance < 1) { agent.hunger = Math.max(0, agent.hunger - .12); agent.energy = clamp(agent.energy + .05, 0, 1); } }
+          }
+          if (agent.hunger < .36 && agent.energy > .68) maybeReproduce(agent, newAgents);
+        } else if (agent.kind === 'bee') {
+          const bloom = localTiles(agent.x, agent.z, 8 * genes.vision, tile => !tile.isWater && tile.flowers > .04, (tile, d) => tile.flowers / (d + .5));
+          if (bloom) {
+            setAgentTarget(agent, bloom.x, bloom.z);
+            if (bloom.distance < 1.1) { bloom.tile.pollination = clamp(bloom.tile.pollination + (sim.tech.includes('corridor') ? .3 : .2), 0, 1); bloom.tile.flowers = Math.max(0, bloom.tile.flowers - .004); agent.hunger = Math.max(0, agent.hunger - .12); agent.energy = clamp(agent.energy + .12, 0, 1); }
+          }
+          if (agent.hunger < .36 && agent.energy > .55) maybeReproduce(agent, newAgents);
+        } else if (!seekingWater && agent.kind === 'raven') {
+          const remains = sim.carrion.filter(c => c.remaining > .08).sort((a, b) => Math.hypot(a.x - agent.x, a.z - agent.z) - Math.hypot(b.x - agent.x, b.z - agent.z))[0];
+          if (remains) {
+            const d = Math.hypot(remains.x - agent.x, remains.z - agent.z); setAgentTarget(agent, remains.x, remains.z);
+            if (d < 1.15) { remains.remaining = Math.max(0, remains.remaining - .035); agent.hunger = Math.max(0, agent.hunger - .13); agent.energy = clamp(agent.energy + .07, 0, 1); }
+          } else {
+            const forage = localTiles(agent.x, agent.z, 5, tile => !tile.isWater && tile.grass > .4, (tile, d) => tile.grass / (d + 1));
+            if (forage) { setAgentTarget(agent, forage.x, forage.z); if (forage.distance < 1) agent.hunger = Math.max(0, agent.hunger - .055); }
+          }
+          if (agent.hunger < .38 && agent.energy > .7) maybeReproduce(agent, newAgents);
+        } else if (!seekingWater && agent.kind === 'beetle') {
+          const remains = localTiles(agent.x, agent.z, 6, tile => !tile.isWater && tile.organic > .2, (tile, d) => tile.organic / (d + .8));
+          if (remains) {
+            setAgentTarget(agent, remains.x, remains.z);
+            if (remains.distance < 1.1) { const feed = Math.min(.02, remains.tile.organic); remains.tile.organic -= feed; remains.tile.nutrients = clamp(remains.tile.nutrients + feed * (sim.tech.includes('myco') ? .8 : .48), 0, 1); agent.hunger = Math.max(0, agent.hunger - .085); agent.energy = clamp(agent.energy + .06, 0, 1); }
+          }
+          if (agent.hunger < .42 && agent.energy > .61) maybeReproduce(agent, newAgents);
+        }
+        if (rand() < .0015 && agent.infection <= 0) agent.health = clamp(agent.health - .04, 0, 1);
+      }
+
+      function simulateDay() {
+        if (!sim || sim.paused || sim.ended) return;
+        sim.day++;
+        sim.generation = Math.floor(sim.day / 14);
+        const newSeason = Math.floor((sim.day % 112) / 28);
+        if (newSeason !== sim.season) {
+          sim.season = newSeason;
+          addEvent(`${SEASONS[newSeason]} arrives`, `The ${SEASONS[newSeason].toLowerCase()} shift is changing growth, moisture and animal activity.`, 'normal', false);
+        }
+        if (--sim.weatherDays <= 0) chooseWeather();
+        if (sim.day === 1 && sim.scenario === 'apex') chooseWeather();
+        updateEnvironment();
+        const agentsToday = sim.agents.slice();
+        const newAgents = [];
+        for (const agent of agentsToday) updateAgent(agent, newAgents);
+        for (const baby of newAgents) { sim.agents.push(baby); createAgentView(baby); }
+        sim.agents = sim.agents.filter(a => !a.dead);
+        if (sim.day % 14 === 0) {
+          sim.researchPoints += 1;
+          if (sim.generation > 0 && sim.generation % 4 === 0) { sim.credits += 1; addEvent('Stewardship grant', 'A four-generation field review earned one stewardship credit.', 'normal', false); }
+        }
+        if (sim.day % 112 === 0) addEvent('Annual field review', `Generation ${sim.generation}: ${sim.agents.length} animals remain; plants and soil have been reassessed.`, 'normal');
+        maybeWorldEvent();
+        const metrics = calculateMetrics();
+        if (sim.day % 3 === 0) calculateMetricsToHistory();
+        if (metrics.health < 8 || metrics.population === 0) sim.stressDays++; else sim.stressDays = Math.max(0, sim.stressDays - 2);
+        const counts = metrics.counts;
+        if ((counts.hare === 0 && counts.bee === 0) || metrics.biodiversity <= 1) sim.emptyDays++; else sim.emptyDays = 0;
+        if (sim.scenario === 'apex' && counts.fox >= 18) sim.apexDays++; else sim.apexDays = Math.max(0, sim.apexDays - 1);
+        if (sim.stressDays >= 14 || sim.emptyDays >= 27 || (sim.scenario === 'apex' && sim.apexDays >= 45 && metrics.health < 25)) {
+          finishRun(false, sim.apexDays >= 45 ? 'The fox surge overwhelmed the remaining food web.' : 'The biosphere collapsed: too little living diversity remains to recover.');
+          return;
+        }
+        checkObjective(metrics);
+        if (sim.day % 14 === 0) { refreshTerrainColors(); syncTrees(); }
+        if (sim.day % 22 === 0) { saveGame(true); }
+      }
+      function checkObjective(metrics = calculateMetrics()) {
+        if (!sim || sim.ended) return;
+        const profile = SCENARIOS[sim.scenario];
+        const counts = metrics.counts;
+        if (sim.scenario === 'apex') {
+          if (sim.generation >= profile.goal && counts.fox < 18 && metrics.biodiversity >= 3 && metrics.health >= 34) finishRun(true, 'The invasive predator is back within the basin\'s carrying capacity.');
+        } else if (sim.generation >= profile.goal && metrics.biodiversity >= 3 && metrics.health >= (sim.scenario === 'ice' ? 38 : 39) && metrics.population >= 20) {
+          finishRun(true, sim.scenario === 'ice' ? 'The ice-age food web endured 20 generations without losing its living network.' : 'The valley has carried a resilient food web through 20 generations.');
+        }
+      }
+      function finishRun(success, reason) {
+        if (!sim || sim.ended) return;
+        sim.ended = true; sim.paused = true; sim.result = success ? 'success' : 'failure';
+        const metrics = calculateMetrics();
+        meta.bestGeneration = Math.max(meta.bestGeneration, sim.generation);
+        meta.runs++;
+        if (success) { meta.wins++; meta.legacyData += Math.max(2, Math.floor(sim.generation / 4)); }
+        saveMeta(); storage.remove('biosphere-active-v1');
+        addEvent(success ? 'Biosphere stabilized' : 'Ecological collapse', reason, success ? 'normal' : 'danger', false);
+        playSound(success ? 'win' : 'error');
+        renderHUD(); showEndModal(success, reason, metrics);
+      }
+
+      function spendCredits(cost) {
+        if (sim.credits < cost) { showToast(`Not enough field credits. Need ${cost}; available ${sim.credits}.`); playSound('error'); return false; }
+        sim.credits -= cost; return true;
+      }
+      function spawnBurst(x, z, color = 0xc9ee82, amount = 14) {
+        if (!scene || !window.THREE || !sim) return;
+        const tile = tileAt(x, z); const baseY = tileHeight(tile) + .35;
+        const material = new THREE.PointsMaterial({ color, size: .11, transparent: true, opacity: .94, depthWrite: false, sizeAttenuation: true });
+        const geometry = new THREE.BufferGeometry(); const positions = new Float32Array(amount * 3); const velocities = [];
+        for (let i = 0; i < amount; i++) {
+          positions[i * 3] = x + (rand() - .5) * .35; positions[i * 3 + 1] = baseY + rand() * .3; positions[i * 3 + 2] = z + (rand() - .5) * .35;
+          velocities.push({ x: (rand() - .5) * .9, y: .55 + rand() * 1.1, z: (rand() - .5) * .9 });
+        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const points = new THREE.Points(geometry, material); scene.add(points);
+        particleViews.push({ mesh: points, velocities, life: .78, max: .78 });
+      }
+      function updateParticles(dt) {
+        if (!renderer) return;
+        for (let p = particleViews.length - 1; p >= 0; p--) {
+          const item = particleViews[p]; item.life -= dt;
+          const positions = item.mesh.geometry.attributes.position.array;
+          for (let i = 0; i < item.velocities.length; i++) {
+            const v = item.velocities[i]; positions[i * 3] += v.x * dt; positions[i * 3 + 1] += v.y * dt; positions[i * 3 + 2] += v.z * dt; v.y -= 1.6 * dt;
+          }
+          item.mesh.geometry.attributes.position.needsUpdate = true; item.mesh.material.opacity = clamp(item.life / item.max, 0, 1);
+          if (item.life <= 0) { scene.remove(item.mesh); item.mesh.geometry.dispose(); item.mesh.material.dispose(); particleViews.splice(p, 1); }
+        }
+      }
+      function applyTool(tileIndex) {
+        if (!sim || sim.paused || sim.ended) { if (sim && sim.paused) showToast('Resume the simulation before changing the habitat.'); return; }
+        const tile = sim.tiles[tileIndex]; if (!tile) return;
+        const x = tileWorld(tile.x), z = tileWorld(tile.z);
+        if (activeTool === 'inspect') { inspectTile(tileIndex); return; }
+        if (activeTool === 'seed') {
+          const cost = sim.tech.includes('seedbank') ? 1 : 2;
+          if (!spendCredits(cost)) return;
+          if (tile.isWater) { showToast('Seeds need exposed ground. Try a meadow or woodland tile.'); sim.credits += cost; return; }
+          tile.grass = clamp(tile.grass + .38, 0, 1.25); tile.flowers = clamp(tile.flowers + .27, 0, 1); tile.nutrients = clamp(tile.nutrients + .025, 0, 1);
+          addEvent('Native seed mix planted', `A recovering patch was seeded in ${tile.biome} ground.`, 'normal', false); spawnBurst(x, z, 0xc9ee82); playSound('action');
+        } else if (activeTool === 'water') {
+          if (!spendCredits(2)) return;
+          tile.moisture = clamp(tile.moisture + .52, 0, 1); tile.grass = clamp(tile.grass + .08, 0, 1.25);
+          addEvent('Water restored', 'A local soil refuge is holding moisture for roots and wildlife.', 'normal', false); spawnBurst(x, z, 0x8de1d0, 12); playSound('action');
+        } else if (activeTool === 'terra') {
+          if (!spendCredits(3)) return;
+          if (tile.isWater) { tile.isWater = false; tile.biome = 'wetland'; tile.elevation = 1; tile.moisture = .7; }
+          else { tile.elevation = tile.elevation >= 4 ? 0 : tile.elevation + 1; tile.erosion = 0; }
+          tile.grass *= .85; tile.canopy *= .82;
+          addEvent('Terrain reshaped', 'A voxel was raised or lowered. New elevations redirect water and alter habitat.', 'alert', false); buildThreeWorld(); spawnBurst(x, z, 0xe9cf8d, 16); playSound('action');
+        } else if (activeTool === 'cull') {
+          if (!spendCredits(2)) return;
+          const nearby = sim.agents.filter(agent => !agent.dead && agent.kind === selectedSpecies && Math.hypot(agent.x - x, agent.z - z) < 4.3);
+          const amount = Math.min(nearby.length, selectedSpecies === 'fox' ? 5 : 7);
+          nearby.slice(0, amount).forEach(agent => markDead(agent, 'management'));
+          sim.agents = sim.agents.filter(agent => !agent.dead); sim.interventionCount++;
+          if (amount) addEvent(`${SPECIES[selectedSpecies].name} cull`, `${amount} nearby ${SPECIES[selectedSpecies].name.toLowerCase()} agents removed. Population effects will ripple through the food web.`, 'alert');
+          else { sim.credits += 2; showToast(`No ${SPECIES[selectedSpecies].name.toLowerCase()} agents were in range; credits returned.`); }
+          spawnBurst(x, z, 0xff9c70, 10); playSound('action');
+        } else if (activeTool === 'disease') {
+          const affected = sim.agents.filter(agent => !agent.dead && Math.hypot(agent.x - x, agent.z - z) < 3.3 && agent.immune <= 0);
+          affected.forEach(agent => { agent.infection = Math.max(agent.infection, 6 + Math.floor(rand() * 5)); });
+          sim.interventionCount++;
+          addEvent('Pathogen released', `${affected.length} nearby animal agents exposed. Disease can spread between close contacts.`, 'danger');
+          spawnBurst(x, z, 0xd48caf, 18); playSound('error');
+        }
+        selectedTileId = tileIndex; updateMarker(tileIndex); refreshTerrainColors(); renderHUD(); saveGame(true);
+      }
+      function inspectTile(index) {
+        const tile = sim.tiles[index]; if (!tile) return;
+        selectedTileId = index; selectedAgentId = null; updateMarker(index);
+        const copy = `${tile.biome} tile / grass ${Math.round(tile.grass * 100)}% / moisture ${Math.round(tile.moisture * 100)}% / nutrients ${Math.round(tile.nutrients * 100)}%`;
+        $('#selectedTitle').textContent = `${tile.biome.charAt(0).toUpperCase() + tile.biome.slice(1)} / tile ${tile.x + 1}, ${tile.z + 1}`;
+        $('#selectedCopy').textContent = copy; $('#selectedReadout').classList.add('visible');
+      }
+      function inspectAgent(agent) {
+        if (!agent) return;
+        selectedAgentId = agent.id; selectedTileId = null;
+        $('#selectedTitle').textContent = `${SPECIES[agent.kind].name} / ID ${String(agent.id).padStart(3, '0')}`;
+        $('#selectedCopy').textContent = `Age ${agent.age}d / health ${Math.round(agent.health * 100)}% / speed gene ${agent.genes.speed.toFixed(2)} / ${agent.infection ? 'infected' : agent.immune > 0 ? 'immune' : 'healthy'}`;
+        $('#selectedReadout').classList.add('visible');
+        const view = agentViews.get(agent.id); if (view && marker) { marker.position.set(agent.x, (tileHeight(tileAt(agent.x, agent.z)) || .5) + .07, agent.z); marker.visible = true; }
+        focusPoint(agent.x, agent.z);
+        updateSpeciesInspector(agent.kind);
+      }
+      function focusPoint(x, z) {
+        if (!controls || !camera || !window.THREE) return;
+        const target = new THREE.Vector3(x, tileHeight(tileAt(x, z)) + .12, z);
+        const shift = target.clone().sub(controls.target);
+        camera.position.add(shift); controls.target.copy(target); controls.update();
+      }
+      function updateMarker(index) {
+        if (!marker || !sim) return;
+        const tile = sim.tiles[index]; marker.position.set(tileWorld(tile.x), tileHeight(tile) + .04, tileWorld(tile.z)); marker.visible = true;
+      }
+      function eventPoint(event) {
+        if (!renderer || !camera || !raycaster) return null;
+        const rect = canvas.getBoundingClientRect();
+        pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+        raycaster.setFromCamera(pointer, camera);
+        const agentObjects = Array.from(agentViews.values());
+        const hits = raycaster.intersectObjects(agentObjects, true);
+        if (hits.length) {
+          let node = hits[0].object;
+          while (node && node.userData.agentId == null) node = node.parent;
+          if (node) { const agent = sim && sim.agents.find(a => a.id === node.userData.agentId); if (agent) return { agent }; }
+        }
+        if (terrainMesh) {
+          const hit = raycaster.intersectObject(terrainMesh, false)[0];
+          if (hit && hit.instanceId != null) return { index: hit.instanceId };
+        }
+        const hit = raycaster.intersectObject(pickPlane, false)[0];
+        if (hit) {
+          const ix = Math.floor(hit.point.x + N / 2), iz = Math.floor(hit.point.z + N / 2);
+          if (ix >= 0 && ix < N && iz >= 0 && iz < N) return { index: iz * N + ix };
+        }
+        return null;
+      }
+      function onWorldClick(event) {
+        if (!sim || $('#simulationUI').classList.contains('hidden')) return;
+        if (modalKind || $('#titleScreen').classList.contains('hidden') === false) return;
+        const hit = eventPoint(event); if (!hit) return;
+        if (hit.agent && activeTool === 'inspect') { inspectAgent(hit.agent); return; }
+        if (hit.index != null) applyTool(hit.index);
+      }
+      function onPointerMove(event) {
+        if (!sim || !renderer || !marker || modalKind) return;
+        const hit = eventPoint(event);
+        if (hit && hit.index != null && activeTool !== 'inspect') {
+          const tile = sim.tiles[hit.index]; marker.position.set(tileWorld(tile.x), tileHeight(tile) + .045, tileWorld(tile.z)); marker.visible = true;
+        } else if (!selectedAgentId && selectedTileId == null) marker.visible = false;
+      }
+      function onFallbackClick(event) {
+        if (!sim || sim.paused || modalKind) return;
+        const rect = fallbackCanvas.getBoundingClientRect(); const px = event.clientX - rect.left, py = event.clientY - rect.top;
+        const cell = fallbackCell(px, py); if (cell >= 0) applyTool(cell);
+      }
+      function fallbackCell(px, py) {
+        const width = window.innerWidth, height = window.innerHeight;
+        const size = Math.min(width / 34, height / 24), tw = size * .82, th = size * .46;
+        const originX = width * .5, originY = height * .48;
+        let best = -1, bestDistance = Infinity;
+        for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
+          const cx = originX + (x - z) * tw * .5, cy = originY + (x + z - N) * th * .5 - tileHeight(sim.tiles[z * N + x]) * 6;
+          const d = Math.abs(px - cx) / tw + Math.abs(py - cy) / th;
+          if (d < bestDistance && d < 1.15) { bestDistance = d; best = z * N + x; }
+        }
+        return best;
+      }
+
+      function updateSpeciesInspector(kind, countOverride = null) {
+        const panel = $('#speciesInspector'); if (!panel) return;
+        if (!kind || !SPECIES[kind]) { panel.innerHTML = '<strong>Living network</strong><p>Plants feed grazers. Predators regulate grazers; scavengers and decomposers return nutrients to the soil.</p>'; return; }
+        const counts = calculateMetrics().counts;
+        const population = countOverride == null ? counts[kind] : countOverride;
+        const avg = sim.agents.filter(a => a.kind === kind && !a.dead);
+        const speed = avg.length ? (avg.reduce((s, a) => s + a.genes.speed, 0) / avg.length).toFixed(2) : '--';
+        panel.innerHTML = `<strong style="color:${SPECIES[kind].hex}">${SPECIES[kind].name} / ${population} alive</strong><p>${SPECIES[kind].blurb}<br>Average speed gene: ${speed}.</p>`;
+      }
+      function selectSpecies(kind) {
+        if (!SPECIES[kind]) return;
+        selectedSpecies = kind;
+        const members = sim ? sim.agents.filter(agent => !agent.dead && agent.kind === kind) : [];
+        if (members.length) {
+          focusPoint(members.reduce((sum, agent) => sum + agent.x, 0) / members.length, members.reduce((sum, agent) => sum + agent.z, 0) / members.length);
+        } else showToast(`No ${SPECIES[kind].name.toLowerCase()} agents are currently alive.`);
+        updateSpeciesInspector(kind);
+        renderSpeciesList(calculateMetrics().counts);
+        playSound('tap');
+      }
+      function renderSpeciesList(counts) {
+        const el = $('#speciesList'); if (!el) return;
+        if (!el.dataset.ready) {
+          el.innerHTML = SPECIES_ORDER.map(kind => `<button class="species-row" data-species="${kind}" title="Track ${SPECIES[kind].name}"><i class="species-dot" style="color:${SPECIES[kind].hex};background:${SPECIES[kind].hex}"></i><span class="species-name">${SPECIES[kind].name}<small class="species-trend"> / stable</small></span><span class="species-count">0</span></button>`).join('');
+          el.dataset.ready = 'true';
+        }
+        const history = sim && sim.history.length > 2 ? sim.history : [];
+        for (const kind of SPECIES_ORDER) {
+          const row = $(`[data-species="${kind}"]`, el); if (!row) continue;
+          const count = counts[kind] || 0;
+          const prior = history.length > 1 ? history[Math.max(0, history.length - 5)][kind] : count;
+          const trend = count > prior ? `+${count - prior}` : count < prior ? `-${prior - count}` : 'stable';
+          row.classList.toggle('active', selectedSpecies === kind);
+          $('.species-count', row).textContent = count;
+          $('.species-trend', row).textContent = ` / ${trend}`;
+        }
+      }
+      function renderResearch() {
+        const el = $('#researchList'); if (!el || !sim) return;
+        $('#researchPoints').textContent = `${sim.researchPoints} DATA / ${meta.legacyData} LEGACY`;
+        if (!el.dataset.ready) {
+          el.innerHTML = TECH.map(tech => `<button class="tech-button" data-tech="${tech.id}"><span class="tech-name">${tech.name}</span><span class="tech-cost">${tech.cost} DATA</span><span class="tech-desc">${tech.desc}</span></button>`).join('');
+          el.dataset.ready = 'true';
+        }
+        for (const tech of TECH) {
+          const button = $(`[data-tech="${tech.id}"]`, el); if (!button) continue;
+          const done = sim.tech.includes(tech.id), afford = sim.researchPoints >= tech.cost;
+          button.disabled = done || !afford;
+          button.classList.toggle('done', done);
+          button.title = done ? 'Already researched' : afford ? 'Research upgrade' : `Requires ${tech.cost} data points`;
+          $('.tech-name', button).textContent = `${done ? 'DONE / ' : ''}${tech.name}`;
+          $('.tech-cost', button).textContent = done ? 'DONE' : `${tech.cost} DATA`;
+        }
+      }
+      function buyTech(id) {
+        const tech = TECH.find(item => item.id === id);
+        if (!tech || !sim || sim.tech.includes(id) || sim.researchPoints < tech.cost) return;
+        sim.researchPoints -= tech.cost; sim.tech.push(id);
+        addEvent(`Research complete: ${tech.name}`, tech.desc, 'normal');
+        if (id === 'seedbank') for (const tile of sim.tiles) if (!tile.isWater) tile.flowers = clamp(tile.flowers + .08, 0, 1);
+        if (id === 'canopy') syncTrees();
+        playSound('action'); renderHUD(); saveGame(true);
+      }
+      function drawChart() {
+        const canvas = $('#historyChart'); if (!canvas || !sim) return;
+        const ctx = canvas.getContext('2d'); if (!ctx) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2), rect = canvas.getBoundingClientRect();
+        const w = Math.max(100, rect.width), h = Math.max(55, rect.height);
+        if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) { canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr); }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+        const data = sim.history.slice(-55); if (data.length < 2) return;
+        const pad = { x: 3, y: 8, right: 4, bottom: 13 }, chartW = w - pad.x - pad.right, chartH = h - pad.y - pad.bottom;
+        ctx.strokeStyle = 'rgba(224,238,216,.09)'; ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) { const y = pad.y + chartH * i / 2; ctx.beginPath(); ctx.moveTo(pad.x, y); ctx.lineTo(w - pad.right, y); ctx.stroke(); }
+        const series = chartMode === 'population' ? [
+          { key: 'hare', color: '#c9ee82', max: Math.max(20, ...data.map(d => d.hare)) },
+          { key: 'fox', color: '#ff9c70', max: Math.max(15, ...data.map(d => d.fox)) },
+          { key: 'bee', color: '#8de1d0', max: Math.max(20, ...data.map(d => d.bee)) }
+        ] : [
+          { key: 'biomass', color: '#c9ee82', max: 1 },
+          { key: 'health', color: '#8de1d0', max: 100 }
+        ];
+        for (const line of series) {
+          ctx.beginPath();
+          data.forEach((entry, index) => {
+            const x = pad.x + chartW * index / Math.max(1, data.length - 1);
+            const raw = entry.key === 'health' ? entry.health : entry.key === 'biomass' ? entry.biomass : entry[entry.key];
+            const y = pad.y + chartH - clamp(raw / line.max, 0, 1) * chartH;
+            if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          });
+          ctx.strokeStyle = line.color; ctx.lineWidth = 1.7; ctx.lineJoin = 'round'; ctx.stroke();
+          const last = data[data.length - 1], value = entryValue(last, line.key);
+          const x = pad.x + chartW, y = pad.y + chartH - clamp(value / line.max, 0, 1) * chartH;
+          ctx.fillStyle = line.color; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(205,219,203,.5)'; ctx.font = '8px ui-monospace, monospace'; ctx.fillText(`DAY ${String(data[0].day).padStart(3, '0')}`, 3, h - 1); ctx.textAlign = 'right'; ctx.fillText(`${String(data[data.length - 1].day).padStart(3, '0')}`, w - 3, h - 1); ctx.textAlign = 'left';
+      }
+      function entryValue(entry, key) { return key === 'health' ? entry.health : key === 'biomass' ? entry.biomass : entry[key] || 0; }
+      function sizeChartCanvas() { if (sim) drawChart(); }
+      function renderLog() {
+        const list = $('#logList'); if (!list || !sim) return;
+        const entries = sim.events.slice(0, 6);
+        const signature = entries.map(event => `${event.day}:${event.title}:${event.text}`).join('|');
+        if (list.dataset.signature === signature) return;
+        list.dataset.signature = signature;
+        list.innerHTML = entries.map(event => `<div class="log-item ${event.kind === 'alert' ? 'alert' : event.kind === 'danger' ? 'danger' : ''}"><span class="log-day">D${String(event.day).padStart(3, '0')}</span><span><b>${event.title}</b>${event.text}</span></div>`).join('');
+      }
+      function renderObjective(metrics) {
+        const profile = SCENARIOS[sim.scenario], goal = profile.goal;
+        const progress = clamp(sim.generation / goal, 0, 1);
+        $('#missionKicker').textContent = `CAPSTONE / ${profile.name.toUpperCase()}`;
+        $('#missionTitle').textContent = sim.scenario === 'apex' ? 'Contain the fox surge' : `Cross ${goal} generations`;
+        $('#missionCopy').textContent = profile.objective;
+        $('#missionProgress').style.width = `${progress * 100}%`;
+        $('#missionProgressLabel').textContent = sim.scenario === 'apex' ? `${sim.generation} / ${goal} generations` : `${sim.generation} / ${goal} generations`;
+        $('#missionHealthLabel').textContent = `Health ${metrics.health}`;
+        const almost = sim.scenario === 'apex' ? sim.generation >= goal && metrics.counts.fox < 18 && metrics.biodiversity >= 3 : sim.generation >= goal && metrics.health >= (sim.scenario === 'ice' ? 38 : 39) && metrics.biodiversity >= 3 && metrics.population >= 20;
+        $('#objectiveStatus').textContent = almost ? 'READY TO RESOLVE' : metrics.health < 30 ? 'AT RISK' : 'IN PROGRESS';
+        $('#objectiveStatus').style.color = metrics.health < 30 ? 'var(--amber)' : almost ? 'var(--lime)' : '';
+      }
+      function renderHUD() {
+        if (!sim) return;
+        const metrics = calculateMetrics();
+        const season = SEASONS[sim.season], weather = WEATHER_INFO[sim.weather] || WEATHER_INFO.Clear;
+        const tempAvg = sim.tiles.reduce((sum, tile) => sum + tile.temperature, 0) / TILE_COUNT;
+        const gen = Math.floor(sim.day / 14);
+        $('#dayLabel').textContent = `Day ${String(sim.day + 1).padStart(3, '0')} / Gen ${String(gen + 1).padStart(2, '0')}`;
+        $('#seasonLabel').textContent = `${season} / ${sim.weather}`;
+        $('#populationLabel').textContent = `${metrics.population} animals`;
+        $('#weatherName').textContent = sim.weather === 'Clear' ? 'Clear skies' : sim.weather;
+        $('#weatherNote').textContent = weather.note;
+        $('#weatherGlyph').textContent = weather.glyph;
+        $('#temperatureLabel').textContent = `${Math.round(tempAvg)} C`;
+        $('#seasonDetail').textContent = `${season.toUpperCase()} / DAY ${(sim.day % 28) + 1}`;
+        $('#climateSlider').value = sim.climateDial;
+        $('#climateValue').textContent = `${sim.climateDial > 0 ? '+' : ''}${Number(sim.climateDial).toFixed(1)} C`;
+        $('#healthValue').textContent = metrics.health;
+        $('#coverValue').textContent = `${Math.round(metrics.cover * 100)}%`;
+        $('#diversityValue').textContent = `${metrics.biodiversity} / 5`;
+        $('#creditValue').textContent = sim.credits;
+        $('#creditsOverlay').textContent = sim.credits;
+        const grade = metrics.health >= 68 ? 'THRIVING' : metrics.health >= 43 ? 'STABLE' : metrics.health >= 23 ? 'STRESSED' : 'CRITICAL';
+        $('#healthGrade').textContent = grade;
+        $('#healthGrade').style.color = metrics.health < 25 ? 'var(--red)' : metrics.health < 44 ? 'var(--amber)' : 'var(--lime)';
+        $('#healthChange').textContent = `${Math.round(metrics.water * 100)}% soil moisture`;
+        $('#habitatName').textContent = SCENARIOS[sim.scenario].name.toUpperCase();
+        $('#seedInHud').textContent = `SEED ${sim.seed}`;
+        renderObjective(metrics); renderSpeciesList(metrics.counts); renderResearch(); renderLog(); drawChart();
+        const paused = sim.paused || sim.ended;
+        $('#pauseBtn').textContent = paused ? (sim.ended ? 'Ended' : 'Resume') : 'Pause';
+        $('#pauseBtn').disabled = sim.ended;
+        $$('.speed-btn').forEach(button => button.classList.toggle('active', Number(button.dataset.speed) === sim.speed));
+        if (soundEngine && sim.day % 5 === 0) updateAudioGain();
+      }
+
+      function updateSceneLighting(dt) {
+        if (!scene || !sim) return;
+        sim.displayClock = (sim.displayClock + dt * sim.speed * 1.35) % 24;
+        const angle = sim.displayClock / 24 * Math.PI * 2;
+        const daylight = clamp((Math.sin(angle - Math.PI / 2) + .22) / 1.1, .12, 1);
+        if (directionalLight) { directionalLight.intensity = .42 + daylight * 2.2; directionalLight.position.set(Math.cos(angle) * 19, 8 + daylight * 23, Math.sin(angle) * 19); }
+        const sky = new THREE.Color(0x12201f).lerp(new THREE.Color(0xa7c8b8), daylight);
+        scene.background.copy(sky); scene.fog.color.copy(sky);
+        if (controls) controls.update();
+      }
+      function drawFallback() {
+        if (!fallbackCtx || !sim) return;
+        const ctx = fallbackCtx, width = window.innerWidth, height = window.innerHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, width, height);
+        const tw = Math.min(width / 33, height / 25) * .86, th = tw * .46, originX = width * .5, originY = height * .47;
+        for (let sum = 0; sum <= (N - 1) * 2; sum++) {
+          const zStart = Math.max(0, sum - (N - 1)), zEnd = Math.min(N - 1, sum);
+          for (let z = zStart; z <= zEnd; z++) {
+            const x = sum - z, index = z * N + x, tile = sim.tiles[index];
+            const cx = originX + (x - z) * tw * .5, cy = originY + (x + z - N) * th * .5 - tileHeight(tile) * 6;
+            let col = tile.isWater ? '#477f86' : tile.biome === 'woodland' ? '#4f754d' : tile.biome === 'rock' ? '#7e7b68' : tile.biome === 'alpine' ? '#829484' : '#829e68';
+            if ($('#overlaySelect').value === 'biomass') col = `hsl(${105 - (1 - tile.grass) * 43} ${Math.min(68, 34 + tile.grass * 35)}% ${31 + tile.grass * 18}%)`;
+            else if ($('#overlaySelect').value === 'water') col = `hsl(${38 + tile.moisture * 145} 36% ${30 + tile.moisture * 23}%)`;
+            ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(cx, cy - th / 2); ctx.lineTo(cx + tw / 2, cy); ctx.lineTo(cx, cy + th / 2); ctx.lineTo(cx - tw / 2, cy); ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = 'rgba(18,34,25,.2)'; ctx.lineWidth = .55; ctx.stroke();
+            if (tile.canopy > .52 && !tile.isWater) { ctx.fillStyle = '#36583b'; ctx.beginPath(); ctx.arc(cx, cy - 6, Math.min(6, tile.canopy * 6), 0, Math.PI * 2); ctx.fill(); }
+          }
+        }
+        for (const agent of sim.agents) {
+          const x = Math.round(agent.x + N / 2 - .5), z = Math.round(agent.z + N / 2 - .5), cx = originX + (x - z) * tw * .5, cy = originY + (x + z - N) * th * .5 - tileHeight(tileAt(agent.x, agent.z)) * 6;
+          ctx.fillStyle = SPECIES[agent.kind].hex; ctx.beginPath(); ctx.arc(cx, cy - 4, agent.kind === 'bee' ? 2.1 : 3.1, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      function frame(timestamp) {
+        requestAnimationFrame(frame);
+        const dt = Math.min(.05, Math.max(0, (timestamp - (lastFrame || timestamp)) / 1000)); lastFrame = timestamp;
+        if (sim && !sim.paused && !sim.ended) {
+          dayAccumulator += dt * sim.speed;
+          sim.time += dt * sim.speed;
+          const dayLength = .76;
+          let steps = 0;
+          while (dayAccumulator >= dayLength && steps < 8 && sim && !sim.paused && !sim.ended) { dayAccumulator -= dayLength; simulateDay(); steps++; }
+          if (steps >= 8) dayAccumulator = Math.min(dayAccumulator, dayLength);
+          hudAccumulator += dt;
+          if (hudAccumulator > .35) { hudAccumulator = 0; renderHUD(); }
+          saveAccumulator += dt;
+          if (saveAccumulator > 48) { saveAccumulator = 0; saveGame(true); }
+        }
+        if (renderer && scene && camera) {
+          if (sim && !sim.paused && !sim.ended) { updateAgentViews(dt); updateSceneLighting(dt); }
+          else if (controls) controls.update();
+          updateParticles(dt); renderer.render(scene, camera);
+        }
+        else if (fallbackCtx) drawFallback();
+      }
+
+      function buildTileData(tile) { return { ...tile }; }
+      function saveGame(quiet = false) {
+        if (!sim || sim.ended) return;
+        const snapshot = {
+          scenario: sim.scenario, difficulty: sim.difficulty, seed: sim.seed, day: sim.day, speed: sim.speed, weather: sim.weather, weatherDays: sim.weatherDays, season: sim.season,
+          climateDial: sim.climateDial, baselineClimate: sim.baselineClimate, credits: sim.credits, researchPoints: sim.researchPoints, tech: sim.tech, nextId: sim.nextId,
+          generation: sim.generation, history: sim.history, events: sim.events, deaths: sim.deaths, births: sim.births, predation: sim.predation, interventionCount: sim.interventionCount,
+          stressDays: sim.stressDays, emptyDays: sim.emptyDays, apexDays: sim.apexDays, displayClock: sim.displayClock, initialPopulation: sim.initialPopulation,
+          tiles: sim.tiles.map(buildTileData), agents: sim.agents, carrion: sim.carrion, rngState
+        };
+        const ok = storage.set('biosphere-active-v1', snapshot);
+        if (!quiet && !ok) showToast('Browser storage is unavailable; this run could not be saved.');
+        else if (!quiet) showToast('Biosphere saved to this device.');
+        if (!quiet) playSound('tap');
+        updateContinueButton();
+      }
+      function updateContinueButton() {
+        const button = $('#continueBtn');
+        const saved = storage.get('biosphere-active-v1', null);
+        if (button) button.classList.toggle('hidden', !saved || !Array.isArray(saved.tiles) || !Array.isArray(saved.agents));
+      }
+      function loadSavedGame() {
+        const saved = storage.get('biosphere-active-v1', null);
+        if (!saved || !Array.isArray(saved.tiles) || saved.tiles.length !== TILE_COUNT || !Array.isArray(saved.agents)) { showToast('No usable saved biosphere was found.'); return; }
+        try {
+          chosenScenario = saved.scenario in SCENARIOS ? saved.scenario : 'meadow'; chosenDifficulty = saved.difficulty in DIFFICULTIES ? saved.difficulty : 'field';
+          rngState = saved.rngState >>> 0 || 1;
+          sim = {
+            ...saved, paused: false, ended: false, result: null,
+            tiles: saved.tiles.map(tile => ({ ...tile })), agents: saved.agents.map(agent => ({ ...agent, genes: { ...agent.genes } })),
+            carrion: saved.carrion || [], tech: saved.tech || [], history: saved.history || [], events: saved.events || [],
+            speed: [0.5, 1, 2, 4].includes(saved.speed) ? saved.speed : 1,
+            season: clamp(saved.season || 0, 0, 3), weather: WEATHER_INFO[saved.weather] ? saved.weather : 'Clear',
+            credits: Math.max(0, saved.credits || 0), researchPoints: Math.max(0, saved.researchPoints || 0)
+          };
+          lastRunConfig = { scenario: chosenScenario, difficulty: chosenDifficulty, seed: saved.seed };
+          dayAccumulator = 0; $('#titleScreen').classList.add('hidden'); $('#simulationUI').classList.remove('hidden');
+          buildThreeWorld(); resetCamera(); initAudio(); renderHUD(); showToast('Saved biosphere restored.'); playSound('action');
+        } catch (error) { console.warn('Could not restore biosphere.', error); showToast('The saved biosphere could not be restored.'); }
+      }
+      function beginRun(scenario = chosenScenario, difficulty = chosenDifficulty, seed = nextSeed) {
+        chosenScenario = scenario in SCENARIOS ? scenario : 'meadow'; chosenDifficulty = difficulty in DIFFICULTIES ? difficulty : 'field';
+        lastRunConfig = { scenario: chosenScenario, difficulty: chosenDifficulty, seed };
+        storage.remove('biosphere-active-v1'); dayAccumulator = 0; hudAccumulator = 0; saveAccumulator = 0; activeTool = 'inspect'; selectedSpecies = 'fox'; selectedAgentId = null; selectedTileId = null;
+        $('#selectedReadout').classList.remove('visible'); updateSpeciesInspector(null);
+        $$('.tool-btn').forEach(button => button.classList.toggle('active', button.dataset.tool === activeTool));
+        createWorld(seed, chosenScenario);
+        $('#titleScreen').classList.add('hidden'); $('#simulationUI').classList.remove('hidden');
+        initAudio(); playSound('action'); renderHUD();
+        meta.runs = meta.runs || 0; saveMeta();
+        if (!settings.tutorialSeen) openHelp(true);
+        else { addEvent('Field study started', `${SCENARIOS[chosenScenario].name} / ${DIFFICULTIES[chosenDifficulty].name}. Watch the food web, then make one small change.`, 'normal'); }
+      }
+      function returnToTitle() {
+        if (sim && !sim.ended) saveGame(true);
+        sim = sim ? Object.assign(sim, { paused: true }) : null;
+        modalKind = null; $('#modalRoot').classList.add('hidden'); $('#simulationUI').classList.add('hidden'); $('#titleScreen').classList.remove('hidden');
+        updateContinueButton(); updateTitleArchive();
+      }
+      function pauseSimulation() {
+        if (!sim || sim.ended) return;
+        sim.paused = true; renderHUD(); showPauseModal();
+      }
+      function resumeSimulation() {
+        if (!sim || sim.ended) return;
+        sim.paused = false; modalKind = null; $('#modalRoot').classList.add('hidden'); renderHUD();
+      }
+      function showModal(html, kind) {
+        modalKind = kind; $('#modalCard').innerHTML = html; $('#modalRoot').classList.remove('hidden');
+        $$('.modal-card button').forEach(button => button.addEventListener('click', () => playSound('tap')));
+      }
+      function hideModal(restorePause = true) {
+        $('#modalRoot').classList.add('hidden'); modalKind = null;
+        if (sim && restorePause && !sim.ended && !modalWasPaused) sim.paused = false;
+        if (sim) renderHUD();
+      }
+      function showPauseModal() {
+        modalWasPaused = true;
+        const metrics = calculateMetrics();
+        showModal(`<div class="modal-overline">Field station / simulation paused</div><h2 class="modal-title" id="modalTitle">Take a breath.</h2><p class="modal-copy">The habitat is holding at day ${sim.day + 1}. Resume when you are ready to observe the next season.</p><div class="end-stats"><div><small>Eco health</small><strong>${metrics.health}</strong></div><div><small>Animals</small><strong>${metrics.population}</strong></div><div><small>Generation</small><strong>${sim.generation + 1}</strong></div></div><div class="pause-actions"><button class="solid-btn" id="modalResume">Resume simulation</button><button class="ghost-btn" id="modalHelp">Field guide</button><button class="ghost-btn" id="modalSettings">Audio & settings</button><button class="ghost-btn" id="modalSave">Save progress</button></div><div class="modal-actions"><button class="ghost-btn" id="modalTitleBtn">Return to title</button><span class="key-hint">SPACE to pause / resume</span></div>`, 'pause');
+        $('#modalResume').onclick = resumeSimulation;
+        $('#modalHelp').onclick = () => openHelp(false);
+        $('#modalSettings').onclick = () => openSettings(false);
+        $('#modalSave').onclick = () => { saveGame(false); };
+        $('#modalTitleBtn').onclick = returnToTitle;
+      }
+      const HELP_SLIDES = [
+        { title: 'Read the terrain first', text: 'Drag the habitat to orbit, scroll or pinch to zoom. Click land with Look selected to inspect biome, grass, water and nutrients. Click an animal to inspect its age, health and inherited speed.', keys: '<span class="help-key">1</span> Look <span class="help-key">2</span> Seed <span class="help-key">3</span> Water <span class="help-key">Space</span> Pause' },
+        { title: 'Follow the food web', text: 'Rain and seasons drive soil moisture and plant growth. Hares eat grass; foxes hunt hares. Bees pollinate flowers, while scavengers and decomposers recycle carcasses into soil nutrients. Disease moves through close contacts.', keys: 'Try the live population chart and the Habitat chart. Terrain overlays show biomass, soil moisture and fertility.' },
+        { title: 'Intervene, then wait', text: 'Seed or water a stressed refuge, reshape terrain, cull a local population, or release a disease pulse. Stewardship credits are limited. Research unlocks lasting improvements; each choice has ecological tradeoffs.', keys: '<span class="help-key">4</span> Terrain <span class="help-key">5</span> Cull <span class="help-key">6</span> Blight <span class="help-key">H</span> Help' },
+        { title: 'Complete the field study', text: 'The main capstone is to carry a viable food web across 20 generations. The Ice Age scenario adds sustained cold; Apex Surge asks you to contain invasive foxes. Collapse is possible if diversity and habitat fail together.', keys: 'Time controls: 0.5x / 1x / 2x / 4x. Click Save to keep this run on the current device.' }
+      ];
+      function openHelp(firstRun = false) {
+        modalWasPaused = sim ? sim.paused : true;
+        if (sim) sim.paused = true;
+        helpStep = 0; renderHelp(firstRun);
+      }
+      function renderHelp(firstRun = false) {
+        const slide = HELP_SLIDES[helpStep];
+        showModal(`<div class="modal-overline">Field guide / ${String(helpStep + 1).padStart(2, '0')} of ${HELP_SLIDES.length}</div><h2 class="modal-title" id="modalTitle">${slide.title}</h2><div class="help-step"><span class="step-number">Field notes</span><p>${slide.text}</p><div style="margin-top:10px;color:var(--muted);font-size:9px;line-height:1.65">${slide.keys}</div></div><div class="progress-line"><div class="progress-fill" style="width:${(helpStep + 1) / HELP_SLIDES.length * 100}%"></div></div><div class="modal-actions"><button class="ghost-btn" id="helpPrev" ${helpStep === 0 ? 'disabled style="opacity:.4"' : ''}>Back</button><div class="modal-actions-right"><button class="ghost-btn" id="helpClose">${firstRun ? 'Skip guide' : 'Close'}</button><button class="solid-btn" id="helpNext">${helpStep === HELP_SLIDES.length - 1 ? 'Enter habitat' : 'Next'}</button></div></div>`, 'help');
+        $('#helpPrev').onclick = () => { if (helpStep > 0) { helpStep--; renderHelp(firstRun); } };
+        $('#helpNext').onclick = () => { if (helpStep < HELP_SLIDES.length - 1) { helpStep++; renderHelp(firstRun); } else finishHelp(firstRun); };
+        $('#helpClose').onclick = () => finishHelp(firstRun);
+      }
+      function finishHelp(firstRun) {
+        settings.tutorialSeen = true; persistSettings(); hideModal(false);
+        if (sim && firstRun && !sim.ended) { sim.paused = false; addEvent('Field study started', `${SCENARIOS[sim.scenario].name} / ${DIFFICULTIES[sim.difficulty].name}. Watch the food web, then make one small change.`, 'normal'); }
+        else if (sim && !sim.ended && !modalWasPaused) sim.paused = false;
+      }
+      function openSettings(fromTitle = false) {
+        modalWasPaused = !sim || sim.paused;
+        if (sim) sim.paused = true;
+        renderSettings(fromTitle);
+      }
+      function renderSettings(fromTitle = false) {
+        showModal(`<div class="modal-overline">System / preferences</div><h2 class="modal-title" id="modalTitle">Field station settings</h2><p class="modal-copy">All sound is generated locally with Web Audio. Volume and display preferences are saved to this device.</p><div class="setting-row"><div>Ambient and event audio<small>Reactive synthesized habitat tone and action cues</small></div><button id="muteToggle" class="toggle-btn ${settings.muted ? '' : 'on'}" role="switch" aria-checked="${!settings.muted}" aria-label="Toggle audio"></button></div><div class="setting-row"><div>Master volume</div><div class="settings-volume"><input id="volumeSlider" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="Audio volume"><span id="volumeLabel" class="volume-value">${Math.round(settings.volume * 100)}%</span></div></div><div class="setting-row"><div>Render quality<small>Higher quality uses more GPU</small></div><select id="qualitySelect" class="modal-select" style="width:132px"><option value="balanced" ${settings.quality === 'balanced' ? 'selected' : ''}>Balanced</option><option value="crisp" ${settings.quality === 'crisp' ? 'selected' : ''}>Crisp</option></select></div><div class="modal-actions"><button class="ghost-btn" id="settingsClose">${fromTitle ? 'Back to title' : 'Close'}</button><span class="key-hint">Preferences save automatically</span></div>`, 'settings');
+        $('#muteToggle').onclick = () => { settings.muted = !settings.muted; persistSettings(); renderSettings(fromTitle); if (!settings.muted) playSound('tap'); };
+        $('#volumeSlider').addEventListener('input', (event) => { settings.volume = Number(event.target.value); $('#volumeLabel').textContent = `${Math.round(settings.volume * 100)}%`; initAudio(); persistSettings(); });
+        $('#qualitySelect').onchange = (event) => { settings.quality = event.target.value; persistSettings(); if (renderer) { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, settings.quality === 'crisp' ? 2 : 1.4)); renderer.shadowMap.enabled = settings.quality === 'crisp'; if (directionalLight) directionalLight.castShadow = settings.quality === 'crisp'; } };
+        $('#settingsClose').onclick = () => { hideModal(false); if (sim && !modalWasPaused && !sim.ended) sim.paused = false; };
+      }
+      function showEndModal(success, reason, metrics) {
+        const title = success ? (sim.scenario === 'apex' ? 'Predator and prey, in balance.' : 'The wild held on.') : 'The food web went quiet.';
+        const label = success ? 'Field study resolved / success' : 'Field study resolved / collapse';
+        showModal(`<div class="modal-overline">${label}</div><h2 class="modal-title" id="modalTitle">${title}</h2><p class="modal-copy">${reason}</p><div class="end-stats"><div><small>Generations</small><strong>${sim.generation}</strong></div><div><small>Final diversity</small><strong>${metrics.biodiversity} / 5</strong></div><div><small>Eco health</small><strong>${metrics.health}</strong></div><div><small>Births</small><strong>${sim.births}</strong></div><div><small>Predation</small><strong>${sim.predation}</strong></div><div><small>Interventions</small><strong>${sim.interventionCount}</strong></div></div><div class="modal-actions"><button class="ghost-btn" id="endTitle">Return to title</button><div class="modal-actions-right"><button class="solid-btn" id="endRestart">Run it again</button></div></div>`, 'end');
+        $('#endTitle').onclick = returnToTitle;
+        $('#endRestart').onclick = () => { $('#modalRoot').classList.add('hidden'); modalKind = null; beginRun(lastRunConfig.scenario, lastRunConfig.difficulty, lastRunConfig.seed); };
+      }
+
+      function setTool(tool) {
+        if (!['inspect', 'seed', 'water', 'terra', 'cull', 'disease'].includes(tool)) return;
+        activeTool = tool;
+        $$('.tool-btn').forEach(button => button.classList.toggle('active', button.dataset.tool === tool));
+        const help = { inspect: 'Click an animal or tile to inspect.', seed: 'Click open ground to plant a native seed mix. Costs field credits.', water: 'Click a tile to restore local soil moisture.', terra: 'Click a voxel to raise or lower terrain and redirect water.', cull: `Click near ${SPECIES[selectedSpecies].name.toLowerCase()} agents to reduce local pressure.`, disease: 'Click to release a disease pulse. Infection spreads between nearby animals.' };
+        showToast(help[tool]); playSound('tap');
+      }
+      function setSpeed(speed) {
+        if (!sim || ![.5, 1, 2, 4].includes(speed)) return;
+        sim.speed = speed; $$('.speed-btn').forEach(button => button.classList.toggle('active', Number(button.dataset.speed) === speed)); renderHUD(); playSound('tap');
+      }
+      function setSelectedScenario(key) {
+        if (!(key in SCENARIOS)) return;
+        chosenScenario = key; nextSeed = SCENARIOS[key].seed; $('#seedReadout').textContent = `Seed ${nextSeed}`;
+        $$('.scenario-choice').forEach(button => { button.classList.toggle('selected', button.dataset.scenario === key); button.setAttribute('aria-pressed', button.dataset.scenario === key ? 'true' : 'false'); });
+        createWorld(nextSeed, chosenScenario); sim.paused = true; renderHUD();
+        playSound('tap');
+      }
+      function setSelectedDifficulty(key) {
+        if (!(key in DIFFICULTIES)) return;
+        chosenDifficulty = key;
+        $$('.difficulty-btn').forEach(button => button.classList.toggle('selected', button.dataset.difficulty === key));
+        playSound('tap');
+      }
+
+      $$('.scenario-choice').forEach(button => button.addEventListener('click', () => setSelectedScenario(button.dataset.scenario)));
+      $$('.difficulty-btn').forEach(button => button.addEventListener('click', () => setSelectedDifficulty(button.dataset.difficulty)));
+      $('#launchBtn').addEventListener('click', () => beginRun(chosenScenario, chosenDifficulty, nextSeed));
+      $('#continueBtn').addEventListener('click', loadSavedGame);
+      $('#newSeedBtn').addEventListener('click', () => { nextSeed = Math.floor(Math.random() * 900000) + 100000; $('#seedReadout').textContent = `Seed ${nextSeed}`; createWorld(nextSeed, chosenScenario); sim.paused = true; renderHUD(); showToast(`New deterministic world seed: ${nextSeed}.`); playSound('tap'); });
+      $('#titleHelpBtn').addEventListener('click', () => { modalWasPaused = true; openHelp(false); });
+      $('#titleSettingsBtn').addEventListener('click', () => openSettings(true));
+      $('#settingsBtn').addEventListener('click', () => openSettings(false));
+      $('#pauseBtn').addEventListener('click', () => { if (sim && sim.paused) resumeSimulation(); else pauseSimulation(); });
+      $('#saveBtn').addEventListener('click', () => saveGame(false));
+      $('#audioToggle').addEventListener('click', () => { settings.muted = !settings.muted; initAudio(); persistSettings(); $('#audioToggle').textContent = settings.muted ? 'M' : 'S'; $('#audioToggle').setAttribute('aria-label', settings.muted ? 'Unmute audio' : 'Mute audio'); showToast(settings.muted ? 'Audio muted.' : 'Ambient audio enabled.'); if (!settings.muted) playSound('tap'); });
+      $('#climateSlider').addEventListener('input', (event) => { if (!sim) return; sim.climateDial = Number(event.target.value); $('#climateValue').textContent = `${sim.climateDial > 0 ? '+' : ''}${sim.climateDial.toFixed(1)} C`; });
+      $('#climateSlider').addEventListener('change', () => { if (sim) { addEvent('Climate dial changed', `Global temperature offset is now ${sim.climateDial > 0 ? '+' : ''}${sim.climateDial.toFixed(1)} C. Plant growth and water stress will respond.`, 'alert'); renderHUD(); saveGame(true); } });
+      $('#overlaySelect').addEventListener('change', () => { refreshTerrainColors(); if (sim) drawFallback(); });
+      $$('.tool-btn').forEach(button => button.addEventListener('click', () => setTool(button.dataset.tool)));
+      $$('.speed-btn').forEach(button => button.addEventListener('click', () => setSpeed(Number(button.dataset.speed))));
+      $('#speciesList').addEventListener('click', (event) => { const button = event.target.closest('[data-species]'); if (button) selectSpecies(button.dataset.species); });
+      $('#researchList').addEventListener('click', (event) => { const button = event.target.closest('[data-tech]'); if (button && !button.disabled) buyTech(button.dataset.tech); });
+      $$('.chart-tab').forEach(button => button.addEventListener('click', () => { chartMode = button.dataset.chart; $$('.chart-tab').forEach(tab => tab.classList.toggle('active', tab === button)); $('#chartLegend').innerHTML = chartMode === 'population' ? '<span><i class="legend-dot" style="background:#c9ee82"></i>Hare</span><span><i class="legend-dot" style="background:#ff9c70"></i>Fox</span><span><i class="legend-dot" style="background:#8de1d0"></i>Bee</span>' : '<span><i class="legend-dot" style="background:#c9ee82"></i>Biomass</span><span><i class="legend-dot" style="background:#8de1d0"></i>Eco health</span>'; drawChart(); }));
+      $('#modalRoot').addEventListener('click', (event) => { if (event.target === $('#modalRoot') && modalKind !== 'end') { if (modalKind === 'pause') resumeSimulation(); else hideModal(true); } });
+      window.addEventListener('keydown', (event) => {
+        const target = event.target;
+        if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+        if (event.key === 'Escape') { if (modalKind === 'pause') resumeSimulation(); else if (modalKind && modalKind !== 'end') hideModal(true); else if (sim && !sim.paused && !sim.ended) pauseSimulation(); return; }
+        if ((event.code === 'Space' || event.key.toLowerCase() === 'p') && sim && !sim.ended) { event.preventDefault(); if (modalKind === 'pause') resumeSimulation(); else if (modalKind) hideModal(true); else if (sim.paused) resumeSimulation(); else pauseSimulation(); return; }
+        if (event.key.toLowerCase() === 'h') { if (modalKind) return; if (sim) openHelp(false); else { modalWasPaused = true; openHelp(false); } return; }
+        if (event.key === '[' && sim) setSpeed(Math.max(.5, sim.speed / 2));
+        if (event.key === ']' && sim) setSpeed(Math.min(4, sim.speed * 2));
+        const toolMap = { '1': 'inspect', '2': 'seed', '3': 'water', '4': 'terra', '5': 'cull', '6': 'disease' };
+        if (toolMap[event.key] && sim && !modalKind) setTool(toolMap[event.key]);
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && sim && !sim.paused && !sim.ended) { sim.paused = true; saveGame(true); renderHUD(); showToast('Paused while this tab was away.'); }
+      });
+      window.addEventListener('pagehide', () => { if (sim && !sim.ended) saveGame(true); });
+
+      initRenderer();
+      updateContinueButton(); updateTitleArchive();
+      $('#audioToggle').textContent = settings.muted ? 'M' : 'S';
+      $('#audioToggle').setAttribute('aria-label', settings.muted ? 'Unmute audio' : 'Mute audio');
+      createWorld(nextSeed, 'meadow');
+      sim.paused = true;
+      renderHUD();
+      $('#simulationUI').classList.add('hidden');
+      $('#titleScreen').classList.remove('hidden');
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

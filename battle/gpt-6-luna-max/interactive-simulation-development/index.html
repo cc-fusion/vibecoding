@@ -1,0 +1,2697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080d11">
+  <title>Northstar | Reactor Operations Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080d11;
+      --panel: #0e161b;
+      --panel-raised: #121c21;
+      --panel-soft: #0b1216;
+      --line: rgba(157, 185, 182, .14);
+      --line-strong: rgba(157, 185, 182, .27);
+      --text: #dce8e4;
+      --muted: #80918e;
+      --muted-2: #566763;
+      --mint: #8de0b6;
+      --cyan: #72d9e8;
+      --amber: #ffc878;
+      --red: #ff6e72;
+      --blue: #86b9ff;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      font-family: var(--sans);
+      font-size: 13px;
+      overflow-x: hidden;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--mint);
+      outline-offset: 3px;
+    }
+    .hidden { display: none !important; }
+    .mono { font-family: var(--mono); }
+    .screen { min-height: 100vh; }
+    .title-screen {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 100svh;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(ellipse at 73% 43%, rgba(23, 77, 82, .28), transparent 37%),
+        radial-gradient(ellipse at 50% 100%, rgba(24, 53, 47, .18), transparent 55%),
+        #080d11;
+    }
+    #heroCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -2;
+      opacity: .8;
+    }
+    .hero-shade {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: linear-gradient(90deg, rgba(8,13,17,.97) 0%, rgba(8,13,17,.91) 34%, rgba(8,13,17,.30) 75%, rgba(8,13,17,.34) 100%), linear-gradient(0deg, #080d11 0%, transparent 30%, rgba(8,13,17,.22) 100%);
+    }
+    .title-header, .sim-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 72px;
+      padding: 0 clamp(20px, 4vw, 64px);
+      border-bottom: 1px solid rgba(166, 193, 186, .11);
+    }
+    .brand-lockup { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand-symbol {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      color: var(--mint);
+      border: 1px solid rgba(141,224,182,.44);
+      border-radius: 50%;
+      box-shadow: 0 0 18px rgba(141,224,182,.08), inset 0 0 15px rgba(141,224,182,.08);
+    }
+    .brand-symbol svg { width: 21px; height: 21px; }
+    .brand-name { font: 700 11px/1.25 var(--mono); letter-spacing: .14em; color: #d2e1db; }
+    .brand-sub { margin-top: 4px; font: 9px/1 var(--mono); letter-spacing: .11em; color: var(--muted); }
+    .header-tools { display: flex; align-items: center; gap: 8px; }
+    .quiet-button, .header-button, .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 12px;
+      color: #a6b6b2;
+      background: rgba(11,18,22,.6);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: color .18s ease, border-color .18s ease, background .18s ease, transform .18s ease;
+      font: 10px/1 var(--mono);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+    .quiet-button:hover, .header-button:hover, .icon-button:hover { color: var(--text); border-color: var(--line-strong); background: #172329; }
+    .quiet-button:active, .header-button:active, .icon-button:active { transform: translateY(1px); }
+    .quiet-button:disabled, .header-button:disabled, .icon-button:disabled { opacity: .38; cursor: not-allowed; }
+    .hero-content {
+      width: min(700px, 100%);
+      padding: clamp(45px, 8vh, 96px) clamp(20px, 7vw, 104px) 42px;
+      animation: rise-in .72s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--mint);
+      font: 10px/1.3 var(--mono);
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 24px; height: 1px; background: var(--mint); box-shadow: 0 0 10px rgba(141,224,182,.7); }
+    .hero-title {
+      margin: 18px 0 0;
+      max-width: 720px;
+      color: #eef4ef;
+      font-size: clamp(42px, 7vw, 92px);
+      line-height: .91;
+      font-weight: 740;
+      letter-spacing: -.07em;
+      text-transform: uppercase;
+    }
+    .hero-title .brand-hero { color: var(--mint); display: block; font-size: .82em; letter-spacing: -.055em; }
+    .hero-copy { max-width: 435px; margin: 22px 0 0; color: #a2b3ae; font-size: 14px; line-height: 1.65; }
+    .hero-copy strong { color: #e2e9e4; font-weight: 550; }
+    .mission-select { width: min(685px, calc(100% - 40px)); margin: 0 clamp(20px, 7vw, 104px) 42px; }
+    .section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font: 9px/1.2 var(--mono);
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    .scenario-options { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); }
+    .scenario-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      min-height: 76px;
+      padding: 15px 13px 14px 2px;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-right: 1px solid var(--line);
+      cursor: pointer;
+      position: relative;
+      transition: background .2s ease, color .2s ease;
+    }
+    .scenario-option:last-child { border-right: 0; padding-left: 13px; }
+    .scenario-option:nth-child(2) { padding-left: 13px; }
+    .scenario-option:hover { background: rgba(141,224,182,.035); }
+    .scenario-option::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: transparent; transition: background .2s ease; }
+    .scenario-option.is-active::after { background: var(--mint); box-shadow: 0 0 11px rgba(141,224,182,.55); }
+    .scenario-number { padding-top: 1px; color: #637671; font: 10px/1.4 var(--mono); }
+    .scenario-option.is-active .scenario-number { color: var(--mint); }
+    .scenario-option strong { display: block; color: #cfdbd5; font: 600 10px/1.45 var(--mono); letter-spacing: .04em; }
+    .scenario-option small { display: block; margin-top: 5px; color: #788985; font: 10px/1.45 var(--sans); }
+    .difficulty-row { display: flex; align-items: center; gap: 8px; margin-top: 17px; }
+    .difficulty-label { margin-right: 5px; color: var(--muted); font: 9px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .difficulty-choice {
+      padding: 7px 10px;
+      color: #82938e;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      font: 9px/1 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .18s ease;
+    }
+    .difficulty-choice:hover { color: #d8e4de; border-color: var(--line-strong); }
+    .difficulty-choice.is-active { color: var(--mint); border-color: rgba(141,224,182,.48); background: rgba(141,224,182,.075); }
+    .launch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
+    .launch-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      min-width: 204px;
+      min-height: 46px;
+      padding: 0 18px;
+      color: #07110e;
+      background: var(--mint);
+      border: 1px solid var(--mint);
+      border-radius: 2px;
+      box-shadow: 0 0 25px rgba(141,224,182,.12);
+      cursor: pointer;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      transition: background .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+    .launch-button:hover { background: #b0f0cb; box-shadow: 0 0 32px rgba(141,224,182,.24); transform: translateY(-1px); }
+    .launch-button svg { width: 13px; height: 13px; }
+    .resume-button { min-height: 44px; padding: 0 14px; }
+    .profile-line { display: flex; align-items: center; gap: 18px; margin-top: 26px; color: #758681; font: 9px/1.3 var(--mono); letter-spacing: .05em; }
+    .profile-line strong { color: #afc0b9; font-weight: 500; }
+    .profile-line .profile-xp { color: var(--amber); }
+    .title-foot { margin-top: auto; padding: 14px clamp(20px, 4vw, 64px) 18px; color: #53635f; border-top: 1px solid rgba(166,193,186,.09); font: 9px/1.4 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+    .title-foot-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .foot-status { display: flex; align-items: center; gap: 8px; }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px rgba(141,224,182,.7); animation: pulse-dot 2.2s ease-in-out infinite; }
+    @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse-dot { 50% { opacity: .35; box-shadow: 0 0 2px rgba(141,224,182,.4); } }
+
+    /* Simulation workstation */
+    .sim-screen { min-height: 100vh; background: radial-gradient(ellipse at 50% -40%, rgba(36,72,70,.16), transparent 50%), var(--bg); }
+    .sim-topbar { min-height: 60px; padding: 0 22px; background: rgba(9,15,19,.92); }
+    .sim-topbar .brand-symbol { width: 28px; height: 28px; }
+    .sim-topbar .brand-symbol svg { width: 18px; height: 18px; }
+    .run-title-block { display: flex; flex-direction: column; gap: 4px; min-width: 118px; margin-left: 8px; padding-left: 15px; border-left: 1px solid var(--line); }
+    .run-title-block strong { color: #dbe5e0; font: 600 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .run-title-block span { color: var(--muted); font: 9px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .topbar-left { display: flex; align-items: center; gap: 2px; min-width: 0; }
+    .topbar-right { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+    .clock-wrap { min-width: 80px; padding: 0 12px; text-align: right; border-left: 1px solid var(--line); }
+    .clock-wrap small { display: block; color: var(--muted); font: 8px/1 var(--mono); letter-spacing: .13em; }
+    .clock-wrap strong { display: block; margin-top: 4px; color: var(--mint); font: 15px/1 var(--mono); letter-spacing: .03em; }
+    .header-button { min-height: 30px; padding: 0 9px; font-size: 9px; }
+    .header-button.primary { color: var(--mint); border-color: rgba(141,224,182,.3); }
+    .header-button.active { color: var(--amber); border-color: rgba(255,200,120,.36); }
+    .speed-control { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 3px; }
+    .speed-choice { min-width: 31px; height: 22px; color: #7f918b; border: 0; background: transparent; border-radius: 2px; cursor: pointer; font: 9px/1 var(--mono); }
+    .speed-choice:hover { color: var(--text); }
+    .speed-choice.is-active { color: #08100d; background: var(--mint); }
+    .sim-body { width: min(1780px, 100%); margin: 0 auto; padding: 16px 17px 25px; }
+    .coach-banner {
+      display: grid;
+      grid-template-columns: 33px minmax(0,1fr) auto;
+      align-items: center;
+      gap: 13px;
+      margin-bottom: 13px;
+      padding: 11px 14px;
+      background: linear-gradient(90deg, rgba(18,42,37,.97), rgba(14,25,27,.94));
+      border: 1px solid rgba(141,224,182,.22);
+      border-left: 3px solid var(--mint);
+      animation: rise-in .34s ease both;
+    }
+    .coach-mark { display: grid; place-items: center; width: 30px; height: 30px; color: var(--mint); border: 1px solid rgba(141,224,182,.24); border-radius: 50%; font: 11px var(--mono); }
+    .coach-copy strong { display: block; margin-bottom: 3px; color: #d9e9e0; font: 600 10px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .coach-copy span { display: block; color: #92a59e; font-size: 11px; line-height: 1.45; }
+    .coach-actions { display: flex; align-items: center; gap: 7px; }
+    .coach-actions .quiet-button { min-height: 29px; font-size: 8px; }
+    .coach-target { position: relative; z-index: 1; outline: 1px solid var(--mint) !important; outline-offset: 3px !important; box-shadow: 0 0 0 5px rgba(141,224,182,.08); }
+    .workspace-grid { display: grid; grid-template-columns: minmax(235px, 274px) minmax(430px, 1fr) minmax(250px, 292px); gap: 12px; align-items: start; }
+    .rail, .center-stack { min-width: 0; }
+    .panel {
+      background: linear-gradient(145deg, rgba(16,25,30,.98), rgba(11,18,22,.98));
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+    }
+    .panel + .panel { margin-top: 11px; }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-head h2, .panel-head h3 { margin: 0; color: #b9c9c3; font: 600 9px/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+    .panel-kicker { color: #62736d; font: 8px/1.2 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .mission-summary { padding: 12px 13px 13px; }
+    .mission-summary .mission-code { color: var(--mint); font: 9px/1.2 var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+    .mission-summary h2 { margin: 6px 0 6px; color: #e1eae4; font-size: 15px; line-height: 1.25; font-weight: 600; letter-spacing: -.02em; }
+    .mission-summary p { margin: 0; color: #84958f; font-size: 10px; line-height: 1.5; }
+    .objective-track { margin-top: 12px; }
+    .objective-meta { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; color: #81928c; font: 8px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .track-line { height: 3px; overflow: hidden; background: #263237; }
+    .track-line span { display: block; width: 0%; height: 100%; background: var(--mint); box-shadow: 0 0 8px rgba(141,224,182,.6); transition: width .25s ease; }
+    .control-panel { padding-bottom: 11px; }
+    .control-list { padding: 3px 13px 0; }
+    .control-row { padding: 11px 0 10px; border-bottom: 1px solid rgba(157,185,182,.08); transition: background .2s ease; }
+    .control-row:last-child { border-bottom: 0; }
+    .control-label-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .control-label-line label { color: #bac8c2; font: 9px/1.2 var(--mono); letter-spacing: .065em; text-transform: uppercase; }
+    .control-value { color: var(--mint); font: 10px/1.2 var(--mono); white-space: nowrap; }
+    .control-secondary { display: flex; justify-content: space-between; gap: 5px; margin-top: 4px; color: #61736d; font: 8px/1.2 var(--mono); }
+    input[type="range"] {
+      width: 100%;
+      height: 14px;
+      margin: 6px 0 0;
+      background: transparent;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: ew-resize;
+    }
+    input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, rgba(141,224,182,.65), rgba(120,143,137,.23)); border-radius: 5px; }
+    input[type="range"]::-moz-range-track { height: 3px; background: linear-gradient(90deg, rgba(141,224,182,.65), rgba(120,143,137,.23)); border-radius: 5px; }
+    input[type="range"]::-webkit-slider-thumb { width: 11px; height: 11px; margin-top: -4px; appearance: none; -webkit-appearance: none; background: #c5f2d6; border: 2px solid #0d1917; border-radius: 50%; box-shadow: 0 0 0 1px var(--mint), 0 0 9px rgba(141,224,182,.2); }
+    input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; background: #c5f2d6; border: 2px solid #0d1917; border-radius: 50%; box-shadow: 0 0 0 1px var(--mint), 0 0 9px rgba(141,224,182,.2); }
+    input[type="range"]:disabled { opacity: .36; cursor: not-allowed; }
+    .control-hint { margin: 0 13px; color: #758780; font-size: 9px; line-height: 1.45; }
+    .ops-actions { padding: 12px 13px 0; border-top: 1px solid var(--line); }
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .action-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 5px 8px;
+      color: #a9bbb4;
+      background: #101a1f;
+      border: 1px solid rgba(157,185,182,.17);
+      border-radius: 2px;
+      cursor: pointer;
+      text-align: center;
+      font: 8px/1.2 var(--mono);
+      letter-spacing: .055em;
+      text-transform: uppercase;
+      transition: all .18s ease;
+    }
+    .action-button:hover:not(:disabled) { color: #e6efe9; border-color: rgba(141,224,182,.42); background: #17252a; }
+    .action-button:disabled { opacity: .36; cursor: not-allowed; }
+    .action-button.danger { color: #ff9b9c; border-color: rgba(255,110,114,.42); background: rgba(85,29,31,.2); }
+    .action-button.danger:hover:not(:disabled) { color: #fff; background: rgba(147,39,44,.45); border-color: var(--red); }
+    .action-button.accent { color: var(--mint); border-color: rgba(141,224,182,.32); }
+    .action-button.full { width: 100%; margin-top: 6px; }
+    .fault-tools { padding: 12px 13px 13px; border-top: 1px solid var(--line); }
+    .fault-tools label { display: block; margin-bottom: 6px; color: #74857f; font: 8px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .fault-tools select {
+      width: 100%;
+      height: 31px;
+      padding: 0 8px;
+      color: #b7c6c0;
+      background: #0a1115;
+      border: 1px solid var(--line-strong);
+      border-radius: 2px;
+      font: 9px var(--mono);
+    }
+    .fault-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 7px; }
+    .repair-status { min-height: 12px; margin-top: 7px; color: #778a83; font: 8px/1.4 var(--mono); }
+    .center-stack > .panel { margin-bottom: 11px; }
+    .readout-strip { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border-bottom: 1px solid var(--line); }
+    .readout { min-width: 0; padding: 11px 12px 10px; border-right: 1px solid var(--line); }
+    .readout:last-child { border-right: 0; }
+    .readout label { display: block; overflow: hidden; color: #74857f; font: 8px/1.2 var(--mono); letter-spacing: .09em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+    .readout strong { display: block; margin-top: 6px; color: #dbe7e0; font: 16px/1 var(--mono); letter-spacing: -.04em; white-space: nowrap; }
+    .readout strong small { color: #74867e; font: 8px var(--mono); letter-spacing: 0; }
+    .readout .readout-foot { display: block; margin-top: 5px; color: #657770; font: 8px/1.2 var(--mono); white-space: nowrap; }
+    .readout.good strong { color: var(--mint); }
+    .readout.warn strong { color: var(--amber); }
+    .readout.danger strong { color: var(--red); }
+    .synoptic-panel { overflow: hidden; }
+    .synoptic-panel .panel-head { min-height: 39px; }
+    .synoptic-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 11px; color: #71827c; font: 8px/1.2 var(--mono); }
+    .legend-key { display: inline-flex; align-items: center; gap: 5px; }
+    .legend-swatch { width: 13px; height: 2px; background: var(--cyan); }
+    .legend-swatch.steam { background: var(--amber); }
+    .legend-swatch.grid { background: var(--mint); }
+    .canvas-frame { position: relative; overflow-x: auto; padding: 0 5px; background: radial-gradient(ellipse at 49% 52%, rgba(31,65,64,.18), transparent 55%), #0b1317; scrollbar-color: #30413d transparent; scrollbar-width: thin; }
+    #processCanvas { display: block; width: 100%; height: clamp(245px, 29vw, 360px); cursor: crosshair; }
+    .diagram-hint { min-height: 31px; display: flex; align-items: center; padding: 7px 13px; color: #6b7c76; background: rgba(10,17,20,.8); border-top: 1px solid rgba(157,185,182,.08); font: 8px/1.4 var(--mono); letter-spacing: .025em; }
+    .diagram-hint strong { margin-right: 7px; color: #93aaa0; font-weight: 500; text-transform: uppercase; }
+    .chart-panel { overflow: hidden; }
+    .chart-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .chart-caption { color: #74857f; font: 8px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .chart-key { display: flex; gap: 11px; color: #81918b; font: 8px/1 var(--mono); }
+    .chart-key span { display: inline-flex; align-items: center; gap: 4px; }
+    .chart-key i { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: var(--cyan); }
+    .chart-key .temp-dot { background: var(--amber); }
+    #trendCanvas { display: block; width: 100%; height: 151px; }
+    .chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 13px 10px; color: #63746e; font: 8px/1.3 var(--mono); }
+    .chart-footer strong { color: #9eafa8; font-weight: 500; }
+    .log-panel { overflow: hidden; }
+    .event-log { min-height: 85px; max-height: 136px; overflow-y: auto; padding: 5px 12px 8px; scrollbar-color: #31433e transparent; scrollbar-width: thin; }
+    .event-entry { display: grid; grid-template-columns: 54px minmax(0,1fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(157,185,182,.06); color: #93a49d; font-size: 9px; line-height: 1.35; }
+    .event-entry:last-child { border-bottom: 0; }
+    .event-time { color: #60716b; font: 8px/1.5 var(--mono); }
+    .event-entry.is-warning .event-message { color: var(--amber); }
+    .event-entry.is-critical .event-message { color: #ff9294; }
+    .telemetry-panel { overflow: hidden; }
+    .plant-state { display: flex; align-items: center; gap: 10px; padding: 12px 13px; border-bottom: 1px solid var(--line); }
+    .state-indicator { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; color: var(--mint); border: 1px solid rgba(141,224,182,.35); border-radius: 50%; font: 10px var(--mono); box-shadow: inset 0 0 14px rgba(141,224,182,.07); }
+    .state-indicator.is-warning { color: var(--amber); border-color: rgba(255,200,120,.4); }
+    .state-indicator.is-critical { color: var(--red); border-color: rgba(255,110,114,.58); box-shadow: 0 0 14px rgba(255,110,114,.12), inset 0 0 14px rgba(255,110,114,.1); animation: alarm-pulse 1.1s ease-in-out infinite; }
+    .state-indicator.is-shutdown { color: var(--blue); border-color: rgba(134,185,255,.38); }
+    @keyframes alarm-pulse { 50% { opacity: .55; } }
+    .plant-state-copy small { display: block; color: #6f817a; font: 8px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .plant-state-copy strong { display: block; margin-top: 4px; color: #d7e4de; font: 600 10px/1.2 var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+    .state-description { margin-left: auto; max-width: 90px; color: #72837d; text-align: right; font: 8px/1.4 var(--mono); }
+    .meter-list { padding: 3px 13px 9px; }
+    .meter-row { padding: 9px 0 2px; }
+    .meter-label-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: #83938c; font: 8px/1.2 var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+    .meter-label-line strong { color: #cbd8d1; font: 9px/1 var(--mono); letter-spacing: 0; white-space: nowrap; }
+    .meter-track { height: 3px; margin-top: 6px; overflow: hidden; background: #273238; }
+    .meter-track span { display: block; width: 0; height: 100%; background: var(--mint); box-shadow: 0 0 8px rgba(141,224,182,.35); transition: width .3s ease, background .25s ease; }
+    .alarm-panel { overflow: hidden; }
+    .alarm-count { color: var(--mint); font: 9px var(--mono); }
+    .alarm-count.has-alarm { color: var(--amber); }
+    .alarm-count.has-critical { color: var(--red); }
+    .alarm-list { padding: 4px 12px 10px; }
+    .alarm-empty { display: flex; align-items: center; gap: 8px; min-height: 38px; color: #74857e; font-size: 9px; }
+    .alarm-empty::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--mint); }
+    .alarm-entry { display: grid; grid-template-columns: 7px minmax(0,1fr); gap: 8px; padding: 8px 0; color: #9aaba4; border-bottom: 1px solid rgba(157,185,182,.06); font: 8px/1.4 var(--mono); }
+    .alarm-entry:last-child { border-bottom: 0; }
+    .alarm-entry i { width: 6px; height: 6px; margin-top: 2px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 6px rgba(255,200,120,.42); }
+    .alarm-entry.critical { color: #ff9a9c; }
+    .alarm-entry.critical i { background: var(--red); box-shadow: 0 0 7px rgba(255,110,114,.55); }
+    .plant-services { padding: 0 13px 12px; border-top: 1px solid var(--line); }
+    .service-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; color: #72837d; font: 8px/1.2 var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+    .service-state { color: var(--mint); }
+    .service-state.is-off { color: #788781; }
+    .service-state.is-warning { color: var(--amber); }
+    .ledger-strip { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 9px 12px; color: #62746e; background: rgba(12,19,23,.72); border: 1px solid rgba(157,185,182,.09); font: 8px/1.3 var(--mono); }
+    .ledger-strip strong { color: #a3b3ac; font-weight: 500; }
+    .ledger-left, .ledger-right { display: flex; flex-wrap: wrap; align-items: center; gap: 13px; }
+    .status-live { display: inline-flex; align-items: center; gap: 6px; }
+    .status-live::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--mint); }
+    .toast {
+      position: fixed;
+      z-index: 20;
+      left: 50%;
+      bottom: 23px;
+      transform: translate(-50%, 12px);
+      max-width: min(520px, calc(100vw - 32px));
+      padding: 10px 15px;
+      color: #d9e6df;
+      background: rgba(18,31,34,.97);
+      border: 1px solid rgba(141,224,182,.38);
+      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+      font: 9px/1.4 var(--mono);
+      letter-spacing: .045em;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+    .toast.is-warning { border-color: rgba(255,200,120,.45); }
+    .toast.is-critical { border-color: rgba(255,110,114,.6); color: #ffd9d9; }
+
+    /* Modals and reports */
+    .modal-wrap {
+      position: fixed;
+      z-index: 30;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(3,7,9,.77);
+      backdrop-filter: blur(8px);
+      animation: fade-in .18s ease both;
+    }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      width: min(610px, 100%);
+      max-height: min(86vh, 820px);
+      overflow: auto;
+      background: linear-gradient(145deg, #132026, #0c1418);
+      border: 1px solid rgba(157,185,182,.23);
+      box-shadow: 0 24px 90px rgba(0,0,0,.55);
+      animation: modal-in .24s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .modal.modal-wide { width: min(760px, 100%); }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 19px 21px 16px; border-bottom: 1px solid var(--line); }
+    .modal-eyebrow { color: var(--mint); font: 9px/1.2 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    .modal-head h2 { margin: 7px 0 0; color: #e2ece6; font-size: 21px; line-height: 1.15; font-weight: 600; letter-spacing: -.04em; }
+    .modal-head p { margin: 7px 0 0; color: #83948e; font-size: 11px; line-height: 1.55; }
+    .modal-close { width: 28px; height: 28px; flex: 0 0 auto; color: #81928c; background: transparent; border: 1px solid var(--line); border-radius: 2px; cursor: pointer; font: 14px/1 var(--mono); }
+    .modal-close:hover { color: var(--text); border-color: var(--line-strong); }
+    .modal-body { padding: 17px 21px 20px; }
+    .help-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 22px; }
+    .help-section { padding: 12px 0; border-bottom: 1px solid rgba(157,185,182,.09); }
+    .help-section h3 { margin: 0 0 6px; color: #c8d7d0; font: 600 9px/1.3 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .help-section p { margin: 0; color: #859790; font-size: 10px; line-height: 1.6; }
+    .keycaps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    .keycap { padding: 5px 7px; color: #9caca5; border: 1px solid var(--line); border-radius: 2px; font: 8px var(--mono); }
+    .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 0 21px 19px; }
+    .modal-actions .launch-button { min-width: 140px; min-height: 36px; font-size: 9px; }
+    .modal-actions .quiet-button { min-height: 36px; }
+    .pause-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; padding: 18px 21px 8px; }
+    .pause-option { min-height: 72px; padding: 12px; text-align: left; background: rgba(10,17,21,.58); border: 1px solid var(--line); cursor: pointer; transition: border-color .18s ease, background .18s ease; }
+    .pause-option:hover { background: rgba(141,224,182,.055); border-color: rgba(141,224,182,.35); }
+    .pause-option strong { display: block; color: #cddbd4; font: 600 9px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .pause-option span { display: block; margin-top: 6px; color: #778982; font-size: 9px; line-height: 1.4; }
+    .settings-line { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(180px, 1.6fr) auto; align-items: center; gap: 14px; padding: 13px 0; border-bottom: 1px solid rgba(157,185,182,.09); }
+    .settings-line:last-child { border-bottom: 0; }
+    .settings-line label { color: #b5c5bd; font: 9px/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .settings-line small { color: #74857f; font-size: 9px; }
+    .settings-line input[type="range"] { margin: 0; }
+    .settings-check { width: 16px; height: 16px; accent-color: var(--mint); cursor: pointer; }
+    .cert-list { display: grid; gap: 8px; }
+    .cert-row { display: grid; grid-template-columns: 35px minmax(0,1fr) auto; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--line); background: rgba(7,13,16,.36); }
+    .cert-seal { display: grid; place-items: center; width: 32px; height: 32px; color: var(--amber); border: 1px solid rgba(255,200,120,.27); border-radius: 50%; font: 9px var(--mono); }
+    .cert-row.is-unlocked .cert-seal { color: var(--mint); border-color: rgba(141,224,182,.42); }
+    .cert-row strong { display: block; color: #cddbd4; font: 600 9px/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .cert-row p { margin: 5px 0 0; color: #7e9088; font-size: 9px; line-height: 1.45; }
+    .cert-buy { min-width: 78px; min-height: 29px; padding: 0 9px; color: var(--mint); background: transparent; border: 1px solid rgba(141,224,182,.34); border-radius: 2px; cursor: pointer; font: 8px var(--mono); text-transform: uppercase; }
+    .cert-buy:disabled { color: #62716d; border-color: var(--line); cursor: not-allowed; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+    .summary-cell { min-height: 71px; padding: 12px; background: #101a1f; }
+    .summary-cell small { display: block; color: #72847d; font: 8px/1.2 var(--mono); letter-spacing: .09em; text-transform: uppercase; }
+    .summary-cell strong { display: block; margin-top: 8px; color: #dae7df; font: 17px/1 var(--mono); }
+    .summary-note { margin: 14px 0 0; padding: 10px 12px; color: #9aaba4; background: rgba(141,224,182,.045); border-left: 2px solid var(--mint); font-size: 10px; line-height: 1.55; }
+    .report-chart { margin-top: 14px; padding: 8px 10px 3px; border: 1px solid var(--line); }
+    .report-chart canvas { width: 100%; height: 125px; display: block; }
+    .end-mark { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--mint); font: 9px/1.2 var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+    .end-mark::before { content: ""; width: 26px; height: 1px; background: currentColor; }
+    .end-mark.is-failure { color: var(--red); }
+    .modal-end-title { margin: 0; color: #e6ede8; font-size: clamp(23px, 5vw, 34px); line-height: 1.05; font-weight: 620; letter-spacing: -.05em; }
+    .modal-end-copy { margin: 8px 0 17px; color: #84958e; font-size: 11px; line-height: 1.6; }
+    .end-score { display: flex; align-items: baseline; gap: 7px; color: var(--mint); font: 30px/1 var(--mono); }
+    .end-score small { color: #70827b; font: 8px var(--mono); letter-spacing: .12em; }
+
+    @media (max-width: 1200px) {
+      .workspace-grid { grid-template-columns: minmax(220px, 260px) minmax(0,1fr); }
+      .telemetry-rail { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+      .telemetry-rail .panel + .panel { margin-top: 0; }
+      .telemetry-panel { grid-row: span 2; }
+      .alarm-panel { min-height: 100%; }
+    }
+    @media (max-width: 820px) {
+      .title-header { min-height: 62px; padding: 0 18px; }
+      .hero-content { padding: 52px 22px 30px; }
+      .hero-title { font-size: clamp(43px, 12vw, 78px); }
+      .hero-copy { max-width: 380px; font-size: 12px; }
+      .mission-select { width: calc(100% - 44px); margin: 0 22px 33px; }
+      .scenario-option { min-height: 82px; padding-right: 7px; gap: 7px; }
+      .scenario-option:nth-child(2), .scenario-option:last-child { padding-left: 8px; }
+      .scenario-option strong { font-size: 8px; }
+      .scenario-option small { font-size: 9px; }
+      .scenario-number { font-size: 9px; }
+      .profile-line { flex-wrap: wrap; gap: 9px 15px; }
+      .sim-topbar { padding: 8px 12px; align-items: flex-start; }
+      .topbar-left { padding-top: 4px; }
+      .run-title-block { display: none; }
+      .topbar-right { gap: 5px; }
+      .header-button { min-width: 30px; padding: 0 7px; }
+      .topbar-right .button-label { display: none; }
+      .clock-wrap { padding: 0 8px; }
+      .sim-body { padding: 10px; }
+      .workspace-grid { grid-template-columns: minmax(205px, .82fr) minmax(0, 1.18fr); gap: 9px; }
+      .readout { padding-left: 8px; padding-right: 8px; }
+      .readout strong { font-size: 13px; }
+      .synoptic-legend { gap: 7px; }
+      #processCanvas { width: 700px; max-width: none; height: 273px; }
+      .telemetry-rail { gap: 9px; }
+      .coach-banner { grid-template-columns: 27px minmax(0,1fr); }
+      .coach-actions { grid-column: 2; justify-content: flex-start; }
+      .coach-mark { width: 26px; height: 26px; }
+    }
+    @media (max-width: 600px) {
+      .title-screen { min-height: 100svh; }
+      .title-header { min-height: 57px; }
+      .brand-sub { font-size: 8px; }
+      .title-header .quiet-button { min-height: 30px; padding: 0 8px; font-size: 8px; }
+      .hero-content { padding-top: 45px; padding-bottom: 26px; }
+      .hero-title { margin-top: 14px; font-size: clamp(40px, 13.5vw, 66px); }
+      .hero-copy { max-width: 335px; margin-top: 15px; }
+      .scenario-options { grid-template-columns: 1fr; border-bottom: 0; }
+      .scenario-option, .scenario-option:nth-child(2), .scenario-option:last-child { min-height: 58px; padding: 11px 7px 10px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .scenario-option strong { font-size: 9px; }
+      .scenario-option small { display: inline; margin-left: 7px; font-size: 9px; }
+      .difficulty-row { gap: 5px; }
+      .difficulty-choice { padding: 7px 8px; font-size: 8px; }
+      .launch-row { margin-top: 15px; }
+      .launch-button { min-width: 180px; min-height: 42px; }
+      .profile-line { margin-top: 19px; font-size: 8px; }
+      .title-foot { padding: 11px 17px 13px; font-size: 8px; }
+      .title-foot-inner { align-items: flex-start; flex-direction: column; gap: 6px; }
+      .sim-topbar { gap: 5px; flex-direction: column; }
+      .topbar-left { width: 100%; justify-content: space-between; }
+      .topbar-right { width: 100%; justify-content: space-between; }
+      .topbar-right .button-label { display: inline; }
+      .header-button { min-height: 28px; font-size: 8px; }
+      .speed-control { margin-right: auto; }
+      .clock-wrap { min-width: 66px; }
+      .coach-banner { padding: 9px; }
+      .coach-copy span { font-size: 10px; }
+      .workspace-grid { display: flex; flex-direction: column; }
+      .workspace-grid > * { width: 100%; }
+      .center-stack { order: 1; }
+      .controls-rail { order: 2; }
+      .telemetry-rail { order: 3; width: 100%; display: flex; flex-direction: column; }
+      .telemetry-rail .panel + .panel { margin-top: 9px; }
+      .controls-rail .panel + .panel { margin-top: 9px; }
+      #processCanvas { width: 700px; max-width: none; height: 273px; }
+      .panel-head { padding-left: 10px; padding-right: 10px; }
+      .readout-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .readout:nth-child(2) { border-right: 0; }
+      .readout:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .readout { min-height: 64px; padding: 10px; }
+      .readout strong { font-size: 16px; }
+      .chart-key { gap: 7px; font-size: 7px; }
+      .diagram-hint { font-size: 7px; }
+      .ledger-strip { align-items: flex-start; flex-direction: column; }
+      .help-grid { grid-template-columns: 1fr; }
+      .modal-wrap { padding: 10px; }
+      .modal-head { padding: 16px 15px 13px; }
+      .modal-body { padding: 13px 15px 16px; }
+      .modal-actions { padding: 0 15px 15px; }
+      .pause-options { padding: 14px 15px 7px; }
+      .settings-line { grid-template-columns: 1fr auto; gap: 8px; }
+      .settings-line input[type="range"] { grid-column: 1 / -1; grid-row: 2; }
+      .summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .cert-row { grid-template-columns: 32px minmax(0,1fr); }
+      .cert-buy { grid-column: 2; justify-self: start; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+    body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  </style>
+</head>
+<body>
+  <div id="titleScreen" class="screen title-screen">
+    <canvas id="heroCanvas" aria-hidden="true"></canvas>
+    <div class="hero-shade" aria-hidden="true"></div>
+    <header class="title-header">
+      <div class="brand-lockup">
+        <div class="brand-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="2.3" stroke="currentColor" stroke-width="1.1"/><path d="M12 2v4M22 12h-4M12 22v-4M2 12h4" stroke="currentColor" stroke-width="1.1"/><path d="M6.1 6.1l2.6 2.6m6.6 6.6 2.6 2.6m0-11.8-2.6 2.6m-6.6 6.6-2.6 2.6" stroke="currentColor" stroke-width=".75" opacity=".8"/></svg>
+        </div>
+        <div><div class="brand-name">NORTHSTAR / NUCLEAR</div><div class="brand-sub">UNIT 04 / OPERATIONS SIMULATOR</div></div>
+      </div>
+      <div class="header-tools">
+        <button id="certTitleBtn" class="quiet-button" type="button">Academy</button>
+        <button id="helpTitleBtn" class="quiet-button" type="button">Field guide</button>
+        <button id="settingsTitleBtn" class="quiet-button" type="button">Settings</button>
+      </div>
+    </header>
+
+    <section class="hero-content" aria-labelledby="heroTitle">
+      <div class="eyebrow">Operator readiness / shift 01</div>
+      <h1 id="heroTitle" class="hero-title"><span class="brand-hero">Northstar</span>Control room</h1>
+      <p class="hero-copy">Control the chain from neutron flux to the grid. <strong>Every adjustment travels through the plant.</strong> Read the response, manage the alarms, and keep the core inside its operating envelope.</p>
+    </section>
+
+    <section class="mission-select" aria-label="Choose a scenario">
+      <div class="section-label"><span>01 / Select operation</span><span id="scenarioBrief">Guided startup</span></div>
+      <div class="scenario-options" role="group" aria-label="Scenario">
+        <button type="button" class="scenario-option is-active" data-scenario="cold" aria-pressed="true">
+          <span class="scenario-number">01</span><span><strong>FIRST CRITICALITY</strong><small>Cold start and grid sync</small></span>
+        </button>
+        <button type="button" class="scenario-option" data-scenario="load" aria-pressed="false">
+          <span class="scenario-number">02</span><span><strong>GRID FOLLOW</strong><small>Track a changing dispatch</small></span>
+        </button>
+        <button type="button" class="scenario-option" data-scenario="blackout" aria-pressed="false">
+          <span class="scenario-number">03</span><span><strong>STATION BLACKOUT</strong><small>Recover cooling after a trip</small></span>
+        </button>
+      </div>
+      <div class="difficulty-row" role="group" aria-label="Difficulty">
+        <span class="difficulty-label">Plant condition</span>
+        <button class="difficulty-choice" type="button" data-difficulty="training" aria-pressed="false">Training</button>
+        <button class="difficulty-choice is-active" type="button" data-difficulty="standard" aria-pressed="true">Standard</button>
+        <button class="difficulty-choice" type="button" data-difficulty="severe" aria-pressed="false">Severe</button>
+      </div>
+      <div class="launch-row">
+        <button id="startBtn" class="launch-button" type="button"><span>Begin training run</span><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button id="resumeBtn" class="launch-button resume-button hidden" type="button">Resume saved shift</button>
+      </div>
+    </section>
+    <footer class="title-foot"><div class="title-foot-inner"><span class="foot-status"><i class="live-dot"></i> Training simulator online / all protections are virtual</span><span>Keyboard: Space pause / 1-4 speed / R scram / H guide / M audio</span></div></footer>
+  </div>
+
+  <div id="simScreen" class="screen sim-screen hidden">
+    <header class="sim-topbar">
+      <div class="topbar-left">
+        <div class="brand-lockup">
+          <div class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="2.3" stroke="currentColor" stroke-width="1.1"/><path d="M12 2v4M22 12h-4M12 22v-4M2 12h4" stroke="currentColor" stroke-width="1.1"/></svg></div>
+          <div><div class="brand-name">NORTHSTAR</div><div class="brand-sub">UNIT 04 / PWR-01</div></div>
+        </div>
+        <div class="run-title-block"><strong id="runScenarioName">First criticality</strong><span id="difficultyBadge">Standard / training</span></div>
+      </div>
+      <div class="topbar-right">
+        <div class="clock-wrap"><small>SIM TIME</small><strong id="simClock">00:00</strong></div>
+        <div class="speed-control" role="group" aria-label="Simulation speed" id="speedButtons">
+          <button class="speed-choice" type="button" data-speed="0.5" aria-label="Half speed">0.5</button>
+          <button class="speed-choice is-active" type="button" data-speed="1" aria-label="Normal speed">1x</button>
+          <button class="speed-choice" type="button" data-speed="2" aria-label="Double speed">2x</button>
+          <button class="speed-choice" type="button" data-speed="4" aria-label="Quadruple speed">4x</button>
+        </div>
+        <button id="pauseBtn" class="header-button primary" type="button" aria-label="Pause simulation"><span class="button-label">Pause</span> <span aria-hidden="true">II</span></button>
+        <button id="saveSimBtn" class="header-button" type="button" title="Save a shift checkpoint"><span aria-hidden="true">SAVE</span></button>
+        <button id="statsSimBtn" class="header-button" type="button"><span class="button-label">Shift report</span><span aria-hidden="true">OPEN</span></button>
+        <button id="soundSimBtn" class="header-button" type="button" aria-label="Toggle sound">AUDIO</button>
+        <button id="helpSimBtn" class="header-button" type="button" aria-label="Open field guide">HELP</button>
+        <button id="settingsSimBtn" class="header-button" type="button" aria-label="Open settings">SET</button>
+      </div>
+    </header>
+
+    <main class="sim-body">
+      <section id="coachBanner" class="coach-banner hidden" aria-live="polite">
+        <div id="coachMark" class="coach-mark">01</div>
+        <div class="coach-copy"><strong id="coachTitle">Operator induction</strong><span id="coachText"></span></div>
+        <div class="coach-actions"><button id="coachSkip" class="quiet-button" type="button">Skip</button><button id="coachNext" class="quiet-button" type="button">Continue</button></div>
+      </section>
+
+      <div class="workspace-grid">
+        <aside class="rail controls-rail" aria-label="Operator controls">
+          <section class="panel mission-panel">
+            <div class="panel-head"><h2>Shift objective</h2><span class="panel-kicker" id="objectiveIndex">01 / 03</span></div>
+            <div class="mission-summary">
+              <div class="mission-code" id="missionCode">Startup / 01</div>
+              <h2 id="missionTitle">First criticality</h2>
+              <p id="missionGoalText"></p>
+              <div class="objective-track"><div class="objective-meta"><span id="objectiveProgressText">Awaiting operator</span><span id="objectiveProgressValue">0%</span></div><div class="track-line"><span id="objectiveProgressBar"></span></div></div>
+            </div>
+          </section>
+
+          <section class="panel control-panel">
+            <div class="panel-head"><h2>Reactor controls</h2><span class="panel-kicker">Command / actual</span></div>
+            <div class="control-list">
+              <div id="rodControl" class="control-row">
+                <div class="control-label-line"><label for="rodInput">Control rod insertion</label><output id="rodCommandReadout" class="control-value">96%</output></div>
+                <input id="rodInput" type="range" min="0" max="100" step="1" value="96" aria-label="Control rod insertion percentage">
+                <div class="control-secondary"><span>0% withdrawn / 100% inserted</span><span id="rodActualReadout">Actual 96%</span></div>
+              </div>
+              <div id="boronControl" class="control-row">
+                <div class="control-label-line"><label for="boronInput">Soluble boron</label><output id="boronCommandReadout" class="control-value">220 ppm</output></div>
+                <input id="boronInput" type="range" min="0" max="1200" step="10" value="220" aria-label="Soluble boron concentration">
+                <div class="control-secondary"><span>More boron absorbs neutrons</span><span id="boronActualReadout">Actual 220 ppm</span></div>
+              </div>
+              <div id="pumpControl" class="control-row">
+                <div class="control-label-line"><label for="pumpInput">Primary coolant pumps</label><output id="pumpCommandReadout" class="control-value">84%</output></div>
+                <input id="pumpInput" type="range" min="30" max="100" step="1" value="84" aria-label="Primary coolant pump command">
+                <div class="control-secondary"><span>Higher flow removes core heat</span><span id="pumpActualReadout">Flow 84%</span></div>
+              </div>
+              <div id="feedControl" class="control-row">
+                <div class="control-label-line"><label for="feedInput">Feedwater flow</label><output id="feedCommandReadout" class="control-value">65%</output></div>
+                <input id="feedInput" type="range" min="0" max="100" step="1" value="65" aria-label="Steam generator feedwater command">
+                <div class="control-secondary"><span>Restores steam generator level</span><span id="feedActualReadout">Flow 65%</span></div>
+              </div>
+              <div id="turbineControl" class="control-row">
+                <div class="control-label-line"><label for="turbineInput">Turbine load demand</label><output id="turbineCommandReadout" class="control-value">55%</output></div>
+                <input id="turbineInput" type="range" min="0" max="100" step="1" value="55" aria-label="Turbine load command">
+                <div class="control-secondary"><span>Actual <span id="turbineActualReadout">55%</span></span><span id="demandReadout">Grid asks 620 MW</span></div>
+              </div>
+            </div>
+            <p id="controlHint" class="control-hint">Operator commands ramp toward their targets. Watch actual rod position and loop flow before changing load.</p>
+            <div class="ops-actions">
+              <div class="action-grid">
+                <button id="scramBtn" class="action-button danger" type="button">SCRAM / drop rods</button>
+                <button id="eccsBtn" class="action-button" type="button">ECCS injection</button>
+                <button id="dieselBtn" class="action-button accent" type="button">Start emergency diesel</button>
+                <button id="syncBtn" class="action-button accent" type="button">Synchronize grid</button>
+                <button id="isolateBtn" class="action-button" type="button">Isolate leak loop</button>
+                <button id="resetTurbineBtn" class="action-button" type="button">Reset turbine</button>
+                <button id="resetScramBtn" class="action-button full" type="button">Reset scram permissive</button>
+              </div>
+            </div>
+            <div class="fault-tools">
+              <label for="faultSelect">Training fault injection</label>
+              <select id="faultSelect" aria-label="Select a fault to inject">
+                <option value="feedwater">Feedwater pump trip</option>
+                <option value="primaryLeak">Primary coolant leak</option>
+                <option value="rodJam">Control rod drive jam</option>
+                <option value="pumpTrip">Primary pump trip</option>
+                <option value="condenser">Condenser cooling loss</option>
+                <option value="gridTrip">Offsite power loss</option>
+                <option value="turbineTrip">Turbine trip</option>
+                <option value="xenonPulse">Xenon transient</option>
+              </select>
+              <div class="fault-buttons"><button id="injectFaultBtn" class="action-button" type="button">Inject fault</button><button id="repairBtn" class="action-button" type="button">Dispatch crew</button></div>
+              <div id="repairStatus" class="repair-status">Maintenance reserve: $120k / no crew dispatched</div>
+            </div>
+          </section>
+        </aside>
+
+        <section class="center-stack" aria-label="Plant process and trends">
+          <section class="panel">
+            <div class="readout-strip">
+              <div id="fluxReadout" class="readout"><label>Neutron flux</label><strong id="fluxValue">0.0<small>%</small></strong><span class="readout-foot" id="reactivityValue">+0 pcm reactivity</span></div>
+              <div id="temperatureReadout" class="readout"><label>Hot leg temperature</label><strong id="hotTempValue">265<small>°C</small></strong><span class="readout-foot" id="fuelTempFoot">Fuel 280°C</span></div>
+              <div id="pressureReadout" class="readout"><label>Primary pressure</label><strong id="pressureValue">150<small>bar</small></strong><span class="readout-foot" id="coolantFoot">Coolant inventory 100%</span></div>
+              <div id="powerReadout" class="readout"><label>Net electrical</label><strong id="powerValue">0<small>MW</small></strong><span class="readout-foot" id="dispatchFoot">Dispatch error 620 MW</span></div>
+            </div>
+          </section>
+
+          <section class="panel synoptic-panel">
+            <div class="panel-head"><h2>Live plant synoptic</h2><div class="synoptic-legend"><span class="legend-key"><i class="legend-swatch"></i>Primary coolant</span><span class="legend-key"><i class="legend-swatch steam"></i>Steam / feed</span><span class="legend-key"><i class="legend-swatch grid"></i>Electrical bus</span></div></div>
+            <div class="canvas-frame"><canvas id="processCanvas" aria-label="Animated reactor, steam generator, turbine, condenser, and grid schematic"></canvas></div>
+            <div id="diagramHint" class="diagram-hint"><strong>System note</strong><span>Click a plant component to inspect its role. Animated flow changes with pump, steam and bus status.</span></div>
+          </section>
+
+          <section class="panel chart-panel">
+            <div class="panel-head"><div class="chart-title-row"><h2>Operating trends</h2><span class="chart-caption">Rolling history / live sample</span></div><div class="chart-key"><span><i></i>Flux %</span><span><i class="temp-dot"></i>Hot leg °C</span></div></div>
+            <canvas id="trendCanvas" aria-label="Live chart of reactor flux and hot leg temperature"></canvas>
+            <div class="chart-footer"><span>Flux scale: 0-110% / temperature scale: 250-400°C</span><strong id="trendSpan">History 0:00</strong></div>
+          </section>
+
+          <section class="panel log-panel">
+            <div class="panel-head"><h2>Shift event log</h2><span id="eventCount" class="panel-kicker">0 transmissions</span></div>
+            <div id="eventLog" class="event-log" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <aside class="rail telemetry-rail" aria-label="Plant telemetry and alarms">
+          <section class="panel telemetry-panel">
+            <div class="panel-head"><h2>Plant telemetry</h2><span class="panel-kicker">Live / 1 Hz</span></div>
+            <div class="plant-state">
+              <div id="stateIndicator" class="state-indicator">OK</div>
+              <div class="plant-state-copy"><small>Unit condition</small><strong id="stateWord">Standby</strong></div>
+              <div id="stateDescription" class="state-description">Awaiting startup</div>
+            </div>
+            <div class="meter-list">
+              <div class="meter-row"><div class="meter-label-line"><span>Thermal output</span><strong id="meterPowerText">0%</strong></div><div class="meter-track"><span id="meterPower"></span></div></div>
+              <div class="meter-row"><div class="meter-label-line"><span>Hot leg / limit 350°C</span><strong id="meterHotText">265°C</strong></div><div class="meter-track"><span id="meterHot"></span></div></div>
+              <div class="meter-row"><div class="meter-label-line"><span>Primary pressure</span><strong id="meterPressureText">150 bar</strong></div><div class="meter-track"><span id="meterPressure"></span></div></div>
+              <div class="meter-row"><div class="meter-label-line"><span>Steam pressure</span><strong id="meterSteamText">0 bar</strong></div><div class="meter-track"><span id="meterSteam"></span></div></div>
+              <div class="meter-row"><div class="meter-label-line"><span>Coolant inventory</span><strong id="meterCoolantText">100%</strong></div><div class="meter-track"><span id="meterCoolant"></span></div></div>
+              <div class="meter-row"><div class="meter-label-line"><span>Fuel damage</span><strong id="meterDamageText">0%</strong></div><div class="meter-track"><span id="meterDamage"></span></div></div>
+            </div>
+            <div class="plant-services">
+              <div class="service-row"><span>Offsite power</span><strong id="gridStatus" class="service-state">AVAILABLE</strong></div>
+              <div class="service-row"><span>Emergency diesel</span><strong id="dieselStatus" class="service-state">STANDBY</strong></div>
+              <div class="service-row"><span>Turbine / generator</span><strong id="turbineStatus" class="service-state">READY</strong></div>
+              <div class="service-row"><span>Repair reserve</span><strong id="budgetStatus" class="service-state">$120k</strong></div>
+            </div>
+          </section>
+          <section class="panel alarm-panel">
+            <div class="panel-head"><h2>Alarm annunciator</h2><span id="alarmCount" class="alarm-count">0 ACTIVE</span></div>
+            <div id="alarmList" class="alarm-list"><div class="alarm-empty">No active alarms. Protection logic armed.</div></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Operator academy</h2><span class="panel-kicker">Persistent progress</span></div>
+            <div class="mission-summary" style="padding-top:10px">
+              <div class="mission-code" id="operatorRankSmall">CADET / 0 XP</div>
+              <p id="certSummary">No certifications yet. Successful shifts earn qualification points.</p>
+              <button id="certSimBtn" class="action-button full" type="button" style="margin-top:10px">Review certifications</button>
+            </div>
+          </section>
+        </aside>
+      </div>
+      <div class="ledger-strip"><div class="ledger-left"><span class="status-live">SIMULATION ACTIVE</span><span>Generation <strong id="generationReadout">0 MWh</strong></span><span>Peak fuel temp <strong id="peakFuelReadout">280°C</strong></span><span>Actions <strong id="actionReadout">0</strong></span></div><div class="ledger-right"><span>Shortcut <strong>R</strong> SCRAM</span><span><strong>Space</strong> pause</span><span><strong>H</strong> guide</span></div></div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="helpModal" class="modal-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal modal-wide">
+      <div class="modal-head"><div><div class="modal-eyebrow">Northstar field guide / rev 4.2</div><h2 id="helpTitle">Read the chain, not just the gauges.</h2><p>A simplified pressurized-water reactor model. Every control changes a connected physical process.</p></div><button class="modal-close" type="button" data-close="helpModal" aria-label="Close field guide">x</button></div>
+      <div class="modal-body">
+        <div class="help-grid">
+          <section class="help-section"><h3>1. Neutrons and reactivity</h3><p>Withdrawing control rods raises neutron flux. Soluble boron and xenon absorb neutrons. As fuel heats, negative temperature feedback suppresses the chain reaction. Flux responds with a delayed, gradual kinetic lag.</p></section>
+          <section class="help-section"><h3>2. Primary cooling</h3><p>Primary pumps move high-pressure water through the core and steam generator. Low flow, coolant loss or low pressure reduces heat removal, raises fuel temperature and can damage cladding. Isolate a leaking loop and use ECCS makeup when inventory falls.</p></section>
+          <section class="help-section"><h3>3. Steam and power</h3><p>Feedwater absorbs heat in the steam generator. Steam pressure and condenser condition limit turbine output. Turbine load sets the requested electrical ceiling; synchronize before exporting to the grid.</p></section>
+          <section class="help-section"><h3>4. Trips and recovery</h3><p>SCRAM rapidly inserts the safety rods. The chain reaction stops, but decay heat remains. A station blackout removes powered pump flow until the emergency diesel starts. Do not confuse a shutdown reactor with a cold reactor.</p></section>
+          <section class="help-section"><h3>Faults and maintenance</h3><p>Use the injector to practice feedwater, pump, rod-drive, condenser, turbine, coolant-leak and grid faults. Dispatching a crew costs reserve funds and takes simulated time. ECCS charges are limited.</p></section>
+          <section class="help-section"><h3>Campaign and failure</h3><p>Complete startup, grid-following and blackout shifts to earn operator XP. Spend XP on actuator, pump and xenon certifications. High fuel damage, extreme temperature, empty coolant inventory or an expired objective ends the operation.</p></section>
+        </div>
+        <div class="keycaps"><span class="keycap">SPACE / pause</span><span class="keycap">1-4 / speed</span><span class="keycap">R / SCRAM</span><span class="keycap">H / field guide</span><span class="keycap">M / audio</span><span class="keycap">S / save checkpoint</span></div>
+      </div>
+      <div class="modal-actions"><button class="launch-button" type="button" data-close="helpModal">Back to operation</button></div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal">
+      <div class="modal-head"><div><div class="modal-eyebrow">Console configuration</div><h2 id="settingsTitle">Settings</h2><p>Audio is synthesized locally with the Web Audio API. Preferences save on this device.</p></div><button class="modal-close" type="button" data-close="settingsModal" aria-label="Close settings">x</button></div>
+      <div class="modal-body">
+        <div class="settings-line"><label for="volumeInput">Master volume</label><input id="volumeInput" type="range" min="0" max="100" value="35" aria-label="Master audio volume"><small id="volumeValue">35%</small></div>
+        <div class="settings-line"><label for="muteInput">Mute audio</label><small>Ambient reactor hum and event tones</small><input id="muteInput" class="settings-check" type="checkbox" aria-label="Mute audio"></div>
+        <div class="settings-line"><label for="motionInput">Reduce motion</label><small>Reduce canvas pulses and interface transitions</small><input id="motionInput" class="settings-check" type="checkbox" aria-label="Reduce motion"></div>
+        <div class="settings-line"><label>Persistence</label><small>Settings, certifications and a manual shift checkpoint use local storage when available.</small><span class="panel-kicker">LOCAL</span></div>
+      </div>
+      <div class="modal-actions"><button class="launch-button" type="button" data-close="settingsModal">Apply</button></div>
+    </div>
+  </div>
+
+  <div id="pauseModal" class="modal-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+    <div class="modal">
+      <div class="modal-head"><div><div class="modal-eyebrow">Operator hold / controls locked</div><h2 id="pauseTitle">Simulation paused</h2><p id="pauseMessage">The plant state is frozen. Resume when ready.</p></div><button class="modal-close" type="button" id="pauseCloseBtn" aria-label="Resume simulation">x</button></div>
+      <div class="pause-options">
+        <button class="pause-option" id="resumeRunBtn" type="button"><strong>Resume operation</strong><span>Continue the current simulated shift.</span></button>
+        <button class="pause-option" id="savePauseBtn" type="button"><strong>Save checkpoint</strong><span>Keep this shift available from the title screen.</span></button>
+        <button class="pause-option" id="restartRunBtn" type="button"><strong>Restart scenario</strong><span>Reset plant condition and start this scenario again.</span></button>
+        <button class="pause-option" id="settingsPauseBtn" type="button"><strong>Console settings</strong><span>Adjust synthesized audio and motion.</span></button>
+      </div>
+      <div class="modal-actions"><button id="returnTitleBtn" class="quiet-button" type="button">Save and return to title</button><button id="endShiftBtn" class="quiet-button" type="button">Abandon shift</button></div>
+    </div>
+  </div>
+
+  <div id="certModal" class="modal-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="certTitle">
+    <div class="modal">
+      <div class="modal-head"><div><div class="modal-eyebrow">Persistent operator progression</div><h2 id="certTitle">Operations academy</h2><p>Spend qualification XP on permanent plant-system certifications. Shift records and purchases persist locally.</p></div><button class="modal-close" type="button" data-close="certModal" aria-label="Close academy">x</button></div>
+      <div id="certModalBody" class="modal-body"></div>
+      <div class="modal-actions"><button class="launch-button" type="button" data-close="certModal">Return</button></div>
+    </div>
+  </div>
+
+  <div id="statsModal" class="modal-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+    <div class="modal modal-wide">
+      <div class="modal-head"><div><div class="modal-eyebrow">Shift telemetry / current operation</div><h2 id="statsTitle">Performance report</h2><p>Statistics are sampled from the active simulation state, not a static briefing.</p></div><button class="modal-close" type="button" data-close="statsModal" aria-label="Close report">x</button></div>
+      <div id="statsModalBody" class="modal-body"></div>
+      <div class="modal-actions"><button class="launch-button" type="button" data-close="statsModal">Return to controls</button></div>
+    </div>
+  </div>
+
+  <div id="endModal" class="modal-wrap hidden" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+    <div class="modal modal-wide">
+      <div class="modal-head"><div><div id="endMark" class="end-mark">Shift resolved</div><h2 id="endTitle" class="modal-end-title">Operation complete</h2><p id="endCopy" class="modal-end-copy"></p><div id="endScore" class="end-score">0 <small>QUALIFICATION XP</small></div></div></div>
+      <div id="endStats" class="modal-body"></div>
+      <div class="modal-actions"><button id="replayBtn" class="quiet-button" type="button">Replay scenario</button><button id="endTitleBtn" class="launch-button" type="button">Return to title</button></div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+    const safeNumber = (value, fallback, min, max) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? clamp(parsed, min, max) : fallback;
+    };
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const formatTime = (seconds) => {
+      const safe = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+      const mins = Math.floor(safe / 60);
+      const secs = safe % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    };
+    const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+
+    const STORAGE = { profile: 'northstar.profile.v1', settings: 'northstar.settings.v1', checkpoint: 'northstar.checkpoint.v1' };
+    const defaultProfile = () => ({ xp: 0, totalXP: 0, totalWins: 0, wins: { cold: 0, load: 0, blackout: 0 }, certs: { rods: false, pumps: false, xenon: false }, bestScore: 0, totalMWh: 0 });
+    const defaultSettings = () => ({ volume: 0.35, muted: false, reducedMotion: false });
+    function safeRead(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value ? JSON.parse(value) : fallback;
+      } catch (error) {
+        return fallback;
+      }
+    }
+    function safeWrite(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (error) { return false; }
+    }
+    function safeRemove(key) { try { localStorage.removeItem(key); } catch (error) { /* Storage can be unavailable in private contexts. */ } }
+
+    let profile = Object.assign(defaultProfile(), safeRead(STORAGE.profile, {}));
+    profile.wins = Object.assign({ cold: 0, load: 0, blackout: 0 }, profile.wins || {});
+    profile.certs = Object.assign({ rods: false, pumps: false, xenon: false }, profile.certs || {});
+    profile.xp = clamp(Number(profile.xp) || 0, 0, 999999);
+    profile.totalXP = clamp(Number(profile.totalXP) || profile.xp, 0, 999999);
+    profile.totalWins = clamp(Number(profile.totalWins) || 0, 0, 999999);
+    let preferences = Object.assign(defaultSettings(), safeRead(STORAGE.settings, {}));
+    preferences.volume = clamp(Number(preferences.volume), 0, 1);
+    preferences.muted = Boolean(preferences.muted);
+    preferences.reducedMotion = Boolean(preferences.reducedMotion);
+
+    const SCENARIOS = {
+      cold: { name: 'First criticality', code: 'Startup / 01', brief: 'Guided startup', objective: 'Bring the unit critical, synchronize the generator, then hold stable output inside the operating envelope.', limit: 900, baseReward: 120, demand: 620 },
+      load: { name: 'Grid follow', code: 'Dispatch / 02', brief: 'Changing dispatch', objective: 'Track a moving grid dispatch while keeping reactor power, steam and coolant within safe limits.', limit: 900, baseReward: 175, demand: 580 },
+      blackout: { name: 'Station blackout', code: 'Emergency / 03', brief: 'Loss of offsite power', objective: 'After the grid trip, scram the reactor, start emergency diesel and restore cooling before damage accumulates.', limit: 720, baseReward: 240, demand: 760 }
+    };
+    const DIFFICULTIES = {
+      training: { name: 'Training', stress: 0.72, eventDelay: 1.35, timeScale: 1.25, reward: 0.8 },
+      standard: { name: 'Standard', stress: 1, eventDelay: 1, timeScale: 1, reward: 1 },
+      severe: { name: 'Severe', stress: 1.28, eventDelay: 0.75, timeScale: 0.88, reward: 1.35 }
+    };
+    const FAULTS = {
+      feedwater: { name: 'Feedwater pump trip', cost: 18, duration: 48 },
+      primaryLeak: { name: 'Primary coolant leak', cost: 38, duration: 64 },
+      rodJam: { name: 'Control rod drive jam', cost: 25, duration: 52 },
+      pumpTrip: { name: 'Primary pump trip', cost: 34, duration: 58 },
+      condenser: { name: 'Condenser cooling loss', cost: 28, duration: 55 },
+      gridTrip: { name: 'Offsite power loss', cost: 32, duration: 62 },
+      turbineTrip: { name: 'Turbine trip', cost: 22, duration: 45 }
+    };
+    const CERTS = [
+      { key: 'rods', title: 'Rod drive tuning', cost: 120, seal: 'RD', text: 'Control rod commands move 30% faster, making reactivity corrections more responsive.' },
+      { key: 'xenon', title: 'Xenon diagnostics', cost: 155, seal: 'XE', text: 'Xenon builds 18% more slowly. Poison transients are easier to anticipate and recover from.' },
+      { key: 'pumps', title: 'Pump seal resilience', cost: 190, seal: 'PS', text: 'Primary loop heat removal improves by 8%, and coolant leak flow is reduced by 20%.' }
+    ];
+
+    let selectedScenario = 'cold';
+    let selectedDifficulty = 'standard';
+    let simulation = null;
+    let accumulator = 0;
+    let lastFrame = performance.now();
+    let lastUIRender = 0;
+    let toastTimer = 0;
+    let activeModal = null;
+    let settingsReturnModal = null;
+    let audioContext = null;
+    let masterGain = null;
+    let ambientStarted = false;
+    let audioNodes = [];
+    let heroCanvas = $('heroCanvas');
+    let processCanvas = $('processCanvas');
+    let trendCanvas = $('trendCanvas');
+
+    const simScreen = $('simScreen');
+    const titleScreen = $('titleScreen');
+    const modalIds = ['helpModal', 'settingsModal', 'pauseModal', 'certModal', 'statsModal', 'endModal'];
+
+    function saveProfile() { safeWrite(STORAGE.profile, profile); renderProfile(); }
+    function saveSettings() {
+      safeWrite(STORAGE.settings, preferences);
+      document.body.classList.toggle('reduce-motion', preferences.reducedMotion);
+      updateAudioGain();
+      $('volumeInput').value = Math.round(preferences.volume * 100);
+      $('volumeValue').textContent = `${Math.round(preferences.volume * 100)}%`;
+      $('muteInput').checked = preferences.muted;
+      $('motionInput').checked = preferences.reducedMotion;
+      updateSoundButtons();
+    }
+    function getRank(xp) {
+      if (xp >= 700) return 'SHIFT LEAD';
+      if (xp >= 390) return 'SENIOR OPERATOR';
+      if (xp >= 160) return 'QUALIFIED OPERATOR';
+      if (xp >= 70) return 'REACTOR OPERATOR';
+      return 'CADET';
+    }
+    function renderProfile() {
+      const unlocked = Object.values(profile.certs).filter(Boolean).length;
+      $('operatorRankSmall').textContent = `${getRank(profile.totalXP)} / ${profile.xp} XP`;
+      $('certSummary').textContent = unlocked ? `${unlocked} certification${unlocked === 1 ? '' : 's'} active. Upgrades modify the live plant model.` : 'No certifications yet. Successful shifts earn qualification points.';
+      $('resumeBtn').classList.toggle('hidden', !hasCheckpoint());
+      renderCertModal();
+    }
+
+    function hasCheckpoint() {
+      const saved = safeRead(STORAGE.checkpoint, null);
+      return Boolean(saved && typeof saved === 'object' && saved.scenario && SCENARIOS[saved.scenario] && saved.commands && typeof saved.commands === 'object' && Number.isFinite(saved.time) && !saved.ended);
+    }
+    function createSimulation(scenarioId, difficultyId, guided) {
+      const sc = SCENARIOS[scenarioId];
+      const difficulty = DIFFICULTIES[difficultyId];
+      const base = {
+        scenario: scenarioId,
+        difficulty: difficultyId,
+        time: 0,
+        timeLimit: sc.limit * difficulty.timeScale,
+        paused: false,
+        ended: false,
+        speed: 1,
+        commands: { rods: 96, boron: 220, pumps: 84, feed: 65, turbine: 55 },
+        actual: { rods: 96, boron: 220, pumps: 84, feed: 65, turbine: 55 },
+        flux: 0.012,
+        precursor: 0.012,
+        targetFlux: 0.01,
+        reactivity: 0,
+        xenon: 4,
+        hotTemp: 265,
+        coldTemp: 255,
+        fuelTemp: 280,
+        primaryPressure: 150,
+        coolant: 100,
+        steamPressure: 4,
+        steamTemp: 160,
+        heatLoad: 0.012,
+        decayHeat: 0,
+        damage: 0,
+        gridConnected: true,
+        gridTrip: false,
+        sync: false,
+        turbineTripped: false,
+        diesel: { status: 'standby', timer: 0 },
+        scrammed: false,
+        tripCount: 0,
+        eccsCharges: 2,
+        eccsTime: 0,
+        isolation: false,
+        demand: sc.demand,
+        grossPower: 0,
+        exportPower: 0,
+        pumpFlow: 84,
+        feedFlow: 65,
+        faults: {},
+        repairJobs: [],
+        budget: 120,
+        repairCount: 0,
+        totalEnergy: 0,
+        maxFuelTemp: 280,
+        maxHotTemp: 265,
+        maxDamage: 0,
+        maxFlux: 0.012,
+        hold: 0,
+        trackTotal: 0,
+        trackGood: 0,
+        trackWindow: [],
+        actions: 0,
+        alarms: [],
+        log: [],
+        history: [],
+        sampleClock: 0,
+        lastAutoSave: 0,
+        events: {},
+        coach: guided ? { active: true, step: 0, flags: { rods: false, pumps: false, feed: false } } : { active: false, step: 0, flags: { rods: false, pumps: false, feed: false } },
+        lastTargetFlux: 0.01,
+        lastHotTemp: 265,
+        lastAlarmCheck: 0,
+        tripTime: null,
+        dispatchSurge: false
+      };
+      if (scenarioId === 'load') {
+        base.commands = { rods: 19, boron: 180, pumps: 86, feed: 78, turbine: 58 };
+        base.actual = { rods: 19, boron: 180, pumps: 86, feed: 78, turbine: 58 };
+        base.flux = 0.59;
+        base.precursor = 0.59;
+        base.xenon = 18;
+        base.hotTemp = 309;
+        base.coldTemp = 276;
+        base.fuelTemp = 505;
+        base.primaryPressure = 157;
+        base.steamPressure = 61;
+        base.steamTemp = 268;
+        base.heatLoad = base.flux;
+        base.targetFlux = base.flux;
+        base.lastTargetFlux = base.flux;
+        base.maxFuelTemp = base.fuelTemp;
+        base.maxHotTemp = base.hotTemp;
+        base.maxFlux = base.flux;
+        base.sync = true;
+        base.demand = 580;
+      } else if (scenarioId === 'blackout') {
+        base.commands = { rods: 10, boron: 180, pumps: 88, feed: 78, turbine: 74 };
+        base.actual = { rods: 10, boron: 180, pumps: 88, feed: 78, turbine: 74 };
+        base.flux = 0.78;
+        base.precursor = 0.78;
+        base.xenon = 24;
+        base.hotTemp = 318;
+        base.coldTemp = 285;
+        base.fuelTemp = 535;
+        base.primaryPressure = 158;
+        base.steamPressure = 70;
+        base.steamTemp = 278;
+        base.heatLoad = base.flux;
+        base.targetFlux = base.flux;
+        base.lastTargetFlux = base.flux;
+        base.maxFuelTemp = base.fuelTemp;
+        base.maxHotTemp = base.hotTemp;
+        base.maxFlux = base.flux;
+        base.sync = true;
+      }
+      return base;
+    }
+
+    function startScenario(scenarioId = selectedScenario, difficultyId = selectedDifficulty, guided = false) {
+      safeRemove(STORAGE.checkpoint);
+      selectedScenario = SCENARIOS[scenarioId] ? scenarioId : 'cold';
+      selectedDifficulty = DIFFICULTIES[difficultyId] ? difficultyId : 'standard';
+      simulation = createSimulation(selectedScenario, selectedDifficulty, guided);
+      accumulator = 0;
+      titleScreen.classList.add('hidden');
+      simScreen.classList.remove('hidden');
+      closeAllModals();
+      initAudio();
+      logEvent(`Shift opened: ${SCENARIOS[selectedScenario].name} / ${DIFFICULTIES[selectedDifficulty].name} condition.`, 'normal');
+      if (selectedScenario === 'blackout') logEvent('Standby diesel is available. Offsite power trip is expected.', 'warning');
+      if (selectedScenario === 'load') logEvent('Dispatch desk is live. Demand will move across the shift.', 'normal');
+      renderUI();
+      updateCoach();
+      drawProcess();
+      drawTrend();
+      notify(`${SCENARIOS[selectedScenario].name.toUpperCase()} / ${DIFFICULTIES[selectedDifficulty].name.toUpperCase()} CONDITION`, 'normal');
+      if (!preferences.muted) tone(520, .07, 'sine', .16);
+    }
+
+    function startSelectedScenario() {
+      const guided = selectedScenario === 'cold';
+      startScenario(selectedScenario, selectedDifficulty, guided);
+    }
+
+    function loadCheckpoint() {
+      const saved = safeRead(STORAGE.checkpoint, null);
+      if (!saved || !saved.scenario || !SCENARIOS[saved.scenario] || !saved.commands) {
+        safeRemove(STORAGE.checkpoint);
+        renderProfile();
+        notify('No valid saved shift was found.', 'warning');
+        return;
+      }
+      const difficultyId = DIFFICULTIES[saved.difficulty] ? saved.difficulty : 'standard';
+      simulation = Object.assign(createSimulation(saved.scenario, difficultyId, false), saved);
+      const fresh = createSimulation(saved.scenario, difficultyId, false);
+      const commandRanges = { rods: [0, 100], boron: [0, 1200], pumps: [30, 100], feed: [0, 100], turbine: [0, 100] };
+      simulation.difficulty = difficultyId;
+      simulation.timeLimit = safeNumber(saved.timeLimit, fresh.timeLimit, 120, 1800);
+      simulation.time = safeNumber(saved.time, 0, 0, simulation.timeLimit);
+      simulation.commands = {};
+      simulation.actual = {};
+      Object.entries(commandRanges).forEach(([key, range]) => {
+        simulation.commands[key] = safeNumber(saved.commands && saved.commands[key], fresh.commands[key], range[0], range[1]);
+        simulation.actual[key] = safeNumber(saved.actual && saved.actual[key], fresh.actual[key], range[0], range[1]);
+      });
+      const numericRanges = {
+        flux: [0, 1.16], precursor: [0, 1.16], targetFlux: [0, 1.16], reactivity: [-280, 280], xenon: [0, 150],
+        hotTemp: [0, 1200], coldTemp: [0, 1200], fuelTemp: [0, 1400], primaryPressure: [0, 250], coolant: [0, 100],
+        steamPressure: [0, 140], steamTemp: [0, 700], heatLoad: [0, 1.16], decayHeat: [0, 1], damage: [0, 120],
+        demand: [0, 1200], grossPower: [0, 1200], exportPower: [0, 1200], pumpFlow: [0, 110], feedFlow: [0, 100],
+        budget: [0, 10000], totalEnergy: [0, 10000000], maxFuelTemp: [0, 1400], maxHotTemp: [0, 1200], maxDamage: [0, 120],
+        maxFlux: [0, 1.16], hold: [0, 2000], trackTotal: [0, 100000], trackGood: [0, 100000], sampleClock: [0, 4],
+        lastAutoSave: [0, 100000], lastTargetFlux: [0, 1.16], lastHotTemp: [0, 1200], lastAlarmCheck: [0, 100000]
+      };
+      Object.entries(numericRanges).forEach(([key, range]) => { simulation[key] = safeNumber(saved[key], fresh[key], range[0], range[1]); });
+      ['gridConnected', 'gridTrip', 'sync', 'turbineTripped', 'scrammed', 'isolation', 'dispatchSurge'].forEach((key) => { simulation[key] = Boolean(saved[key]); });
+      simulation.tripCount = Math.round(safeNumber(saved.tripCount, 0, 0, 10000));
+      simulation.repairCount = Math.round(safeNumber(saved.repairCount, 0, 0, 10000));
+      simulation.actions = Math.round(safeNumber(saved.actions, 0, 0, 1000000));
+      simulation.eccsCharges = Math.round(safeNumber(saved.eccsCharges, 2, 0, 2));
+      simulation.eccsTime = safeNumber(saved.eccsTime, 0, 0, 100);
+      simulation.diesel = Object.assign({ status: 'standby', timer: 0 }, saved.diesel && typeof saved.diesel === 'object' ? saved.diesel : {});
+      if (!['standby', 'cranking', 'online'].includes(simulation.diesel.status)) simulation.diesel.status = 'standby';
+      simulation.diesel.timer = safeNumber(simulation.diesel.timer, 0, 0, 120);
+      simulation.faults = Object.fromEntries(Object.keys(FAULTS).filter((key) => Boolean(saved.faults && saved.faults[key])).map((key) => [key, true]));
+      simulation.repairJobs = Array.isArray(saved.repairJobs) ? saved.repairJobs.filter((job) => job && FAULTS[job.type]).slice(0, 7).map((job) => ({ type: job.type, remaining: safeNumber(job.remaining, FAULTS[job.type].duration, 0, 1000) })) : [];
+      simulation.events = saved.events && typeof saved.events === 'object' ? saved.events : {};
+      simulation.tripTime = Number.isFinite(saved.tripTime) ? safeNumber(saved.tripTime, 0, 0, simulation.timeLimit) : null;
+      simulation.speed = [0.5, 1, 2, 4].includes(Number(saved.speed)) ? Number(saved.speed) : 1;
+      simulation.paused = false;
+      simulation.ended = false;
+      simulation.coach = { active: false, step: 0, flags: { rods: false, pumps: false, feed: false } };
+      simulation.history = Array.isArray(saved.history) ? saved.history.filter((point) => point && Number.isFinite(point.t) && Number.isFinite(point.flux) && Number.isFinite(point.hot)).slice(-180).map((point) => ({ t: safeNumber(point.t, 0, 0, simulation.timeLimit), flux: safeNumber(point.flux, 0, 0, 116), hot: safeNumber(point.hot, 260, 0, 1200), pressure: safeNumber(point.pressure, 150, 0, 250), power: safeNumber(point.power, 0, 0, 1200) })) : [];
+      simulation.trackWindow = Array.isArray(saved.trackWindow) ? saved.trackWindow.filter((point) => point && Number.isFinite(point.t)).slice(-800).map((point) => ({ t: safeNumber(point.t, 0, 0, simulation.timeLimit), ok: Boolean(point.ok) })) : [];
+      simulation.log = Array.isArray(saved.log) ? saved.log.filter((entry) => entry && typeof entry.message === 'string').slice(-28).map((entry) => ({ time: safeNumber(entry.time, 0, 0, simulation.timeLimit), message: entry.message.slice(0, 400), kind: ['normal', 'warning', 'critical'].includes(entry.kind) ? entry.kind : 'normal' })) : [];
+      simulation.alarms = [];
+      selectedScenario = simulation.scenario;
+      selectedDifficulty = simulation.difficulty;
+      titleScreen.classList.add('hidden');
+      simScreen.classList.remove('hidden');
+      closeAllModals();
+      initAudio();
+      logEvent('Saved shift restored from local checkpoint.', 'normal');
+      renderUI();
+      notify('Checkpoint restored. Simulation resumed at normal speed.', 'normal');
+    }
+
+    function saveCheckpoint(showMessage = true) {
+      if (!simulation || simulation.ended) {
+        if (showMessage) notify('No active shift to save.', 'warning');
+        return false;
+      }
+      const snapshot = JSON.parse(JSON.stringify(simulation));
+      snapshot.paused = false;
+      snapshot.speed = simulation.speed || 1;
+      const stored = safeWrite(STORAGE.checkpoint, snapshot);
+      if (showMessage) notify(stored ? 'Shift checkpoint saved on this device.' : 'Browser storage is unavailable. Checkpoint could not be saved.', stored ? 'normal' : 'warning');
+      return stored;
+    }
+
+    function returnToTitle(abandon = false) {
+      if (simulation && !simulation.ended) {
+        if (abandon) safeRemove(STORAGE.checkpoint);
+        else saveCheckpoint(false);
+        simulation.paused = true;
+      }
+      closeAllModals();
+      simScreen.classList.add('hidden');
+      titleScreen.classList.remove('hidden');
+      renderProfile();
+    }
+
+    function setPaused(paused, reason = '') {
+      if (!simulation || simulation.ended) return;
+      simulation.paused = Boolean(paused);
+      if (simulation.paused) {
+        $('pauseMessage').textContent = reason || 'The plant state is frozen. Resume when ready.';
+        openModal('pauseModal');
+        if (reason) notify(reason, 'warning');
+      } else {
+        closeAllModals();
+        initAudio();
+      }
+      renderUI();
+    }
+
+    function setSpeed(speed) {
+      if (!simulation) return;
+      simulation.speed = [0.5, 1, 2, 4].includes(Number(speed)) ? Number(speed) : 1;
+      document.querySelectorAll('[data-speed]').forEach((button) => {
+        const active = Number(button.dataset.speed) === simulation.speed;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      tone(330 + simulation.speed * 90, .045, 'sine', .07);
+      renderUI();
+    }
+
+    function openModal(id) {
+      modalIds.forEach((modalId) => $(modalId).classList.add('hidden'));
+      $(id).classList.remove('hidden');
+      activeModal = id;
+      const focusable = $(id).querySelector('button:not(:disabled), input:not(:disabled), select:not(:disabled)');
+      if (focusable) setTimeout(() => focusable.focus({ preventScroll: true }), 30);
+    }
+    function closeAllModals() {
+      modalIds.forEach((id) => $(id).classList.add('hidden'));
+      activeModal = null;
+      settingsReturnModal = null;
+    }
+    function closeModal(id) {
+      $(id).classList.add('hidden');
+      if (activeModal === id) activeModal = null;
+      if (id === 'settingsModal' && settingsReturnModal) {
+        const returnTo = settingsReturnModal;
+        settingsReturnModal = null;
+        openModal(returnTo);
+      }
+    }
+    function openSettings() {
+      settingsReturnModal = activeModal === 'pauseModal' ? 'pauseModal' : null;
+      saveSettings();
+      openModal('settingsModal');
+    }
+    function openHelp() { openModal('helpModal'); }
+
+    function notify(message, kind = 'normal') {
+      const toast = $('toast');
+      toast.textContent = message;
+      toast.classList.remove('is-warning', 'is-critical', 'is-visible');
+      if (kind === 'warning') toast.classList.add('is-warning');
+      if (kind === 'critical') toast.classList.add('is-critical');
+      requestAnimationFrame(() => toast.classList.add('is-visible'));
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2800);
+    }
+
+    function initAudio() {
+      if (audioContext) {
+        if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+        updateAudioGain();
+        return;
+      }
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      try {
+        audioContext = new AudioCtx();
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = preferences.muted ? 0 : preferences.volume;
+        masterGain.connect(audioContext.destination);
+        const lowFilter = audioContext.createBiquadFilter();
+        lowFilter.type = 'lowpass';
+        lowFilter.frequency.value = 170;
+        const humA = audioContext.createOscillator();
+        const humB = audioContext.createOscillator();
+        const humGain = audioContext.createGain();
+        humA.type = 'triangle'; humA.frequency.value = 48;
+        humB.type = 'sine'; humB.frequency.value = 73;
+        humGain.gain.value = .035;
+        humA.connect(lowFilter); humB.connect(lowFilter); lowFilter.connect(humGain); humGain.connect(masterGain);
+        humA.start(); humB.start();
+        audioNodes = [humA, humB, lowFilter, humGain];
+        ambientStarted = true;
+      } catch (error) {
+        audioContext = null;
+        masterGain = null;
+      }
+    }
+    function updateAudioGain() {
+      if (!masterGain || !audioContext) return;
+      masterGain.gain.setTargetAtTime(preferences.muted ? 0 : preferences.volume, audioContext.currentTime, .045);
+    }
+    function tone(frequency = 520, duration = .09, type = 'sine', volume = .14) {
+      if (preferences.muted || preferences.volume <= 0) return;
+      initAudio();
+      if (!audioContext || !masterGain) return;
+      try {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        const start = audioContext.currentTime;
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(Math.max(.001, volume), start + .012);
+        gain.gain.exponentialRampToValueAtTime(.0001, start + Math.max(.04, duration));
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(start); osc.stop(start + duration + .025);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      } catch (error) { /* Audio is optional when the browser blocks synthesis. */ }
+    }
+    function alarmTone(critical = false) {
+      tone(critical ? 770 : 560, .11, 'square', critical ? .13 : .085);
+      if (critical) setTimeout(() => tone(590, .12, 'square', .11), 135);
+    }
+    function updateSoundButtons() {
+      const text = preferences.muted ? 'MUTED' : 'AUDIO';
+      $('soundSimBtn').textContent = text;
+      $('soundSimBtn').classList.toggle('active', preferences.muted);
+      $('soundSimBtn').setAttribute('aria-label', preferences.muted ? 'Enable sound' : 'Mute sound');
+    }
+    function toggleMute() {
+      preferences.muted = !preferences.muted;
+      if (!preferences.muted) initAudio();
+      saveSettings();
+      tone(420, .05, 'sine', .1);
+    }
+
+    function logEvent(message, kind = 'normal') {
+      if (!simulation) return;
+      simulation.log.unshift({ time: simulation.time || 0, message, kind });
+      if (simulation.log.length > 36) simulation.log.length = 36;
+      renderEventLog();
+    }
+
+    function markAction(label) {
+      if (!simulation) return;
+      simulation.actions += 1;
+      logEvent(`Operator ${label}.`, 'normal');
+      renderUI();
+    }
+
+    function triggerScram(source = 'manual') {
+      if (!simulation || simulation.ended || simulation.scrammed) {
+        if (simulation && simulation.scrammed) notify('Safety rods are already fully inserted.', 'warning');
+        return;
+      }
+      simulation.scrammed = true;
+      simulation.tripCount += 1;
+      simulation.decayHeat = Math.max(.055, simulation.flux * .075);
+      simulation.turbineTripped = true;
+      simulation.sync = false;
+      simulation.tripTime = simulation.tripTime ?? simulation.time;
+      simulation.actions += 1;
+      logEvent(`${source === 'manual' ? 'Manual' : 'Automatic protection'} SCRAM initiated. Safety rods are dropping; decay heat remains.`, source === 'manual' ? 'warning' : 'critical');
+      notify(source === 'manual' ? 'SCRAM INITIATED / safety rods inserting' : 'AUTOMATIC REACTOR TRIP / check core cooling', 'critical');
+      alarmTone(true);
+      renderUI();
+    }
+
+    function triggerGridTrip(automatic = false) {
+      if (!simulation || simulation.gridTrip) return;
+      const s = simulation;
+      s.gridTrip = true;
+      s.gridConnected = false;
+      s.sync = false;
+      s.turbineTripped = true;
+      s.tripTime = s.time;
+      s.faults.gridTrip = true;
+      s.actions += automatic ? 0 : 1;
+      logEvent(automatic ? 'CAPSTONE EVENT: loss of offsite power. Main bus de-energized; emergency diesel on standby.' : 'Training fault injected: offsite power lost. Main bus de-energized.', 'critical');
+      notify('LOSS OF OFFSITE POWER / restore emergency cooling', 'critical');
+      alarmTone(true);
+      renderUI();
+    }
+
+    function startDiesel() {
+      if (!simulation || simulation.ended) return;
+      const s = simulation;
+      if (s.gridConnected && !s.gridTrip) { notify('Emergency diesel is not required while offsite power is available.', 'warning'); return; }
+      if (s.diesel.status !== 'standby') { notify(s.diesel.status === 'cranking' ? 'Emergency diesel is already cranking.' : 'Emergency diesel is already online.', 'warning'); return; }
+      s.diesel.status = 'cranking';
+      s.diesel.timer = DIFFICULTIES[s.difficulty].stress > 1.15 ? 24 : 18;
+      s.actions += 1;
+      logEvent('Emergency diesel start sequence initiated. Essential bus transfer is automatic on stable voltage.', 'warning');
+      tone(280, .12, 'triangle', .13);
+      renderUI();
+    }
+
+    function activateECCS() {
+      if (!simulation || simulation.ended) return;
+      const s = simulation;
+      if (s.eccsTime > 0) { notify(`ECCS injection active for ${Math.ceil(s.eccsTime)} simulated seconds.`, 'normal'); return; }
+      if (s.eccsCharges <= 0) { notify('ECCS accumulator reserve depleted for this shift.', 'critical'); return; }
+      s.eccsCharges -= 1;
+      s.eccsTime = 52;
+      s.actions += 1;
+      logEvent(`Emergency core cooling injection started. ${s.eccsCharges} reserve charge${s.eccsCharges === 1 ? '' : 's'} remain.`, 'warning');
+      tone(210, .16, 'sawtooth', .11);
+      renderUI();
+    }
+
+    function synchronizeGrid() {
+      if (!simulation || simulation.ended) return;
+      const s = simulation;
+      const ready = s.gridConnected && !s.gridTrip && !s.scrammed && !s.turbineTripped && s.grossPower >= 120 && s.steamPressure >= 30;
+      if (!ready) {
+        notify('Sync permissive blocked: require live grid, steam above 30 bar and a running turbine.', 'warning');
+        return;
+      }
+      s.sync = true;
+      s.actions += 1;
+      logEvent('Generator synchronized to the grid. Export is now following the turbine load command.', 'normal');
+      notify('GENERATOR SYNCHRONIZED / grid export enabled', 'normal');
+      tone(660, .08, 'sine', .14);
+      renderUI();
+    }
+
+    function toggleIsolation() {
+      if (!simulation) return;
+      simulation.isolation = !simulation.isolation;
+      simulation.actions += 1;
+      logEvent(simulation.isolation ? 'Primary loop isolation valve closed. Leak rate reduced; available circulation is lower.' : 'Primary loop isolation valve reopened. Full circulation restored.', simulation.isolation ? 'warning' : 'normal');
+      renderUI();
+    }
+
+    function resetTurbine() {
+      if (!simulation) return;
+      const s = simulation;
+      if (!s.turbineTripped) { notify('Turbine is not tripped.', 'normal'); return; }
+      if (s.faults.turbineTrip || s.gridTrip || s.scrammed) { notify('Turbine reset blocked: clear trip cause, restore grid and establish reactor conditions.', 'warning'); return; }
+      if (s.steamPressure < 28) { notify('Turbine reset blocked: steam pressure below 28 bar.', 'warning'); return; }
+      s.turbineTripped = false;
+      s.actions += 1;
+      logEvent('Turbine reset permissives satisfied. Generator is ready for synchronization.', 'normal');
+      tone(470, .08, 'sine', .1);
+      renderUI();
+    }
+
+    function resetScram() {
+      if (!simulation) return;
+      const s = simulation;
+      if (!s.scrammed) { notify('Reactor is not in a scram state.', 'normal'); return; }
+      if (s.flux > .045 || s.damage > 15) { notify('Scram reset blocked: neutron flux must be below 4.5% and core integrity stable.', 'warning'); return; }
+      s.scrammed = false;
+      s.actions += 1;
+      logEvent('Scram reset permissive accepted. Reactor remains subcritical until rods are withdrawn.', 'normal');
+      renderUI();
+    }
+
+    function injectFault(type, automatic = false) {
+      if (!simulation || simulation.ended) return;
+      const s = simulation;
+      if (type === 'xenonPulse') {
+        s.xenon = clamp(s.xenon + 34 * DIFFICULTIES[s.difficulty].stress, 0, 140);
+        s.actions += automatic ? 0 : 1;
+        logEvent('Xenon-135 transient injected. Neutron absorption will rise, then decay as the poison clears.', 'warning');
+        notify('XENON TRANSIENT / flux response delayed', 'warning');
+        tone(380, .1, 'sawtooth', .11);
+        renderUI();
+        return;
+      }
+      if (!FAULTS[type]) return;
+      if (s.faults[type] || s.repairJobs.some((job) => job.type === type)) {
+        notify(`${FAULTS[type].name} is already active or under repair.`, 'warning');
+        return;
+      }
+      if (type === 'gridTrip') {
+        triggerGridTrip(automatic);
+        return;
+      }
+      s.faults[type] = true;
+      if (type === 'turbineTrip') { s.turbineTripped = true; s.sync = false; }
+      s.actions += automatic ? 0 : 1;
+      logEvent(`Fault injected: ${FAULTS[type].name}. Review alarms and dispatch maintenance if required.`, 'warning');
+      notify(`${FAULTS[type].name.toUpperCase()} / fault active`, 'warning');
+      alarmTone(false);
+      renderUI();
+    }
+
+    function dispatchRepair() {
+      if (!simulation || simulation.ended) return;
+      const s = simulation;
+      const type = $('faultSelect').value;
+      if (!FAULTS[type] || !s.faults[type]) { notify('Select a persistent active fault before dispatching a crew.', 'warning'); return; }
+      if (s.repairJobs.some((job) => job.type === type)) { notify('A crew is already working on that system.', 'warning'); return; }
+      const fault = FAULTS[type];
+      if (s.budget < fault.cost) { notify(`Insufficient maintenance reserve. ${fault.cost}k required.`, 'critical'); return; }
+      s.budget -= fault.cost;
+      const stress = DIFFICULTIES[s.difficulty].stress;
+      s.repairJobs.push({ type, remaining: fault.duration * stress });
+      s.actions += 1;
+      logEvent(`Maintenance crew dispatched to ${fault.name.toLowerCase()}. Cost: $${fault.cost}k.`, 'warning');
+      tone(360, .08, 'triangle', .1);
+      renderUI();
+    }
+
+    function completeRepair(type) {
+      const s = simulation;
+      delete s.faults[type];
+      s.repairCount += 1;
+      if (type === 'primaryLeak') {
+        s.isolation = false;
+        logEvent('Primary loop leak repaired. Isolation valve reopened and full circulation restored.', 'normal');
+      } else if (type === 'gridTrip') {
+        s.gridTrip = false;
+        s.gridConnected = true;
+        logEvent('Grid repair complete. Offsite power is available; reset the turbine and synchronize when ready.', 'normal');
+      } else if (type === 'turbineTrip') {
+        s.turbineTripped = false;
+        logEvent('Turbine trip fault cleared. Check steam conditions before returning to service.', 'normal');
+      } else {
+        logEvent(`${FAULTS[type].name} repair complete. Equipment response restored.`, 'normal');
+      }
+      notify(`${FAULTS[type].name.toUpperCase()} / REPAIR COMPLETE`, 'normal');
+      tone(740, .09, 'sine', .1);
+    }
+
+    function approach(current, target, rate, dt) {
+      const amount = Math.max(0, rate) * dt;
+      if (Math.abs(target - current) <= amount) return target;
+      return current + Math.sign(target - current) * amount;
+    }
+
+    function updateScenarioDemand(s) {
+      if (s.scenario === 'load') {
+        const base = 500 + 155 * (0.5 + 0.5 * Math.sin((s.time + 18) / 102));
+        const surge = s.time > 280 && s.time < 405 ? 105 * Math.sin(Math.PI * (s.time - 280) / 125) : 0;
+        s.demand = clamp(base + surge, 400, 780);
+        if (s.time >= 280 && s.time < 282 && !s.events.surge) {
+          s.events.surge = true;
+          s.dispatchSurge = true;
+          logEvent('DISPATCH SURGE: evening demand ramp is +105 MW. Raise turbine load and preserve thermal margin.', 'warning');
+          notify('DISPATCH SURGE / +105 MW demand ramp', 'warning');
+          alarmTone(false);
+        }
+      } else if (s.scenario === 'blackout') {
+        s.demand = s.gridConnected ? 760 : 0;
+      } else {
+        s.demand = 620;
+      }
+    }
+
+    function updateSimulation(dt) {
+      const s = simulation;
+      if (!s || s.paused || s.ended || !(dt > 0)) return;
+      const difficulty = DIFFICULTIES[s.difficulty];
+      s.time += dt;
+      updateScenarioDemand(s);
+
+      if (s.scenario === 'blackout' && !s.events.blackout && s.time >= 75 * difficulty.eventDelay) {
+        s.events.blackout = true;
+        triggerGridTrip(true);
+      }
+      if (s.scenario === 'cold' && !s.events.xenon && s.time >= 235 * difficulty.eventDelay && s.flux > .35) {
+        s.events.xenon = true;
+        s.xenon = clamp(s.xenon + 24, 0, 140);
+        logEvent('Startup capstone: iodine decay is feeding a xenon transient. Expect a slow negative reactivity shift.', 'warning');
+        notify('XENON BUILDUP / adjust rod position gradually', 'warning');
+        alarmTone(false);
+      }
+      if (s.scenario === 'load' && s.difficulty === 'severe' && !s.events.severeFault && s.time >= 365 * difficulty.eventDelay) {
+        s.events.severeFault = true;
+        injectFault('feedwater', true);
+      }
+
+      if (s.diesel.status === 'cranking') {
+        s.diesel.timer = Math.max(0, s.diesel.timer - dt);
+        if (s.diesel.timer <= 0) {
+          s.diesel.status = 'online';
+          logEvent('Emergency diesel stable. Essential electrical bus restored; primary pumps are available.', 'normal');
+          notify('EMERGENCY DIESEL ONLINE / essential bus restored', 'normal');
+          tone(610, .14, 'triangle', .12);
+        }
+      }
+
+      for (let i = s.repairJobs.length - 1; i >= 0; i -= 1) {
+        const job = s.repairJobs[i];
+        job.remaining -= dt;
+        if (job.remaining <= 0) {
+          s.repairJobs.splice(i, 1);
+          completeRepair(job.type);
+        }
+      }
+
+      if (s.eccsTime > 0) {
+        s.eccsTime = Math.max(0, s.eccsTime - dt);
+        s.coolant = clamp(s.coolant + dt * .075, 0, 100);
+        s.commands.boron = clamp(s.commands.boron + dt * .35, 0, 1200);
+      }
+
+      const commandRod = s.scrammed ? 100 : (s.faults.rodJam ? Math.min(s.commands.rods, 56) : s.commands.rods);
+      const rodRate = s.scrammed ? 16 : (s.faults.rodJam ? .22 : .53 * (profile.certs.rods ? 1.3 : 1));
+      s.actual.rods = approach(s.actual.rods, commandRod, rodRate, dt);
+      s.actual.boron = approach(s.actual.boron, s.commands.boron, 4.0, dt);
+      s.actual.pumps = approach(s.actual.pumps, s.commands.pumps, 17, dt);
+      s.actual.feed = approach(s.actual.feed, s.commands.feed, 14, dt);
+      s.actual.turbine = approach(s.actual.turbine, s.commands.turbine, 24, dt);
+
+      const essentialBus = s.gridConnected && !s.gridTrip || s.diesel.status === 'online';
+      let pumpFlow = s.actual.pumps * (essentialBus ? 1 : .34);
+      if (s.faults.pumpTrip) pumpFlow *= .34;
+      if (s.isolation) pumpFlow *= .9;
+      if (s.eccsTime > 0) pumpFlow = Math.min(100, pumpFlow + 8);
+      if (profile.certs.pumps) pumpFlow = Math.min(100, pumpFlow * 1.08);
+      s.pumpFlow = clamp(pumpFlow, 13, 108);
+
+      let feedFlow = s.actual.feed * (essentialBus ? 1 : .38);
+      if (s.faults.feedwater) feedFlow *= .24;
+      s.feedFlow = clamp(feedFlow, 0, 100);
+
+      if (s.faults.primaryLeak) {
+        const leakFactor = s.isolation ? .18 : 1;
+        const leakRate = .062 * difficulty.stress * (profile.certs.pumps ? .8 : 1) * leakFactor;
+        s.coolant = clamp(s.coolant - leakRate * dt, 0, 100);
+      }
+      if (s.eccsTime > 0) s.coolant = clamp(s.coolant + dt * .018, 0, 100);
+
+      const rodFraction = clamp(1 - s.actual.rods / 100, 0, 1);
+      const rodWorth = Math.pow(rodFraction, 1.4);
+      const boronFactor = clamp(1 - s.actual.boron / 1600, .19, 1.04);
+      const xenonFactor = clamp(1 - s.xenon / 170, .38, 1.02);
+      const fuelFeedback = clamp(1 - (s.fuelTemp - 420) * .00042, .74, 1.08);
+      let targetFlux = rodWorth * 1.12 * boronFactor * xenonFactor * fuelFeedback;
+      if (s.scrammed) targetFlux = .006;
+      if (s.faults.rodJam && !s.scrammed && s.commands.rods > 56) targetFlux = Math.min(1.1, targetFlux + .03);
+      s.targetFlux = clamp(targetFlux, .002, 1.12);
+      const fluxTau = s.scrammed ? 3.8 : 13.5;
+      const delayedLag = (s.precursor - s.flux) * (s.scrammed ? .025 : .035);
+      s.flux = clamp(s.flux + (s.targetFlux - s.flux) * (1 - Math.exp(-dt / fluxTau)) + delayedLag * dt, .001, 1.16);
+      s.precursor += (s.flux - s.precursor) * (1 - Math.exp(-dt / 34));
+      s.reactivity = clamp((s.targetFlux - s.flux) * 265, -280, 280);
+
+      if (s.scrammed) s.decayHeat = Math.max(.012, s.decayHeat * Math.exp(-dt / 1450));
+      s.heatLoad = s.scrammed ? Math.max(.012, s.decayHeat) : s.flux;
+      const xenonTarget = s.scrammed ? 0 : s.flux * 67;
+      const xenonTau = profile.certs.xenon ? 490 : 400;
+      s.xenon = clamp(s.xenon + (xenonTarget - s.xenon) * (1 - Math.exp(-dt / xenonTau)), 0, 150);
+
+      const pressurePenalty = Math.max(0, 142 - s.primaryPressure) * .22;
+      const inventoryPenalty = s.coolant < 60 ? (60 - s.coolant) * .5 : 0;
+      const lowFlowPenalty = Math.max(0, 48 - s.pumpFlow) * .7;
+      const loopStress = s.faults.primaryLeak && !s.isolation ? 8 : 0;
+      const hotTarget = 260 + s.heatLoad * 76 + (82 - s.pumpFlow) * .22 + (75 - s.feedFlow) * .065 + pressurePenalty + inventoryPenalty + lowFlowPenalty + loopStress;
+      const coldTarget = hotTarget - (20 + s.pumpFlow * .15);
+      s.hotTemp += (hotTarget - s.hotTemp) * (1 - Math.exp(-dt / (45 + s.pumpFlow * .12)));
+      s.coldTemp += (coldTarget - s.coldTemp) * (1 - Math.exp(-dt / 52));
+      const fuelTarget = s.hotTemp + 112 + s.heatLoad * 155 + Math.max(0, 55 - s.pumpFlow) * .32;
+      s.fuelTemp += (fuelTarget - s.fuelTemp) * (1 - Math.exp(-dt / 62));
+
+      const targetPrimaryPressure = 155 + (s.hotTemp - 300) * .16 - (100 - s.coolant) * .22 - (s.faults.primaryLeak ? (s.isolation ? 5 : 17) : 0) - Math.max(0, 70 - s.pumpFlow) * .06;
+      s.primaryPressure += (targetPrimaryPressure - s.primaryPressure) * (1 - Math.exp(-dt / 34));
+      const feedFraction = clamp(s.feedFlow / 78, 0, 1.2);
+      const turbineDraw = s.actual.turbine * .22;
+      const condenserBack = s.faults.condenser ? 18 : 0;
+      const targetSteam = clamp(18 + s.heatLoad * 88 * feedFraction - turbineDraw + condenserBack, 3, 118);
+      s.steamPressure += (targetSteam - s.steamPressure) * (1 - Math.exp(-dt / 32));
+      s.steamTemp = 150 + s.steamPressure * 1.9;
+
+      const steamAvailability = clamp((s.steamPressure - 10) / 53, 0, 1.08);
+      const condenserEfficiency = s.faults.condenser ? .53 : 1;
+      const turbineCapacity = Math.min(s.heatLoad * 1000, s.actual.turbine * 10);
+      s.grossPower = s.turbineTripped ? 0 : Math.max(0, turbineCapacity * steamAvailability * condenserEfficiency);
+      s.exportPower = s.sync && s.gridConnected && !s.gridTrip ? s.grossPower : 0;
+      s.totalEnergy += s.exportPower * dt / 3600;
+
+      const thermalStress = Math.max(0, (s.fuelTemp - 620) / 180);
+      const inventoryStress = Math.max(0, (32 - s.coolant) / 32);
+      s.damage = clamp(s.damage + (thermalStress * thermalStress * .22 + inventoryStress * .11) * difficulty.stress * dt, 0, 120);
+      s.maxFuelTemp = Math.max(s.maxFuelTemp, s.fuelTemp);
+      s.maxHotTemp = Math.max(s.maxHotTemp, s.hotTemp);
+      s.maxDamage = Math.max(s.maxDamage, s.damage);
+      s.maxFlux = Math.max(s.maxFlux, s.flux);
+
+      if (!s.scrammed && (s.hotTemp > 372 || s.primaryPressure > 183 || s.flux > 1.13 || s.coolant < 16)) {
+        triggerScram('automatic protection');
+      }
+      if (s.fuelTemp >= 1000 || s.damage >= 100 || s.coolant <= 2) {
+        endScenario(false, 'Fuel damage exceeded the recoverable core limit. The unit has entered a simulated core-damage state.');
+        return;
+      }
+
+      const tracked = s.sync && Math.abs(s.exportPower - s.demand) <= 85 && s.hotTemp < 342 && s.primaryPressure > 128 && s.primaryPressure < 178 && !s.gridTrip;
+      s.trackTotal += dt;
+      if (tracked) s.trackGood += dt;
+      if (s.scenario === 'load') {
+        s.trackWindow.push({ t: s.time, ok: tracked });
+        while (s.trackWindow.length && s.time - s.trackWindow[0].t > 150) s.trackWindow.shift();
+      }
+
+      const stableStartup = s.sync && s.exportPower >= 430 && s.hotTemp >= 270 && s.hotTemp <= 338 && s.primaryPressure >= 132 && s.primaryPressure <= 178 && Math.abs(s.targetFlux - s.flux) < .09 && s.damage < 15;
+      if (s.scenario === 'cold') {
+        s.hold = stableStartup ? s.hold + dt : Math.max(0, s.hold - dt * .5);
+        if (s.hold >= 100) { endScenario(true, 'The reactor reached criticality, synchronized cleanly and held stable power through the xenon transient.'); return; }
+      } else if (s.scenario === 'load') {
+        const windowGood = s.trackWindow.length ? s.trackWindow.filter((point) => point.ok).length / s.trackWindow.length : 0;
+        s.hold = windowGood;
+        if (s.time >= 390 && s.trackWindow.length >= 80 && windowGood >= .73 && s.damage < 18) { endScenario(true, 'Dispatch tracking stayed inside tolerance through the demand ramp without exceeding core or pressure limits.'); return; }
+      } else if (s.scenario === 'blackout' && s.events.blackout) {
+        const safeRecovery = s.scrammed && s.diesel.status === 'online' && s.pumpFlow >= 56 && s.hotTemp < 366 && s.primaryPressure > 112 && s.damage < 28;
+        s.hold = safeRecovery ? s.hold + dt : Math.max(0, s.hold - dt * .5);
+        if (s.hold >= 155) { endScenario(true, 'The reactor was safely tripped, essential power recovered on diesel, and decay heat was removed through the blackout window.'); return; }
+      }
+
+      if (s.time >= s.timeLimit) {
+        endScenario(false, 'Shift window expired before the capstone objective was met. Review the hold criteria and try a safer command sequence.');
+        return;
+      }
+
+      if (s.time - s.lastAlarmCheck >= 1) {
+        s.lastAlarmCheck = s.time;
+        updateAlarms();
+      }
+      s.sampleClock += dt;
+      if (s.sampleClock >= 4) {
+        s.sampleClock %= 4;
+        s.history.push({ t: s.time, flux: s.flux * 100, hot: s.hotTemp, pressure: s.primaryPressure, power: s.exportPower });
+        if (s.history.length > 180) s.history.shift();
+      }
+      if (s.time - s.lastAutoSave >= 75) {
+        s.lastAutoSave = s.time;
+        saveCheckpoint(false);
+      }
+    }
+
+    function updateAlarms() {
+      const s = simulation;
+      if (!s) return;
+      const next = [];
+      if (s.gridTrip) next.push({ key: 'grid', level: 'critical', text: 'Loss of offsite power / essential bus at risk' });
+      if (s.hotTemp >= 350) next.push({ key: 'hot-high', level: s.hotTemp >= 370 ? 'critical' : 'warning', text: `High core outlet temperature / ${Math.round(s.hotTemp)}°C` });
+      else if (s.hotTemp > 326) next.push({ key: 'hot-watch', level: 'warning', text: `Core outlet temperature rising / ${Math.round(s.hotTemp)}°C` });
+      if (s.primaryPressure < 128) next.push({ key: 'pressure-low', level: s.primaryPressure < 112 ? 'critical' : 'warning', text: `Primary pressure low / ${Math.round(s.primaryPressure)} bar` });
+      if (s.primaryPressure > 177) next.push({ key: 'pressure-high', level: 'warning', text: `Primary pressure high / ${Math.round(s.primaryPressure)} bar` });
+      if (s.coolant < 72) next.push({ key: 'inventory', level: s.coolant < 38 ? 'critical' : 'warning', text: `Coolant inventory falling / ${Math.round(s.coolant)}%` });
+      if (s.damage > 5) next.push({ key: 'damage', level: s.damage > 30 ? 'critical' : 'warning', text: `Fuel cladding stress / ${Math.round(s.damage)}% damage index` });
+      if (s.xenon > 76) next.push({ key: 'xenon', level: 'warning', text: `Xenon-135 poisoning elevated / ${Math.round(s.xenon)} units` });
+      if (s.faults.feedwater) next.push({ key: 'feedwater', level: 'warning', text: 'Feedwater pump trip / steam generator level falling' });
+      if (s.faults.primaryLeak) next.push({ key: 'leak', level: s.coolant < 45 ? 'critical' : 'warning', text: 'Primary coolant leakage / isolate or inject ECCS' });
+      if (s.faults.pumpTrip) next.push({ key: 'pump', level: 'warning', text: 'Primary pump trip / reduced core circulation' });
+      if (s.faults.rodJam) next.push({ key: 'rod-jam', level: 'warning', text: 'Rod drive jam / limited regulating bank travel' });
+      if (s.faults.condenser) next.push({ key: 'condenser', level: 'warning', text: 'Condenser heat rejection degraded / output derated' });
+      if (s.faults.turbineTrip) next.push({ key: 'turbine', level: 'warning', text: 'Turbine trip / generator output isolated' });
+      const previous = new Set(s.alarms.map((alarm) => alarm.key));
+      const newAlarms = next.filter((alarm) => !previous.has(alarm.key));
+      s.alarms = next;
+      newAlarms.forEach((alarm) => {
+        logEvent(`ALARM: ${alarm.text}.`, alarm.level === 'critical' ? 'critical' : 'warning');
+        alarmTone(alarm.level === 'critical');
+      });
+    }
+
+    function endScenario(success, reason) {
+      if (!simulation || simulation.ended) return;
+      const s = simulation;
+      s.ended = true;
+      s.paused = true;
+      safeRemove(STORAGE.checkpoint);
+      const difficulty = DIFFICULTIES[s.difficulty];
+      let award = 0;
+      if (success) {
+        const safetyFactor = clamp(1 - s.maxDamage / 100, .45, 1);
+        award = Math.round(SCENARIOS[s.scenario].baseReward * difficulty.reward * safetyFactor);
+        profile.xp += award;
+        profile.totalXP += award;
+        profile.totalWins += 1;
+        profile.wins[s.scenario] = (profile.wins[s.scenario] || 0) + 1;
+        profile.totalMWh = (Number(profile.totalMWh) || 0) + s.totalEnergy;
+        const score = Math.round((s.hold / Math.max(1, s.scenario === 'cold' ? 100 : s.scenario === 'blackout' ? 155 : 1)) * 100 + Math.max(0, 40 - s.damage) + s.totalEnergy / 15);
+        profile.bestScore = Math.max(Number(profile.bestScore) || 0, score);
+        saveProfile();
+      }
+      $('endMark').textContent = success ? 'Shift resolved / success' : 'Shift unresolved / protection review';
+      $('endMark').classList.toggle('is-failure', !success);
+      $('endTitle').textContent = success ? (s.scenario === 'blackout' ? 'Core safely recovered.' : 'Operation complete.') : 'Operation lost.';
+      $('endCopy').textContent = reason;
+      $('endScore').innerHTML = success ? `${award} <small>QUALIFICATION XP EARNED</small>` : `0 <small>QUALIFICATION XP</small>`;
+      renderEndStats(success);
+      closeAllModals();
+      openModal('endModal');
+      updateAlarms();
+      renderUI();
+      tone(success ? 740 : 180, .24, success ? 'sine' : 'sawtooth', .15);
+    }
+
+    function renderEndStats(success) {
+      const s = simulation;
+      const trackPct = s.trackTotal ? Math.round(100 * s.trackGood / s.trackTotal) : 0;
+      $('endStats').innerHTML = `<div class="summary-grid">
+        <div class="summary-cell"><small>Scenario</small><strong>${escapeHTML(SCENARIOS[s.scenario].name)}</strong></div>
+        <div class="summary-cell"><small>Condition</small><strong>${escapeHTML(DIFFICULTIES[s.difficulty].name)}</strong></div>
+        <div class="summary-cell"><small>Shift duration</small><strong>${formatTime(s.time)}</strong></div>
+        <div class="summary-cell"><small>Peak fuel temperature</small><strong>${Math.round(s.maxFuelTemp)}°C</strong></div>
+        <div class="summary-cell"><small>Peak core damage</small><strong>${Math.round(s.maxDamage)}%</strong></div>
+        <div class="summary-cell"><small>Exported energy</small><strong>${s.totalEnergy.toFixed(1)} MWh</strong></div>
+        <div class="summary-cell"><small>Dispatch tracking</small><strong>${trackPct}%</strong></div>
+        <div class="summary-cell"><small>Maintenance actions</small><strong>${s.repairCount}</strong></div>
+        <div class="summary-cell"><small>Operator actions</small><strong>${s.actions}</strong></div>
+      </div><p class="summary-note">${success ? 'This operation has been added to your persistent qualification record. Review the telemetry, then select another scenario or purchase a certification.' : 'The scenario can be restarted from the same condition. Use trends and alarms to identify which subsystem drove the excursion.'}</p>`;
+    }
+
+    function renderStatsModal() {
+      if (!simulation) return;
+      const s = simulation;
+      const tracking = s.trackTotal ? Math.round(100 * s.trackGood / s.trackTotal) : 0;
+      const alarms = s.alarms.length;
+      $('statsModalBody').innerHTML = `<div class="summary-grid">
+        <div class="summary-cell"><small>Time / deadline</small><strong>${formatTime(s.time)} / ${formatTime(s.timeLimit)}</strong></div>
+        <div class="summary-cell"><small>Reactor flux</small><strong>${(s.flux * 100).toFixed(1)}%</strong></div>
+        <div class="summary-cell"><small>Live output / dispatch</small><strong>${Math.round(s.exportPower)} / ${Math.round(s.demand)} MW</strong></div>
+        <div class="summary-cell"><small>Hot leg / peak</small><strong>${Math.round(s.hotTemp)} / ${Math.round(s.maxHotTemp)}°C</strong></div>
+        <div class="summary-cell"><small>Coolant / pressure</small><strong>${Math.round(s.coolant)}% / ${Math.round(s.primaryPressure)} bar</strong></div>
+        <div class="summary-cell"><small>Steam / xenon</small><strong>${Math.round(s.steamPressure)} bar / ${Math.round(s.xenon)}</strong></div>
+        <div class="summary-cell"><small>Dispatch tracking</small><strong>${tracking}%</strong></div>
+        <div class="summary-cell"><small>Active alarms / trips</small><strong>${alarms} / ${s.tripCount}</strong></div>
+        <div class="summary-cell"><small>Energy / maintenance reserve</small><strong>${s.totalEnergy.toFixed(1)} MWh / $${s.budget}k</strong></div>
+      </div><div class="report-chart"><div class="chart-caption">Shift trace / flux and hot-leg temperature</div><canvas id="reportTrendCanvas" aria-label="Current shift trend report"></canvas></div><p class="summary-note">${s.scrammed ? 'Decay heat is still present after SCRAM. Maintain pump flow and coolant inventory until the fuel cools.' : 'The one-group kinetics response includes a delayed precursor, soluble-boron absorption, xenon poisoning and negative fuel-temperature feedback.'}</p>`;
+      requestAnimationFrame(drawReportTrend);
+    }
+
+    function openStats() { renderStatsModal(); openModal('statsModal'); }
+
+    function renderCertModal() {
+      const container = $('certModalBody');
+      if (!container) return;
+      container.innerHTML = `<div class="section-label" style="margin-bottom:10px"><span>${getRank(profile.totalXP)} / ${profile.xp} XP AVAILABLE</span><span>Permanent upgrades</span></div><div class="cert-list">${CERTS.map((cert) => {
+        const unlocked = Boolean(profile.certs[cert.key]);
+        const canBuy = profile.xp >= cert.cost;
+        return `<div class="cert-row ${unlocked ? 'is-unlocked' : ''}"><div class="cert-seal">${cert.seal}</div><div><strong>${cert.title}</strong><p>${cert.text}</p></div><button class="cert-buy" type="button" data-cert="${cert.key}" ${unlocked || !canBuy ? 'disabled' : ''}>${unlocked ? 'Active' : `Unlock ${cert.cost} XP`}</button></div>`;
+      }).join('')}</div>`;
+      container.querySelectorAll('[data-cert]').forEach((button) => button.addEventListener('click', () => buyCertification(button.dataset.cert)));
+    }
+
+    function buyCertification(key) {
+      const cert = CERTS.find((item) => item.key === key);
+      if (!cert || profile.certs[key]) return;
+      if (profile.xp < cert.cost) { notify(`Need ${cert.cost} qualification XP for ${cert.title}.`, 'warning'); return; }
+      profile.xp -= cert.cost;
+      profile.certs[key] = true;
+      saveProfile();
+      renderCertModal();
+      notify(`${cert.title.toUpperCase()} CERTIFICATION ACTIVE`, 'normal');
+      tone(720, .11, 'sine', .14);
+    }
+
+    function updateCoach() {
+      const s = simulation;
+      if (!s || !s.coach || !s.coach.active) {
+        $('coachBanner').classList.add('hidden');
+        document.querySelectorAll('.coach-target').forEach((element) => element.classList.remove('coach-target'));
+        return;
+      }
+      $('coachBanner').classList.remove('hidden');
+      const step = s.coach.step;
+      const steps = [
+        { mark: '01', title: 'Establish reactivity', text: 'Move control rods toward 20% insertion. Rod withdrawal raises flux; the plant will respond gradually. Change the highlighted slider to continue.', target: 'rodControl', ready: () => s.coach.flags.rods },
+        { mark: '02', title: 'Close the heat-removal loop', text: 'Keep primary pumps above 70% and feedwater above 60%. Core heat moves into the steam generator only while both loops are healthy.', target: 'pumpControl', ready: () => s.coach.flags.pumps && s.coach.flags.feed },
+        { mark: '03', title: 'Synchronize electrical output', text: 'When steam pressure and turbine power are ready, synchronize the generator. Then use turbine load to shape export toward the dispatch request.', target: 'syncBtn', ready: () => s.sync },
+        { mark: '04', title: 'Monitor feedback', text: 'Xenon builds after sustained power and absorbs neutrons. Watch the trend, hot leg, pressure and annunciator. You are ready to operate.', target: '', ready: () => true }
+      ];
+      const current = steps[clamp(step, 0, steps.length - 1)];
+      $('coachMark').textContent = current.mark;
+      $('coachTitle').textContent = `Operator induction / ${current.title}`;
+      $('coachText').textContent = current.text;
+      $('coachNext').textContent = step >= steps.length - 1 ? 'Finish' : 'Continue';
+      $('coachNext').disabled = !current.ready();
+      $('coachNext').title = $('coachNext').disabled ? 'Complete the highlighted action first.' : '';
+      document.querySelectorAll('.coach-target').forEach((element) => element.classList.remove('coach-target'));
+      if (current.target) $(current.target).classList.add('coach-target');
+    }
+
+    function advanceCoach() {
+      if (!simulation || !simulation.coach.active) return;
+      const steps = 4;
+      if (simulation.coach.step >= steps - 1) {
+        simulation.coach.active = false;
+        logEvent('Operator induction completed.', 'normal');
+        updateCoach();
+        notify('Induction complete. Keep the unit inside its operating envelope.', 'normal');
+        return;
+      }
+      const currentReady = simulation.coach.step === 0 ? simulation.coach.flags.rods : simulation.coach.step === 1 ? simulation.coach.flags.pumps && simulation.coach.flags.feed : simulation.sync;
+      if (!currentReady) return;
+      simulation.coach.step += 1;
+      updateCoach();
+      tone(480, .06, 'sine', .09);
+    }
+
+    function renderEventLog() {
+      if (!simulation) return;
+      const log = $('eventLog');
+      $('eventCount').textContent = `${simulation.log.length} transmission${simulation.log.length === 1 ? '' : 's'}`;
+      if (!simulation.log.length) {
+        log.innerHTML = '<div class="event-entry"><span class="event-time">00:00</span><span class="event-message">No shift events recorded.</span></div>';
+        return;
+      }
+      log.innerHTML = simulation.log.map((entry) => `<div class="event-entry ${entry.kind === 'warning' ? 'is-warning' : entry.kind === 'critical' ? 'is-critical' : ''}"><span class="event-time">${formatTime(entry.time)}</span><span class="event-message">${escapeHTML(entry.message)}</span></div>`).join('');
+    }
+
+    function setMeter(id, value, max, thresholds = null) {
+      const percent = clamp((value / max) * 100, 0, 100);
+      const bar = $(id);
+      bar.style.width = `${percent}%`;
+      let color = 'var(--mint)';
+      if (thresholds) {
+        if (Number.isFinite(thresholds.lowWarn) && value <= thresholds.lowWarn) color = value <= thresholds.lowDanger ? 'var(--red)' : 'var(--amber)';
+        if (Number.isFinite(thresholds.highWarn) && value >= thresholds.highWarn) color = value >= thresholds.highDanger ? 'var(--red)' : 'var(--amber)';
+        if (Number.isFinite(thresholds.warn) && value >= thresholds.warn) color = value >= thresholds.danger ? 'var(--red)' : 'var(--amber)';
+      }
+      bar.style.background = color;
+      bar.style.boxShadow = color === 'var(--mint)' ? '0 0 8px rgba(141,224,182,.35)' : color === 'var(--amber)' ? '0 0 8px rgba(255,200,120,.3)' : '0 0 8px rgba(255,110,114,.38)';
+    }
+
+    function renderUI() {
+      const s = simulation;
+      if (!s) return;
+      const sc = SCENARIOS[s.scenario];
+      $('runScenarioName').textContent = sc.name;
+      $('difficultyBadge').textContent = `${DIFFICULTIES[s.difficulty].name} / ${s.scenario === 'cold' ? 'startup' : s.scenario === 'load' ? 'dispatch' : 'emergency'}`;
+      $('simClock').textContent = formatTime(s.time);
+      $('pauseBtn').innerHTML = s.paused ? '<span class="button-label">Resume</span> <span aria-hidden="true">></span>' : '<span class="button-label">Pause</span> <span aria-hidden="true">II</span>';
+      $('pauseBtn').setAttribute('aria-label', s.paused ? 'Resume simulation' : 'Pause simulation');
+      document.querySelectorAll('[data-speed]').forEach((button) => button.classList.toggle('is-active', Number(button.dataset.speed) === s.speed));
+
+      $('missionCode').textContent = sc.code;
+      $('missionTitle').textContent = sc.name;
+      $('missionGoalText').textContent = sc.objective;
+      $('objectiveIndex').textContent = `${s.scenario === 'cold' ? '01' : s.scenario === 'load' ? '02' : '03'} / 03`;
+      let progress = 0;
+      let progressText = 'Awaiting operator';
+      if (s.scenario === 'cold') {
+        progress = clamp(s.hold / 100 * 100, 0, 100);
+        progressText = s.sync ? `Stable hold ${Math.min(100, Math.round(s.hold))} / 100s` : 'Synchronize generator to begin hold';
+      } else if (s.scenario === 'load') {
+        const recent = s.trackWindow.length ? s.trackWindow.filter((point) => point.ok).length / s.trackWindow.length : 0;
+        progress = clamp(recent * 100, 0, 100);
+        progressText = `Dispatch tolerance / ${Math.round(recent * 100)}% recent`;
+      } else {
+        progress = clamp(s.hold / 155 * 100, 0, 100);
+        progressText = !s.events.blackout ? 'Expected trip in ' + formatTime(Math.max(0, 75 * DIFFICULTIES[s.difficulty].eventDelay - s.time)) : !s.scrammed ? 'Scram the reactor and cut decay heat' : s.diesel.status !== 'online' ? (s.diesel.status === 'cranking' ? `Diesel crank / ${Math.ceil(s.diesel.timer)}s` : 'Start emergency diesel') : `Safe cooling hold / ${Math.round(s.hold)} / 155s`;
+      }
+      $('objectiveProgressText').textContent = progressText;
+      $('objectiveProgressValue').textContent = `${Math.round(progress)}%`;
+      $('objectiveProgressBar').style.width = `${progress}%`;
+
+      const controls = [
+        ['rodInput', 'rods', 'rodCommandReadout', 'rodActualReadout', '%', 'Actual '],
+        ['boronInput', 'boron', 'boronCommandReadout', 'boronActualReadout', ' ppm', 'Actual '],
+        ['pumpInput', 'pumps', 'pumpCommandReadout', 'pumpActualReadout', '%', 'Flow '],
+        ['feedInput', 'feed', 'feedCommandReadout', 'feedActualReadout', '%', 'Flow '],
+        ['turbineInput', 'turbine', 'turbineCommandReadout', null, '%', '']
+      ];
+      controls.forEach(([inputId, key, commandId, actualId, suffix, actualPrefix]) => {
+        const input = $(inputId);
+        if (document.activeElement !== input) input.value = s.commands[key];
+        $(commandId).textContent = `${Math.round(s.commands[key])}${suffix}`;
+        if (actualId) {
+          const actual = key === 'pumps' ? s.pumpFlow : key === 'feed' ? s.feedFlow : s.actual[key];
+          $(actualId).textContent = `${actualPrefix}${Math.round(actual)}${suffix}`;
+        }
+        input.disabled = Boolean(s.scrammed && key === 'rods');
+      });
+      $('demandReadout').textContent = `Grid asks ${Math.round(s.demand)} MW`;
+      $('turbineActualReadout').textContent = `${Math.round(s.actual.turbine)}%`;
+      $('rodActualReadout').textContent = `Actual ${Math.round(s.actual.rods)}%`;
+      $('boronActualReadout').textContent = `Actual ${Math.round(s.actual.boron)} ppm`;
+      $('pumpActualReadout').textContent = `Flow ${Math.round(s.pumpFlow)}%`;
+      $('feedActualReadout').textContent = `Flow ${Math.round(s.feedFlow)}%`;
+
+      $('fluxValue').innerHTML = `${(s.flux * 100).toFixed(1)}<small>%</small>`;
+      $('reactivityValue').textContent = `${s.reactivity >= 0 ? '+' : ''}${Math.round(s.reactivity)} pcm reactivity`;
+      $('hotTempValue').innerHTML = `${Math.round(s.hotTemp)}<small>°C</small>`;
+      $('fuelTempFoot').textContent = `Fuel ${Math.round(s.fuelTemp)}°C`;
+      $('pressureValue').innerHTML = `${Math.round(s.primaryPressure)}<small> bar</small>`;
+      $('coolantFoot').textContent = `Coolant inventory ${Math.round(s.coolant)}%`;
+      $('powerValue').innerHTML = `${Math.round(s.exportPower)}<small> MW</small>`;
+      $('dispatchFoot').textContent = `Dispatch error ${s.demand - s.exportPower >= 0 ? '+' : ''}${Math.round(s.demand - s.exportPower)} MW`;
+      $('generationReadout').textContent = `${s.totalEnergy.toFixed(1)} MWh`;
+      $('peakFuelReadout').textContent = `${Math.round(s.maxFuelTemp)}°C`;
+      $('actionReadout').textContent = String(s.actions);
+      $('trendSpan').textContent = `History ${formatTime(s.history.length ? s.time - s.history[0].t : 0)}`;
+
+      ['fluxReadout', 'temperatureReadout', 'pressureReadout', 'powerReadout'].forEach((id) => $(id).classList.remove('good', 'warn', 'danger'));
+      const fluxTone = s.flux > 1 ? 'danger' : s.flux > .86 ? 'warn' : s.flux > .04 ? 'good' : null;
+      if (fluxTone) $('fluxReadout').classList.add(fluxTone);
+      $('temperatureReadout').classList.add(s.hotTemp >= 350 ? 'danger' : s.hotTemp > 326 ? 'warn' : 'good');
+      $('pressureReadout').classList.add(s.primaryPressure < 120 || s.primaryPressure > 180 ? 'danger' : s.primaryPressure < 135 || s.primaryPressure > 172 ? 'warn' : 'good');
+      const powerTone = s.sync ? (Math.abs(s.exportPower - s.demand) < 85 ? 'good' : 'warn') : null;
+      if (powerTone) $('powerReadout').classList.add(powerTone);
+
+      setMeter('meterPower', s.flux * 100, 110, { warn: 85, danger: 103 });
+      $('meterPowerText').textContent = `${Math.round(s.flux * 100)}%`;
+      setMeter('meterHot', s.hotTemp, 400, { warn: 326, danger: 350 });
+      $('meterHotText').textContent = `${Math.round(s.hotTemp)}°C`;
+      setMeter('meterPressure', s.primaryPressure, 200, { lowWarn: 135, lowDanger: 115, highWarn: 173, highDanger: 184 });
+      $('meterPressureText').textContent = `${Math.round(s.primaryPressure)} bar`;
+      setMeter('meterSteam', s.steamPressure, 120, { warn: 95, danger: 108 });
+      $('meterSteamText').textContent = `${Math.round(s.steamPressure)} bar`;
+      setMeter('meterCoolant', s.coolant, 100, { lowWarn: 44, lowDanger: 25 });
+      $('meterCoolantText').textContent = `${Math.round(s.coolant)}%`;
+      setMeter('meterDamage', s.damage, 100, { warn: 18, danger: 48 });
+      $('meterDamageText').textContent = `${Math.round(s.damage)}%`;
+
+      const isCritical = s.alarms.some((alarm) => alarm.level === 'critical') || s.damage >= 35;
+      const isWarning = s.alarms.length > 0;
+      const indicator = $('stateIndicator');
+      indicator.classList.remove('is-warning', 'is-critical', 'is-shutdown');
+      if (isCritical) {
+        indicator.textContent = 'AL'; indicator.classList.add('is-critical');
+        $('stateWord').textContent = 'Critical alarm'; $('stateDescription').textContent = 'Immediate action required';
+      } else if (s.scrammed) {
+        indicator.textContent = 'SD'; indicator.classList.add('is-shutdown');
+        $('stateWord').textContent = 'Safe shutdown'; $('stateDescription').textContent = 'Decay heat remains';
+      } else if (isWarning) {
+        indicator.textContent = 'CA'; indicator.classList.add('is-warning');
+        $('stateWord').textContent = 'Caution'; $('stateDescription').textContent = 'Review annunciator';
+      } else if (s.flux < .04) {
+        indicator.textContent = 'SB';
+        $('stateWord').textContent = 'Subcritical'; $('stateDescription').textContent = 'Awaiting power rise';
+      } else {
+        indicator.textContent = 'OK';
+        $('stateWord').textContent = 'Nominal'; $('stateDescription').textContent = 'Reactor response stable';
+      }
+      $('gridStatus').textContent = s.gridTrip ? 'TRIPPED' : s.gridConnected ? 'AVAILABLE' : 'OFFLINE';
+      $('gridStatus').className = `service-state ${s.gridTrip ? 'is-warning' : s.gridConnected ? '' : 'is-off'}`;
+      $('dieselStatus').textContent = s.diesel.status === 'cranking' ? `CRANK ${Math.ceil(s.diesel.timer)}s` : s.diesel.status.toUpperCase();
+      $('dieselStatus').className = `service-state ${s.diesel.status === 'online' ? '' : s.diesel.status === 'cranking' ? 'is-warning' : 'is-off'}`;
+      $('turbineStatus').textContent = s.turbineTripped ? 'TRIPPED' : s.sync ? 'SYNCHRONIZED' : 'READY / UNSYNC';
+      $('turbineStatus').className = `service-state ${s.turbineTripped ? 'is-warning' : ''}`;
+      $('budgetStatus').textContent = `$${Math.round(s.budget)}k`;
+      $('budgetStatus').className = `service-state ${s.budget < 25 ? 'is-warning' : ''}`;
+
+      $('scramBtn').disabled = s.scrammed || s.ended;
+      $('eccsBtn').disabled = s.eccsCharges <= 0 && s.eccsTime <= 0;
+      $('eccsBtn').textContent = s.eccsTime > 0 ? `ECCS ACTIVE ${Math.ceil(s.eccsTime)}s` : `ECCS / ${s.eccsCharges} CHARGE${s.eccsCharges === 1 ? '' : 'S'}`;
+      $('dieselBtn').disabled = s.diesel.status !== 'standby' || (s.gridConnected && !s.gridTrip);
+      $('dieselBtn').textContent = s.diesel.status === 'online' ? 'Diesel online' : s.diesel.status === 'cranking' ? `Cranking ${Math.ceil(s.diesel.timer)}s` : 'Start emergency diesel';
+      $('syncBtn').disabled = !s.gridConnected || s.sync || s.scrammed || s.turbineTripped || s.grossPower < 120 || s.steamPressure < 30;
+      $('syncBtn').textContent = s.sync ? 'Grid synchronized' : 'Synchronize grid';
+      $('isolateBtn').disabled = !s.faults.primaryLeak;
+      $('isolateBtn').textContent = s.isolation ? 'Reopen loop isolation' : 'Isolate leak loop';
+      $('resetTurbineBtn').disabled = !s.turbineTripped || s.gridTrip || s.scrammed || s.faults.turbineTrip || s.steamPressure < 28;
+      $('resetScramBtn').disabled = !s.scrammed || s.flux > .045 || s.damage > 15;
+      $('faultSelect').querySelectorAll('option').forEach((option) => { option.disabled = Boolean(s.faults[option.value]) || s.repairJobs.some((job) => job.type === option.value); });
+      const activeRepair = s.repairJobs.map((job) => `${FAULTS[job.type].name} ${Math.ceil(job.remaining)}s`).join(' / ');
+      $('repairStatus').textContent = activeRepair ? `CREW EN ROUTE: ${activeRepair} / reserve $${Math.round(s.budget)}k` : `Maintenance reserve: $${Math.round(s.budget)}k / ${s.repairCount} completed repair${s.repairCount === 1 ? '' : 's'}`;
+      const selectedFault = $('faultSelect').value;
+      $('repairBtn').disabled = !s.faults[selectedFault] || s.repairJobs.some((job) => job.type === selectedFault) || s.budget < (FAULTS[selectedFault] ? FAULTS[selectedFault].cost : Infinity);
+      $('injectFaultBtn').disabled = Boolean(s.faults[selectedFault]) || s.repairJobs.some((job) => job.type === selectedFault);
+      $('certSimBtn').textContent = `Review certifications / ${profile.xp} XP`;
+      renderAlarms();
+      renderEventLog();
+      updateCoach();
+    }
+
+    function renderAlarms() {
+      const list = $('alarmList');
+      const alarms = simulation.alarms || [];
+      const count = $('alarmCount');
+      count.textContent = `${alarms.length} ACTIVE`;
+      count.classList.toggle('has-alarm', alarms.length > 0);
+      count.classList.toggle('has-critical', alarms.some((alarm) => alarm.level === 'critical'));
+      if (!alarms.length) {
+        list.innerHTML = '<div class="alarm-empty">No active alarms. Protection logic armed.</div>';
+        return;
+      }
+      list.innerHTML = alarms.slice(0, 8).map((alarm) => `<div class="alarm-entry ${alarm.level === 'critical' ? 'critical' : ''}"><i></i><span>${escapeHTML(alarm.text)}</span></div>`).join('');
+    }
+
+    function prepareCanvas(canvas) {
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, rect.width);
+      const height = Math.max(1, rect.height);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const pixelWidth = Math.round(width * dpr);
+      const pixelHeight = Math.round(height * dpr);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, width, height };
+    }
+
+    function drawHero(now) {
+      const prepared = prepareCanvas(heroCanvas);
+      if (!prepared) return;
+      const { ctx, width: w, height: h } = prepared;
+      ctx.clearRect(0, 0, w, h);
+      const reduced = preferences.reducedMotion;
+      const time = reduced ? 0 : now / 1000;
+      ctx.save();
+      const centerX = w * .73;
+      const centerY = h * .48;
+      const radius = Math.min(w, h) * .31;
+      const gradient = ctx.createRadialGradient(centerX, centerY, 2, centerX, centerY, radius * 1.75);
+      gradient.addColorStop(0, 'rgba(51,134,118,.13)');
+      gradient.addColorStop(.55, 'rgba(35,82,81,.065)');
+      gradient.addColorStop(1, 'rgba(8,13,17,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(125,166,155,.075)';
+      ctx.lineWidth = 1;
+      const spacing = 34;
+      for (let x = (w * .34) % spacing; x < w; x += spacing) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 16; y < h; y += spacing) { ctx.beginPath(); ctx.moveTo(w * .28, y); ctx.lineTo(w, y); ctx.stroke(); }
+      ctx.setLineDash([2, 8]);
+      ctx.strokeStyle = 'rgba(113,181,163,.18)';
+      for (let i = 0; i < 5; i += 1) {
+        const r = radius * (.65 + i * .19) + (reduced ? 0 : Math.sin(time * .35 + i) * 2);
+        ctx.beginPath(); ctx.arc(centerX, centerY, r, .15, Math.PI * 1.75); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(116,211,181,.24)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius * .37, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(47,142,116,.15)';
+      ctx.shadowBlur = reduced ? 0 : 42;
+      ctx.shadowColor = 'rgba(101,232,179,.22)';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius * (.18 + (reduced ? 0 : Math.sin(time * 1.1) * .012)), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(110,193,167,.2)';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(centerX - radius * .8, centerY - radius * .55);
+      ctx.bezierCurveTo(centerX - radius * 1.35, centerY - radius * .5, centerX - radius * 1.45, centerY + radius * .42, centerX - radius * .77, centerY + radius * .58);
+      ctx.lineTo(centerX - radius * .37, centerY + radius * .58);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(centerX + radius * .37, centerY - radius * .58);
+      ctx.lineTo(centerX + radius * .9, centerY - radius * .58);
+      ctx.bezierCurveTo(centerX + radius * 1.4, centerY - radius * .58, centerX + radius * 1.48, centerY + radius * .34, centerX + radius * 1.08, centerY + radius * .38);
+      ctx.stroke();
+      const points = [0, Math.PI * .5, Math.PI, Math.PI * 1.5];
+      points.forEach((angle, i) => {
+        const pulse = reduced ? 0 : (time * (.18 + i * .03)) % 1;
+        const px = centerX + Math.cos(angle + pulse * .3) * radius * .95;
+        const py = centerY + Math.sin(angle + pulse * .3) * radius * .95;
+        ctx.fillStyle = i % 2 ? 'rgba(255,200,120,.8)' : 'rgba(141,224,182,.82)';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.beginPath(); ctx.arc(px, py, 2.1, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    function roundedRect(ctx, x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+    }
+
+    function drawPipe(ctx, points, color, width, dashOffset = 0, isFlowing = true) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(123,151,146,.13)';
+      ctx.lineWidth = width + 5;
+      ctx.beginPath();
+      points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = .55;
+      ctx.lineWidth = width;
+      ctx.setLineDash([10, 10]);
+      ctx.lineDashOffset = -dashOffset;
+      ctx.beginPath();
+      points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (isFlowing) {
+        const fullLength = points.slice(1).reduce((sum, point, i) => sum + Math.hypot(point[0] - points[i][0], point[1] - points[i][1]), 0);
+        const count = Math.max(2, Math.floor(fullLength / 62));
+        for (let n = 0; n < count; n += 1) {
+          const distance = ((dashOffset * .58 + n * fullLength / count) % fullLength + fullLength) % fullLength;
+          let remain = distance;
+          for (let i = 1; i < points.length; i += 1) {
+            const a = points[i - 1], b = points[i];
+            const segment = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            if (remain <= segment) {
+              const t = segment ? remain / segment : 0;
+              ctx.fillStyle = color;
+              ctx.globalAlpha = .78;
+              ctx.shadowBlur = 8;
+              ctx.shadowColor = color;
+              ctx.beginPath(); ctx.arc(lerp(a[0], b[0], t), lerp(a[1], b[1], t), 2.1, 0, Math.PI * 2); ctx.fill();
+              break;
+            }
+            remain -= segment;
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawProcess() {
+      const prepared = prepareCanvas(processCanvas);
+      if (!prepared) return;
+      const { ctx, width, height } = prepared;
+      const s = simulation || createSimulation('cold', 'standard', false);
+      const scaleX = width / 1000;
+      const scaleY = height / 390;
+      const t = preferences.reducedMotion || s.paused ? 0 : s.time;
+      ctx.save();
+      ctx.scale(scaleX, scaleY);
+      ctx.clearRect(0, 0, 1000, 390);
+      ctx.fillStyle = '#0a1216';
+      ctx.fillRect(0, 0, 1000, 390);
+      ctx.strokeStyle = 'rgba(125,166,155,.055)';
+      ctx.lineWidth = 1;
+      for (let x = 20; x < 1000; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 390); ctx.stroke(); }
+      for (let y = 16; y < 390; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1000, y); ctx.stroke(); }
+
+      const primaryFlow = s.pumpFlow > 34 && s.coolant > 8;
+      const secondaryFlow = s.feedFlow > 18 && s.steamPressure > 8;
+      const gridFlow = s.sync && s.gridConnected && s.exportPower > 25;
+      const primaryColor = s.faults.primaryLeak && !s.isolation ? '#ff767b' : '#70dbea';
+      const steamColor = s.faults.feedwater ? '#ffc878' : '#edbd70';
+      drawPipe(ctx, [[232,137],[292,137],[292,125],[395,125]], primaryColor, 7, t * (primaryFlow ? 22 : 0), primaryFlow);
+      drawPipe(ctx, [[395,252],[295,252],[295,268],[232,268]], '#6dc9db', 7, -t * (primaryFlow ? 18 : 0), primaryFlow);
+      drawPipe(ctx, [[455,110],[455,78],[618,78],[618,147]], steamColor, 6, t * (secondaryFlow ? 25 : 0), secondaryFlow);
+      drawPipe(ctx, [[674,207],[674,276],[556,276],[556,249]], '#dcb975', 5, -t * (secondaryFlow ? 16 : 0), secondaryFlow);
+      drawPipe(ctx, [[612,304],[505,304],[505,280],[444,280]], '#71bdca', 4, t * (s.faults.condenser ? 4 : 12), !s.faults.condenser);
+      drawPipe(ctx, [[747,171],[805,171],[805,183],[905,183]], gridFlow ? '#8de0b6' : '#56716b', 4, t * (gridFlow ? 28 : 0), gridFlow);
+
+      // Reactor vessel and live core region.
+      ctx.save();
+      const coreGlow = ctx.createRadialGradient(181, 194, 5, 181, 194, 88);
+      const glowAlpha = clamp(s.heatLoad * .45 + .07, .07, .55);
+      coreGlow.addColorStop(0, `rgba(255,151,81,${glowAlpha})`);
+      coreGlow.addColorStop(.5, `rgba(237,103,60,${glowAlpha * .45})`);
+      coreGlow.addColorStop(1, 'rgba(237,103,60,0)');
+      ctx.fillStyle = coreGlow;
+      ctx.beginPath(); ctx.arc(181, 197, 89, 0, Math.PI * 2); ctx.fill();
+      roundedRect(ctx, 127, 91, 108, 203, 20);
+      const vesselGradient = ctx.createLinearGradient(127, 90, 236, 90);
+      vesselGradient.addColorStop(0, '#18272b'); vesselGradient.addColorStop(.45, '#26383a'); vesselGradient.addColorStop(1, '#101a1e');
+      ctx.fillStyle = vesselGradient; ctx.fill();
+      ctx.strokeStyle = s.alarms.some((alarm) => alarm.level === 'critical') ? 'rgba(255,110,114,.84)' : 'rgba(125,194,175,.56)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      roundedRect(ctx, 145, 119, 72, 145, 11);
+      ctx.fillStyle = 'rgba(7,17,19,.72)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(113,184,166,.24)'; ctx.lineWidth = 1; ctx.stroke();
+      const coreY = 177;
+      roundedRect(ctx, 153, coreY, 56, 43, 5);
+      ctx.fillStyle = `rgba(244,117,60,${clamp(.16 + s.heatLoad * .68, .18, .88)})`; ctx.fill();
+      ctx.strokeStyle = `rgba(255,197,112,${clamp(.22 + s.heatLoad * .65, .22, .9)})`; ctx.stroke();
+      for (let i = 0; i < 6; i += 1) {
+        const rodTop = 103;
+        const insertLength = 9 + s.actual.rods * .93;
+        const x = 159 + i * 8.8;
+        ctx.strokeStyle = s.scrammed ? '#ff7e79' : '#d8dcba';
+        ctx.globalAlpha = .86;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, rodTop); ctx.lineTo(x, Math.min(rodTop + insertLength, 260)); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#9eafa7'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(s.scrammed ? 'SAFETY RODS IN' : `ROD BANK ${Math.round(s.actual.rods)}%`, 181, 281);
+      ctx.restore();
+
+      // Steam generator shell, tube bundle and live level.
+      ctx.save();
+      roundedRect(ctx, 395, 99, 120, 165, 26);
+      const sgGrad = ctx.createLinearGradient(395, 100, 515, 260);
+      sgGrad.addColorStop(0, '#293739'); sgGrad.addColorStop(.42, '#152226'); sgGrad.addColorStop(1, '#111b1f');
+      ctx.fillStyle = sgGrad; ctx.fill(); ctx.strokeStyle = 'rgba(197,176,127,.48)'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.save(); ctx.beginPath(); roundedRect(ctx, 404, 108, 102, 147, 21); ctx.clip();
+      const waterY = 243 - clamp(s.steamPressure / 115, 0, .72) * 107;
+      ctx.fillStyle = 'rgba(202,160,88,.11)'; ctx.fillRect(404, waterY, 102, 255 - waterY);
+      ctx.strokeStyle = 'rgba(211,179,119,.9)'; ctx.lineWidth = 2.2;
+      for (let i = 0; i < 4; i += 1) {
+        const x = 420 + i * 22;
+        ctx.beginPath(); ctx.moveTo(x, 122); ctx.bezierCurveTo(x - 6, 146, x + 8, 160, x, 181); ctx.bezierCurveTo(x - 7, 204, x + 5, 215, x, 239); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(255,213,143,.28)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(405, waterY); ctx.lineTo(506, waterY); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#c6b588'; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.fillText(`SG ${Math.round(s.steamPressure)} BAR`, 455, 282);
+      ctx.restore();
+
+      // Turbine and generator.
+      ctx.save();
+      ctx.beginPath(); ctx.arc(675, 173, 44, 0, Math.PI * 2);
+      ctx.fillStyle = '#152328'; ctx.fill();
+      ctx.strokeStyle = s.turbineTripped ? 'rgba(255,110,114,.65)' : 'rgba(229,190,117,.55)'; ctx.lineWidth = 1.3; ctx.stroke();
+      ctx.translate(675, 173);
+      ctx.rotate(s.turbineTripped || preferences.reducedMotion ? 0 : t * (s.steamPressure / 160));
+      for (let i = 0; i < 8; i += 1) {
+        ctx.rotate(Math.PI / 4);
+        ctx.strokeStyle = '#d0ae71'; ctx.globalAlpha = .8; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(30, 0); ctx.stroke();
+      }
+      ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fillStyle = '#dbb771'; ctx.fill();
+      ctx.restore();
+      ctx.save();
+      roundedRect(ctx, 796, 141, 83, 67, 11); ctx.fillStyle = '#142126'; ctx.fill(); ctx.strokeStyle = 'rgba(141,224,182,.42)'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(837, 174, 21, -.8, Math.PI * 1.35); ctx.strokeStyle = gridFlow ? '#8de0b6' : '#536861'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#a8c7b6'; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.fillText(`${Math.round(s.exportPower)} MW`, 837, 187);
+      ctx.restore();
+
+      // Condenser and cooling tower.
+      ctx.save();
+      roundedRect(ctx, 614, 286, 130, 37, 9); ctx.fillStyle = '#142126'; ctx.fill(); ctx.strokeStyle = 'rgba(119,187,196,.37)'; ctx.stroke();
+      ctx.fillStyle = '#7faaa8'; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.fillText(s.faults.condenser ? 'CONDENSER / DEGRADED' : 'CONDENSER / NORMAL', 679, 309);
+      ctx.beginPath(); ctx.moveTo(455, 316); ctx.lineTo(455, 359); ctx.lineTo(505, 359); ctx.lineTo(505, 310);
+      ctx.strokeStyle = 'rgba(98,154,149,.38)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(424, 359); ctx.lineTo(486, 359); ctx.lineTo(476, 333); ctx.lineTo(434, 333); ctx.closePath();
+      ctx.fillStyle = '#121e22'; ctx.fill(); ctx.strokeStyle = 'rgba(119,169,160,.47)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#748a82'; ctx.font = '7px monospace'; ctx.textAlign = 'center'; ctx.fillText('HEAT REJECTION', 455, 376);
+      ctx.restore();
+
+      // Grid terminal and status lamps.
+      ctx.save();
+      ctx.strokeStyle = gridFlow ? 'rgba(141,224,182,.75)' : 'rgba(98,120,112,.42)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(922, 132); ctx.lineTo(922, 231); ctx.moveTo(901, 150); ctx.lineTo(943, 150); ctx.moveTo(907, 173); ctx.lineTo(937, 173); ctx.moveTo(912, 195); ctx.lineTo(932, 195); ctx.stroke();
+      ctx.fillStyle = gridFlow ? '#8de0b6' : '#75857e'; ctx.font = '8px monospace'; ctx.textAlign = 'center'; ctx.fillText(s.gridTrip ? 'GRID TRIP' : gridFlow ? 'GRID EXPORT' : 'GRID OPEN', 922, 250);
+      ctx.beginPath(); ctx.arc(922, 119, 3, 0, Math.PI * 2); ctx.fillStyle = s.gridTrip ? '#ff6e72' : gridFlow ? '#8de0b6' : '#66756f'; ctx.fill();
+      ctx.restore();
+
+      // Component labels and live loop readouts.
+      ctx.save();
+      ctx.font = '8px monospace'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#a5b6ae'; ctx.fillText('REACTOR VESSEL', 181, 75);
+      ctx.fillStyle = '#91a69d'; ctx.fillText(`${Math.round(s.heatLoad * 100)}% THERMAL`, 181, 311);
+      ctx.fillStyle = '#a5b6ae'; ctx.fillText('STEAM GENERATOR', 455, 91);
+      ctx.fillStyle = '#a5b6ae'; ctx.fillText('TURBINE', 675, 235);
+      ctx.fillStyle = '#91a69d'; ctx.fillText(s.turbineTripped ? 'TRIPPED' : `${Math.round(s.actual.turbine)}% LOAD`, 675, 248);
+      ctx.fillStyle = '#a5b6ae'; ctx.fillText('GENERATOR', 837, 128);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#6f8983'; ctx.fillText(`PUMP FLOW ${Math.round(s.pumpFlow)}%`, 263, 121);
+      ctx.fillText(`HOT LEG ${Math.round(s.hotTemp)} C`, 263, 111);
+      ctx.fillText(`COLD LEG ${Math.round(s.coldTemp)} C`, 263, 291);
+      ctx.fillStyle = s.faults.primaryLeak && !s.isolation ? '#ff8b89' : '#6f8983';
+      ctx.fillText(s.isolation ? 'LOOP ISOLATED' : s.faults.primaryLeak ? 'LEAK / ACTIVE' : 'PRIMARY LOOP', 270, 308);
+      if (s.diesel.status === 'online') {
+        ctx.fillStyle = '#8de0b6'; ctx.fillText('EMERGENCY BUS / LIVE', 800, 228);
+      } else if (s.gridTrip) {
+        ctx.fillStyle = '#ff8688'; ctx.fillText('EMERGENCY BUS / DE-ENERGIZED', 778, 228);
+      }
+      if (s.scrammed) {
+        ctx.textAlign = 'center'; ctx.fillStyle = '#ff8c87'; ctx.font = '9px monospace'; ctx.fillText('DECAY HEAT REMAINS AFTER SCRAM', 500, 28);
+      }
+      ctx.restore();
+      ctx.restore();
+    }
+
+    function drawTrendTo(canvas, isReport = false) {
+      const prepared = prepareCanvas(canvas);
+      if (!prepared) return;
+      const { ctx, width: w, height: h } = prepared;
+      const s = simulation;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#0b1317'; ctx.fillRect(0, 0, w, h);
+      const left = 37, right = 12, top = 13, bottom = 24;
+      const plotW = Math.max(1, w - left - right), plotH = Math.max(1, h - top - bottom);
+      ctx.strokeStyle = 'rgba(134,161,153,.13)'; ctx.lineWidth = 1;
+      ctx.font = '8px monospace'; ctx.fillStyle = '#62736d'; ctx.textAlign = 'right';
+      for (let i = 0; i <= 4; i += 1) {
+        const y = top + plotH * i / 4;
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(w - right, y); ctx.stroke();
+        const tempLabel = Math.round(400 - i * 37.5);
+        ctx.fillText(`${tempLabel}°`, left - 5, y + 3);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#526d72';
+        ctx.fillText(`${Math.round(110 - i * 27.5)}%`, 4, y + 3);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#62736d';
+      }
+      if (!s || !s.history.length) {
+        ctx.fillStyle = '#71817b'; ctx.textAlign = 'center'; ctx.font = '9px monospace';
+        ctx.fillText('Awaiting first live samples', left + plotW / 2, top + plotH / 2);
+        return;
+      }
+      const history = s.history;
+      const startTime = history[0].t;
+      const endTime = Math.max(startTime + 1, history[history.length - 1].t);
+      const xFor = (index) => left + (history.length <= 1 ? 0 : index / (history.length - 1)) * plotW;
+      const yFlux = (value) => top + (1 - clamp(value / 110, 0, 1)) * plotH;
+      const yTemp = (value) => top + (1 - clamp((value - 250) / 150, 0, 1)) * plotH;
+      function plotSeries(getter, yFunc, color, fill = false) {
+        ctx.beginPath();
+        history.forEach((point, index) => index ? ctx.lineTo(xFor(index), yFunc(getter(point))) : ctx.moveTo(xFor(index), yFunc(getter(point))));
+        ctx.strokeStyle = color; ctx.lineWidth = 1.65; ctx.shadowBlur = 6; ctx.shadowColor = color; ctx.stroke(); ctx.shadowBlur = 0;
+        if (fill) {
+          ctx.lineTo(xFor(history.length - 1), top + plotH);
+          ctx.lineTo(xFor(0), top + plotH);
+          ctx.closePath(); ctx.fillStyle = 'rgba(114,217,232,.045)'; ctx.fill();
+        }
+      }
+      plotSeries((point) => point.flux, yFlux, '#72d9e8', true);
+      plotSeries((point) => point.hot, yTemp, '#ffc878', false);
+      ctx.fillStyle = '#657770'; ctx.textAlign = 'left'; ctx.font = '8px monospace'; ctx.fillText(formatTime(startTime), left, h - 6);
+      ctx.textAlign = 'right'; ctx.fillText(formatTime(endTime), left + plotW, h - 6);
+      const last = history[history.length - 1];
+      ctx.fillStyle = '#72d9e8'; ctx.beginPath(); ctx.arc(xFor(history.length - 1), yFlux(last.flux), 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffc878'; ctx.beginPath(); ctx.arc(xFor(history.length - 1), yTemp(last.hot), 3, 0, Math.PI * 2); ctx.fill();
+    }
+    function drawTrend() { drawTrendTo(trendCanvas, false); }
+    function drawReportTrend() { const canvas = $('reportTrendCanvas'); if (canvas) drawTrendTo(canvas, true); }
+
+    function inspectComponent(event) {
+      if (!simulation) return;
+      const rect = processCanvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / Math.max(1, rect.width) * 1000;
+      const y = (event.clientY - rect.top) / Math.max(1, rect.height) * 390;
+      let title = 'SYSTEM NOTE';
+      let message = 'Click a component: the process view follows heat from the core to the grid.';
+      if (x > 120 && x < 240 && y > 85 && y < 300) {
+        title = 'REACTOR VESSEL';
+        message = `Neutron flux ${ (simulation.flux * 100).toFixed(1) }%. Rod insertion, soluble boron, xenon and negative fuel-temperature feedback set reactivity. Fuel temperature is ${Math.round(simulation.fuelTemp)}°C.`;
+      } else if (x > 385 && x < 525 && y > 90 && y < 270) {
+        title = 'STEAM GENERATOR';
+        message = `Primary coolant carries heat into the secondary loop. Steam is ${Math.round(simulation.steamPressure)} bar; feedwater flow is ${Math.round(simulation.feedFlow)}%.`;
+      } else if (x > 625 && x < 720 && y > 125 && y < 225) {
+        title = 'TURBINE';
+        message = `Turbine load command ${Math.round(simulation.actual.turbine)}%. Steam pressure, condenser condition and reactor thermal power limit actual generation.`;
+      } else if (x > 790 && x < 885 && y > 135 && y < 215) {
+        title = 'GENERATOR / GRID';
+        message = simulation.gridTrip ? 'Offsite power is lost. Start the emergency diesel to restore the essential bus.' : `Grid ${simulation.sync ? 'synchronized' : 'not synchronized'}; net export ${Math.round(simulation.exportPower)} MW.`;
+      } else if (x > 410 && x < 520 && y > 325) {
+        title = 'HEAT REJECTION';
+        message = simulation.faults.condenser ? 'Condenser cooling is degraded. Turbine output is derated until maintenance completes.' : 'The condenser rejects secondary-loop heat. Its cooling condition affects turbine backpressure and electrical output.';
+      } else if (x > 250 && x < 380) {
+        title = 'PRIMARY COOLANT LOOP';
+        message = `Primary pump flow ${Math.round(simulation.pumpFlow)}%. Hot leg ${Math.round(simulation.hotTemp)}°C, cold leg ${Math.round(simulation.coldTemp)}°C, inventory ${Math.round(simulation.coolant)}%.`;
+      }
+      $('diagramHint').innerHTML = `<strong>${escapeHTML(title)}</strong><span>${escapeHTML(message)}</span>`;
+      tone(380, .035, 'sine', .05);
+    }
+
+    function animationFrame(now) {
+      const rawDt = Math.max(0, (now - lastFrame) / 1000);
+      const frameDt = Math.min(.1, rawDt);
+      lastFrame = now;
+      if (simulation && !simulation.paused && !simulation.ended && !simScreen.classList.contains('hidden')) {
+        accumulator += frameDt * simulation.speed * 5;
+        let steps = 0;
+        while (accumulator >= .25 && steps < 12) {
+          updateSimulation(.25);
+          accumulator -= .25;
+          steps += 1;
+          if (!simulation || simulation.ended || simulation.paused) break;
+        }
+        if (steps >= 12) accumulator = Math.min(accumulator, .25);
+      }
+      if (!titleScreen.classList.contains('hidden')) drawHero(now);
+      if (!simScreen.classList.contains('hidden') && simulation) {
+        drawProcess();
+        if (now - lastUIRender > 130) {
+          renderUI();
+          drawTrend();
+          lastUIRender = now;
+        }
+      }
+      requestAnimationFrame(animationFrame);
+    }
+
+    function bindSlider(inputId, key, actionLabel) {
+      const input = $(inputId);
+      input.addEventListener('input', () => {
+        if (!simulation || simulation.ended) return;
+        simulation.commands[key] = clamp(Number(input.value), Number(input.min), Number(input.max));
+        if (simulation.coach && simulation.coach.active) {
+          if (key === 'rods') simulation.coach.flags.rods = Number(input.value) <= 35;
+          if (key === 'pumps') simulation.coach.flags.pumps = Number(input.value) >= 70;
+          if (key === 'feed') simulation.coach.flags.feed = Number(input.value) >= 60;
+        }
+        renderUI();
+      });
+      input.addEventListener('change', () => {
+        if (!simulation || simulation.ended) return;
+        simulation.actions += 1;
+        logEvent(`Operator set ${actionLabel} command to ${Math.round(simulation.commands[key])}${key === 'boron' ? ' ppm' : '%'}.`, 'normal');
+        tone(280 + simulation.commands[key] * .8, .045, 'sine', .07);
+      });
+    }
+
+    function wireEvents() {
+      document.querySelectorAll('[data-scenario]').forEach((button) => button.addEventListener('click', () => {
+        selectedScenario = button.dataset.scenario;
+        document.querySelectorAll('[data-scenario]').forEach((item) => {
+          const active = item === button;
+          item.classList.toggle('is-active', active);
+          item.setAttribute('aria-pressed', String(active));
+        });
+        $('scenarioBrief').textContent = SCENARIOS[selectedScenario].brief;
+        $('startBtn').querySelector('span').textContent = selectedScenario === 'cold' ? 'Begin training run' : selectedScenario === 'load' ? 'Start dispatch shift' : 'Enter blackout drill';
+        tone(380, .045, 'sine', .06);
+      }));
+      document.querySelectorAll('[data-difficulty]').forEach((button) => button.addEventListener('click', () => {
+        selectedDifficulty = button.dataset.difficulty;
+        document.querySelectorAll('[data-difficulty]').forEach((item) => {
+          const active = item === button;
+          item.classList.toggle('is-active', active);
+          item.setAttribute('aria-pressed', String(active));
+        });
+        tone(350, .04, 'sine', .05);
+      }));
+      $('startBtn').addEventListener('click', startSelectedScenario);
+      $('resumeBtn').addEventListener('click', loadCheckpoint);
+      $('helpTitleBtn').addEventListener('click', openHelp);
+      $('helpSimBtn').addEventListener('click', openHelp);
+      $('settingsTitleBtn').addEventListener('click', openSettings);
+      $('settingsSimBtn').addEventListener('click', openSettings);
+      $('certTitleBtn').addEventListener('click', () => { renderCertModal(); openModal('certModal'); });
+      $('certSimBtn').addEventListener('click', () => { renderCertModal(); openModal('certModal'); });
+      $('pauseBtn').addEventListener('click', () => simulation && simulation.paused ? setPaused(false) : setPaused(true));
+      $('resumeRunBtn').addEventListener('click', () => setPaused(false));
+      $('pauseCloseBtn').addEventListener('click', () => setPaused(false));
+      $('savePauseBtn').addEventListener('click', () => saveCheckpoint(true));
+      $('saveSimBtn').addEventListener('click', () => saveCheckpoint(true));
+      $('restartRunBtn').addEventListener('click', () => startScenario(simulation ? simulation.scenario : selectedScenario, simulation ? simulation.difficulty : selectedDifficulty, false));
+      $('settingsPauseBtn').addEventListener('click', openSettings);
+      $('returnTitleBtn').addEventListener('click', () => returnToTitle(false));
+      $('endShiftBtn').addEventListener('click', () => returnToTitle(true));
+      $('statsSimBtn').addEventListener('click', openStats);
+      $('soundSimBtn').addEventListener('click', toggleMute);
+      $('scramBtn').addEventListener('click', () => triggerScram('manual'));
+      $('eccsBtn').addEventListener('click', activateECCS);
+      $('dieselBtn').addEventListener('click', startDiesel);
+      $('syncBtn').addEventListener('click', synchronizeGrid);
+      $('isolateBtn').addEventListener('click', toggleIsolation);
+      $('resetTurbineBtn').addEventListener('click', resetTurbine);
+      $('resetScramBtn').addEventListener('click', resetScram);
+      $('injectFaultBtn').addEventListener('click', () => injectFault($('faultSelect').value));
+      $('repairBtn').addEventListener('click', dispatchRepair);
+      $('faultSelect').addEventListener('change', renderUI);
+      $('coachNext').addEventListener('click', advanceCoach);
+      $('coachSkip').addEventListener('click', () => {
+        if (!simulation || !simulation.coach) return;
+        simulation.coach.active = false;
+        updateCoach();
+        notify('Guided induction skipped. Open Help for the field guide.', 'normal');
+      });
+      bindSlider('rodInput', 'rods', 'control rod insertion');
+      bindSlider('boronInput', 'boron', 'soluble boron concentration');
+      bindSlider('pumpInput', 'pumps', 'primary pump');
+      bindSlider('feedInput', 'feed', 'feedwater');
+      bindSlider('turbineInput', 'turbine', 'turbine load');
+      document.querySelectorAll('[data-speed]').forEach((button) => button.addEventListener('click', () => setSpeed(button.dataset.speed)));
+      document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => closeModal(button.dataset.close)));
+      modalIds.forEach((id) => $(id).addEventListener('click', (event) => {
+        if (event.target === $(id) && id !== 'pauseModal' && id !== 'endModal') closeModal(id);
+      }));
+      $('volumeInput').addEventListener('input', () => {
+        preferences.volume = clamp(Number($('volumeInput').value) / 100, 0, 1);
+        $('volumeValue').textContent = `${Math.round(preferences.volume * 100)}%`;
+        saveSettings();
+      });
+      $('muteInput').addEventListener('change', () => { preferences.muted = $('muteInput').checked; if (!preferences.muted) initAudio(); saveSettings(); });
+      $('motionInput').addEventListener('change', () => { preferences.reducedMotion = $('motionInput').checked; saveSettings(); });
+      processCanvas.addEventListener('click', inspectComponent);
+      processCanvas.addEventListener('mousemove', (event) => {
+        const rect = processCanvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / Math.max(1, rect.width) * 1000;
+        const y = (event.clientY - rect.top) / Math.max(1, rect.height) * 390;
+        const over = (x > 120 && x < 240 && y > 85 && y < 300) || (x > 385 && x < 525 && y > 90 && y < 270) || (x > 625 && x < 720 && y > 125 && y < 225) || (x > 790 && x < 885 && y > 135 && y < 215) || (x > 250 && x < 380);
+        processCanvas.style.cursor = over ? 'pointer' : 'crosshair';
+      });
+      $('replayBtn').addEventListener('click', () => startScenario(simulation ? simulation.scenario : selectedScenario, simulation ? simulation.difficulty : selectedDifficulty, false));
+      $('endTitleBtn').addEventListener('click', () => returnToTitle(true));
+      window.addEventListener('keydown', (event) => {
+        const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : '';
+        const typing = ['input', 'textarea', 'select'].includes(tag) || event.target.isContentEditable;
+        if (typing) return;
+        const key = event.key.toLowerCase();
+        const inOperation = !simScreen.classList.contains('hidden');
+        if (key === 'escape') {
+          if (activeModal === 'pauseModal') setPaused(false);
+          else if (activeModal && !['endModal'].includes(activeModal)) closeModal(activeModal);
+          else if (inOperation && simulation && !simulation.ended) setPaused(true);
+          return;
+        }
+        if (key === ' ' && inOperation && simulation && !simulation.ended) { event.preventDefault(); setPaused(!simulation.paused); }
+        else if (['1', '2', '3', '4'].includes(key) && inOperation && simulation) setSpeed([.5, 1, 2, 4][Number(key) - 1]);
+        else if (key === 'r' && inOperation && simulation && !simulation.ended) triggerScram('manual');
+        else if (key === 'h') openHelp();
+        else if (key === 'm') toggleMute();
+        else if (key === 's' && inOperation && simulation && !simulation.ended) saveCheckpoint(true);
+      });
+      window.addEventListener('blur', () => {
+        if (simulation && !simulation.paused && !simulation.ended && !simScreen.classList.contains('hidden')) setPaused(true, 'Browser focus lost. Simulation safely paused.');
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && simulation && !simulation.paused && !simulation.ended) setPaused(true, 'Tab hidden. Simulation safely paused.');
+      });
+      window.addEventListener('resize', () => { drawHero(performance.now()); drawProcess(); drawTrend(); if (activeModal === 'statsModal') drawReportTrend(); });
+      window.addEventListener('beforeunload', () => { if (simulation && !simulation.ended) saveCheckpoint(false); });
+    }
+
+    function init() {
+      saveSettings();
+      renderProfile();
+      wireEvents();
+      $('scenarioBrief').textContent = SCENARIOS[selectedScenario].brief;
+      drawHero(performance.now());
+      requestAnimationFrame(animationFrame);
+    }
+    init();
+  </script>
+</body>
+</html>

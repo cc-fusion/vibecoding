@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approach Control — Radar ATC Simulation</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{font-family:Inter,system-ui,sans-serif}
+  .display{font-family:"Barlow Condensed",sans-serif;letter-spacing:.04em}
+  .mono{font-family:"JetBrains Mono",monospace}
+  body{background:#07110d}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#24473a;border-radius:99px}::-webkit-scrollbar-track{background:#0a1a14}
+  .radar-bg{background-color:#04120c;background-image:radial-gradient(circle at center,transparent 0 18%,rgba(52,211,153,.055) 18.2% 18.6%,transparent 19%),radial-gradient(circle at center,transparent 0 38%,rgba(52,211,153,.055) 38.2% 38.6%,transparent 39%),radial-gradient(circle at center,transparent 0 58%,rgba(52,211,153,.05) 58.2% 58.6%,transparent 59%),radial-gradient(circle at center,transparent 0 78%,rgba(52,211,153,.05) 78.2% 78.6%,transparent 79%)}
+  .card{background:#0c2118;border:1px solid #1e4433}
+  .card-hover:hover{border-color:#34d399;transform:translateY(-2px)}
+  .card{transition:all .2s ease}
+  .scenario-selected{border-color:#34d399!important;box-shadow:0 0 0 2px rgba(52,211,153,.35),0 18px 40px rgba(0,0,0,.35)}
+  .btn-primary{background:#10b981;color:#04120c;font-weight:800}.btn-primary:hover{background:#34d399}
+  .btn-ghost{border:1px solid #245443;color:#d1fae5}.btn-ghost:hover{background:#123324}
+  .ctl-btn{border:1px solid #245443;background:#0d2419;color:#d1fae5;transition:all .15s}.ctl-btn:hover{border-color:#34d399;background:#143527}.ctl-btn.active{background:#10b981;color:#04120c;border-color:#10b981;font-weight:800}
+  .ctl-btn:disabled{opacity:.38;cursor:not-allowed}
+  .speed-active{background:#f59e0b!important;color:#111827!important;border-color:#f59e0b!important}
+  input[type=range]{accent-color:#10b981}
+  .log-item{animation:slideIn .25s ease both}
+  @keyframes slideIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+  @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.0)}50%{box-shadow:0 0 0 6px rgba(239,68,68,.18)}}
+  .alert-pulse{animation:pulseRed 1s infinite}
+  @keyframes floatUp{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-28px)}}
+  .toast-in{animation:toastIn .3s cubic-bezier(.2,.9,.3,1.2) both}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-10px) scale(.96)}to{opacity:1;transform:none}}
+  .blip{filter:drop-shadow(0 0 6px rgba(52,211,153,.7))}
+  .tab-active{background:#10b981;color:#04120c;font-weight:800}
+  .kbd{background:#122e21;border:1px solid #2b5a44;border-bottom-width:3px;border-radius:6px;padding:1px 6px;font-size:11px}
+  .progress-track{background:#122a1e;border-radius:99px;overflow:hidden}.progress-fill{height:100%;transition:width .4s ease}
+  select{background:#0d2419;border:1px solid #245443;color:#ecfdf5;border-radius:10px;padding:8px}
+  .traffic-row{transition:all .15s}.traffic-row:hover{background:#143527}
+  .shake{animation:shake .35s ease}@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+</style>
+</head>
+<body class="text-emerald-50 min-h-screen overflow-x-hidden">
+
+<!-- ================= TITLE SCREEN ================= -->
+<section id="titleScreen" class="min-h-screen radar-bg relative">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <header class="flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-emerald-400 text-emerald-950 grid place-items-center"><i data-lucide="radar" class="w-6 h-6"></i></div>
+        <div><p class="display text-2xl leading-none font-bold tracking-widest">APPROACH CONTROL</p><p class="text-[11px] uppercase tracking-[.25em] text-emerald-300/70">Radar • Sequencing • Separation</p></div>
+      </div>
+      <div class="flex gap-2">
+        <button id="titleHelpBtn" class="btn-ghost rounded-xl px-4 py-2 text-sm flex items-center gap-2"><i data-lucide="circle-help" class="w-4 h-4"></i>How to Play</button>
+        <button id="titleSettingsBtn" class="btn-ghost rounded-xl px-4 py-2 text-sm flex items-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i>Settings</button>
+      </div>
+    </header>
+
+    <div class="grid lg:grid-cols-[1.05fr_.95fr] gap-8 items-center mt-8 lg:mt-12">
+      <div>
+        <div class="inline-flex items-center gap-2 bg-emerald-400/10 border border-emerald-400/30 text-emerald-200 rounded-full px-3 py-1 text-xs font-semibold"><span class="w-2 h-2 rounded-full bg-emerald-300"></span> LIVE RADAR SIMULATION · SHIFT-BASED CAMPAIGN</div>
+        <h1 class="display font-bold uppercase leading-[.9] mt-5 text-6xl sm:text-7xl xl:text-8xl">Bring them<br><span class="text-emerald-400">home safe.</span></h1>
+        <p class="text-emerald-100/70 text-base sm:text-lg mt-5 max-w-xl leading-relaxed">You are the approach controller. Vector arrivals onto final, launch departures to their exit gates, protect 3-mile separation, beat the weather — and keep every fuel gauge out of the red.</p>
+        <div class="grid grid-cols-3 gap-3 max-w-xl mt-7 text-center">
+          <div class="card rounded-2xl p-3"><p class="display text-3xl font-bold text-emerald-300" id="statBestScore">0</p><p class="text-[11px] uppercase tracking-wider text-emerald-200/60">Best Score</p></div>
+          <div class="card rounded-2xl p-3"><p class="display text-3xl font-bold text-amber-300" id="statShiftsDone">0 / 4</p><p class="text-[11px] uppercase tracking-wider text-emerald-200/60">Shifts Cleared</p></div>
+          <div class="card rounded-2xl p-3"><p class="display text-3xl font-bold text-cyan-300" id="statTotalLanded">0</p><p class="text-[11px] uppercase tracking-wider text-emerald-200/60">Total Landings</p></div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mt-7">
+          <button id="startBtn" class="btn-primary rounded-2xl px-7 py-4 text-base flex items-center gap-2 shadow-xl shadow-emerald-500/20"><i data-lucide="play" class="w-5 h-5"></i><span id="startBtnLabel">Start Shift 1</span></button>
+          <button id="quickTutorialBtn" class="btn-ghost rounded-2xl px-5 py-4 text-sm flex items-center gap-2"><i data-lucide="graduation-cap" class="w-5 h-5"></i>60-Second Tutorial</button>
+        </div>
+        <p class="text-xs text-emerald-200/50 mt-3 flex items-center gap-2"><i data-lucide="mouse-pointer-click" class="w-4 h-4"></i> Click an aircraft blip → set heading / altitude / speed → clear it to land. That is the whole loop.</p>
+      </div>
+
+      <div class="card rounded-[28px] p-4 sm:p-5 shadow-2xl">
+        <div class="flex items-center justify-between"><h2 class="display text-2xl font-bold uppercase">Select your shift</h2><span class="text-[11px] mono bg-black/30 border border-emerald-800 rounded-full px-2 py-1" id="unlockNote">SHIFTS 1–3 OPEN</span></div>
+        <div id="scenarioCards" class="grid sm:grid-cols-2 gap-3 mt-4"></div>
+        <div class="grid sm:grid-cols-2 gap-3 mt-4">
+          <label class="block"><span class="text-[11px] uppercase tracking-wider text-emerald-200/60 font-bold">Traffic Modifier</span>
+            <select id="trafficMod" class="w-full mt-1"><option value="0.8">Calm Day ×0.8 traffic</option><option value="1" selected>Standard ×1.0 traffic</option><option value="1.3">Intense ×1.3 traffic</option></select></label>
+          <label class="block"><span class="text-[11px] uppercase tracking-wider text-emerald-200/60 font-bold">Weather Modifier</span>
+            <select id="weatherMod" class="w-full mt-1"><option value="calm">Calm Skies</option><option value="active" selected>Active Weather</option><option value="volatile">Volatile Fronts</option></select></label>
+        </div>
+        <div class="bg-black/25 border border-emerald-900 rounded-2xl p-3 mt-4 text-sm text-emerald-100/75 flex gap-3"><i data-lucide="trophy" class="w-5 h-5 text-amber-300 shrink-0"></i><p><b class="text-emerald-50">Capstone — Tempest Rush:</b> survive a storm-driven bank of arrivals, two emergencies and a departure push. Meet both quotas with safety ≥ 60 to earn Tower Chief.</p></div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-4 gap-3 mt-8 pb-8">
+      <div class="card rounded-2xl p-4"><i data-lucide="route" class="w-5 h-5 text-emerald-300"></i><h3 class="font-bold mt-2">Vector & Sequence</h3><p class="text-sm text-emerald-100/60 mt-1">Direct arrivals to the FAF, space them on final, and launch departures between gaps.</p></div>
+      <div class="card rounded-2xl p-4"><i data-lucide="shield-alert" class="w-5 h-5 text-red-300"></i><h3 class="font-bold mt-2">Protect Separation</h3><p class="text-sm text-emerald-100/60 mt-1">3 NM / 1,000 ft minimums. Altitude is your cheapest separation tool.</p></div>
+      <div class="card rounded-2xl p-4"><i data-lucide="cloud-lightning" class="w-5 h-5 text-amber-300"></i><h3 class="font-bold mt-2">Weather & Wind</h3><p class="text-sm text-emerald-100/60 mt-1">Storm cells drift with the wind, force turbulence and can close the runway.</p></div>
+      <div class="card rounded-2xl p-4"><i data-lucide="fuel" class="w-5 h-5 text-cyan-300"></i><h3 class="font-bold mt-2">Fuel & Emergencies</h3><p class="text-sm text-emerald-100/60 mt-1">Holding burns fuel. Prioritise low-fuel and medical flights or lose the shift.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GAME SCREEN ================= -->
+<section id="gameScreen" class="hidden min-h-screen radar-bg">
+  <header class="sticky top-0 z-30 bg-[#071a12]/95 backdrop-blur border-b border-emerald-900">
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-4 py-2 flex items-center gap-2 flex-wrap">
+      <button id="quitBtn" class="ctl-btn rounded-xl p-2" title="Return to title (pause first)"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+      <div class="mr-1"><p class="display font-bold text-xl leading-none" id="hudScenario">SHIFT 1</p><p class="text-[10px] uppercase tracking-widest text-emerald-300/60" id="hudAirport">KAPT · RWY 09</p></div>
+      <div class="flex items-center gap-2 bg-black/30 border border-emerald-900 rounded-xl px-3 py-1.5"><i data-lucide="timer" class="w-4 h-4 text-amber-300"></i><span class="mono font-bold" id="hudClock">04:00</span><div class="w-20 sm:w-28 progress-track h-2"><div id="timeProgress" class="progress-fill bg-amber-400" style="width:100%"></div></div></div>
+      <div class="flex items-center gap-2 bg-black/30 border border-emerald-900 rounded-xl px-3 py-1.5" title="Score"><i data-lucide="star" class="w-4 h-4 text-amber-300"></i><span class="mono font-bold" id="hudScore">0</span><span class="text-[10px] text-emerald-200/50 mono" id="hudCombo"></span></div>
+      <div class="flex items-center gap-2 bg-black/30 border border-emerald-900 rounded-xl px-3 py-1.5" title="Safety rating"><i data-lucide="heart-pulse" class="w-4 h-4 text-emerald-300"></i><span class="mono font-bold" id="hudSafety">100</span></div>
+      <div class="hidden md:flex items-center gap-3 bg-black/30 border border-emerald-900 rounded-xl px-3 py-1.5 text-xs mono">
+        <span title="Landed quota">↓ <b id="hudLanded">0/6</b></span><span title="Departed quota">↑ <b id="hudDeparted">0/4</b></span>
+      </div>
+      <div class="hidden lg:flex items-center gap-2 bg-black/30 border border-emerald-900 rounded-xl px-3 py-1.5 text-xs mono" title="Wind"><i data-lucide="wind" class="w-4 h-4 text-cyan-300"></i><span id="hudWind">270° / 08kt</span><span id="hudVis" class="text-emerald-200/60">VIS 10km</span></div>
+      <div class="flex-1"></div>
+      <div class="flex rounded-xl overflow-hidden border border-emerald-800" role="group" aria-label="Simulation speed">
+        <button data-speed="0.5" class="speedBtn ctl-btn px-2.5 py-2 text-xs mono border-0">0.5×</button>
+        <button data-speed="1" class="speedBtn ctl-btn px-2.5 py-2 text-xs mono border-0 speed-active">1×</button>
+        <button data-speed="2" class="speedBtn ctl-btn px-2.5 py-2 text-xs mono border-0">2×</button>
+        <button data-speed="4" class="speedBtn ctl-btn px-2.5 py-2 text-xs mono border-0">4×</button>
+      </div>
+      <button id="pauseBtn" class="ctl-btn rounded-xl px-3 py-2 text-sm flex items-center gap-1.5"><i data-lucide="pause" class="w-4 h-4"></i><span class="hidden sm:inline">Pause</span></button>
+      <button id="muteBtn" class="ctl-btn rounded-xl p-2" title="Mute / unmute"><i data-lucide="volume-2" class="w-5 h-5"></i></button>
+      <button id="gameHelpBtn" class="ctl-btn rounded-xl p-2" title="Help"><i data-lucide="circle-help" class="w-5 h-5"></i></button>
+      <button id="gameSettingsBtn" class="ctl-btn rounded-xl p-2" title="Settings"><i data-lucide="settings-2" class="w-5 h-5"></i></button>
+    </div>
+  </header>
+
+  <main class="max-w-[1600px] mx-auto px-3 sm:px-4 py-3 grid xl:grid-cols-[minmax(0,1fr)_390px] gap-3">
+    <!-- LEFT: RADAR -->
+    <div class="min-w-0">
+      <div id="alertBanner" class="hidden mb-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold items-center gap-2"></div>
+      <div class="relative card rounded-[24px] overflow-hidden" id="radarWrap">
+        <canvas id="radar" class="w-full block touch-none cursor-crosshair" style="height:min(68vh,720px);min-height:420px"></canvas>
+        <div id="tutorialCard" class="hidden absolute top-3 left-3 w-[290px] max-w-[86%] bg-[#06170f]/95 border border-emerald-500/40 rounded-2xl p-3 shadow-2xl">
+          <div class="flex items-center justify-between"><p class="font-bold text-sm flex items-center gap-2"><i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-300"></i>First Flight Tutorial</p><button id="tutClose" class="text-emerald-200/60 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+          <ol id="tutSteps" class="mt-2 space-y-1.5 text-[13px]"></ol>
+        </div>
+        <div class="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
+          <span id="runwayStatus" class="mono text-[11px] font-bold rounded-full px-2.5 py-1 bg-emerald-500 text-emerald-950">RWY 09 CLEAR</span>
+          <span id="weatherStatus" class="mono text-[11px] rounded-full px-2.5 py-1 bg-black/60 border border-emerald-800 text-cyan-200">WX CLEAR</span>
+        </div>
+        <div class="absolute bottom-3 left-3 flex flex-wrap gap-1.5">
+          <button class="overlayBtn ctl-btn rounded-lg px-2.5 py-1.5 text-[11px]" data-overlay="weather">Weather</button>
+          <button class="overlayBtn ctl-btn rounded-lg px-2.5 py-1.5 text-[11px]" data-overlay="trails">Trails</button>
+          <button class="overlayBtn ctl-btn rounded-lg px-2.5 py-1.5 text-[11px]" data-overlay="labels">Labels</button>
+          <button class="overlayBtn ctl-btn rounded-lg px-2.5 py-1.5 text-[11px]" data-overlay="rings">Range Rings</button>
+        </div>
+        <div class="absolute bottom-3 right-3 hidden md:flex items-center gap-3 bg-black/55 border border-emerald-900 rounded-xl px-3 py-1.5 text-[11px] text-emerald-100/75">
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rotate-45 bg-cyan-300 inline-block"></span>Arrival</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rotate-45 bg-amber-300 inline-block"></span>Departure</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rotate-45 bg-red-400 inline-block"></span>Emergency</span>
+          <span>◇ Fix / Gate</span><span class="text-orange-300">◯ Storm</span>
+        </div>
+        <div id="toastZone" class="absolute top-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none w-[92%]"></div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3 mt-3">
+        <div class="card rounded-2xl p-3"><div class="flex justify-between items-center"><h3 class="font-bold text-sm flex items-center gap-2"><i data-lucide="chart-line" class="w-4 h-4 text-emerald-300"></i>Throughput (cumulative)</h3><span class="text-[11px] mono text-emerald-200/50"><span class="text-cyan-300">— landed</span> <span class="text-amber-300">— departed</span></span></div><canvas id="chartThroughput" class="w-full mt-2" height="92"></canvas></div>
+        <div class="card rounded-2xl p-3"><div class="flex justify-between items-center"><h3 class="font-bold text-sm flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-emerald-300"></i>Safety & Traffic Load</h3><span class="text-[11px] mono text-emerald-200/50"><span class="text-emerald-300">— safety</span> <span class="text-red-300">— airborne</span></span></div><canvas id="chartSafety" class="w-full mt-2" height="92"></canvas></div>
+      </div>
+
+      <div class="card rounded-2xl p-3 mt-3 hidden md:block">
+        <h3 class="font-bold text-sm flex items-center gap-2"><i data-lucide="keyboard" class="w-4 h-4 text-emerald-300"></i>Keyboard Control</h3>
+        <p class="text-xs text-emerald-100/60 mt-1.5 leading-6"><span class="kbd">←</span><span class="kbd">→</span> heading ∓10° · <span class="kbd">↑</span><span class="kbd">↓</span> altitude ±500 ft · <span class="kbd">+</span><span class="kbd">−</span> speed ±10 kt · <span class="kbd">F</span> direct final · <span class="kbd">L</span> clear land · <span class="kbd">T</span> takeoff · <span class="kbd">H</span> hold · <span class="kbd">Tab</span> next aircraft · <span class="kbd">Space</span> pause · <span class="kbd">1–4</span> speed</p>
+      </div>
+    </div>
+
+    <!-- RIGHT: CONTROL PANEL -->
+    <aside class="space-y-3 min-w-0">
+      <div class="card rounded-[22px] p-4" id="selectedPanel">
+        <div class="flex items-start justify-between gap-2">
+          <div><p class="text-[10px] uppercase tracking-[.2em] text-emerald-300/60 font-bold">Selected Aircraft</p><h2 class="display text-3xl font-bold leading-none mt-1" id="selCallsign">— none —</h2><p class="text-xs text-emerald-100/60 mt-1" id="selMeta">Click any blip or traffic row to take control.</p></div>
+          <span id="selBadge" class="mono text-[11px] font-bold rounded-full px-2 py-1 bg-emerald-900 text-emerald-200">STANDBY</span>
+        </div>
+        <div id="selEmpty" class="mt-4 bg-black/25 border border-dashed border-emerald-800 rounded-2xl p-4 text-center text-sm text-emerald-100/55"><i data-lucide="mouse-pointer-click" class="w-6 h-6 mx-auto text-emerald-300"></i><p class="mt-2">Select an arrival and vector it to the dashed final approach line, west of the airport.</p></div>
+        <div id="selControls" class="hidden mt-3">
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="bg-black/30 rounded-xl p-2"><p class="text-[10px] uppercase text-emerald-200/50">Heading</p><p class="mono font-bold text-lg" id="selHdg">090°</p></div>
+            <div class="bg-black/30 rounded-xl p-2"><p class="text-[10px] uppercase text-emerald-200/50">Altitude</p><p class="mono font-bold text-lg" id="selAlt">8000</p></div>
+            <div class="bg-black/30 rounded-xl p-2"><p class="text-[10px] uppercase text-emerald-200/50">Speed</p><p class="mono font-bold text-lg" id="selSpd">250</p></div>
+          </div>
+          <div class="mt-3"><div class="flex justify-between text-[11px]"><span class="flex items-center gap-1"><i data-lucide="fuel" class="w-3.5 h-3.5"></i>Fuel</span><span class="mono" id="selFuelTxt">—</span></div><div class="progress-track h-2.5 mt-1"><div id="selFuelBar" class="progress-fill bg-cyan-400" style="width:80%"></div></div></div>
+          <p class="text-xs mt-2 bg-black/25 rounded-xl px-3 py-2 text-emerald-100/75" id="selInstruction">—</p>
+
+          <div class="mt-3"><p class="text-[11px] font-bold uppercase tracking-wider text-emerald-200/60 flex items-center gap-1.5"><i data-lucide="compass" class="w-3.5 h-3.5"></i>Heading</p>
+            <div class="flex items-center gap-1.5 mt-1.5"><button class="ctl-btn rounded-lg px-2 py-2 mono text-xs flex-1" data-hdg="-30">−30</button><button class="ctl-btn rounded-lg px-2 py-2 mono text-xs flex-1" data-hdg="-10">−10</button><button class="ctl-btn rounded-lg px-2 py-2 mono text-xs flex-1" data-hdg="-1">−1</button><input id="hdgInput" type="number" min="1" max="360" class="w-[70px] bg-black/40 border border-emerald-800 rounded-lg text-center mono py-2 text-sm"><button class="ctl-btn rounded-lg px-2 py-2 mono text-xs flex-1" data-hdg="1">+1</button><button class="ctl-btn rounded-lg px-2 py-2 mono text-xs flex-1" data-hdg="10">+10</button><button class="ctl-btn rounded-lg px-2 py-2 mono text-xs flex-1" data-hdg="30">+30</button></div>
+            <div class="grid grid-cols-4 gap-1.5 mt-1.5"><button class="ctl-btn rounded-lg py-1.5 text-xs mono" data-hdgset="360">N 360</button><button class="ctl-btn rounded-lg py-1.5 text-xs mono" data-hdgset="90">E 090</button><button class="ctl-btn rounded-lg py-1.5 text-xs mono" data-hdgset="180">S 180</button><button class="ctl-btn rounded-lg py-1.5 text-xs mono" data-hdgset="270">W 270</button></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 mt-3">
+            <div><p class="text-[11px] font-bold uppercase tracking-wider text-emerald-200/60">Altitude <span class="mono text-emerald-300" id="altTargetLbl">8000 ft</span></p><input id="altSlider" type="range" min="2000" max="14000" step="500" value="8000" class="w-full"><div class="flex justify-between text-[10px] text-emerald-200/40 mono"><span>2,000</span><span>14,000</span></div></div>
+            <div><p class="text-[11px] font-bold uppercase tracking-wider text-emerald-200/60">Speed <span class="mono text-emerald-300" id="spdTargetLbl">250 kt</span></p><input id="spdSlider" type="range" min="120" max="320" step="10" value="250" class="w-full"><div class="flex justify-between text-[10px] text-emerald-200/40 mono"><span>120</span><span>320</span></div></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <button id="directFinalBtn" class="ctl-btn rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2"><i data-lucide="route" class="w-4 h-4 text-cyan-300"></i>Direct Final</button>
+            <button id="directExitBtn" class="ctl-btn rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2"><i data-lucide="log-out" class="w-4 h-4 text-amber-300"></i>Direct Exit Gate</button>
+            <button id="holdBtn" class="ctl-btn rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2"><i data-lucide="loader-circle" class="w-4 h-4"></i><span id="holdBtnLbl">Enter Hold</span></button>
+            <button id="priorityBtn" class="ctl-btn rounded-xl px-3 py-2.5 text-sm flex items-center justify-center gap-2"><i data-lucide="siren" class="w-4 h-4 text-red-300"></i>Declare Priority</button>
+          </div>
+          <button id="clearLandBtn" class="btn-primary w-full rounded-2xl py-3.5 mt-2 text-base flex items-center justify-center gap-2"><i data-lucide="plane-landing" class="w-5 h-5"></i>CLEAR TO LAND · RWY 09</button>
+          <p class="text-[11px] text-center mt-1.5 text-emerald-100/50" id="landHint">Needs: on/near final, ≤ 4,000 ft, ≤ 200 kt, runway clear.</p>
+        </div>
+      </div>
+
+      <div class="card rounded-[22px] p-4">
+        <div class="flex items-center justify-between"><h3 class="font-bold flex items-center gap-2"><i data-lucide="plane-takeoff" class="w-4 h-4 text-amber-300"></i>Departure Queue</h3><span class="mono text-[11px] bg-black/30 border border-emerald-900 rounded-full px-2 py-0.5" id="depQueueCount">0 waiting</span></div>
+        <div id="depQueue" class="mt-2 space-y-2"></div>
+      </div>
+
+      <div class="card rounded-[22px] p-4">
+        <div class="flex rounded-xl overflow-hidden border border-emerald-800 mb-2">
+          <button id="tabTraffic" class="flex-1 py-2 text-sm tab-active">Traffic <span class="mono" id="trafficCount"></span></button>
+          <button id="tabLog" class="flex-1 py-2 text-sm">Event Log</button>
+        </div>
+        <div id="trafficList" class="space-y-1.5 max-h-[300px] overflow-y-auto pr-1"></div>
+        <div id="eventLog" class="hidden space-y-1.5 max-h-[300px] overflow-y-auto pr-1 text-[13px]"></div>
+      </div>
+    </aside>
+  </main>
+</section>
+
+<!-- ================= PAUSE OVERLAY ================= -->
+<div id="pauseOverlay" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm grid place-items-center p-4">
+  <div class="card rounded-[26px] p-6 w-full max-w-md text-center shadow-2xl">
+    <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-400 text-amber-950 grid place-items-center"><i data-lucide="pause" class="w-7 h-7"></i></div>
+    <h2 class="display text-4xl font-bold mt-3">FREQUENCY PAUSED</h2><p class="text-sm text-emerald-100/60 mt-1">Traffic is frozen. No aircraft will move while you brief.</p>
+    <div class="grid gap-2 mt-5">
+      <button id="resumeBtn" class="btn-primary rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="play" class="w-5 h-5"></i>Resume Control</button>
+      <button id="pauseRestartBtn" class="btn-ghost rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Restart Shift</button>
+      <button id="pauseSettingsBtn" class="btn-ghost rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="settings-2" class="w-4 h-4"></i>Settings</button>
+      <button id="pauseTitleBtn" class="btn-ghost rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="home" class="w-4 h-4"></i>Return to Title</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= END OVERLAY ================= -->
+<div id="endOverlay" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm grid place-items-center p-4 overflow-y-auto">
+  <div class="card rounded-[26px] p-6 w-full max-w-2xl shadow-2xl my-6">
+    <div class="text-center"><div id="endIcon" class="w-16 h-16 mx-auto rounded-3xl grid place-items-center bg-emerald-400 text-emerald-950"><i data-lucide="trophy" class="w-8 h-8"></i></div>
+    <h2 class="display text-5xl font-bold mt-3" id="endTitle">SHIFT COMPLETE</h2><p class="text-emerald-100/65 mt-1" id="endSubtitle">All traffic handled.</p>
+    <div class="inline-flex items-center gap-2 mt-3"><span class="text-xs uppercase tracking-widest text-emerald-200/50">Grade</span><span id="endGrade" class="display text-5xl font-bold text-amber-300">A</span><span class="mono bg-black/30 border border-emerald-800 rounded-full px-3 py-1" id="endScore">0 pts</span></div></div>
+    <div id="endStats" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-5"></div>
+    <div id="endUnlock" class="hidden mt-4 bg-emerald-400/10 border border-emerald-400/30 rounded-2xl p-3 text-sm flex gap-2"><i data-lucide="lock-open" class="w-5 h-5 text-emerald-300 shrink-0"></i><span id="endUnlockTxt"></span></div>
+    <div class="grid sm:grid-cols-3 gap-2 mt-5">
+      <button id="nextShiftBtn" class="btn-primary rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="skip-forward" class="w-4 h-4"></i>Next Shift</button>
+      <button id="retryBtn" class="btn-ghost rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Retry Shift</button>
+      <button id="endTitleBtn" class="btn-ghost rounded-2xl py-3 flex items-center justify-center gap-2"><i data-lucide="home" class="w-4 h-4"></i>Title Screen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= HELP MODAL ================= -->
+<div id="helpModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm grid place-items-center p-4 overflow-y-auto">
+  <div class="card rounded-[26px] p-6 w-full max-w-3xl shadow-2xl my-6">
+    <div class="flex items-start justify-between"><div><h2 class="display text-4xl font-bold">CONTROLLER HANDBOOK</h2><p class="text-sm text-emerald-100/60">Everything you need in your first minute — and the depth after it.</p></div><button class="closeHelp ctl-btn rounded-xl p-2"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+    <div class="grid md:grid-cols-2 gap-3 mt-5 text-sm">
+      <div class="bg-black/25 rounded-2xl p-4"><h3 class="font-bold flex gap-2 items-center"><i data-lucide="mouse-pointer-click" class="w-4 h-4 text-emerald-300"></i>The 60-second loop</h3><ol class="list-decimal ml-5 mt-2 space-y-1.5 text-emerald-100/70"><li>Click a cyan arrival blip (or its traffic row).</li><li>Press <b class="text-white">Direct Final</b> — it turns toward the FAF fix, west of the field.</li><li>Slow it: speed ≤ 200 kt, altitude ≤ 4,000 ft before the FAF.</li><li>Press <b class="text-white">Clear to Land</b> when the runway is clear. +100 pts.</li><li>Departures: pick one in the queue → <b class="text-white">Clear Takeoff</b> → vector it to its named exit gate.</li></ol></div>
+      <div class="bg-black/25 rounded-2xl p-4"><h3 class="font-bold flex gap-2 items-center"><i data-lucide="shield-alert" class="w-4 h-4 text-red-300"></i>Separation & safety</h3><p class="mt-2 text-emerald-100/70 leading-relaxed">Keep aircraft <b class="text-white">3 NM apart horizontally or 1,000 ft apart vertically</b>. Amber/red rings mean a conflict is developing — change altitude first, it is the fastest fix. A loss of separation costs safety and points; a collision ends the shift instantly. Heavy jets leave wake turbulence: wait a few seconds before landing or launching traffic behind them.</p></div>
+      <div class="bg-black/25 rounded-2xl p-4"><h3 class="font-bold flex gap-2 items-center"><i data-lucide="cloud-lightning" class="w-4 h-4 text-amber-300"></i>Weather, wind & fuel</h3><p class="mt-2 text-emerald-100/70 leading-relaxed">Orange storm cells drift with the wind. Flying through one causes turbulence and extra fuel burn; a cell over the airport closes the runway and forces go-arounds. Holds buy spacing but burn fuel fast — below 12 minutes of fuel, land that aircraft first or declare priority. Wind shifts change your headwind: strong tailwinds block landings.</p></div>
+      <div class="bg-black/25 rounded-2xl p-4"><h3 class="font-bold flex gap-2 items-center"><i data-lucide="trophy" class="w-4 h-4 text-amber-300"></i>Winning & losing</h3><p class="mt-2 text-emerald-100/70 leading-relaxed">Meet the <b class="text-white">landing + departure quotas before the shift clock runs out</b> with safety ≥ 60 to clear the shift and unlock the next. You fail instantly on a mid-air collision or a fuel-exhaustion crash, and at the buzzer if quotas are missed. Emergencies (red) are worth double — but never at the cost of separation.</p></div>
+    </div>
+    <div class="bg-black/25 rounded-2xl p-4 mt-3 text-sm"><h3 class="font-bold">Controls</h3><p class="text-emerald-100/70 mt-1.5 leading-7"><span class="kbd">Click / Tap</span> select aircraft · <span class="kbd">←→</span> heading · <span class="kbd">↑↓</span> altitude · <span class="kbd">+−</span> speed · <span class="kbd">F</span> final · <span class="kbd">L</span> land · <span class="kbd">T</span> takeoff · <span class="kbd">H</span> hold · <span class="kbd">Tab</span> cycle traffic · <span class="kbd">Space</span> pause · <span class="kbd">1–4</span> sim speed · <span class="kbd">Esc</span> pause menu</p></div>
+    <button class="closeHelp btn-primary rounded-2xl px-6 py-3 mt-5 w-full">Got it — back to the scope</button>
+  </div>
+</div>
+
+<!-- ================= SETTINGS MODAL ================= -->
+<div id="settingsModal" class="hidden fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm grid place-items-center p-4">
+  <div class="card rounded-[26px] p-6 w-full max-w-md shadow-2xl">
+    <div class="flex items-start justify-between"><h2 class="display text-4xl font-bold">SETTINGS</h2><button id="closeSettings" class="ctl-btn rounded-xl p-2"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+    <div class="space-y-4 mt-4 text-sm">
+      <div><div class="flex justify-between"><label class="font-semibold flex items-center gap-2"><i data-lucide="volume-2" class="w-4 h-4 text-emerald-300"></i>Master Volume</label><span class="mono" id="volLbl">70%</span></div><input id="volSlider" type="range" min="0" max="100" value="70" class="w-full mt-1"></div>
+      <label class="flex items-center justify-between bg-black/25 rounded-xl px-3 py-2.5"><span>Mute all audio</span><input id="muteToggle" type="checkbox" class="w-5 h-5"></label>
+      <label class="flex items-center justify-between bg-black/25 rounded-xl px-3 py-2.5"><span>Radar sweep</span><input id="setSweep" type="checkbox" checked class="w-5 h-5"></label>
+      <label class="flex items-center justify-between bg-black/25 rounded-xl px-3 py-2.5"><span>Aircraft trails</span><input id="setTrails" type="checkbox" checked class="w-5 h-5"></label>
+      <label class="flex items-center justify-between bg-black/25 rounded-xl px-3 py-2.5"><span>Data tags (labels)</span><input id="setLabels" type="checkbox" checked class="w-5 h-5"></label>
+      <label class="flex items-center justify-between bg-black/25 rounded-xl px-3 py-2.5"><span>Range rings</span><input id="setRings" type="checkbox" checked class="w-5 h-5"></label>
+      <button id="resetProgressBtn" class="w-full border border-red-800 text-red-200 rounded-xl py-2.5 hover:bg-red-950/50 flex items-center justify-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i>Reset campaign progress</button>
+      <p class="text-[11px] text-emerald-100/40">Settings and campaign progress save automatically to this browser.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   APPROACH CONTROL — radar ATC simulation
+   Systems: traffic sequencing <-> separation/safety <-> runway
+   occupancy/wake <-> weather/wind <-> fuel/emergencies <-> score
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(seed){let t=seed>>>0;return function(){t+=0x6D2B79F5;let r=Math.imul(t^t>>>15,1|t);r^=r+Math.imul(r^r>>>7,61|r);return((r^r>>>14)>>>0)/4294967296}}
+function angNorm(a){a=((a%360)+360)%360;return a===0?360:a}
+function angDiff(a,b){let d=((a-b+540)%360)-180;return d}
+function fmtClock(s){s=Math.max(0,Math.ceil(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+
+/* ---------- persistence ---------- */
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let settings=Object.assign({volume:.7,muted:false,sweep:true,trails:true,labels:true,rings:true},store.get('atc_settings',{}));
+let progress=Object.assign({completed:[],best:{},totalLanded:0,totalDeparted:0,shiftsPlayed:0},store.get('atc_progress',{}));
+function saveSettings(){store.set('atc_settings',settings)}
+function saveProgress(){store.set('atc_progress',progress)}
+
+/* ---------- audio (fully synthesized) ---------- */
+const AudioSys={ctx:null,master:null,ambient:null,lastAlert:0,
+ init(){if(this.ctx)return;try{const C=new(window.AudioContext||window.webkitAudioContext)();this.ctx=C;this.master=C.createGain();this.master.gain.value=settings.muted?0:settings.volume;this.master.connect(C.destination);
+   const o=C.createOscillator(),g=C.createGain(),f=C.createBiquadFilter();o.type='sine';o.frequency.value=52;f.type='lowpass';f.frequency.value=220;g.gain.value=.012;o.connect(f);f.connect(g);g.connect(this.master);o.start();
+   const nb=C.createBuffer(1,C.sampleRate*2,C.sampleRate),d=nb.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+   const ns=C.createBufferSource();ns.buffer=nb;ns.loop=true;const nf=C.createBiquadFilter();nf.type='bandpass';nf.frequency.value=480;nf.Q.value=.6;const ng=C.createGain();ng.gain.value=.006;ns.connect(nf);nf.connect(ng);ng.connect(this.master);ns.start();
+   this.ambient=g;}catch(e){}},
+ resume(){if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume()},
+ apply(){if(this.master)this.master.gain.value=settings.muted?0:settings.volume},
+ tone(freq,dur,type,vol,when=0){if(!this.ctx||settings.muted)return;const C=this.ctx,t=C.currentTime+when,o=C.createOscillator(),g=C.createGain();o.type=type||'sine';o.frequency.value=freq;g.gain.setValueAtTime(vol||.08,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+.02)},
+ click(){this.tone(1400,.05,'square',.03)},
+ select(){this.tone(880,.07,'sine',.05);this.tone(1320,.06,'sine',.035,.05)},
+ good(){this.tone(660,.1,'sine',.06);this.tone(990,.14,'sine',.06,.09)},
+ bad(){this.tone(180,.22,'sawtooth',.07);this.tone(140,.25,'sawtooth',.06,.08)},
+ alert(){const n=performance.now();if(n-this.lastAlert<900)return;this.lastAlert=n;this.tone(1175,.12,'square',.055);this.tone(1175,.12,'square',.055,.16)},
+ chime(){[523,659,784].forEach((f,i)=>this.tone(f,.16,'sine',.05,i*.08))},
+ radio(){this.tone(2200,.03,'square',.018);this.tone(1800,.04,'square',.014,.045)}
+};
+
+/* ---------- scenarios ---------- */
+const SCENARIOS=[
+ {id:1,name:"Shift 1 · First Light",diff:"EASY",seed:1101,duration:240,landQuota:6,depQuota:4,spawnArr:26,spawnDep:30,storms:0,windFrom:270,windKt:8,emergencies:[],desc:"A gentle morning bank. Learn the loop: vector, slow, descend, clear to land.",color:"text-emerald-300",icon:"sunrise"},
+ {id:2,name:"Shift 2 · Rush Hour Hub",diff:"MEDIUM",seed:2202,duration:300,landQuota:10,depQuota:7,spawnArr:19,spawnDep:22,storms:1,windFrom:300,windKt:12,emergencies:[{t:150,type:'fuel'}],desc:"The evening bank arrives together. Sequencing and altitude separation earn their keep.",color:"text-amber-300",icon:"factory"},
+ {id:3,name:"Shift 3 · Storm Front",diff:"HARD",seed:3303,duration:330,landQuota:11,depQuota:7,spawnArr:18,spawnDep:24,storms:2,windFrom:240,windKt:18,emergencies:[{t:90,type:'medical'},{t:210,type:'fuel'}],desc:"A moving front, gusty crosswinds and two emergencies. The runway will close — plan around it.",color:"text-red-300",icon:"cloud-lightning"},
+ {id:4,name:"Capstone · Tempest Rush",diff:"CAPSTONE",seed:4404,duration:360,landQuota:15,depQuota:10,spawnArr:14,spawnDep:18,storms:3,windFrom:220,windKt:22,emergencies:[{t:70,type:'medical'},{t:170,type:'fuel'},{t:280,type:'engine'}],desc:"Storm cells, three emergencies and a departure push — all at once. Earn Tower Chief.",color:"text-cyan-300",icon:"trophy",locked:true}
+];
+const FIXES={FAF:{x:-22,y:0,name:'FAF'},NORTH:{x:0,y:47,name:'NORTH'},EAST:{x:47,y:6,name:'EAST'},SOUTH:{x:-4,y:-47,name:'SOUTH'},WEST:{x:-47,y:22,name:'WEST'},MISSED:{x:-38,y:18,name:'MISSED'}};
+const AIRCRAFT_TYPES=[
+ {kind:'Heavy Jet',wake:'H',ex:'B777',fuel:52,weight:3},
+ {kind:'Medium Jet',wake:'M',ex:'A320',fuel:44,weight:5},
+ {kind:'Medium Jet',wake:'M',ex:'B737',fuel:42,weight:5},
+ {kind:'Cargo Jet',wake:'H',ex:'MD-11F',fuel:58,weight:2},
+ {kind:'Light GA',wake:'L',ex:'C172',fuel:30,weight:2},
+ {kind:'Regional Jet',wake:'M',ex:'E190',fuel:38,weight:3}
+];
+const AIRLINES=['BAW','DLH','AFR','KLM','UAE','SAS','FIN','VIR','THY','SWR'];
+
+/* ---------- game state ---------- */
+let G=null, selectedId=null, rafId=null, lastTs=0, chartTimer=0, uiTimer=0, sweepAng=0;
+let selectedScenarioId=1;
+function newState(sc){
+ const trafficMul=parseFloat($('trafficMod').value||'1'), wxMode=$('weatherMod').value||'active';
+ const stormCount = wxMode==='calm'?0: wxMode==='volatile'? sc.storms+1 : sc.storms;
+ return {sc, rng:mulberry32(sc.seed), elapsed:0, duration:sc.duration, speed:1, paused:false, over:false,
+  aircraft:[], depQueue:[], nextId:1, spawnArrT:2, spawnDepT:6, landed:0, departed:0, score:0, safety:100, combo:0, maxCombo:0,
+  goArounds:0, conflicts:0, losses:0, emergenciesHandled:0, totalDelay:0, landedCountForDelay:0,
+  runwayBusyUntil:-9, wakeUntil:-9, windFrom:sc.windFrom, windKt:sc.windKt, vis:10, stormOverField:false,
+  storms:[], events:sc.emergencies.map(e=>({...e,done:false})), trafficMul, wxMode,
+  history:[], floaters:[], particles:[], tut:{selected:false,adjusted:false,direct:false,cleared:false,landed:false,done:sc.id!==1},
+  stats:{closestCall:999}, startedAt:Date.now(), windShiftT:75+Math.random()*60, msgCooldown:0};
+}
+function spawnStorms(g,count){for(let i=0;i<count;i++){g.storms.push({x:-30+g.rng()*60,y:-30+g.rng()*60,r:9+g.rng()*6,int:.6+g.rng()*.4,seed:g.rng()*10,drift:g.rng()*Math.PI*2})}}
+function makeCallsign(g,type){if(type.ex==='C172')return 'N'+Math.floor(100+g.rng()*800)+'AB';return AIRLINES[Math.floor(g.rng()*AIRLINES.length)]+Math.floor(10+g.rng()*880)}
+function pickType(g){const pool=[];AIRCRAFT_TYPES.forEach(t=>{for(let i=0;i<t.weight;i++)pool.push(t)});return pool[Math.floor(g.rng()*pool.length)]}
+function entryPoint(g){const pts=[{x:0,y:49},{x:49,y:10},{x:-6,y:-49},{x:-49,y:24},{x:30,y:-49},{x:-35,y:49}];const p=pts[Math.floor(g.rng()*pts.length)];return{x:p.x+(g.rng()*8-4),y:p.y+(g.rng()*8-4)}}
+function spawnArrival(g,emergencyType){
+ if(g.aircraft.filter(a=>a.mode==='ARR').length>=13)return;
+ const type=pickType(g), p=entryPoint(g);
+ const headingToCenter=angNorm(Math.atan2(0-p.x,0-p.y)*180/Math.PI);
+ const ac={id:g.nextId++,callsign:makeCallsign(g,type),type:type.ex,kind:type.kind,wake:type.wake,mode:'ARR',phase: emergencyType?'EMERGENCY':'ENROUTE',
+  x:p.x,y:p.y,heading:headingToCenter,targetHeading:headingToCenter,alt:8000+g.rng()*4000,targetAlt:8000,spd:250,targetSpd:250,
+  fuel: emergencyType==='fuel'? 11 : type.fuel*(0.8+g.rng()*0.45), maxFuel:type.fuel, holding:false, nav:null, cleared:false, priority:!!emergencyType,
+  emergency:emergencyType||null, spawnT:g.elapsed, trail:[], conflict:0, stormT:0, born:g.elapsed, goAroundDone:false, selectedFlash:0};
+ if(emergencyType==='medical'){ac.priority=true}
+ if(emergencyType==='engine'){ac.targetSpd=180;ac.spd=190;ac.priority=true}
+ g.aircraft.push(ac);
+ logEvent(`${ac.callsign} (${ac.type}) inbound${emergencyType?' — '+emergencyType.toUpperCase()+' EMERGENCY, priority handling requested':''}`, emergencyType?'bad':'info');
+ if(emergencyType){toast(`${ac.callsign}: ${emergencyType==='fuel'?'LOW FUEL':emergencyType==='medical'?'MEDICAL EMERGENCY':'ENGINE TROUBLE'} — priority!`,'bad');AudioSys.bad()}
+ return ac;
+}
+function spawnDeparture(g){
+ if(g.depQueue.length>=5)return;
+ const type=pickType(g);const gates=['NORTH','EAST','SOUTH','WEST'];
+ const dep={id:g.nextId++,callsign:makeCallsign(g,type),type:type.ex,kind:type.kind,wake:type.wake,gate:gates[Math.floor(g.rng()*gates.length)],waitSince:g.elapsed,fuel:type.fuel};
+ g.depQueue.push(dep); logEvent(`${dep.callsign} (${dep.type}) ready for departure → ${dep.gate} gate`,'info');
+}
+function takeoff(depId){
+ if(!G||G.paused||G.over)return; const idx=G.depQueue.findIndex(d=>d.id===depId); if(idx<0)return;
+ if(G.elapsed<G.runwayBusyUntil){toast('Runway occupied — departure must wait','warn');AudioSys.bad();return}
+ if(G.elapsed<G.wakeUntil){toast('Wake turbulence from a Heavy — hold short a few more seconds','warn');AudioSys.bad();return}
+ const dep=G.depQueue.splice(idx,1)[0];
+ const ac={id:dep.id,callsign:dep.callsign,type:dep.type,kind:dep.kind,wake:dep.wake,mode:'DEP',phase:'CLIMB',x:2,y:0,heading:90,targetHeading:90,alt:0,targetAlt:9000,spd:60,targetSpd:250,fuel:dep.fuel,maxFuel:dep.fuel,holding:false,nav:FIXES[dep.gate],cleared:false,priority:false,emergency:null,spawnT:G.elapsed,trail:[],conflict:0,stormT:0,born:G.elapsed,gate:dep.gate,waited:G.elapsed-dep.waitSince};
+ G.aircraft.push(ac); G.runwayBusyUntil=G.elapsed+7; if(dep.wake==='H')G.wakeUntil=G.elapsed+13;
+ selectAircraft(ac.id,false); AudioSys.radio(); AudioSys.good();
+ logEvent(`${ac.callsign} airborne, runway 09 — vector to ${ac.gate} gate`,'good'); addFloater(4,4,'TAKEOFF '+ac.callsign,'#fbbf24');
+ markTut('adjusted');
+}
+/* ---------- selection & control ---------- */
+function getAc(id){return G?G.aircraft.find(a=>a.id===id):null}
+function selectAircraft(id,sound=true){selectedId=id;const ac=getAc(id);if(ac&&sound){AudioSys.select()} if(ac)markTut('selected'); refreshSelectedPanel()}
+function setHeading(deg){const ac=getAc(selectedId);if(!ac)return;ac.targetHeading=angNorm(deg);ac.nav=null;if(ac.phase==='HOLD'){ac.phase='ENROUTE';ac.holding=false}AudioSys.click();markTut('adjusted');refreshSelectedPanel()}
+function setTargetAlt(v){const ac=getAc(selectedId);if(!ac)return;ac.targetAlt=clamp(v,1000,14000);AudioSys.click();markTut('adjusted');refreshSelectedPanel()}
+function setTargetSpd(v){const ac=getAc(selectedId);if(!ac)return;ac.targetSpd=clamp(v,110,340);AudioSys.click();markTut('adjusted');refreshSelectedPanel()}
+function directFinal(){const ac=getAc(selectedId);if(!ac||ac.mode!=='ARR')return;ac.nav={...FIXES.FAF};ac.cleared=false;if(ac.phase!=='FINAL')ac.phase='TO_FAF';ac.holding=false;logEvent(`${ac.callsign} direct FAF, descend at pilot's discretion`,'info');AudioSys.radio();markTut('direct');refreshSelectedPanel()}
+function directExit(){const ac=getAc(selectedId);if(!ac||ac.mode!=='DEP')return;ac.nav=FIXES[ac.gate];logEvent(`${ac.callsign} direct ${ac.gate} gate`,'info');AudioSys.radio();refreshSelectedPanel()}
+function toggleHold(){const ac=getAc(selectedId);if(!ac)return;ac.holding=!ac.holding;ac.nav=null;ac.cleared=false;ac.phase=ac.holding?'HOLD':(ac.mode==='ARR'?'ENROUTE':'CLIMB');logEvent(`${ac.callsign} ${ac.holding?'entering hold — fuel burn increased':'leaving hold'}`,ac.holding?'warn':'info');AudioSys.radio();refreshSelectedPanel()}
+function declarePriority(){const ac=getAc(selectedId);if(!ac)return;ac.priority=true;G.score=Math.max(0,G.score-15);toast(`${ac.callsign} given priority handling (−15 pts coordination cost)`,'warn');logEvent(`${ac.callsign} granted priority by controller`,'warn');AudioSys.radio();refreshSelectedPanel()}
+function landingCheck(ac,verbose){
+ if(!ac||ac.mode!=='ARR')return{ok:false,why:'Not an arrival'};
+ if(G.elapsed<G.runwayBusyUntil)return{ok:false,why:'Runway occupied'};
+ if(G.elapsed<G.wakeUntil && ac.wake!=='H')return{ok:false,why:'Wake turbulence — wait'};
+ if(G.stormOverField)return{ok:false,why:'Storm over the field — runway closed'};
+ const tail=tailwindKt(); if(tail>8)return{ok:false,why:`Tailwind ${tail.toFixed(0)}kt — landing unsafe`};
+ const distFaf=Math.hypot(ac.x-FIXES.FAF.x,ac.y-FIXES.FAF.y), distApt=Math.hypot(ac.x,ac.y);
+ const onFinal=Math.abs(ac.y)<6 && ac.x<2 && ac.x>-32;
+ if(!(onFinal||distFaf<7||distApt<16))return{ok:false,why:'Not established near final — use Direct Final'};
+ if(ac.alt>4500)return{ok:false,why:'Too high — descend below 4,500 ft'};
+ if(ac.spd>210)return{ok:false,why:'Too fast — slow below 210 kt'};
+ return{ok:true,why:'Established · runway clear'};
+}
+function tailwindKt(){ // landing eastbound (heading 090); wind FROM windFrom
+ const windTo=angNorm(G.windFrom+180); const comp=Math.cos((90-windTo)*Math.PI/180)*G.windKt; return -comp; // positive = tailwind
+}
+function clearLand(){
+ const ac=getAc(selectedId);if(!ac)return; const chk=landingCheck(ac);
+ if(!chk.ok){toast('Cannot clear: '+chk.why,'warn');AudioSys.bad();logEvent(`${ac.callsign} landing clearance denied — ${chk.why}`,'warn');return}
+ ac.cleared=true;ac.holding=false;ac.phase='CLEARED';ac.nav={...FIXES.FAF};
+ toast(`${ac.callsign} cleared to land, runway 09`,'good');logEvent(`${ac.callsign} cleared to land RWY 09`,'good');AudioSys.radio();AudioSys.good();markTut('cleared');refreshSelectedPanel();
+}
+
+/* ---------- feedback helpers ---------- */
+function toast(msg,kind='info'){
+ const z=$('toastZone');if(!z)return;const el=document.createElement('div');
+ const styles={info:'bg-[#0b2418] border-emerald-700 text-emerald-50',good:'bg-emerald-500 text-emerald-950 border-emerald-300',warn:'bg-amber-400 text-amber-950 border-amber-200',bad:'bg-red-500 text-white border-red-300'};
+ el.className=`toast-in pointer-events-none rounded-xl border px-4 py-2 text-sm font-bold shadow-2xl ${styles[kind]||styles.info}`;el.textContent=msg;z.appendChild(el);
+ setTimeout(()=>{el.style.transition='all .3s';el.style.opacity='0';el.style.transform='translateY(-6px)';setTimeout(()=>el.remove(),320)},3400);
+ while(z.children.length>3)z.firstChild.remove();
+}
+function logEvent(msg,kind='info'){
+ const el=$('eventLog');if(!el)return;const row=document.createElement('div');
+ const dot={info:'bg-emerald-400',good:'bg-emerald-300',warn:'bg-amber-300',bad:'bg-red-400'}[kind]||'bg-emerald-400';
+ row.className='log-item flex gap-2 items-start bg-black/25 rounded-lg px-2.5 py-1.5';
+ row.innerHTML=`<span class="w-2 h-2 rounded-full mt-1.5 shrink-0 ${dot}"></span><span class="flex-1">${msg}</span><span class="mono text-[10px] text-emerald-200/40">${G?fmtClock(G.duration-G.elapsed):''}</span>`;
+ el.prepend(row);while(el.children.length>45)el.lastChild.remove();
+}
+function addFloater(x,y,text,color){if(G)G.floaters.push({x,y,text,color:color||'#34d399',t:0})}
+function burst(x,y,color){if(!G)return;for(let i=0;i<14;i++){const a=Math.random()*Math.PI*2,s=2+Math.random()*7;G.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,t:0,color})}}
+function markTut(step){if(!G||G.tut.done)return;if(G.tut[step]!==undefined)G.tut[step]=true;renderTut()}
+function renderTut(){
+ const card=$('tutorialCard');if(!G||G.sc.id!==1||G.tut.done){card.classList.add('hidden');return}
+ card.classList.remove('hidden');
+ const steps=[['selected','Click a cyan arrival blip to select it'],['adjusted','Change heading, altitude (≤4,000) or speed (≤200)'],['direct','Press “Direct Final” to route it to the FAF'],['cleared','Press “Clear to Land” when established'],['landed','Land your first aircraft — nice work!']];
+ $('tutSteps').innerHTML=steps.map(([k,label])=>`<li class="flex gap-2 items-start"><span class="w-5 h-5 rounded-full grid place-items-center text-[11px] font-bold shrink-0 ${G.tut[k]?'bg-emerald-400 text-emerald-950':'bg-emerald-950 border border-emerald-700 text-emerald-200'}">${G.tut[k]?'✓':steps.findIndex(s=>s[0]===k)+1}</span><span class="${G.tut[k]?'line-through text-emerald-200/40':''}">${label}</span></li>`).join('');
+ if(steps.every(([k])=>G.tut[k])){G.tut.done=true;G.score+=50;toast('Tutorial complete — +50 pts. The shift is yours, controller.','good');setTimeout(()=>card.classList.add('hidden'),1200)}
+}
+
+/* ---------- scoring ---------- */
+function addScore(ac,base,label,color){
+ const emergencyBonus=ac.emergency?base:0; const priorityBonus=ac.priority&&!ac.emergency?20:0;
+ const pts=base+emergencyBonus+priorityBonus; G.score+=pts; G.combo++; G.maxCombo=Math.max(G.maxCombo,G.combo);
+ addFloater(ac.x,ac.y+3,`+${pts} ${label}`,'#34d399'); burst(ac.x,ac.y,color||'#34d399'); AudioSys.chime();
+ if(ac.emergency){G.emergenciesHandled++}
+}
+function penalize(pts,why,kind='warn'){G.score=Math.max(0,G.score-pts);G.combo=0;if(pts>=40)AudioSys.bad();logEvent(`${why} (−${pts} pts)`,'warn')}
+
+/* ---------- simulation update ---------- */
+function updateSim(gdt){
+ const g=G; if(!g||g.over)return; g.elapsed+=gdt;
+ // spawns
+ g.spawnArrT-=gdt; if(g.spawnArrT<=0){spawnArrival(g);g.spawnArrT=g.sc.spawnArr*g.trafficMul*(0.75+g.rng()*0.6)}
+ g.spawnDepT-=gdt; if(g.spawnDepT<=0){spawnDeparture(g);g.spawnDepT=g.sc.spawnDep*g.trafficMul*(0.75+g.rng()*0.6)}
+ // scheduled emergencies convert a fresh arrival
+ g.events.forEach(ev=>{if(!ev.done&&g.elapsed>=ev.t){ev.done=true;spawnArrival(g,ev.type)}});
+ // wind shifts & weather events
+ g.windShiftT-=gdt; if(g.windShiftT<=0){g.windShiftT=80+g.rng()*70;const old=g.windFrom;g.windFrom=angNorm(g.windFrom+(g.rng()*70-35));g.windKt=clamp(g.windKt+(g.rng()*10-5),4,g.sc.id>=3?26:18);logEvent(`Wind shift ${Math.round(old)}° → ${Math.round(g.windFrom)}° at ${Math.round(g.windKt)}kt — check landing tailwind`,'warn');toast(`Wind now ${Math.round(g.windFrom)}° / ${Math.round(g.windKt)}kt`,'warn');AudioSys.radio()}
+ // storms drift with wind
+ const windTo=angNorm(g.windFrom+180), wRad=windTo*Math.PI/180;
+ g.storms.forEach(s=>{s.x+=Math.sin(wRad)*gdt*.55+Math.sin(g.elapsed*.05+s.seed)*gdt*.15;s.y+=Math.cos(wRad)*gdt*.55;s.x+=Math.sin(s.drift)*gdt*.2;s.y+=Math.cos(s.drift)*gdt*.2;
+  if(s.x>58)s.x=-58;if(s.x<-58)s.x=58;if(s.y>58)s.y=-58;if(s.y<-58)s.y=58});
+ const wasOver=g.stormOverField; g.stormOverField=g.storms.some(s=>Math.hypot(s.x,s.y)<s.r+3);
+ if(g.stormOverField&&!wasOver){logEvent('Storm cell over the airport — RUNWAY CLOSED until it clears','bad');toast('Storm over the field — runway closed!','bad');AudioSys.bad()}
+ if(!g.stormOverField&&wasOver){logEvent('Storm has cleared the airport — runway reopened','good');toast('Runway reopened','good');AudioSys.good()}
+ g.vis=g.stormOverField?2.5:(g.storms.length?6:10);
+
+ // aircraft
+ const toRemove=[];
+ for(const ac of g.aircraft){
+  // targets from phase
+  if(ac.holding){ac.targetHeading=angNorm(ac.heading+42*gdt); /* continuous turn handled below by direct set */ ac.heading=angNorm(ac.heading+38*gdt); ac.targetAlt=Math.max(ac.targetAlt,3000)}
+  if(ac.nav){const want=angNorm(Math.atan2(ac.nav.x-ac.x,ac.nav.y-ac.y)*180/Math.PI);ac.targetHeading=want;
+    if(Math.hypot(ac.nav.x-ac.x,ac.nav.y-ac.y)<2.5 && ac.mode==='DEP'){ /* reached gate */ }
+  }
+  if(ac.phase==='CLEARED'||ac.phase==='TO_FAF'){
+    const dFaf=Math.hypot(ac.x-FIXES.FAF.x,ac.y-FIXES.FAF.y);
+    if(ac.phase==='CLEARED'&&dFaf<4)ac.phase='FINAL';
+    if(ac.phase==='TO_FAF'&&dFaf<3){ac.phase='ENROUTE';ac.nav=null;toast(`${ac.callsign} at FAF — slow & descend, then clear to land`,'info')}
+  }
+  if(ac.phase==='FINAL'){
+    if(G.stormOverField){doGoAround(ac,'storm over the field');continue}
+    ac.nav={x:3,y:0}; ac.targetSpd=135; const dApt=Math.hypot(ac.x-3,ac.y);
+    ac.targetAlt=clamp(dApt*150,0,3000);
+    if(ac.alt>2600&&dApt<11){doGoAround(ac,'too high on final');continue}
+    if(Math.abs(ac.y)>5.5&&dApt<12){doGoAround(ac,'not aligned with runway');continue}
+    if(dApt<1.4){landAircraft(ac);toRemove.push(ac);continue}
+  }
+  if(ac.phase==='GOAROUND'){
+    ac.nav={...FIXES.MISSED}; ac.targetAlt=4500;ac.targetSpd=210;
+    if(Math.hypot(ac.x-FIXES.MISSED.x,ac.y-FIXES.MISSED.y)<4){ac.phase='ENROUTE';ac.nav=null;ac.cleared=false}
+  }
+  // smooth flight model
+  const dh=angDiff(ac.targetHeading,ac.heading); const turn=clamp(dh,-58*gdt,58*gdt); ac.heading=angNorm(ac.heading+turn);
+  ac.spd+=clamp(ac.targetSpd-ac.spd,-46*gdt,46*gdt);
+  ac.alt+=clamp(ac.targetAlt-ac.alt,-1350*gdt,1350*gdt); if(ac.phase==='FINAL')ac.alt=Math.max(0,ac.alt);
+  const rad=ac.heading*Math.PI/180; let vx=Math.sin(rad)*ac.spd*.0086, vy=Math.cos(rad)*ac.spd*.0086;
+  vx+=Math.sin(wRad)*g.windKt*.0011; vy+=Math.cos(wRad)*g.windKt*.0011; // wind drift
+  ac.x+=vx*gdt; ac.y+=vy*gdt;
+  // storms
+  const inStorm=g.storms.some(s=>Math.hypot(ac.x-s.x,ac.y-s.y)<s.r);
+  if(inStorm){ac.stormT+=gdt;ac.heading=angNorm(ac.heading+Math.sin(g.elapsed*7+ac.id)*10*gdt);ac.fuel-=0.05*gdt;
+    if(ac.stormT>4){ac.stormT=0;penalize(15,`${ac.callsign} turbulence encounter in storm cell`);toast(`${ac.callsign} reporting severe turbulence`,'warn')}}
+  else ac.stormT=Math.max(0,ac.stormT-gdt);
+  // fuel
+  if(ac.mode==='ARR'){let burn=.075+(ac.holding?.075:0)+(ac.spd>260?.03:0)+(ac.alt<3500?.015:0);ac.fuel-=burn*gdt;
+    if(ac.fuel<12&&!ac.lowFuelWarned){ac.lowFuelWarned=true;ac.priority=true;toast(`${ac.callsign} LOW FUEL — prioritise landing`,'bad');logEvent(`${ac.callsign} low fuel (${ac.fuel.toFixed(0)} min) — auto priority`,'bad');AudioSys.bad()}
+    if(ac.fuel<=0){failShift(`${ac.callsign} ran out of fuel and was lost. Holding and high speed burn fuel — land your arrivals promptly and never let a gauge hit zero.`);return}
+  }
+  // trail
+  ac.trail.push({x:ac.x,y:ac.y}); if(ac.trail.length>46)ac.trail.shift();
+  // departure success / leaving airspace
+  if(ac.mode==='DEP'){
+    const dGate=Math.hypot(ac.x-FIXES[ac.gate].x,ac.y-FIXES[ac.gate].y);
+    if(dGate<4.5){G.departed++;progress.totalDeparted++;addScore(ac,100,'HANDOFF','#fbbf24');const delay=Math.max(0,(ac.waited||0)-40);logEvent(`${ac.callsign} handed off at ${ac.gate} gate (+100)`,'good');toRemove.push(ac);continue}
+    if(Math.abs(ac.x)>52||Math.abs(ac.y)>52){G.departed++;progress.totalDeparted++;addScore(ac,45,'LEFT AIRSPACE','#fbbf24');penalize(20,`${ac.callsign} left through the wrong sector — vector departures to their named gate`);logEvent(`${ac.callsign} exited via wrong sector (+45, −20)`,'warn');toRemove.push(ac);continue}
+  }
+  if(ac.mode==='ARR'&&!ac.cleared&&(Math.abs(ac.x)>56||Math.abs(ac.y)>56)){penalize(60,`${ac.callsign} left your airspace uncontrolled`);logEvent(`${ac.callsign} lost — left airspace without landing`,'bad');G.safety=clamp(G.safety-6,0,100);toRemove.push(ac);continue}
+ }
+ g.aircraft=g.aircraft.filter(a=>!toRemove.includes(a));
+ if(selectedId&&!getAc(selectedId))selectedId=null;
+ // separation
+ checkConflicts(g,gdt);
+ // floaters & particles
+ g.floaters.forEach(f=>f.t+=gdt); g.floaters=g.floaters.filter(f=>f.t<1.6);
+ g.particles.forEach(p=>{p.t+=gdt;p.x+=p.vx*gdt;p.y+=p.vy*gdt;p.vx*=.96;p.vy*=.96}); g.particles=g.particles.filter(p=>p.t<.7);
+ // timer end
+ if(g.elapsed>=g.duration)endShift();
+}
+function doGoAround(ac,reason){
+ if(ac.goAroundDone&&reason==='repeat'){return}
+ ac.cleared=false;ac.phase='GOAROUND';ac.nav={...FIXES.MISSED};ac.targetAlt=4500;ac.targetSpd=210;G.goArounds++;
+ penalize(30,`${ac.callsign} go-around (${reason})`);toast(`${ac.callsign} going around — ${reason}`,'warn');logEvent(`${ac.callsign} go-around: ${reason}. Re-sequence via Direct Final.`,'warn');AudioSys.bad();
+}
+function landAircraft(ac){
+ G.landed++;progress.totalLanded++;const delay=Math.max(0,G.elapsed-ac.spawnT-150);G.totalDelay+=delay;G.landedCountForDelay++;
+ G.runwayBusyUntil=G.elapsed+6;if(ac.wake==='H')G.wakeUntil=G.elapsed+13;
+ addScore(ac,100,'LANDED','#34d399');markTut('landed');
+ logEvent(`${ac.callsign} landed RWY 09${ac.emergency?' — emergency services met the aircraft':''} (delay ${Math.round(delay)}s)`,'good');
+ saveProgress();
+}
+function checkConflicts(g,gdt){
+ let anyAlert=false;
+ for(let i=0;i<g.aircraft.length;i++)for(let j=i+1;j<g.aircraft.length;j++){
+  const a=g.aircraft[i],b=g.aircraft[j];const d=Math.hypot(a.x-b.x,a.y-b.y),vd=Math.abs(a.alt-b.alt);
+  const key=a.id+'-'+b.id;
+  if(d<5&&vd<950){anyAlert=true;a.conflict=1.2;b.conflict=1.2;
+   if(d<g.stats.closestCall)g.stats.closestCall=d;
+   if(d<3.1&&vd<700){ // loss of separation
+     if(!g['loss_'+key]||g.elapsed-g['loss_'+key]>8){g['loss_'+key]=g.elapsed;g.losses++;g.safety=clamp(g.safety-9,0,100);penalize(120,`Loss of separation: ${a.callsign} × ${b.callsign} (${d.toFixed(1)} NM)`);toast(`LOSS OF SEPARATION — ${a.callsign} × ${b.callsign}`,'bad');$('radarWrap').classList.remove('shake');void $('radarWrap').offsetWidth;$('radarWrap').classList.add('shake')}
+   } else if(!g['warn_'+key]||g.elapsed-g['warn_'+key]>10){g['warn_'+key]=g.elapsed;g.conflicts++;logEvent(`Conflict alert: ${a.callsign} × ${b.callsign} — separate by altitude or heading`,'warn')}
+   AudioSys.alert();
+   if(d<0.85&&vd<260){failShift(`Mid-air collision between ${a.callsign} and ${b.callsign}. Separation is 3 NM or 1,000 ft — use altitude early, before blips merge.`);return}
+  }
+ }
+ g.anyConflict=anyAlert;
+ if(g.safety<=0){failShift('Your safety rating collapsed after repeated separation losses. The tower has relieved you of duty.')}
+}
+
+/* ---------- end states ---------- */
+function gradeFor(score,safety){if(score>=1400&&safety>=90)return'S';if(score>=1000&&safety>=80)return'A';if(score>=700&&safety>=65)return'B';if(score>=400)return'C';return'D'}
+function endShift(){
+ if(!G||G.over)return;const g=G;const met=g.landed>=g.sc.landQuota&&g.departed>=g.sc.depQuota;
+ if(met&&g.safety>=60)successShift();else failShift(`Shift clock expired: landed ${g.landed}/${g.sc.landQuota}, departed ${g.departed}/${g.sc.depQuota}, safety ${Math.round(g.safety)}. ${g.safety<60?'Safety fell below 60.':''} Tighten sequencing — land the closest, lowest-fuel arrival first and keep departures flowing between arrivals.`,true);
+}
+function successShift(){
+ const g=G;g.over=true;g.paused=true;progress.shiftsPlayed++;
+ const bonus=Math.round(g.safety)*2;g.score+=bonus;
+ if(!progress.completed.includes(g.sc.id))progress.completed.push(g.sc.id);
+ progress.best[g.sc.id]=Math.max(progress.best[g.sc.id]||0,g.score);saveProgress();
+ showEnd(true,`Both quotas met with safety ${Math.round(g.safety)} (+${bonus} safety bonus). The tower log will remember this shift.`);
+ AudioSys.chime();
+}
+function failShift(reason,expired=false){
+ if(!G||G.over)return;const g=G;g.over=true;g.paused=true;progress.shiftsPlayed++;saveProgress();
+ showEnd(false,reason);AudioSys.bad();
+}
+function showEnd(success,subtitle){
+ const g=G;
+ $('endOverlay').classList.remove('hidden');$('pauseOverlay').classList.add('hidden');
+ $('endIcon').className='w-16 h-16 mx-auto rounded-3xl grid place-items-center '+(success?'bg-emerald-400 text-emerald-950':'bg-red-500 text-white');
+ $('endIcon').innerHTML=`<i data-lucide="${success?'trophy':'siren'}" class="w-8 h-8"></i>`;
+ $('endTitle').textContent=success?'SHIFT COMPLETE':'SHIFT FAILED';
+ $('endSubtitle').textContent=subtitle;
+ $('endGrade').textContent=success?gradeFor(g.score,g.safety):'—';$('endGrade').className='display text-5xl font-bold '+(success?'text-amber-300':'text-red-300');
+ $('endScore').textContent=g.score+' pts';
+ const avgDelay=g.landedCountForDelay?Math.round(g.totalDelay/g.landedCountForDelay):0;
+ const stats=[['plane-landing','Landed',`${g.landed} / ${g.sc.landQuota}`],['plane-takeoff','Departed',`${g.departed} / ${g.sc.depQuota}`],['heart-pulse','Safety',Math.round(g.safety)+'%'],['shield-alert','Sep. Losses',g.losses],['loader-circle','Go-Arounds',g.goArounds],['siren','Emergencies',g.emergenciesHandled],['timer','Avg Delay',avgDelay+'s'],['flame','Best Combo','×'+g.maxCombo]];
+ $('endStats').innerHTML=stats.map(([ic,l,v])=>`<div class="bg-black/30 border border-emerald-900 rounded-2xl p-3 text-center"><i data-lucide="${ic}" class="w-4 h-4 mx-auto text-emerald-300"></i><p class="mono font-bold text-lg mt-1">${v}</p><p class="text-[10px] uppercase tracking-wider text-emerald-200/50">${l}</p></div>`).join('');
+ const next=SCENARIOS.find(s=>s.id===g.sc.id+1);
+ const unlock=$('endUnlock');
+ if(success&&next){unlock.classList.remove('hidden');$('endUnlockTxt').innerHTML=`<b>${next.name}</b> unlocked — ${next.desc}`;$('nextShiftBtn').style.display=''}
+ else if(success){unlock.classList.remove('hidden');$('endUnlockTxt').innerHTML=`<b>Campaign complete.</b> You hold the Tower Chief rating. Replay any shift to chase an S grade.`;$('nextShiftBtn').style.display='none'}
+ else{unlock.classList.add('hidden');$('nextShiftBtn').style.display='none'}
+ refreshTitleStats();lucide.createIcons();
+}
+
+/* ---------- rendering: radar ---------- */
+const radar=$('radar'),rctx=radar.getContext('2d');
+function resizeRadar(){const r=radar.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);radar.width=Math.max(300,r.width)*dpr;radar.height=Math.max(300,r.height)*dpr}
+function simToPx(x,y){const w=radar.width,h=radar.height,s=Math.min(w,h)/108;return[cx0()+x*s,cy0()-y*s,s]}
+function cx0(){return radar.width/2}function cy0(){return radar.height/2}
+function drawRadar(){
+ if(!G)return;const ctx=rctx,w=radar.width,h=radar.height;ctx.clearRect(0,0,w,h);
+ ctx.fillStyle='#04120c';ctx.fillRect(0,0,w,h);
+ const s=Math.min(w,h)/108,cx=cx0(),cy=cy0();
+ const px=(x,y)=>[cx+x*s,cy-y*s];
+ // grid
+ ctx.strokeStyle='rgba(52,211,153,.07)';ctx.lineWidth=1;
+ for(let gx=-50;gx<=50;gx+=10){ctx.beginPath();const[a]=px(gx,0);ctx.moveTo(a,0);ctx.lineTo(a,h);ctx.stroke();const[,b]=px(0,gx);ctx.beginPath();ctx.moveTo(0,b);ctx.lineTo(w,b);ctx.stroke()}
+ if(settings.rings){ctx.strokeStyle='rgba(52,211,153,.16)';[12,24,36,48].forEach(r=>{ctx.beginPath();ctx.arc(cx,cy,r*s,0,Math.PI*2);ctx.stroke()});
+  ctx.strokeStyle='rgba(52,211,153,.10)';ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.stroke()}
+ // sweep
+ if(settings.sweep){sweepAng+=.012;ctx.save();ctx.translate(cx,cy);ctx.rotate(sweepAng);const grd=ctx.createRadialGradient(0,0,0,0,0,52*s);grd.addColorStop(0,'rgba(52,211,153,.14)');grd.addColorStop(1,'rgba(52,211,153,0)');ctx.fillStyle=grd;ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,52*s,-.5,0);ctx.closePath();ctx.fill();ctx.restore()}
+ // final approach path
+ ctx.strokeStyle='rgba(103,232,249,.55)';ctx.setLineDash([8,7]);ctx.lineWidth=2;ctx.beginPath();let[a,b]=px(-47,0);ctx.moveTo(a,b);[a,b]=px(4,0);ctx.lineTo(a,b);ctx.stroke();ctx.setLineDash([]);
+ ctx.fillStyle='rgba(103,232,249,.8)';ctx.font=`${Math.max(10,s*2.6)}px JetBrains Mono`;const[fx,fy]=px(-24,3);ctx.fillText('FINAL · RWY 09',fx,fy);
+ // fixes
+ Object.values(FIXES).forEach(f=>{if(f.name==='MISSED'&&!G.aircraft.some(a=>a.phase==='GOAROUND'))return;const[x,y]=px(f.x,f.y);ctx.strokeStyle='#67e8f9';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x+6,y);ctx.lineTo(x,y+6);ctx.lineTo(x-6,y);ctx.closePath();ctx.stroke();ctx.fillStyle='rgba(207,250,254,.85)';ctx.font='10px JetBrains Mono';ctx.fillText(f.name,x+9,y+3)});
+ // runway
+ const[rx,ry]=px(0,0);ctx.save();ctx.translate(rx,ry);ctx.fillStyle='#d6e4dc';ctx.fillRect(-3.2*s,-.55*s,6.4*s,1.1*s);ctx.fillStyle='#0a1f16';ctx.font=`bold ${Math.max(9,s*1.8)}px JetBrains Mono`;ctx.fillText('09',-2.6*s,.35*s);ctx.fillText('27',1.8*s,.35*s);ctx.restore();
+ ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.arc(rx,ry,3,0,Math.PI*2);ctx.fill();
+ // storms
+ if(G.overlays.weather)G.storms.forEach(st=>{const[x,y]=px(st.x,st.y);ctx.save();ctx.globalAlpha=.30+.08*Math.sin(G.elapsed*2+st.seed);ctx.fillStyle='#f97316';ctx.beginPath();for(let i=0;i<10;i++){const ang=i/10*Math.PI*2,rr=st.r*s*(0.78+0.24*Math.sin(st.seed*7+i*2.3));const vx2=x+Math.cos(ang)*rr,vy2=y+Math.sin(ang)*rr;i?ctx.lineTo(vx2,vy2):ctx.moveTo(vx2,vy2)}ctx.closePath();ctx.fill();ctx.globalAlpha=.9;ctx.strokeStyle='#fdba74';ctx.stroke();ctx.fillStyle='#ffedd5';ctx.font='bold 10px JetBrains Mono';ctx.fillText('STORM',x-16,y+3);ctx.restore()});
+ // nav lines + trails + aircraft
+ const sel=getAc(selectedId);
+ for(const ac of G.aircraft){
+   if(settings.trails&&ac.trail.length>1){ctx.strokeStyle=ac.mode==='ARR'?'rgba(103,232,249,.30)':'rgba(251,191,36,.30)';ctx.lineWidth=1.5;ctx.beginPath();ac.trail.forEach((p,i)=>{const[x,y]=px(p.x,p.y);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
+   if(ac.nav){const[x,y]=px(ac.x,ac.y),[tx,ty]=px(ac.nav.x,ac.nav.y);ctx.strokeStyle='rgba(255,255,255,.22)';ctx.setLineDash([4,5]);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([])}
+ }
+ // conflict lines
+ for(let i=0;i<G.aircraft.length;i++)for(let j=i+1;j<G.aircraft.length;j++){const a=G.aircraft[i],b=G.aircraft[j];if(Math.hypot(a.x-b.x,a.y-b.y)<5&&Math.abs(a.alt-b.alt)<950){const[x1,y1]=px(a.x,a.y),[x2,y2]=px(b.x,b.y);ctx.strokeStyle='rgba(239,68,68,.85)';ctx.lineWidth=2;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.setLineDash([])}}
+ for(const ac of G.aircraft){
+  const[x,y]=px(ac.x,ac.y);const isSel=ac.id===selectedId;
+  const col=ac.emergency?'#f87171':ac.conflict>0?'#ef4444':ac.mode==='ARR'?'#22d3ee':'#fbbf24';
+  if(ac.conflict>0)ac.conflict-=0.016;
+  ctx.save();ctx.translate(x,y);
+  if(isSel){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,15+3*Math.sin(G.elapsed*5),0,Math.PI*2);ctx.stroke()}
+  if(ac.priority){ctx.strokeStyle=ac.emergency?'rgba(248,113,113,.9)':'rgba(251,191,36,.7)';ctx.beginPath();ctx.arc(0,0,11,0,Math.PI*2);ctx.stroke()}
+  ctx.rotate(ac.heading*Math.PI/180);
+  ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=8;
+  ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,7);ctx.lineTo(0,3.5);ctx.lineTo(-6,7);ctx.closePath();ctx.fill();ctx.restore();
+  if(settings.labels){ctx.fillStyle=isSel?'#fff':'rgba(224,242,233,.92)';ctx.font=`${isSel?'bold ':''}10px JetBrains Mono`;
+   const fl=ac.mode==='ARR'?Math.max(0,ac.fuel):null;
+   ctx.fillText(`${ac.callsign} ${ac.wake}`,x+12,y-8);
+   ctx.fillStyle=ac.alt<3500?'#a7f3d0':'rgba(224,242,233,.65)';
+   ctx.fillText(`${Math.round(ac.alt/100).toString().padStart(3,'0')} · ${Math.round(ac.spd)}${ac.holding?' HOLD':ac.phase==='FINAL'?' FINAL':''}${fl!==null&&fl<15?' F'+fl.toFixed(0):''}`,x+12,y+4);
+  }
+ }
+ // particles & floaters
+ G.particles.forEach(p=>{const[x,y]=px(p.x,p.y);ctx.globalAlpha=1-p.t/.7;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1});
+ ctx.font='bold 13px JetBrains Mono';ctx.textAlign='center';
+ G.floaters.forEach(f=>{const[x,y]=px(f.x,f.y-f.t*3);ctx.globalAlpha=1-f.t/1.6;ctx.fillStyle=f.color;ctx.fillText(f.text,x,y);ctx.globalAlpha=1});ctx.textAlign='left';
+ // wind arrow
+ ctx.fillStyle='rgba(165,243,252,.85)';ctx.font='11px JetBrains Mono';ctx.fillText(`WIND ${Math.round(G.windFrom)}°/${Math.round(G.windKt)}kt`,14,h-14);
+}
+
+/* ---------- charts ---------- */
+function drawLineChart(cv,series,maxY,colors){
+ const ctx=cv.getContext('2d');const dpr=Math.min(2,window.devicePixelRatio||1);const rect=cv.getBoundingClientRect();if(rect.width<10)return;
+ cv.width=rect.width*dpr;cv.height=92*dpr;ctx.scale(dpr,dpr);const W=rect.width,H=92;
+ ctx.strokeStyle='rgba(52,211,153,.14)';for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(0,H*i/4);ctx.lineTo(W,H*i/4);ctx.stroke()}
+ series.forEach((data,si)=>{if(data.length<2)return;ctx.strokeStyle=colors[si];ctx.lineWidth=2;ctx.beginPath();data.forEach((v,i)=>{const x=i/(Math.max(1,G.history.length-1))*W,y=H-4-(v/maxY)*(H-10);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()});
+}
+function drawCharts(){
+ if(!G||!G.history.length)return;
+ drawLineChart($('chartThroughput'),[G.history.map(h=>h.landed),G.history.map(h=>h.departed)],Math.max(6,G.sc.landQuota+G.sc.depQuota),['#22d3ee','#fbbf24']);
+ drawLineChart($('chartSafety'),[G.history.map(h=>h.safety),G.history.map(h=>h.airborne*10)],100,['#34d399','#f87171']);
+}
+
+/* ---------- UI refresh ---------- */
+function refreshSelectedPanel(){
+ const ac=getAc(selectedId);
+ $('selEmpty').classList.toggle('hidden',!!ac);$('selControls').classList.toggle('hidden',!ac);
+ if(!ac){$('selCallsign').textContent='— none —';$('selMeta').textContent='Click any blip or traffic row to take control.';$('selBadge').textContent='STANDBY';return}
+ $('selCallsign').textContent=ac.callsign;
+ $('selMeta').textContent=`${ac.type} · ${ac.kind} · Wake ${ac.wake} · ${ac.mode==='ARR'?'Arrival':'Departure → '+ac.gate}`;
+ const badge=$('selBadge');
+ badge.textContent=ac.emergency?ac.emergency.toUpperCase()+' EMERGENCY':ac.phase;
+ badge.className='mono text-[11px] font-bold rounded-full px-2 py-1 '+(ac.emergency?'bg-red-500 text-white alert-pulse':ac.priority?'bg-amber-400 text-amber-950':'bg-emerald-900 text-emerald-200');
+ $('selHdg').textContent=String(Math.round(ac.heading)).padStart(3,'0')+'°';
+ $('selAlt').textContent=Math.round(ac.alt).toLocaleString();
+ $('selSpd').textContent=Math.round(ac.spd)+' kt';
+ $('hdgInput').value=Math.round(ac.targetHeading);
+ if(document.activeElement!==$('altSlider'))$('altSlider').value=ac.targetAlt;
+ if(document.activeElement!==$('spdSlider'))$('spdSlider').value=ac.targetSpd;
+ $('altTargetLbl').textContent=Math.round(ac.targetAlt).toLocaleString()+' ft';$('spdTargetLbl').textContent=Math.round(ac.targetSpd)+' kt';
+ const fuelPct=ac.mode==='ARR'?clamp(ac.fuel/ac.maxFuel*100,0,100):100;
+ $('selFuelBar').style.width=fuelPct+'%';$('selFuelBar').className='progress-fill '+(fuelPct<25?'bg-red-400':fuelPct<50?'bg-amber-400':'bg-cyan-400');
+ $('selFuelTxt').textContent=ac.mode==='ARR'?ac.fuel.toFixed(0)+' min':'Departure fuel OK';
+ $('selInstruction').textContent=ac.mode==='ARR'
+   ?(ac.phase==='FINAL'?'On final — riding the glidepath down. Keep the runway clear.':ac.cleared?'Cleared to land — guiding to the FAF, then final.':`Vector to FAF (west, y≈0), descend ≤4,000 ft, slow ≤200 kt, then clear to land. Fuel ${ac.fuel.toFixed(0)} min${ac.holding?' · HOLDING (high burn)':''}.`)
+   :`Climb and vector to the ${ac.gate} gate (diamond at the edge). Reaching it scores a clean handoff.`;
+ $('holdBtnLbl').textContent=ac.holding?'Leave Hold':'Enter Hold';
+ const chk=landingCheck(ac);const lb=$('clearLandBtn');
+ lb.disabled=ac.mode!=='ARR';lb.classList.toggle('opacity-40',ac.mode!=='ARR');
+ $('landHint').textContent=ac.mode!=='ARR'?'Departures do not land — vector them to their exit gate.':(ac.cleared?'Cleared — landing in progress.':chk.ok?'Ready: established, slow, low, runway clear.':'Needs: '+chk.why+'.');
+ $('directFinalBtn').disabled=ac.mode!=='ARR';$('directExitBtn').disabled=ac.mode!=='DEP';
+}
+function refreshTraffic(){
+ const list=$('trafficList');if(!G)return;
+ const sorted=[...G.aircraft].sort((a,b)=>((b.emergency?3:b.priority?2:0)-(a.emergency?3:a.priority?2:0))||a.fuel-b.fuel);
+ $('trafficCount').textContent='('+sorted.length+')';
+ list.innerHTML=sorted.length?sorted.map(ac=>{
+  const fuelCls=ac.mode==='ARR'?(ac.fuel<12?'text-red-300':ac.fuel<22?'text-amber-300':'text-cyan-200'):'text-emerald-200/50';
+  return `<button data-ac="${ac.id}" class="traffic-row w-full text-left rounded-xl px-3 py-2 border ${ac.id===selectedId?'border-emerald-400 bg-emerald-400/10':'border-emerald-900 bg-black/25'}">
+   <span class="flex items-center justify-between gap-2"><span class="font-bold mono text-sm ${ac.emergency?'text-red-300':ac.mode==='ARR'?'text-cyan-200':'text-amber-200'}">${ac.callsign} <span class="text-[10px] opacity-60">${ac.type}·${ac.wake}</span></span><span class="mono text-[10px] rounded-full px-1.5 py-0.5 ${ac.emergency?'bg-red-500 text-white':ac.phase==='FINAL'?'bg-emerald-400 text-emerald-950':'bg-emerald-950 text-emerald-200'}">${ac.emergency?'EMERG':ac.phase}</span></span>
+   <span class="flex justify-between mono text-[11px] text-emerald-100/60 mt-0.5"><span>${Math.round(ac.alt)}ft · ${Math.round(ac.spd)}kt · ${String(Math.round(ac.heading)).padStart(3,'0')}°</span><span class="${fuelCls}">${ac.mode==='ARR'?'FUEL '+ac.fuel.toFixed(0)+'m':'→ '+ac.gate}</span></span></button>`}).join('')
+  :'<p class="text-sm text-emerald-100/45 text-center py-4">No airborne traffic. Next arrival inbound shortly…</p>';
+ list.querySelectorAll('[data-ac]').forEach(b=>b.onclick=()=>selectAircraft(parseInt(b.dataset.ac)));
+ // departure queue
+ $('depQueueCount').textContent=G.depQueue.length+' waiting';
+ $('depQueue').innerHTML=G.depQueue.length?G.depQueue.map(d=>`<div class="flex items-center gap-2 bg-black/25 border border-emerald-900 rounded-xl px-3 py-2"><div class="flex-1 min-w-0"><p class="mono font-bold text-sm text-amber-200">${d.callsign} <span class="text-[10px] opacity-60">${d.type}·${d.wake}</span></p><p class="text-[11px] text-emerald-100/55">→ ${d.gate} gate · waiting ${Math.round(G.elapsed-d.waitSince)}s</p></div><button data-dep="${d.id}" class="btn-primary rounded-lg px-3 py-2 text-xs shrink-0">CLEAR TAKEOFF</button></div>`).join('')
+  :'<p class="text-sm text-emerald-100/45 text-center py-2">No departures waiting.</p>';
+ $('depQueue').querySelectorAll('[data-dep]').forEach(b=>b.onclick=()=>takeoff(parseInt(b.dataset.dep)));
+}
+function refreshHUD(){
+ if(!G)return;const g=G;
+ $('hudClock').textContent=fmtClock(g.duration-g.elapsed);
+ $('timeProgress').style.width=clamp((g.duration-g.elapsed)/g.duration*100,0,100)+'%';
+ $('timeProgress').className='progress-fill '+(g.duration-g.elapsed<45?'bg-red-400':'bg-amber-400');
+ $('hudScore').textContent=g.score;$('hudCombo').textContent=g.combo>2?'COMBO ×'+g.combo:'';
+ $('hudSafety').textContent=Math.round(g.safety);$('hudSafety').parentElement.classList.toggle('alert-pulse',g.safety<55);
+ $('hudSafety').parentElement.style.borderColor=g.safety<55?'#ef4444':'';
+ $('hudLanded').textContent=`${g.landed}/${g.sc.landQuota}`;$('hudDeparted').textContent=`${g.departed}/${g.sc.depQuota}`;
+ $('hudWind').textContent=`${Math.round(g.windFrom)}° / ${Math.round(g.windKt)}kt`;$('hudVis').textContent='VIS '+(g.vis>=10?'10km':g.vis+'km');
+ const rb=$('runwayStatus');
+ if(g.stormOverField){rb.textContent='RWY 09 CLOSED · STORM';rb.className='mono text-[11px] font-bold rounded-full px-2.5 py-1 bg-red-500 text-white alert-pulse'}
+ else if(g.elapsed<g.runwayBusyUntil){rb.textContent='RWY 09 OCCUPIED';rb.className='mono text-[11px] font-bold rounded-full px-2.5 py-1 bg-amber-400 text-amber-950'}
+ else if(g.elapsed<g.wakeUntil){rb.textContent='RWY 09 WAKE TURBULENCE';rb.className='mono text-[11px] font-bold rounded-full px-2.5 py-1 bg-amber-400 text-amber-950'}
+ else{rb.textContent='RWY 09 CLEAR';rb.className='mono text-[11px] font-bold rounded-full px-2.5 py-1 bg-emerald-500 text-emerald-950'}
+ $('weatherStatus').textContent=g.stormOverField?'WX: STORM OVER FIELD':g.storms.length?`WX: ${g.storms.length} CELL${g.storms.length>1?'S':''} · VIS ${g.vis}km`:'WX CLEAR · VIS 10km';
+ const banner=$('alertBanner');
+ if(g.anyConflict){banner.className='mb-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold flex items-center gap-2 bg-red-500/15 border-red-500 text-red-100 alert-pulse';banner.innerHTML='<i data-lucide="siren" class="w-4 h-4"></i> CONFLICT ALERT — separate traffic by altitude (1,000 ft) or heading NOW.';lucide.createIcons()}
+ else if(g.aircraft.some(a=>a.emergency)){banner.className='mb-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold flex items-center gap-2 bg-amber-400/15 border-amber-400/50 text-amber-100';banner.innerHTML='<i data-lucide="siren" class="w-4 h-4"></i> Emergency traffic on frequency — give it priority routing to the runway.';lucide.createIcons()}
+ else if(g.aircraft.some(a=>a.mode==='ARR'&&a.fuel<12)){banner.className='mb-2 rounded-2xl border px-4 py-2.5 text-sm font-semibold flex items-center gap-2 bg-amber-400/15 border-amber-400/50 text-amber-100';banner.innerHTML='<i data-lucide="fuel" class="w-4 h-4"></i> Low-fuel arrival on frequency — land it before the gauge empties.';lucide.createIcons()}
+ else banner.className='hidden';
+ const ac=getAc(selectedId);if(ac)refreshSelectedPanel();
+}
+
+/* ---------- game flow ---------- */
+function initGame(scId){
+ const sc=SCENARIOS.find(s=>s.id===scId)||SCENARIOS[0];
+ selectedScenarioId=sc.id;
+ G=newState(sc); G.overlays={weather:settings.storms!==false,trails:settings.trails,labels:settings.labels,rings:settings.rings};
+ // overlays derive from settings toggles
+ G.overlays={weather:true,trails:settings.trails,labels:settings.labels,rings:settings.rings};
+ settings.trails=G.overlays.trails; // keep in sync for draw
+ spawnStorms(G,sc.storms + (G.wxMode==='calm'?-sc.storms:G.wxMode==='volatile'?1:0));
+ if(G.wxMode==='calm')G.storms=[];
+ selectedId=null;
+ $('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('endOverlay').classList.add('hidden');$('pauseOverlay').classList.add('hidden');
+ $('hudScenario').textContent=sc.name.toUpperCase();
+ $('eventLog').innerHTML='';$('trafficList').innerHTML='';
+ // opening traffic: 3 arrivals (one pre-vectored for tutorial), 2 departures
+ for(let i=0;i<3;i++){const ac=spawnArrival(G);if(ac){ac.x=-34+i*7;ac.y=-14+i*13;ac.alt=7000+i*1200;ac.targetAlt=ac.alt;ac.heading=80;ac.targetHeading=80}}
+ const first=G.aircraft[0];if(first&&sc.id===1){first.x=-36;first.y=-2;first.alt=5200;first.targetAlt=5200;first.spd=230;first.targetSpd=230}
+ spawnDeparture(G);spawnDeparture(G);
+ logEvent(`${sc.name} started — quotas: land ${sc.landQuota}, depart ${sc.depQuota} in ${fmtClock(sc.duration)}`,'good');
+ logEvent('Separation minima: 3 NM horizontal or 1,000 ft vertical','info');
+ if(sc.id===1)toast('Select the cyan arrival on the left — the tutorial will walk you in.','info');
+ else toast(`${sc.name}: land ${sc.landQuota} · depart ${sc.depQuota} · keep safety ≥ 60`,'info');
+ AudioSys.init();AudioSys.resume();AudioSys.good();
+ document.querySelectorAll('.speedBtn').forEach(b=>b.classList.toggle('speed-active',parseFloat(b.dataset.speed)===1));G.speed=1;
+ syncOverlayButtons();renderTut();refreshTraffic();refreshSelectedPanel();resizeRadar();
+ lucide.createIcons();
+}
+function setPaused(p){
+ if(!G||G.over)return;G.paused=p;$('pauseOverlay').classList.toggle('hidden',!p);
+ $('pauseBtn').innerHTML=p?'<i data-lucide="play" class="w-4 h-4"></i><span class="hidden sm:inline">Resume</span>':'<i data-lucide="pause" class="w-4 h-4"></i><span class="hidden sm:inline">Pause</span>';lucide.createIcons();
+}
+function toTitle(){if(G){G.paused=true}$('gameScreen').classList.add('hidden');$('pauseOverlay').classList.add('hidden');$('endOverlay').classList.add('hidden');$('titleScreen').classList.remove('hidden');refreshTitleStats();renderScenarios();lucide.createIcons()}
+
+/* ---------- main loop ---------- */
+function loop(ts){
+ rafId=requestAnimationFrame(loop);
+ const dt=Math.min(.05,(ts-lastTs)/1000||0);lastTs=ts;
+ if(!G||G.paused||G.over||$('gameScreen').classList.contains('hidden')){if(G&&!$('gameScreen').classList.contains('hidden'))drawRadar();return}
+ const gdt=dt*G.speed;
+ // run sim in substeps for stability at 4x
+ const steps=G.speed>=4?2:1;for(let i=0;i<steps;i++)updateSim(gdt/steps);
+ if(G.over)return;
+ drawRadar();
+ chartTimer+=dt;if(chartTimer>.5){chartTimer=0;G.history.push({landed:G.landed,departed:G.departed,safety:G.safety,airborne:G.aircraft.length});if(G.history.length>240)G.history.shift();drawCharts()}
+ uiTimer+=dt;if(uiTimer>.18){uiTimer=0;refreshHUD();refreshTraffic()}
+}
+
+/* ---------- title / scenarios ---------- */
+function isUnlocked(sc){return !sc.locked||progress.completed.includes(3)||progress.completed.includes(4)}
+function renderScenarios(){
+ $('scenarioCards').innerHTML=SCENARIOS.map(sc=>{const un=isUnlocked(sc),done=progress.completed.includes(sc.id),best=progress.best[sc.id];
+  return `<button data-sc="${sc.id}" ${un?'':'disabled'} class="text-left card card-hover rounded-3xl p-4 ${selectedScenarioId===sc.id?'scenario-selected':''} ${un?'':'opacity-50 cursor-not-allowed'}">
+   <div class="flex items-start justify-between"><span class="w-10 h-10 rounded-2xl bg-black/30 border border-emerald-800 grid place-items-center ${sc.color}"><i data-lucide="${un?sc.icon:'lock'}" class="w-5 h-5"></i></span><span class="mono text-[10px] font-bold rounded-full px-2 py-1 ${sc.diff==='EASY'?'bg-emerald-400 text-emerald-950':sc.diff==='MEDIUM'?'bg-amber-400 text-amber-950':sc.diff==='HARD'?'bg-red-400 text-red-950':'bg-cyan-300 text-cyan-950'}">${sc.diff}</span></div>
+   <h3 class="display text-2xl font-bold mt-2 leading-none">${sc.name}</h3><p class="text-[13px] text-emerald-100/60 mt-1.5 leading-snug min-h-[54px]">${sc.desc}</p>
+   <p class="mono text-[11px] text-emerald-200/60 mt-2">↓${sc.landQuota} land · ↑${sc.depQuota} dep · ${fmtClock(sc.duration)}</p>
+   <p class="text-[11px] mt-1 font-semibold ${done?'text-emerald-300':'text-emerald-100/40'}">${done?'✓ Cleared · Best '+best+' pts':un?'Not cleared yet':'Complete Shift 3 to unlock'}</p></button>`}).join('');
+ $('scenarioCards').querySelectorAll('[data-sc]').forEach(b=>b.onclick=()=>{selectedScenarioId=parseInt(b.dataset.sc);AudioSys.init();AudioSys.click();renderScenarios();$('startBtnLabel').textContent='Start Shift '+selectedScenarioId});
+ $('unlockNote').textContent=progress.completed.includes(3)?'ALL SHIFTS OPEN':'SHIFTS 1–3 OPEN';
+ $('startBtnLabel').textContent='Start Shift '+selectedScenarioId;
+}
+function refreshTitleStats(){
+ $('statBestScore').textContent=Math.max(0,...Object.values(progress.best||{0:0})).toLocaleString();
+ $('statShiftsDone').textContent=progress.completed.length+' / 4';
+ $('statTotalLanded').textContent=progress.totalLanded||0;
+}
+
+/* ---------- input wiring ---------- */
+function canvasPosToSim(e){const r=radar.getBoundingClientRect();const mx=(e.clientX-r.left)/r.width*radar.width,my=(e.clientY-r.top)/r.height*radar.height;const s=Math.min(radar.width,radar.height)/108;return{x:(mx-cx0())/s,y:-(my-cy0())/s}}
+radar.addEventListener('pointerdown',e=>{if(!G)return;AudioSys.init();AudioSys.resume();const p=canvasPosToSim(e);let best=null,bd=6;
+ G.aircraft.forEach(ac=>{const d=Math.hypot(ac.x-p.x,ac.y-p.y);if(d<bd){bd=d;best=ac}});
+ if(best)selectAircraft(best.id);});
+document.querySelectorAll('[data-hdg]').forEach(b=>b.onclick=()=>{const ac=getAc(selectedId);if(ac)setHeading(ac.targetHeading+parseInt(b.dataset.hdg))});
+document.querySelectorAll('[data-hdgset]').forEach(b=>b.onclick=()=>setHeading(parseInt(b.dataset.hdgset)));
+$('hdgInput').addEventListener('change',e=>setHeading(parseFloat(e.target.value)||360));
+$('altSlider').addEventListener('input',e=>setTargetAlt(parseFloat(e.target.value)));
+$('spdSlider').addEventListener('input',e=>setTargetSpd(parseFloat(e.target.value)));
+$('directFinalBtn').onclick=directFinal;$('directExitBtn').onclick=directExit;$('holdBtn').onclick=toggleHold;$('priorityBtn').onclick=declarePriority;$('clearLandBtn').onclick=clearLand;
+document.querySelectorAll('.speedBtn').forEach(b=>b.onclick=()=>{if(!G)return;G.speed=parseFloat(b.dataset.speed);document.querySelectorAll('.speedBtn').forEach(x=>x.classList.toggle('speed-active',x===b));AudioSys.click()});
+function syncOverlayButtons(){document.querySelectorAll('.overlayBtn').forEach(b=>{const k=b.dataset.overlay;b.classList.toggle('active',k==='weather'?(G?G.overlays.weather:true):!!settings[k])})}
+document.querySelectorAll('.overlayBtn').forEach(b=>b.onclick=()=>{const k=b.dataset.overlay;if(k==='weather'){G.overlays.weather=!G.overlays.weather;b.classList.toggle('active',G.overlays.weather)}else{settings[k]=!settings[k];saveSettings();b.classList.toggle('active',settings[k]);if(k==='trails'&&G)G.overlays.trails=settings[k]}AudioSys.click()});
+$('tabTraffic').onclick=()=>{$('tabTraffic').classList.add('tab-active');$('tabLog').classList.remove('tab-active');$('trafficList').classList.remove('hidden');$('eventLog').classList.add('hidden')};
+$('tabLog').onclick=()=>{$('tabLog').classList.add('tab-active');$('tabTraffic').classList.remove('tab-active');$('eventLog').classList.remove('hidden');$('trafficList').classList.add('hidden')};
+$('pauseBtn').onclick=()=>setPaused(!G.paused);
+$('resumeBtn').onclick=()=>setPaused(false);
+$('pauseRestartBtn').onclick=()=>{$('pauseOverlay').classList.add('hidden');initGame(G.sc.id)};
+$('retryBtn').onclick=()=>initGame(G.sc.id);
+$('pauseTitleBtn').onclick=toTitle;$('endTitleBtn').onclick=toTitle;$('quitBtn').onclick=()=>setPaused(true);
+$('nextShiftBtn').onclick=()=>{const n=SCENARIOS.find(s=>s.id===G.sc.id+1);if(n)initGame(n.id)};
+$('pauseSettingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+$('titleSettingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+$('gameSettingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+$('closeSettings').onclick=()=>$('settingsModal').classList.add('hidden');
+$('titleHelpBtn').onclick=()=>$('helpModal').classList.remove('hidden');
+$('quickTutorialBtn').onclick=()=>{selectedScenarioId=1;renderScenarios();initGame(1)};
+$('gameHelpBtn').onclick=()=>{if(G)G.paused=true;$('helpModal').classList.remove('hidden')};
+document.querySelectorAll('.closeHelp').forEach(b=>b.onclick=()=>{$('helpModal').classList.add('hidden');if(G&&!G.over&&$('pauseOverlay').classList.contains('hidden')){/* stay paused state as-is */}});
+$('tutClose').onclick=()=>{if(G)G.tut.done=true;$('tutorialCard').classList.add('hidden')};
+$('startBtn').onclick=()=>initGame(selectedScenarioId);
+/* settings */
+function applySettingsUI(){$('volSlider').value=Math.round(settings.volume*100);$('volLbl').textContent=Math.round(settings.volume*100)+'%';$('muteToggle').checked=settings.muted;$('setSweep').checked=settings.sweep;$('setTrails').checked=settings.trails;$('setLabels').checked=settings.labels;$('setRings').checked=settings.rings;syncMuteIcon()}
+function syncMuteIcon(){$('muteBtn').innerHTML=`<i data-lucide="${settings.muted||settings.volume===0?'volume-x':'volume-2'}" class="w-5 h-5"></i>`;lucide.createIcons()}
+$('volSlider').addEventListener('input',e=>{settings.volume=parseInt(e.target.value)/100;$('volLbl').textContent=e.target.value+'%';AudioSys.init();AudioSys.apply();saveSettings();syncMuteIcon()});
+$('muteToggle').addEventListener('change',e=>{settings.muted=e.target.checked;AudioSys.init();AudioSys.apply();saveSettings();syncMuteIcon()});
+$('muteBtn').onclick=()=>{settings.muted=!settings.muted;$('muteToggle').checked=settings.muted;AudioSys.init();AudioSys.apply();saveSettings();syncMuteIcon();if(!settings.muted)AudioSys.good()};
+[['setSweep','sweep'],['setTrails','trails'],['setLabels','labels'],['setRings','rings']].forEach(([id,key])=>{$(id).addEventListener('change',e=>{settings[key]=e.target.checked;saveSettings();syncOverlayButtons()})});
+$('resetProgressBtn').onclick=()=>{progress={completed:[],best:{},totalLanded:0,totalDeparted:0,shiftsPlayed:0};saveProgress();refreshTitleStats();renderScenarios();toast('Campaign progress reset','warn')};
+/* keyboard */
+document.addEventListener('keydown',e=>{
+ if($('gameScreen').classList.contains('hidden'))return;
+ if(e.target.tagName==='INPUT'&&e.target.type==='number')return;
+ const ac=getAc(selectedId);
+ if(e.code==='Space'){e.preventDefault();if(G)setPaused(!G.paused)}
+ else if(e.key==='Escape'){if(!$('helpModal').classList.contains('hidden'))$('helpModal').classList.add('hidden');else if(!$('settingsModal').classList.contains('hidden'))$('settingsModal').classList.add('hidden');else if(G)setPaused(true)}
+ else if(['1','2','3','4'].includes(e.key)&&G){const sp=[0.5,1,2,4][parseInt(e.key)-1];G.speed=sp;document.querySelectorAll('.speedBtn').forEach(x=>x.classList.toggle('speed-active',parseFloat(x.dataset.speed)===sp))}
+ else if(e.key==='Tab'&&G){e.preventDefault();if(G.aircraft.length){const i=G.aircraft.findIndex(a=>a.id===selectedId);selectAircraft(G.aircraft[(i+1)%G.aircraft.length].id)}}
+ else if(!ac||!G||G.paused)return;
+ else if(e.key==='ArrowLeft'){e.preventDefault();setHeading(ac.targetHeading-10)}
+ else if(e.key==='ArrowRight'){e.preventDefault();setHeading(ac.targetHeading+10)}
+ else if(e.key==='ArrowUp'){e.preventDefault();setTargetAlt(ac.targetAlt+500);$('altSlider').value=ac.targetAlt}
+ else if(e.key==='ArrowDown'){e.preventDefault();setTargetAlt(ac.targetAlt-500);$('altSlider').value=ac.targetAlt}
+ else if(e.key==='+'||e.key==='='){setTargetSpd(ac.targetSpd+10);$('spdSlider').value=ac.targetSpd}
+ else if(e.key==='-'||e.key==='_'){setTargetSpd(ac.targetSpd-10);$('spdSlider').value=ac.targetSpd}
+ else if(e.key.toLowerCase()==='f')directFinal();
+ else if(e.key.toLowerCase()==='l')clearLand();
+ else if(e.key.toLowerCase()==='h')toggleHold();
+ else if(e.key.toLowerCase()==='t'){if(G.depQueue.length)takeoff(G.depQueue[0].id)}
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&G&&!G.paused&&!G.over)setPaused(true)});
+window.addEventListener('resize',()=>{resizeRadar();drawCharts()});
+
+/* ---------- boot ---------- */
+applySettingsUI();refreshTitleStats();renderScenarios();
+document.querySelectorAll('.overlayBtn').forEach(b=>{if(b.dataset.overlay==='weather')b.classList.add('active')});
+lucide.createIcons();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

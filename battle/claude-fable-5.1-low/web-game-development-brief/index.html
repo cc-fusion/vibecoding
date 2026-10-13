@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Civilization Micro</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#0b0f14;color:#e8e2d0;font-family:Inter,system-ui,sans-serif;user-select:none;-webkit-user-select:none;font-size:14px}
+h1,h2,h3,.cz{font-family:Cinzel,Georgia,serif}
+h2{font-size:20px;color:#e9c766;margin-bottom:8px}
+h3{font-size:14px;color:#e9c766;margin:8px 0 4px}
+#map{position:fixed;inset:0;display:block;touch-action:none;cursor:grab}
+#map.drag{cursor:grabbing}
+.panel{position:fixed;background:rgba(14,18,26,.93);border:1px solid #6e5a2e;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.5);backdrop-filter:blur(6px)}
+#topbar{top:0;left:0;right:0;height:40px;display:flex;align-items:center;gap:14px;padding:0 12px;border-radius:0;border-width:0 0 1px;font-size:13px;z-index:5;white-space:nowrap;overflow:hidden}
+#topbar .stat{display:flex;align-items:center;gap:4px;cursor:pointer}
+#topbar .stat:hover{color:#fff}
+#topbar .spacer{flex:1}
+.btn{display:inline-block;padding:6px 12px;border:1px solid #8a6f2f;background:linear-gradient(#3a2f18,#241c0e);color:#f1e4b8;border-radius:5px;cursor:pointer;font-size:13px;font-family:Cinzel,Georgia,serif;font-weight:700;transition:transform .1s,filter .1s;line-height:1.2}
+.btn:hover{filter:brightness(1.25)}.btn:active{transform:scale(.96)}
+.btn.sm{padding:3px 8px;font-size:11px}
+.btn.primary{background:linear-gradient(#7a5a16,#4b370c);border-color:#d4af37}
+.btn.danger{background:linear-gradient(#6a1f1f,#3a0e0e);border-color:#b04040}
+.btn.good{background:linear-gradient(#1f5a2a,#0e3a16);border-color:#40b060}
+.btn:disabled{opacity:.4;cursor:not-allowed;filter:none;transform:none}
+#endTurn{position:fixed;right:14px;bottom:14px;z-index:6;padding:12px 22px;font-size:15px;min-width:170px;text-align:center}
+#endTurn.attn{animation:pulse 1.2s infinite}
+#forceEnd{position:fixed;right:14px;bottom:62px;z-index:6;font-size:11px;color:#bba;cursor:pointer;text-decoration:underline;display:none}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,.6)}50%{box-shadow:0 0 0 10px rgba(212,175,55,0)}}
+#unitPanel{left:12px;bottom:12px;width:310px;padding:10px;z-index:5;font-size:13px;display:none}
+#cityPanel{right:12px;top:50px;bottom:70px;width:370px;padding:12px;z-index:7;overflow-y:auto;font-size:13px;display:none}
+#notifs{right:12px;top:50px;width:250px;z-index:4;display:flex;flex-direction:column;gap:4px;max-height:40vh;overflow-y:auto}
+.notif{background:rgba(20,26,36,.9);border-left:3px solid #d4af37;padding:6px 8px;font-size:12px;cursor:pointer;border-radius:4px;animation:slidein .3s ease-out}
+.notif:hover{background:rgba(40,46,56,.95)}
+@keyframes slidein{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+#minimapWrap{left:12px;top:50px;padding:4px;z-index:4;line-height:0}
+#minimap{cursor:pointer;border-radius:4px}
+#tileInfo{left:50%;transform:translateX(-50%);bottom:12px;padding:5px 12px;font-size:12px;z-index:4;display:none;pointer-events:none;white-space:nowrap}
+#modalWrap{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:20;display:none;align-items:center;justify-content:center;padding:10px}
+#modal{background:#141a24;border:1px solid #8a6f2f;border-radius:10px;max-width:min(1000px,96vw);max-height:92vh;overflow:auto;padding:18px;width:100%;position:relative;box-shadow:0 10px 50px #000}
+#modal .close{position:absolute;right:10px;top:8px;font-size:22px;cursor:pointer;color:#bba;line-height:1}
+#modal .close:hover{color:#fff}
+#title{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 30%,#2b2a1f,#0b0f14 70%);flex-direction:column;overflow:auto;padding:20px}
+#title h1{font-size:clamp(34px,7vw,64px);color:#e9c766;text-shadow:0 0 30px rgba(233,199,102,.4);letter-spacing:4px;text-align:center}
+#title .sub{color:#bba;margin-bottom:28px;font-style:italic;text-align:center}
+.menu{display:flex;flex-direction:column;gap:10px;width:min(320px,90vw)}
+.menu .btn{padding:12px;font-size:16px}
+#toasts{position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:15;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.toast{background:rgba(30,24,10,.95);border:1px solid #d4af37;color:#f5e6b8;padding:8px 18px;border-radius:6px;font-size:14px;animation:toastin .3s ease-out;max-width:90vw;text-align:center}
+.toast.bad{border-color:#c04040;background:rgba(40,10,10,.95)}
+@keyframes toastin{from{transform:translateY(-20px);opacity:0}to{transform:none;opacity:1}}
+#tutorial{left:50%;transform:translateX(-50%);bottom:90px;width:min(520px,94vw);z-index:8;padding:12px 14px;border-color:#d4af37;display:none;font-size:13px}
+#tutorial b{color:#e9c766}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bar{height:8px;background:#222;border-radius:4px;overflow:hidden;flex:1}.bar>div{height:100%;transition:width .3s}
+.list{display:flex;flex-direction:column;gap:4px}
+.item{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#1d2531;border-radius:4px;cursor:pointer;border:1px solid transparent;gap:6px}
+.item:hover{border-color:#8a6f2f}
+.item.sel{border-color:#d4af37;background:#2a2a1a}
+.item.dis{opacity:.45;cursor:not-allowed}
+.item small{color:#9a9a8a;font-size:11px}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;background:#333;margin-left:4px;white-space:nowrap}
+.eras{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px}
+.era{min-width:200px;display:flex;flex-direction:column;gap:6px}
+.era h3{text-align:center;border-bottom:1px solid #444;padding-bottom:4px}
+.tech{padding:6px;border-radius:5px;background:#1d2531;border:1px solid #333;cursor:pointer;font-size:11px;line-height:1.35}
+.tech b{font-size:12px}.tech .u{color:#9bd;display:block}.tech .pr{color:#887;display:block}
+.tech.done{background:#1e3a22;border-color:#3f8f4a;cursor:default}.tech.avail{border-color:#8a6f2f}.tech.cur{border-color:#d4af37;background:#3a3015}.tech.locked{opacity:.6}.tech.queued{border-color:#5ab;background:#15303a}
+.trees{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.tree{background:#1a212c;border-radius:6px;padding:8px}
+.pol{padding:6px;margin:4px 0;border-radius:4px;background:#121820;border:1px solid #333;font-size:12px;cursor:pointer}
+.pol.done{border-color:#3f8f4a;background:#1e3a22}.pol.avail{border-color:#d4af37}.pol.locked{opacity:.5;cursor:not-allowed}
+.civcard{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid #333;border-radius:6px;cursor:pointer;background:#1a212c}
+.civcard.sel{border-color:#d4af37;background:#2a2a1a}
+.swatch{width:26px;height:26px;border-radius:50%;flex-shrink:0;border:2px solid #fff3}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media (max-width:700px){.grid2,.grid3{grid-template-columns:1fr}}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px}
+.kv b{color:#e9c766}
+input[type=range]{width:140px;accent-color:#d4af37}
+select,input[type=text]{background:#1d2531;color:#eee;border:1px solid #555;border-radius:4px;padding:4px 6px;font-size:13px}
+.diplo{display:flex;flex-direction:column;gap:10px}
+.dcard{background:#1a212c;border-radius:6px;padding:10px;border-left:4px solid}
+.att{font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:3px 6px;border-bottom:1px solid #2a2f3a;text-align:left}
+.hint{color:#9a9a8a;font-size:11px}
+.yl{color:#9ad96a}.yp{color:#e8a35a}.yg{color:#f0d060}.ys{color:#6ab8f0}.yc{color:#d58af0}
+#stats{font-size:12px}
+.bigstat{font-size:28px;font-family:Cinzel,serif;color:#e9c766}
+@media (max-width:820px){#cityPanel{width:auto;left:12px;right:12px;top:auto;bottom:70px;max-height:56vh}#unitPanel{width:auto;right:200px}#notifs{top:auto;bottom:70px;left:12px;width:200px;max-height:25vh;right:auto}#minimapWrap{display:none}#tileInfo{display:none!important}#topbar{font-size:11px;gap:8px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div id="topbar" class="panel"></div>
+<div id="minimapWrap" class="panel"><canvas id="minimap" width="180" height="120"></canvas></div>
+<div id="notifs"></div>
+<div id="unitPanel" class="panel"></div>
+<div id="cityPanel" class="panel"></div>
+<div id="tileInfo" class="panel"></div>
+<div id="tutorial" class="panel"></div>
+<button id="endTurn" class="btn primary">End Turn</button>
+<div id="forceEnd">end turn anyway (Shift+Enter)</div>
+<div id="toasts"></div>
+<div id="modalWrap"><div id="modal"></div></div>
+<div id="title"></div>
+<script>
+'use strict';
+// ============================ DATA ============================
+const TERRAIN={
+ocean:{name:'Ocean',color:'#1c4f86',f:1,p:0,g:1,water:1},
+coast:{name:'Coast',color:'#2d7bb8',f:1,p:0,g:2,water:1},
+grass:{name:'Grassland',color:'#5c9e3c',f:2,p:0,g:0},
+plains:{name:'Plains',color:'#b0a852',f:1,p:1,g:0},
+desert:{name:'Desert',color:'#dcc67e',f:0,p:0,g:0},
+tundra:{name:'Tundra',color:'#99a593',f:1,p:0,g:0},
+snow:{name:'Snow',color:'#e6ecef',f:0,p:0,g:0},
+};
+const RES={
+wheat:{name:'Wheat',icon:'🌾',f:1,imp:'farm',on:['grass','plains']},
+cattle:{name:'Cattle',icon:'🐄',f:1,imp:'pasture',on:['grass']},
+deer:{name:'Deer',icon:'🦌',f:1,imp:'camp',on:['tundra','forest']},
+horses:{name:'Horses',icon:'🐎',p:1,imp:'pasture',on:['grass','plains'],tech:'animalhusbandry',strat:1},
+iron:{name:'Iron',icon:'⚙️',p:1,imp:'mine',on:['hill','desert','plains','tundra'],tech:'ironworking',strat:1},
+stone:{name:'Stone',icon:'🪨',p:1,imp:'quarry',on:['hill','plains','grass']},
+gold:{name:'Gold Ore',icon:'💰',g:2,imp:'mine',on:['hill','desert']},
+gems:{name:'Gems',icon:'💎',g:3,imp:'mine',on:['hill','forest']},
+silk:{name:'Silk',icon:'🧵',g:2,imp:'plantation',on:['forest']},
+spices:{name:'Spices',icon:'🌶️',g:2,imp:'plantation',on:['forest','grass']},
+fish:{name:'Fish',icon:'🐟',f:2,on:['coast']},
+};
+const IMPS={
+farm:{name:'Farm',icon:'🌾',f:1,turns:4,tech:'agriculture',flat:1},
+mine:{name:'Mine',icon:'⛏️',p:1,turns:5,tech:'mining',hillOrRes:1},
+pasture:{name:'Pasture',icon:'🐄',f:1,turns:4,tech:'animalhusbandry',resOnly:1},
+camp:{name:'Camp',icon:'⛺',g:1,turns:4,tech:'archery',resOnly:1},
+quarry:{name:'Quarry',icon:'🪨',p:1,turns:5,tech:'masonry',resOnly:1},
+plantation:{name:'Plantation',icon:'🌴',g:1,turns:4,tech:'pottery',resOnly:1},
+tradingpost:{name:'Trading Post',icon:'🏪',g:2,turns:4,tech:'currency',flat:1},
+};
+const UNITS={
+settler:{name:'Settler',cost:90,move:2,str:0,icon:'🏕️',civ:1,cls:'civilian',desc:'Founds a new city.'},
+worker:{name:'Worker',cost:55,move:2,str:0,icon:'🔨',civ:1,cls:'civilian',desc:'Builds tile improvements and roads.'},
+scout:{name:'Scout',cost:25,move:3,str:5,icon:'🔭',cls:'recon',desc:'Ignores terrain movement costs.'},
+warrior:{name:'Warrior',cost:40,move:2,str:8,icon:'🪓',cls:'melee'},
+archer:{name:'Archer',cost:45,move:2,str:5,rstr:7,range:2,icon:'🏹',cls:'ranged',tech:'archery'},
+horseman:{name:'Horseman',cost:70,move:4,str:12,icon:'🐎',cls:'mounted',tech:'horsebackriding',res:'horses'},
+swordsman:{name:'Swordsman',cost:75,move:2,str:14,icon:'⚔️',cls:'melee',tech:'ironworking',res:'iron'},
+catapult:{name:'Catapult',cost:75,move:2,str:7,rstr:14,range:2,icon:'🪨',cls:'siege',tech:'mathematics'},
+knight:{name:'Knight',cost:120,move:4,str:20,icon:'🛡️',cls:'mounted',tech:'chivalry',res:'horses'},
+crossbowman:{name:'Crossbowman',cost:120,move:2,str:13,rstr:18,range:2,icon:'🎯',cls:'ranged',tech:'machinery'},
+musketeer:{name:'Musketeer',cost:150,move:2,str:24,icon:'🔫',cls:'melee',tech:'gunpowder'},
+cannon:{name:'Cannon',cost:185,move:2,str:14,rstr:26,range:2,icon:'💣',cls:'siege',tech:'metallurgy'},
+rifleman:{name:'Rifleman',cost:225,move:2,str:34,icon:'🎖️',cls:'melee',tech:'rifling'},
+cavalry:{name:'Cavalry',cost:260,move:4,str:34,icon:'🏇',cls:'mounted',tech:'militaryscience',res:'horses'},
+artillery:{name:'Artillery',cost:320,move:2,str:21,rstr:40,range:3,icon:'🧨',cls:'siege',tech:'dynamite'},
+infantry:{name:'Infantry',cost:375,move:2,str:50,icon:'🪖',cls:'melee',tech:'replaceableparts'},
+tank:{name:'Tank',cost:450,move:4,str:62,icon:'🚜',cls:'armor',tech:'combustion'},
+// unique units
+legion:{name:'Legion',cost:75,move:2,str:17,icon:'🦅',cls:'melee',tech:'ironworking',res:'iron',uniq:'rome',rep:'swordsman',desc:'Roman Swordsman: stronger, can build roads.'},
+hoplite:{name:'Hoplite',cost:45,move:2,str:10,icon:'🔱',cls:'melee',uniq:'greece',rep:'warrior',vsMounted:50,desc:'Greek Warrior: +50% vs mounted.'},
+warchariot:{name:'War Chariot',cost:50,move:3,str:6,rstr:9,range:2,icon:'🏹',cls:'ranged',tech:'thewheel',uniq:'egypt',rep:'archer',desc:'Egyptian Archer: faster, stronger shot.'},
+keshik:{name:'Keshik',cost:120,move:5,str:15,rstr:17,range:2,icon:'🐎',cls:'mounted',tech:'chivalry',res:'horses',uniq:'mongolia',rep:'knight',desc:'Mongol Knight: mounted archer, 5 moves.'},
+redcoat:{name:'Redcoat',cost:150,move:2,str:28,icon:'🎩',cls:'melee',tech:'gunpowder',uniq:'england',rep:'musketeer',desc:'English Musketeer: +4 strength, +25% defending.'},
+panzer:{name:'Panzer',cost:450,move:5,str:72,icon:'🚜',cls:'armor',tech:'combustion',uniq:'germany',rep:'tank',desc:'German Tank: faster and stronger.'},
+};
+const UPGRADE={warrior:'swordsman',hoplite:'legion_or_swordsman',swordsman:'musketeer',legion:'musketeer',musketeer:'rifleman',redcoat:'rifleman',rifleman:'infantry',infantry:'tank',archer:'crossbowman',warchariot:'crossbowman',crossbowman:'rifleman',horseman:'knight',knight:'cavalry',keshik:'cavalry',cavalry:'tank',catapult:'cannon',cannon:'artillery',scout:'archer'};
+const CIVS=[
+{id:'rome',name:'Rome',leader:'Caesar',color:'#c0392b',bonus:'+15% Production in all cities',unique:'legion',pers:{war:.75,sci:.45,cul:.3,exp:.7}},
+{id:'greece',name:'Greece',leader:'Pericles',color:'#2e86de',bonus:'+25% Culture in all cities',unique:'hoplite',pers:{war:.4,sci:.6,cul:.9,exp:.4}},
+{id:'egypt',name:'Egypt',leader:'Cleopatra',color:'#f1c40f',bonus:'+25% Wonder production',unique:'warchariot',pers:{war:.3,sci:.5,cul:.8,exp:.5}},
+{id:'mongolia',name:'Mongolia',leader:'Genghis Khan',color:'#8e44ad',bonus:'+1 Move for mounted units; +30% vs Barbarians',unique:'keshik',pers:{war:1,sci:.3,cul:.2,exp:.8}},
+{id:'england',name:'England',leader:'Elizabeth',color:'#e67e22',bonus:'+2 Gold per city; +15% Science',unique:'redcoat',pers:{war:.5,sci:.9,cul:.4,exp:.6}},
+{id:'germany',name:'Germany',leader:'Bismarck',color:'#aab7b8',bonus:'+20% Production of military units; Unit maintenance -25%',unique:'panzer',pers:{war:.7,sci:.7,cul:.3,exp:.6}},
+];
+const ERAS=['Ancient','Classical','Medieval','Renaissance','Industrial','Modern'];
+const TECHS={
+agriculture:{name:'Agriculture',cost:20,era:0,pre:[],u:'Farms'},
+pottery:{name:'Pottery',cost:35,era:0,pre:['agriculture'],u:'Granary, Stonehenge, Plantation'},
+animalhusbandry:{name:'Animal Husbandry',cost:35,era:0,pre:['agriculture'],u:'Pasture, reveals Horses'},
+archery:{name:'Archery',cost:35,era:0,pre:['agriculture'],u:'Archer, Camp'},
+mining:{name:'Mining',cost:35,era:0,pre:['agriculture'],u:'Mine'},
+sailing:{name:'Sailing',cost:55,era:0,pre:['pottery'],u:'Lighthouse'},
+bronzeworking:{name:'Bronze Working',cost:55,era:0,pre:['mining'],u:'Barracks, Colossus'},
+masonry:{name:'Masonry',cost:55,era:0,pre:['mining'],u:'Walls, Pyramids, Quarry'},
+thewheel:{name:'The Wheel',cost:55,era:0,pre:['animalhusbandry'],u:'Roads, War Chariot'},
+writing:{name:'Writing',cost:55,era:0,pre:['pottery'],u:'Library, Great Library'},
+horsebackriding:{name:'Horseback Riding',cost:100,era:1,pre:['thewheel'],u:'Horseman'},
+ironworking:{name:'Iron Working',cost:100,era:1,pre:['bronzeworking'],u:'Swordsman, reveals Iron'},
+mathematics:{name:'Mathematics',cost:100,era:1,pre:['thewheel','archery'],u:'Catapult, Hanging Gardens'},
+philosophy:{name:'Philosophy',cost:110,era:1,pre:['writing'],u:'Temple, Oracle'},
+currency:{name:'Currency',cost:120,era:1,pre:['mathematics'],u:'Market, Trading Post, Machu Picchu'},
+construction:{name:'Construction',cost:120,era:1,pre:['masonry'],u:'Colosseum, Great Wall'},
+civilservice:{name:'Civil Service',cost:200,era:2,pre:['philosophy','horsebackriding'],u:'Farms +1 Food'},
+engineering:{name:'Engineering',cost:200,era:2,pre:['mathematics','construction'],u:'Aqueduct'},
+education:{name:'Education',cost:250,era:2,pre:['philosophy'],u:'University, Notre Dame'},
+chivalry:{name:'Chivalry',cost:250,era:2,pre:['civilservice','horsebackriding'],u:'Knight, Keshik'},
+machinery:{name:'Machinery',cost:250,era:2,pre:['engineering'],u:'Crossbowman'},
+guilds:{name:'Guilds',cost:250,era:2,pre:['currency','civilservice'],u:'Workshop, Trading Post +1 Gold'},
+gunpowder:{name:'Gunpowder',cost:400,era:3,pre:['machinery','chivalry'],u:'Musketeer, Redcoat'},
+banking:{name:'Banking',cost:400,era:3,pre:['guilds','education'],u:'Bank'},
+printingpress:{name:'Printing Press',cost:400,era:3,pre:['education'],u:'Taj Mahal'},
+astronomy:{name:'Astronomy',cost:400,era:3,pre:['education'],u:'Observatory'},
+acoustics:{name:'Acoustics',cost:500,era:3,pre:['printingpress'],u:'Museum, Sistine Chapel'},
+metallurgy:{name:'Metallurgy',cost:500,era:3,pre:['gunpowder'],u:'Cannon'},
+scientifictheory:{name:'Scientific Theory',cost:800,era:4,pre:['astronomy','banking'],u:'Public School'},
+economics:{name:'Economics',cost:800,era:4,pre:['banking','printingpress'],u:'Stock Exchange, Big Ben'},
+rifling:{name:'Rifling',cost:800,era:4,pre:['metallurgy'],u:'Rifleman'},
+militaryscience:{name:'Military Science',cost:900,era:4,pre:['rifling','economics'],u:'Cavalry'},
+industrialization:{name:'Industrialization',cost:1000,era:4,pre:['scientifictheory','economics'],u:'Factory'},
+dynamite:{name:'Dynamite',cost:1000,era:4,pre:['rifling','scientifictheory'],u:'Artillery'},
+biology:{name:'Biology',cost:1000,era:4,pre:['scientifictheory'],u:'Hospital'},
+electricity:{name:'Electricity',cost:1500,era:5,pre:['industrialization'],u:'+10% Production everywhere'},
+radio:{name:'Radio',cost:1500,era:5,pre:['electricity'],u:'Broadcast Tower, Eiffel Tower'},
+replaceableparts:{name:'Replaceable Parts',cost:1500,era:5,pre:['dynamite','electricity'],u:'Infantry'},
+combustion:{name:'Combustion',cost:2000,era:5,pre:['replaceableparts'],u:'Tank, Panzer'},
+rocketry:{name:'Rocketry',cost:2000,era:5,pre:['radio','replaceableparts'],u:'Apollo Program, SS Booster'},
+computers:{name:'Computers',cost:2500,era:5,pre:['rocketry','electricity'],u:'Research Lab, SS Engine'},
+satellites:{name:'Satellites',cost:2500,era:5,pre:['rocketry'],u:'SS Cockpit, reveals map'},
+};
+const BLD={
+monument:{name:'Monument',cost:40,maint:1,c:2,desc:'+2 Culture'},
+granary:{name:'Granary',cost:60,maint:1,tech:'pottery',f:2,desc:'+2 Food'},
+barracks:{name:'Barracks',cost:75,maint:1,tech:'bronzeworking',xp:15,desc:'New units start with 15 XP'},
+walls:{name:'Walls',cost:75,maint:0,tech:'masonry',def:6,desc:'+6 City Strength, +60 City HP'},
+library:{name:'Library',cost:75,maint:1,tech:'writing',sPerPop:.5,desc:'+1 Science per 2 pop'},
+lighthouse:{name:'Lighthouse',cost:75,maint:1,tech:'sailing',coastal:1,waterF:1,desc:'+1 Food on water tiles'},
+market:{name:'Market',cost:100,maint:0,tech:'currency',g:2,gPct:25,desc:'+2 Gold, +25% Gold'},
+temple:{name:'Temple',cost:100,maint:2,tech:'philosophy',c:3,desc:'+3 Culture'},
+colosseum:{name:'Colosseum',cost:100,maint:1,tech:'construction',c:2,f:1,desc:'+2 Culture, +1 Food'},
+aqueduct:{name:'Aqueduct',cost:100,maint:1,tech:'engineering',keepFood:.4,desc:'Keeps 40% food on growth'},
+workshop:{name:'Workshop',cost:120,maint:2,tech:'guilds',p:2,pPct:10,desc:'+2 Production, +10%'},
+university:{name:'University',cost:160,maint:3,tech:'education',sPct:50,desc:'+50% Science'},
+observatory:{name:'Observatory',cost:180,maint:2,tech:'astronomy',sPct:25,s:2,desc:'+2 Science, +25%'},
+bank:{name:'Bank',cost:200,maint:2,tech:'banking',gPct:25,g:2,desc:'+2 Gold, +25% Gold'},
+museum:{name:'Museum',cost:250,maint:3,tech:'acoustics',c:5,desc:'+5 Culture'},
+publicschool:{name:'Public School',cost:300,maint:3,tech:'scientifictheory',sPerPop:.5,s:3,desc:'+3 Science, +1 per 2 pop'},
+factory:{name:'Factory',cost:300,maint:3,tech:'industrialization',pPct:25,p:3,desc:'+3 Production, +25%'},
+stockexchange:{name:'Stock Exchange',cost:350,maint:3,tech:'economics',gPct:33,g:3,desc:'+3 Gold, +33% Gold'},
+hospital:{name:'Hospital',cost:350,maint:2,tech:'biology',f:5,desc:'+5 Food'},
+broadcasttower:{name:'Broadcast Tower',cost:400,maint:3,tech:'radio',cPct:50,c:3,desc:'+3 Culture, +50% Culture'},
+researchlab:{name:'Research Lab',cost:500,maint:4,tech:'computers',sPct:50,s:4,desc:'+4 Science, +50%'},
+};
+const WONDERS={
+pyramids:{name:'Pyramids',cost:185,tech:'masonry',c:1,pPct:25,desc:'+25% Production here; Workers build 50% faster'},
+stonehenge:{name:'Stonehenge',cost:185,tech:'pottery',c:6,desc:'+6 Culture'},
+greatlibrary:{name:'Great Library',cost:185,tech:'writing',s:3,free:'tech',desc:'Free Technology, +3 Science'},
+colossus:{name:'Colossus',cost:185,tech:'bronzeworking',g:6,desc:'+6 Gold; +1 Gold on water tiles here'},
+hanginggardens:{name:'Hanging Gardens',cost:250,tech:'mathematics',f:6,desc:'+6 Food in this city'},
+oracle:{name:'Oracle',cost:250,tech:'philosophy',c:3,free:'policy',desc:'Free Social Policy, +3 Culture'},
+greatwall:{name:'Great Wall',cost:250,tech:'construction',c:2,desc:'+6 Strength to all your cities; enemies move slower in your lands'},
+machupicchu:{name:'Machu Picchu',cost:300,tech:'currency',c:2,desc:'+20% Gold empire-wide'},
+notredame:{name:'Notre Dame',cost:400,tech:'education',c:8,desc:'+8 Culture'},
+tajmahal:{name:'Taj Mahal',cost:500,tech:'printingpress',c:10,desc:'+10 Culture, +150 Gold on completion'},
+sistinechapel:{name:'Sistine Chapel',cost:500,tech:'acoustics',c:3,desc:'+25% Culture in all your cities'},
+bigben:{name:'Big Ben',cost:600,tech:'economics',g:5,desc:'+5 Gold; purchasing costs 25% less'},
+eiffeltower:{name:'Eiffel Tower',cost:800,tech:'radio',c:12,desc:'+12 Culture'},
+};
+const PROJECTS={
+apollo:{name:'Apollo Program',cost:800,tech:'rocketry',desc:'Enables Spaceship parts'},
+ssbooster:{name:'SS Booster',cost:600,tech:'rocketry',req:'apollo',desc:'Spaceship part 1/3'},
+sscockpit:{name:'SS Cockpit',cost:600,tech:'satellites',req:'apollo',desc:'Spaceship part 2/3'},
+ssengine:{name:'SS Engine',cost:800,tech:'computers',req:'apollo',desc:'Spaceship part 3/3 — launch!'},
+};
+const POLICIES=[
+{tree:'Tradition',id:'aristocracy',name:'Aristocracy',desc:'+15% Wonder production'},
+{tree:'Tradition',id:'landedelite',name:'Landed Elite',desc:'+2 Food and +25% growth in capital'},
+{tree:'Tradition',id:'monarchy',name:'Monarchy',desc:'+1 Gold & +1 Culture per 2 pop in capital'},
+{tree:'Liberty',id:'republic',name:'Republic',desc:'+1 Production per city'},
+{tree:'Liberty',id:'collectiverule',name:'Collective Rule',desc:'Settlers built 50% faster'},
+{tree:'Liberty',id:'citizenship',name:'Citizenship',desc:'Workers 25% faster; free Worker'},
+{tree:'Honor',id:'warriorcode',name:'Warrior Code',desc:'+25% vs Barbarians; Culture from kills'},
+{tree:'Honor',id:'discipline',name:'Discipline',desc:'+15% Combat Strength'},
+{tree:'Honor',id:'militarytradition',name:'Military Tradition',desc:'Units heal +10 HP/turn; +50% XP'},
+{tree:'Commerce',id:'tradeunions',name:'Trade Unions',desc:'+25% Gold in capital'},
+{tree:'Commerce',id:'mercantilism',name:'Mercantilism',desc:'Purchasing 25% cheaper'},
+{tree:'Commerce',id:'protectionism',name:'Protectionism',desc:'+2 Gold per city'},
+{tree:'Rationalism',id:'secularism',name:'Secularism',desc:'+2 Science per city'},
+{tree:'Rationalism',id:'freethought',name:'Free Thought',desc:'+15% Science'},
+{tree:'Rationalism',id:'scientificrevolution',name:'Scientific Revolution',desc:'+1 Science per 2 pop everywhere'},
+];
+const DIFFS=[
+{id:'settler',name:'Settler',desc:'Relaxed. You get +40% yields, AI handicapped (-20%). Few barbarians.',py:1.4,ay:.8,start:0,barb:.5},
+{id:'prince',name:'Prince',desc:'Balanced. No bonuses for anyone.',py:1,ay:1,start:0,barb:1},
+{id:'king',name:'King',desc:'AI gets +20% yields and an extra Warrior.',py:1,ay:1.2,start:1,barb:1.2},
+{id:'emperor',name:'Emperor',desc:'AI gets +45% yields, extra units and a Worker. Fierce barbarians.',py:1,ay:1.45,start:2,barb:1.5},
+];
+const MAPS=[{id:'small',name:'Small',w:34,h:24},{id:'medium',name:'Medium',w:42,h:28},{id:'large',name:'Large',w:52,h:34}];
+const CITY_NAMES={rome:['Rome','Antium','Cumae','Neapolis','Ravenna','Arretium','Mediolanum','Arpinum','Pisae','Capua'],greece:['Athens','Sparta','Corinth','Argos','Knossos','Thebes','Delphi','Rhodes','Olympia','Eretria'],egypt:['Thebes','Memphis','Heliopolis','Elephantine','Alexandria','Giza','Byblos','Akhetaten','Abydos','Edfu'],mongolia:['Karakorum','Beshbalik','Turfan','Hsia','Old Sarai','New Sarai','Tabriz','Tiflis','Otrar','Sanchu'],england:['London','York','Nottingham','Hastings','Canterbury','Coventry','Warwick','Newcastle','Oxford','Liverpool'],germany:['Berlin','Hamburg','Munich','Cologne','Frankfurt','Essen','Dortmund','Stuttgart','Bremen','Leipzig']};
+const MAX_TURN=300;
+const CULTURE_WIN=12;
+// ============================ UTIL ============================
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let rng=Math.random;
+const rnd=(a,b)=>a+rng()*(b-a);const ri=(a,b)=>Math.floor(rnd(a,b+1));const pick=a=>a[Math.floor(rng()*a.length)];
+function makeNoise(seed){const r=mulberry(seed);const P=new Float32Array(65536);for(let i=0;i<65536;i++)P[i]=r();const g=(x,y)=>P[((x&255)<<8)|(y&255)];const sm=t=>t*t*(3-2*t);
+function n(x,y){const x0=Math.floor(x),y0=Math.floor(y),fx=sm(x-x0),fy=sm(y-y0);return lerp(lerp(g(x0,y0),g(x0+1,y0),fx),lerp(g(x0,y0+1),g(x0+1,y0+1),fx),fy)}
+return(x,y,oct=4)=>{let v=0,a=1,s=0,f=1;for(let i=0;i<oct;i++){v+=a*n(x*f+i*31,y*f+i*17);s+=a;a*=.5;f*=2}return v/s}}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let LS={};try{LS=window.localStorage;LS.setItem('__t','1');LS.removeItem('__t')}catch(e){LS={_d:{},getItem(k){return this._d[k]??null},setItem(k,v){this._d[k]=String(v)},removeItem(k){delete this._d[k]}}}
+function lsGet(k,d){try{const v=LS.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}}
+function lsSet(k,v){try{LS.setItem(k,JSON.stringify(v))}catch(e){}}
+
+// ============================ HEX MATH ============================
+let G=null;
+const idx=(x,y)=>y*G.W+x;
+const inB=(x,y)=>x>=0&&y>=0&&x<G.W&&y<G.H;
+const NB_ODD=[[1,0],[-1,0],[0,-1],[1,-1],[0,1],[1,1]],NB_EVEN=[[1,0],[-1,0],[-1,-1],[0,-1],[-1,1],[0,1]];
+function nbrs(x,y){const d=(y&1)?NB_ODD:NB_EVEN,o=[];for(const [dx,dy] of d){const nx=x+dx,ny=y+dy;if(inB(nx,ny))o.push([nx,ny])}return o}
+function cube(x,y){const q=x-((y-(y&1))>>1);return[q,y,-q-y]}
+function hdist(x1,y1,x2,y2){const a=cube(x1,y1),b=cube(x2,y2);return Math.max(Math.abs(a[0]-b[0]),Math.abs(a[1]-b[1]),Math.abs(a[2]-b[2]))}
+function within(x,y,R){const o=[];for(let yy=y-R;yy<=y+R;yy++)for(let xx=x-R-1;xx<=x+R+1;xx++){if(inB(xx,yy)&&hdist(x,y,xx,yy)<=R)o.push([xx,yy])}return o}
+const HS=34,SQ3=Math.sqrt(3);
+const hexX=(x,y)=>HS*SQ3*(x+0.5*(y&1)),hexY=y=>HS*1.5*y;
+function pixToHex(wx,wy){const r=Math.round(wy/(HS*1.5));let best=null,bd=1e9;for(let yy=r-1;yy<=r+1;yy++){const c=Math.round(wx/(HS*SQ3)-0.5*(yy&1));for(let xx=c-1;xx<=c+1;xx++){if(!inB(xx,yy))continue;const d=(hexX(xx,yy)-wx)**2+(hexY(yy)-wy)**2;if(d<bd){bd=d;best=[xx,yy]}}}return best}
+
+// ============================ MAP GEN ============================
+function genMap(W,H,seed){
+const el=makeNoise(seed),mo=makeNoise(seed+77),hi=makeNoise(seed+123);
+const tiles=[],ev=[];
+for(let y=0;y<H;y++)for(let x=0;x<W;x++){const nx=x/W,ny=y/H;const dx=(nx-.5)*2,dy=(ny-.5)*2;const d=Math.sqrt(dx*dx+dy*dy*1.4);const e=el(x*.085,y*.085)-d*d*.55;ev.push(e);tiles.push({t:'ocean',hill:0,forest:0,mtn:0,res:null,imp:null,road:0,owner:-1,city:-1,pill:0,camp:0,worked:-1})}
+const sorted=ev.slice().sort((a,b)=>a-b);const thr=sorted[Math.floor(sorted.length*.56)];
+for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x,t=tiles[i];if(ev[i]<=thr||y===0||y===H-1||x===0||x===W-1)continue;
+const lat=Math.abs(y/H-.5)*2,m=mo(x*.13,y*.13),h=hi(x*.21,y*.21);
+if(lat>.86)t.t='snow';else if(lat>.72)t.t='tundra';else if(m<.38&&lat<.45)t.t='desert';else if(m<.56)t.t='plains';else t.t='grass';
+if(h>.78)t.mtn=1;else if(h>.6)t.hill=1;
+if(!t.mtn&&m>.58&&lat<.8&&t.t!=='desert'&&rng()<.75)t.forest=1;}
+// coast
+for(let y=0;y<H;y++)for(let x=0;x<W;x++){const t=tiles[y*W+x];if(t.t==='ocean'){for(const [nx,ny] of nbrsW(x,y,W,H)){if(!TERRAIN[tiles[ny*W+nx].t].water){t.t='coast';break}}}}
+// resources
+const keys=Object.keys(RES);
+for(let i=0;i<tiles.length;i++){const t=tiles[i];if(t.mtn)continue;const rr=rng();if(TERRAIN[t.t].water){if(t.t==='coast'&&rr<.14)t.res='fish';continue}if(rr<.17){const ok=keys.filter(k=>{const r=RES[k];if(k==='fish')return false;return(r.on.includes(t.t)&&!t.forest)||(t.hill&&r.on.includes('hill'))||(t.forest&&r.on.includes('forest'))});if(ok.length)t.res=pick(ok)}}
+// largest landmass
+const comp=new Int32Array(tiles.length).fill(-1);let best=-1,bestN=0,nc=0;
+for(let i=0;i<tiles.length;i++){if(comp[i]>=0||TERRAIN[tiles[i].t].water)continue;const st=[i];comp[i]=nc;let n=0;while(st.length){const j=st.pop();n++;const x=j%W,y=(j/W)|0;for(const [nx,ny] of nbrsW(x,y,W,H)){const k=ny*W+nx;if(comp[k]<0&&!TERRAIN[tiles[k].t].water){comp[k]=nc;st.push(k)}}}if(n>bestN){bestN=n;best=nc}nc++}
+for(let i=0;i<tiles.length;i++)tiles[i].main=comp[i]===best?1:0;
+return tiles}
+function nbrsW(x,y,W,H){const d=(y&1)?NB_ODD:NB_EVEN,o=[];for(const [dx,dy] of d){const nx=x+dx,ny=y+dy;if(nx>=0&&ny>=0&&nx<W&&ny<H)o.push([nx,ny])}return o}
+
+// ============================ GAME SETUP ============================
+let settings=Object.assign({master:.7,music:.5,sfx:.8,anim:1,grid:0,tutorial:1,autoWorker:0},lsGet('civmicro_settings',{}));
+function saveSettings(){lsSet('civmicro_settings',settings)}
+function newGame(o){
+const m=MAPS.find(x=>x.id===o.map)||MAPS[1];const seed=o.seed||((Math.random()*1e9)|0);rng=mulberry(seed);
+G={seed,W:m.w,H:m.h,turn:1,player:0,diff:o.diff||1,civs:[],units:[],cities:[],nextId:1,wonders:{},notifs:[],over:null,rel:[],log:[],stats:{killed:0,lost:0,citiesFounded:0,citiesCaptured:0,techs:0,wonders:0,barbCamps:0,goldEarned:0},pendingPeace:[],started:Date.now(),maxTurn:MAX_TURN,tut:{}};
+let tries=0;do{G.tiles=genMap(G.W,G.H,seed+tries*999);tries++}while(G.tiles.filter(t=>t.main).length<G.W*G.H*.25&&tries<6);
+const nAI=3;const order=[o.civ].concat(CIVS.map(c=>c.id).filter(c=>c!==o.civ).sort(()=>rng()-.5).slice(0,nAI));
+order.forEach((cid,i)=>G.civs.push(mkCiv(cid,i,i!==0)));
+G.civs.push(mkCiv(null,G.civs.length,true));// barbarians
+G.barb=G.civs.length-1;
+for(let i=0;i<G.civs.length;i++){G.rel[i]=[];for(let j=0;j<G.civs.length;j++)G.rel[i][j]={att:0,war:(i===G.barb||j===G.barb)&&i!==j,warSince:0,ally:false,met:false,peaceUntil:0,ra:0,open:false}}
+// starts
+const starts=pickStarts(nAI+1);
+const D=DIFFS[G.diff];
+G.civs.forEach((c,i)=>{if(c.barb)return;const [x,y]=starts[i];c.startX=x;c.startY=y;spawnUnit('settler',i,x,y);spawnUnit('warrior',i,x,y);
+if(c.ai){for(let k=0;k<D.start;k++)spawnUnit('warrior',i,x,y);if(D.start>=2){spawnUnit('worker',i,x,y);spawnUnit('settler',i,x,y)}}else{if(G.diff===0)spawnUnit('worker',i,x,y);spawnUnit('scout',i,x,y)}
+updateVis(i)});
+G.civs.forEach(c=>{if(c.ai&&!c.barb)pickResearchAI(c)});
+}
+function mkCiv(cid,idx,ai){const def=cid?CIVS.find(c=>c.id===cid):{id:'barb',name:'Barbarians',leader:'Chieftain',color:'#3a3a3a',bonus:'',pers:{war:1,sci:0,cul:0,exp:0}};
+return{id:def.id,idx,def,ai,barb:!cid,alive:true,gold:cid?60:0,techs:{agriculture:true},research:null,rp:0,goal:null,cultureAcc:0,cultureTotal:0,policies:[],freePolicies:0,projects:{},vis:new Uint8Array(G.W*G.H),names:cid?CITY_NAMES[cid].slice():[],sciTotal:0,kills:0,losses:0,capTile:-1,warWeariness:0,denounced:0}}
+function pickStarts(n){const cand=[];for(let y=2;y<G.H-2;y++)for(let x=2;x<G.W-2;x++){const t=G.tiles[idx(x,y)];if(!t.main||t.mtn||t.t==='snow'||t.t==='tundra'||t.t==='desert')continue;let sc=0,land=0;for(const [nx,ny] of within(x,y,2)){const tt=G.tiles[idx(nx,ny)];if(!TERRAIN[tt.t].water)land++;const yl=rawYield(tt);sc+=yl.f*1.3+yl.p+yl.g*.5+(tt.res?2:0)}if(land<12)continue;cand.push({x,y,sc})}
+cand.sort((a,b)=>b.sc-a.sc);const out=[];if(!cand.length){out.push([G.W>>1,G.H>>1]);}
+let minD=Math.max(9,Math.floor(Math.sqrt(G.W*G.H/n)*.75));
+while(out.length<n){let bestC=null,bestV=-1;for(const c of cand.slice(0,Math.max(40,cand.length>>1))){let md=99;for(const [ox,oy] of out)md=Math.min(md,hdist(c.x,c.y,ox,oy));if(out.length&&md<minD)continue;const v=(out.length?md:rng()*20)+c.sc*.08+rng()*3;if(v>bestV){bestV=v;bestC=c}}
+if(!bestC){minD--;if(minD<4){bestC=cand[ri(0,cand.length-1)]||{x:ri(2,G.W-3),y:ri(2,G.H-3)}}else continue}out.push([bestC.x,bestC.y])}
+return out}
+function rawYield(t){const T=TERRAIN[t.t];let f=T.f,p=T.p,g=T.g;if(t.mtn)return{f:0,p:0,g:0};if(t.hill){f=0;p=2}if(t.forest){f=Math.max(0,f-1);p+=1}return{f,p,g}}
+
+// ============================ UNITS ============================
+function unitDef(type){return UNITS[type]}
+function civUnitType(civ,base){const def=CIVS.find(c=>c.id===civ.id);if(def&&UNITS[def.unique]&&UNITS[def.unique].rep===base)return def.unique;return base}
+function spawnUnit(type,ci,x,y,opts={}){const d=UNITS[type];let tx=x,ty=y;if(!canStack(type,ci,x,y)){const alt=within(x,y,2).find(([ax,ay])=>passable(ax,ay)&&canStack(type,ci,ax,ay)&&!enemyAt(ax,ay,ci));if(alt){tx=alt[0];ty=alt[1]}else return null}
+const civ=G.civs[ci];let mv=d.move+(d.cls==='mounted'&&civ.id==='mongolia'?1:0);
+const u={id:G.nextId++,type,civ:ci,x:tx,y:ty,hp:100,moves:mv,maxMoves:mv,xp:opts.xp||0,fort:0,dest:null,auto:false,order:null,acted:false,alive:true,ax:tx,ay:ty,skip:false};
+G.units.push(u);return u}
+function isMil(u){return !UNITS[u.type].civ}
+function unitsAt(x,y){return G.units.filter(u=>u.alive&&u.x===x&&u.y===y)}
+function canStack(type,ci,x,y){const us=unitsAt(x,y);if(us.some(u=>u.civ!==ci))return false;const civ=!!UNITS[type].civ;return !us.some(u=>(!!UNITS[u.type].civ)===civ)}
+function enemyAt(x,y,ci){const t=G.tiles[idx(x,y)];if(t.city>=0){const c=G.cities[t.city];if(c.civ!==ci&&atWar(ci,c.civ))return c}return unitsAt(x,y).find(u=>u.civ!==ci&&atWar(ci,u.civ))||null}
+function passable(x,y){const t=G.tiles[idx(x,y)];return !t.mtn&&!TERRAIN[t.t].water}
+function moveCost(u,fx,fy,tx,ty){const t=G.tiles[idx(tx,ty)],f=G.tiles[idx(fx,fy)];if(!passable(tx,ty))return 1e9;if(UNITS[u.type].cls==='recon')return 1;if(t.road&&f.road)return .5;let c=1;if(t.hill)c++;if(t.forest)c++;if(t.owner>=0&&t.owner!==u.civ&&G.wonders.greatwall===t.owner&&atWar(u.civ,t.owner))c++;return c}
+function atWar(a,b){if(a===b)return false;return G.rel[a][b].war}
+function allied(a,b){return a!==b&&G.rel[a][b].ally}
+function killUnit(u,byCiv){u.alive=false;if(byCiv!=null&&byCiv!==u.civ){const k=G.civs[byCiv];k.kills++;if(u.civ===G.player)G.stats.lost++;if(byCiv===G.player)G.stats.killed++;if(hasPol(k,'warriorcode'))k.cultureAcc+=Math.ceil(UNITS[u.type].str/4),k.cultureTotal+=Math.ceil(UNITS[u.type].str/4)}G.civs[u.civ].losses++;if(sel.unit===u)selectUnit(null)}
+
+// ============================ VISIBILITY ============================
+function updateVis(ci){const civ=G.civs[ci];const v=civ.vis;let unknown=0;if(ci===G.player)for(let i=0;i<v.length;i++)if(v[i]===0)unknown++;for(let i=0;i<v.length;i++)if(v[i]===2)v[i]=1;
+
+const rev=(x,y,R)=>{for(const [nx,ny] of within(x,y,R))v[idx(nx,ny)]=2};
+for(const u of G.units)if(u.alive&&u.civ===ci)rev(u.x,u.y,G.tiles[idx(u.x,u.y)].hill?3:2);
+for(const c of G.cities)if(c.civ===ci){rev(c.x,c.y,3);for(const ti of c.tiles)v[ti]=2}
+for(let j=0;j<G.civs.length;j++)if(j!==ci&&allied(ci,j)){const w=G.civs[j].vis;for(const u of G.units)if(u.alive&&u.civ===j)rev(u.x,u.y,2);for(const c of G.cities)if(c.civ===j)rev(c.x,c.y,2)}
+if(civ.techs.satellites)for(let i=0;i<v.length;i++)if(v[i]===0)v[i]=1;
+// meeting
+for(let i=0;i<G.W*G.H;i++)if(v[i]===2){const t=G.tiles[i];if(t.owner>=0&&t.owner!==ci)meet(ci,t.owner)}
+for(const u of G.units)if(u.alive&&u.civ!==ci&&v[idx(u.x,u.y)]===2)meet(ci,u.civ);
+if(ci===G.player){let u2=0;for(let i=0;i<v.length;i++)if(v[i]===0)u2++;if(u2!==unknown)dirtyMap()}}
+function meet(a,b){if(a===b||a===G.barb||b===G.barb)return;if(!G.rel[a][b].met){G.rel[a][b].met=G.rel[b][a].met=true;if(a===G.player||b===G.player){const o=G.civs[a===G.player?b:a];notify(`You have met ${o.def.leader} of ${o.def.name}!`,{civ:o.idx});toast(`Met ${o.def.name}`);SFX.meet()}}}
+const pvis=(x,y)=>G.civs[G.player].vis[idx(x,y)];
+
+// ============================ YIELDS ============================
+function resVisible(civ,res){const r=RES[res];return !r.tech||civ.techs[r.tech]}
+function tileYield(ti,civ,city){const t=G.tiles[ti];if(t.mtn)return{f:0,p:0,g:0,s:0,c:0};const y=rawYield(t);let f=y.f,p=y.p,g=y.g,s=0,c=0;
+if(t.res&&civ&&resVisible(civ,t.res)){const r=RES[t.res];f+=r.f||0;p+=r.p||0;g+=r.g||0}
+if(t.imp&&!t.pill){const I=IMPS[t.imp];f+=I.f||0;p+=I.p||0;g+=I.g||0;if(civ){if(t.imp==='farm'&&civ.techs.civilservice)f++;if(t.imp==='tradingpost'&&civ.techs.guilds)g++;if(t.imp==='mine'&&civ.techs.steel)p++}}
+if(TERRAIN[t.t].water&&city){if(city.b.lighthouse)f++;if(G.wonders.colossus===city.civ&&city.hasW&&city.hasW.colossus)g++}
+if(t.city>=0){f=Math.max(f,2);p=Math.max(p,1);g=Math.max(g,1)}
+return{f,p,g,s,c}}
+function hasPol(civ,id){return civ.policies.includes(id)}
+function cityYields(c){const civ=G.civs[c.civ];const capital=c.capital;let f=0,p=0,g=0,s=0,cu=0;
+const ct=tileYield(idx(c.x,c.y),civ,c);f+=ct.f;p+=ct.p;g+=ct.g;
+for(const ti of c.worked){const y=tileYield(ti,civ,c);f+=y.f;p+=y.p;g+=y.g}
+const unemployed=Math.max(0,c.pop-c.worked.length);p+=unemployed;
+s+=c.pop;cu+=1;g+=capital?3:0;s+=capital?3:0;
+let pPct=0,gPct=0,sPct=0,cPct=0,fPct=0;
+for(const b in c.b){const B=BLD[b];if(!B)continue;f+=B.f||0;p+=B.p||0;g+=B.g||0;s+=B.s||0;cu+=B.c||0;if(B.sPerPop)s+=Math.floor(c.pop*B.sPerPop);pPct+=B.pPct||0;gPct+=B.gPct||0;sPct+=B.sPct||0;cPct+=B.cPct||0}
+for(const w in c.hasW){const Wd=WONDERS[w];if(!Wd)continue;f+=Wd.f||0;p+=Wd.p||0;g+=Wd.g||0;s+=Wd.s||0;cu+=Wd.c||0;pPct+=Wd.pPct||0}
+if(civ.id==='rome')pPct+=15;if(civ.id==='greece')cPct+=25;if(civ.id==='england'){g+=2;sPct+=15}
+if(civ.techs.electricity)pPct+=10;
+if(hasPol(civ,'republic'))p+=1;if(hasPol(civ,'protectionism'))g+=2;if(hasPol(civ,'secularism'))s+=2;if(hasPol(civ,'freethought'))sPct+=15;if(hasPol(civ,'scientificrevolution'))s+=Math.floor(c.pop/2);
+if(capital){if(hasPol(civ,'landedelite')){f+=2;fPct+=25}if(hasPol(civ,'monarchy')){g+=Math.floor(c.pop/2);cu+=Math.floor(c.pop/2)}if(hasPol(civ,'tradeunions'))gPct+=25}
+if(G.wonders.sistinechapel===c.civ)cPct+=25;if(G.wonders.machupicchu===c.civ)gPct+=20;
+const D=DIFFS[G.diff];const ym=civ.ai?D.ay:D.py;
+p=Math.round(p*(1+pPct/100)*ym);g=Math.round(g*(1+gPct/100)*ym);s=Math.round(s*(1+sPct/100)*ym);cu=Math.round(cu*(1+cPct/100)*ym);
+const need=c.pop*2;let sur=f-need;if(sur>0)sur=Math.round(sur*(1+fPct/100)*ym);
+return{f,p,g,s,c:cu,sur,need,pPct}}
+function prodFor(c,y,build){let m=1;const civ=G.civs[c.civ];if(!build)return y.p;
+if(build.kind==='wonder'){if(civ.id==='egypt')m+=.25;if(hasPol(civ,'aristocracy'))m+=.15}
+if(build.kind==='unit'){const d=UNITS[build.id];if(!d.civ&&civ.id==='germany')m+=.2;if(build.id==='settler'&&hasPol(civ,'collectiverule'))m+=.5}
+return Math.round(y.p*m)}
+function foodNeed(pop){return Math.floor(15+8*pop+Math.pow(pop,1.5)*1.5)}
+function policyCost(n){return Math.floor(30+20*Math.pow(n,1.7))}
+function cultureCostTiles(n){return Math.floor(20+15*Math.pow(n,1.4))}
+function assignTiles(c){const civ=G.civs[c.civ];for(const ti of c.worked)G.tiles[ti].worked=-1;c.worked=[];
+const cand=c.tiles.filter(ti=>{const t=G.tiles[ti];return ti!==idx(c.x,c.y)&&(t.worked<0||t.worked===c.id)&&!t.mtn});
+let f=tileYield(idx(c.x,c.y),civ,c).f;for(let n=0;n<c.pop;n++){let best=null,bv=-1;for(const ti of cand){if(c.worked.includes(ti))continue;const y=tileYield(ti,civ,c);const need=c.pop*2;const fw=c.focus==='food'?4:(f-need<2?3:1.4),pw=c.focus==='prod'?4:1.8,gw=c.focus==='gold'?4:1,sw=1;const v=y.f*fw+y.p*pw+y.g*gw;if(v>bv){bv=v;best=ti}}if(best==null)break;c.worked.push(best);G.tiles[best].worked=c.id;f+=tileYield(best,civ,c).f}}
+function reassignAll(){for(const t of G.tiles)t.worked=-1;for(const c of G.cities)c.worked=[];for(const c of G.cities)assignTiles(c)}
+
+// ============================ CITIES ============================
+function canFound(x,y,ci){const t=G.tiles[idx(x,y)];if(!passable(x,y)||t.city>=0)return false;if(t.owner>=0&&t.owner!==ci)return false;for(const c of G.cities)if(hdist(c.x,c.y,x,y)<3)return false;return true}
+function foundCity(ci,x,y){const civ=G.civs[ci];const name=civ.names.shift()||('New '+civ.def.name+' '+G.cities.length);const first=!G.cities.some(c=>c.civ===ci);
+const c={id:G.cities.length,name,civ:ci,orig:ci,x,y,pop:1,food:0,prod:0,build:null,b:{},hasW:{},tiles:[],worked:[],cultureAcc:0,hp:200,maxhp:200,focus:'bal',capital:first,founded:G.turn,attackedTurn:-9,rangeUsed:false,bought:0};
+G.cities.push(c);const t=G.tiles[idx(x,y)];t.city=c.id;t.forest=0;if(t.res==='fish')t.res=null;
+for(const [nx,ny] of within(x,y,1)){const tt=G.tiles[idx(nx,ny)];if(tt.owner<0||tt.owner===ci&&tt.city<0&&!G.cities.some(o=>o.tiles.includes(idx(nx,ny)))){claim(c,idx(nx,ny))}}
+if(first){civ.capTile=idx(x,y);c.b.palace=1}
+assignTiles(c);if(ci===G.player){G.stats.citiesFounded++;notify(`${name} founded!`,{x,y});fxRing(x,y,civ.def.color);SFX.found();tut('found')}updateVis(ci);dirtyMap();return c}
+function claim(c,ti){const t=G.tiles[ti];if(t.owner>=0&&t.owner!==c.civ)return;if(t.owner===c.civ){const o=G.cities.find(o=>o.tiles.includes(ti));if(o&&o!==c)return}t.owner=c.civ;if(!c.tiles.includes(ti))c.tiles.push(ti)}
+function expandBorders(c){const owned=c.tiles.length;let best=null,bv=-1;const civ=G.civs[c.civ];
+for(const [nx,ny] of within(c.x,c.y,3)){const ti=idx(nx,ny);const t=G.tiles[ti];if(t.owner>=0)continue;if(!nbrs(nx,ny).some(([ax,ay])=>G.tiles[idx(ax,ay)].owner===c.civ))continue;const y=tileYield(ti,civ,c);const v=y.f*1.5+y.p+y.g*.6+(t.res?3:0)-hdist(c.x,c.y,nx,ny)*1.2+rng()*.5;if(v>bv){bv=v;best=ti}}
+if(best!=null){claim(c,best);c.cultureAcc-=cultureCostTiles(owned-6);assignTiles(c);dirtyMap();return true}return false}
+function cityStrength(c){const civ=G.civs[c.civ];let s=8+c.pop*1.3+(c.b.walls?6:0)+Object.keys(civ.techs).length*.6;if(G.wonders.greatwall===c.civ)s+=6;const gar=unitsAt(c.x,c.y).find(u=>isMil(u));if(gar)s+=effStr(gar,{def:true})*.35;return s}
+function buildableUnits(c){const civ=G.civs[c.civ];const out=[];for(const k in UNITS){const d=UNITS[k];if(d.uniq&&d.uniq!==civ.id)continue;if(!d.uniq&&CIVS.find(x=>x.id===civ.id)&&UNITS[CIVS.find(x=>x.id===civ.id).unique].rep===k)continue;if(d.tech&&!civ.techs[d.tech])continue;if(d.res&&!hasRes(civ,d.res))continue;if(obsolete(civ,k))continue;out.push(k)}return out}
+function obsolete(civ,k){let n=UPGRADE[k];if(!n)return false;if(n==='legion_or_swordsman')n='legion';const d=UNITS[n];if(!d)return false;if(d.uniq&&d.uniq!==civ.id)n=d.rep;const dd=UNITS[n];return dd&&(!dd.tech||civ.techs[dd.tech])&&(!dd.res||hasRes(civ,dd.res))}
+function hasRes(civ,res){for(const c of G.cities)if(c.civ===civ.idx)for(const ti of c.tiles){const t=G.tiles[ti];if(t.res===res&&t.imp===RES[res].imp&&!t.pill)return true}return false}
+function buildableBld(c){const civ=G.civs[c.civ];const out=[];for(const k in BLD){const B=BLD[k];if(c.b[k])continue;if(B.tech&&!civ.techs[B.tech])continue;if(B.coastal&&!isCoastal(c))continue;out.push(k)}return out}
+function buildableWonders(c){const civ=G.civs[c.civ];return Object.keys(WONDERS).filter(k=>G.wonders[k]==null&&civ.techs[WONDERS[k].tech])}
+function buildableProjects(c){const civ=G.civs[c.civ];return Object.keys(PROJECTS).filter(k=>{const P=PROJECTS[k];return !civ.projects[k]&&civ.techs[P.tech]&&(!P.req||civ.projects[P.req])&&!G.cities.some(o=>o.civ===c.civ&&o!==c&&o.build&&o.build.id===k)})}
+function isCoastal(c){return nbrs(c.x,c.y).some(([x,y])=>TERRAIN[G.tiles[idx(x,y)].t].water)}
+function buildCost(b){return b.kind==='unit'?UNITS[b.id].cost:b.kind==='bld'?BLD[b.id].cost:b.kind==='wonder'?WONDERS[b.id].cost:PROJECTS[b.id].cost}
+function buildName(b){return b.kind==='unit'?UNITS[b.id].name:b.kind==='bld'?BLD[b.id].name:b.kind==='wonder'?WONDERS[b.id].name:PROJECTS[b.id].name}
+function buyCost(c,b){const civ=G.civs[c.civ];const rem=Math.max(0,buildCost(b)-c.prod);let g=Math.round(rem*2.2+20);if(hasPol(civ,'mercantilism'))g=Math.round(g*.75);if(G.wonders.bigben===c.civ)g=Math.round(g*.75);return g}
+function completeBuild(c){const b=c.build;const civ=G.civs[c.civ];const cost=buildCost(b);c.prod=Math.max(0,c.prod-cost);const me=c.civ===G.player;
+if(b.kind==='unit'){const u=spawnUnit(b.id,c.civ,c.x,c.y,{xp:c.b.barracks?15:0});if(me){notify(`${c.name} trained a ${UNITS[b.id].name}`,{x:c.x,y:c.y});SFX.build()}}
+else if(b.kind==='bld'){c.b[b.id]=1;if(b.id==='walls')c.maxhp=260;if(me){notify(`${c.name} built a ${BLD[b.id].name}`,{x:c.x,y:c.y});SFX.build()}}
+else if(b.kind==='wonder'){if(G.wonders[b.id]!=null){civ.gold+=cost;if(me)notify(`${WONDERS[b.id].name} was already built elsewhere; production refunded as gold.`,{x:c.x,y:c.y})}else{G.wonders[b.id]=c.civ;c.hasW[b.id]=1;const W=WONDERS[b.id];if(W.free==='tech')grantFreeTech(civ);if(W.free==='policy')civ.freePolicies++;if(b.id==='tajmahal')civ.gold+=150;if(me)G.stats.wonders++;notify(`${civ.def.name} completed the ${W.name}!`,{x:c.x,y:c.y,civ:c.civ});if(me){toast(`🏛️ ${W.name} completed in ${c.name}!`);SFX.wonder();fxRing(c.x,c.y,'#ffd700')}
+for(const o of G.cities)if(o!==c&&o.build&&o.build.kind==='wonder'&&o.build.id===b.id){o.build=null;if(o.civ===G.player)notify(`${o.name} can no longer build ${W.name}`,{x:o.x,y:o.y})}}}
+else if(b.kind==='project'){civ.projects[b.id]=1;if(me){notify(`${PROJECTS[b.id].name} completed!`,{x:c.x,y:c.y});toast(`🚀 ${PROJECTS[b.id].name} complete`);SFX.wonder()}else notify(`${civ.def.name} completed the ${PROJECTS[b.id].name}!`,{civ:c.civ})}
+if(b.kind==='unit'&&civ.ai){c.build=null}else if(b.kind==='unit'&&b.repeat){}else c.build=null;}
+function grantFreeTech(civ){const av=availableTechs(civ);if(!av.length)return;av.sort((a,b)=>TECHS[b].cost-TECHS[a].cost);const t=av[0];civ.techs[t]=1;if(civ.research===t){civ.research=null;civ.rp=0}if(civ.idx===G.player){notify(`Free technology: ${TECHS[t].name}!`);G.stats.techs++;dirtyMap()}}
+function availableTechs(civ){return Object.keys(TECHS).filter(k=>!civ.techs[k]&&TECHS[k].pre.every(p=>civ.techs[p]))}
+function techPath(civ,goal){const out=[];const visit=k=>{if(civ.techs[k]||out.includes(k))return;for(const p of TECHS[k].pre)visit(p);out.push(k)};visit(goal);return out}
+function techCost(civ,k){const n=G.cities.filter(c=>c.civ===civ.idx).length;return Math.floor(TECHS[k].cost*(1+Math.max(0,n-1)*.04))}
+function civEra(civ){let e=0;for(const k in civ.techs)e=Math.max(e,TECHS[k]?TECHS[k].era:0);const cnt=Object.keys(civ.techs).filter(k=>TECHS[k]&&TECHS[k].era===e).length;return e}
+function empireYields(ci){let g=0,s=0,c=0;const civ=G.civs[ci];for(const ct of G.cities)if(ct.civ===ci){const y=cityYields(ct);g+=y.g;s+=y.s;c+=y.c}
+const cities=G.cities.filter(x=>x.civ===ci);let maint=0;for(const ct of cities)for(const b in ct.b)maint+=(BLD[b]?BLD[b].maint:0);
+let units=G.units.filter(u=>u.alive&&u.civ===ci);let um=0;units.forEach((u,i)=>{if(i>=3)um+=Math.max(1,Math.ceil(UNITS[u.type].cost/120))});if(civ.id==='germany')um=Math.round(um*.75);
+if(civ.raTurns>0)s=Math.round(s*1.25);
+return{g,s,c,maint,um,net:g-maint-um}}
+function civScore(ci){const civ=G.civs[ci];let s=0;for(const c of G.cities)if(c.civ===ci){s+=c.pop*3+c.tiles.length;s+=Object.keys(c.hasW).length*25}s+=Object.keys(civ.techs).length*4+civ.policies.length*10+Math.floor(civ.gold/50);return s}
+
+// ============================ TURN: ECONOMY ============================
+function processCivEconomy(ci){const civ=G.civs[ci];if(!civ.alive||civ.barb)return;const me=ci===G.player;
+const cities=G.cities.filter(c=>c.civ===ci);
+let totalS=0,totalC=0;
+for(const c of cities){const y=cityYields(c);c.y=y;c.y_=y;totalS+=y.s;totalC+=y.c;
+// growth
+c.food+=y.sur;const need=foodNeed(c.pop);if(c.food>=need){c.pop++;c.food=Math.floor(c.b.aqueduct?need*.4:0);assignTiles(c);if(me){notify(`${c.name} has grown to ${c.pop}`,{x:c.x,y:c.y});tut('grow')}}else if(c.food<0){if(c.pop>1){c.pop--;assignTiles(c);if(me)notify(`${c.name} is starving! Pop decreased.`,{x:c.x,y:c.y,bad:1})}c.food=0}
+// production
+if(c.build){c.prod+=prodFor(c,y,c.build);if(c.prod>=buildCost(c.build))completeBuild(c)}else{c.prod+=Math.floor(y.p*.5);civ.gold+=Math.floor(y.p*.5)}
+// borders
+c.cultureAcc+=y.c;if(c.tiles.length<37&&c.cultureAcc>=cultureCostTiles(c.tiles.length-6))expandBorders(c);
+// heal
+if(G.turn-c.attackedTurn>1)c.hp=Math.min(c.maxhp,c.hp+20);c.rangeUsed=false;}
+// gold
+const ey=empireYields(ci);civ.gold+=ey.net;if(me&&ey.net>0)G.stats.goldEarned+=ey.net;
+if(civ.gold<0){civ.gold=0;const mil=G.units.filter(u=>u.alive&&u.civ===ci&&isMil(u));if(mil.length>2){const u=mil[mil.length-1];killUnit(u,null);if(me)notify(`Bankrupt! ${UNITS[u.type].name} disbanded.`,{bad:1})}}
+// science
+if(civ.raTurns>0)civ.raTurns--;
+civ.sciTotal+=ey.s;
+if(civ.research){civ.rp+=ey.s;const cost=techCost(civ,civ.research);if(civ.rp>=cost){const t=civ.research;civ.techs[t]=1;civ.rp-=cost;civ.research=null;if(me){G.stats.techs++;notify(`Research complete: ${TECHS[t].name}`);toast(`🔬 ${TECHS[t].name} discovered! Unlocks: ${TECHS[t].u}`);SFX.tech();dirtyMap();tut('tech');checkEraChange(civ)}
+if(civ.goal&&civ.goal!==t){const p=techPath(civ,civ.goal);civ.research=p[0]||null;if(!civ.research)civ.goal=null}else civ.goal=null;
+if(civ.ai&&!civ.research)pickResearchAI(civ)}}else if(civ.ai)pickResearchAI(civ);
+// culture
+civ.cultureAcc+=ey.c;civ.cultureTotal+=ey.c;
+if(me&&canAdoptPolicy(civ)&&!G.tut.polNote){notify('You can adopt a new Social Policy!',{open:'policies'});G.tut.polNote=1;tut('policy')}
+if(civ.ai)aiPolicies(civ);
+// science victory check
+if(civ.projects.ssbooster&&civ.projects.sscockpit&&civ.projects.ssengine)endGame(ci,'science');
+if(civ.policies.length>=CULTURE_WIN)endGame(ci,'culture');}
+function checkEraChange(civ){const e=civEra(civ);if(civ.lastEra==null)civ.lastEra=0;if(e>civ.lastEra){civ.lastEra=e;toast(`✨ You have entered the ${ERAS[e]} Era`);Music.setEra(e)}}
+function canAdoptPolicy(civ){return civ.freePolicies>0||civ.cultureAcc>=policyCost(civ.policies.length)}
+function policyAvailable(civ,p){if(civ.policies.includes(p.id))return false;const tree=POLICIES.filter(q=>q.tree===p.tree);const i=tree.indexOf(p);for(let k=0;k<i;k++)if(!civ.policies.includes(tree[k].id))return false;return true}
+function adoptPolicy(civ,p){if(!canAdoptPolicy(civ)||!policyAvailable(civ,p))return false;if(civ.freePolicies>0)civ.freePolicies--;else civ.cultureAcc-=policyCost(civ.policies.length);civ.policies.push(p.id);
+if(p.id==='citizenship'){const cap=G.cities.find(c=>c.civ===civ.idx&&c.capital)||G.cities.find(c=>c.civ===civ.idx);if(cap)spawnUnit('worker',civ.idx,cap.x,cap.y)}
+if(civ.idx===G.player){G.tut.polNote=0;SFX.policy();toast(`📜 Adopted ${p.name}`)}return true}
+function pickResearchAI(civ){const av=availableTechs(civ);if(!av.length){civ.research=null;return}const pr=civ.def.pers||{war:.5,sci:.5,cul:.5};
+const w=av.map(k=>{let v=1/Math.sqrt(TECHS[k].cost);const u=TECHS[k].u.toLowerCase();if(/man|archer|knight|cannon|tank|rifle|cavalry|artillery|infantry|catapult|musket/.test(u))v*=1+pr.war;if(/library|university|school|observatory|lab/.test(u))v*=1+pr.sci;if(/temple|culture|museum|chapel|dame|eiffel/.test(u))v*=1+pr.cul;if(/apollo|ss |research lab/.test(u))v*=1+pr.sci*2;return v});
+let tot=w.reduce((a,b)=>a+b,0),r=rng()*tot;for(let i=0;i<av.length;i++){r-=w[i];if(r<=0){civ.research=av[i];return}}civ.research=av[0]}
+// ============================ PATHFINDING & MOVEMENT ============================
+const sel={unit:null,city:null};
+function findPath(u,tx,ty,opts={}){if(!inB(tx,ty)||!passable(tx,ty))return null;const start=idx(u.x,u.y),goal=idx(tx,ty);if(start===goal)return[];
+const gS=new Map([[start,0]]),from=new Map(),closed=new Set();let open=[{i:start,g:0,f:hdist(u.x,u.y,tx,ty)}];let n=0;
+while(open.length&&n++<6000){let bi=0;for(let k=1;k<open.length;k++)if(open[k].f<open[bi].f)bi=k;const cur=open.splice(bi,1)[0];if(cur.i===goal){const p=[];let i=goal;while(i!==start){p.push([i%G.W,(i/G.W)|0]);i=from.get(i)}return p.reverse()}
+if(closed.has(cur.i))continue;closed.add(cur.i);const cx=cur.i%G.W,cy=(cur.i/G.W)|0;
+for(const [nx,ny] of nbrs(cx,cy)){const ni=idx(nx,ny);if(closed.has(ni))continue;const cost=moveCost(u,cx,cy,nx,ny);if(cost>=1e9)continue;
+if(ni!==goal){const t=G.tiles[ni];if(t.city>=0&&G.cities[t.city].civ!==u.civ)continue;if(unitsAt(nx,ny).some(v=>v.civ!==u.civ))continue}
+else{const en=enemyAt(nx,ny,u.civ);if(en&&!opts.attack)continue;if(!en&&unitsAt(nx,ny).some(v=>v.civ!==u.civ))continue;const t=G.tiles[ni];if(t.city>=0&&G.cities[t.city].civ!==u.civ&&!atWar(u.civ,G.cities[t.city].civ))continue}
+const ng=cur.g+cost;if(ng<(gS.get(ni)??Infinity)){gS.set(ni,ng);from.set(ni,cur.i);open.push({i:ni,g:ng,f:ng+hdist(nx,ny,tx,ty)})}}}
+return null}
+function pathTurns(u,path){let mv=u.moves,t=mv>0?1:0,x=u.x,y=u.y;if(mv<=0){mv=u.maxMoves;t=1}for(const [nx,ny] of path){if(mv<=0){t++;mv=u.maxMoves}mv-=moveCost(u,x,y,nx,ny);x=nx;y=ny}return Math.max(1,t)}
+function moveUnit(u,path){if(!path||!path.length)return;let lastValid=[u.x,u.y];const me=u.civ===G.player;let i=0;
+for(;i<path.length;i++){const [x,y]=path[i];if(u.moves<=0)break;const en=enemyAt(x,y,u.civ);const us=unitsAt(x,y);
+if(en){const civs=us.filter(v=>v.civ!==u.civ);if(en.pop!=null||civs.some(isMil)||!isMil(u))break;for(const v of civs)captureCivilian(v,u.civ)}
+else if(us.some(v=>v.civ!==u.civ))break;
+const cost=moveCost(u,u.x,u.y,x,y);if(cost>=1e9)break;const t=G.tiles[idx(x,y)];if(t.city>=0&&G.cities[t.city].civ!==u.civ&&!atWar(u.civ,G.cities[t.city].civ))break;
+u.x=x;u.y=y;u.moves=Math.max(0,u.moves-cost);u.acted=true;u.fort=0;u.sleep=false;
+if(canStack(u.type,u.civ,x,y))lastValid=[x,y];
+if(t.camp&&isMil(u)&&u.civ!==G.barb){t.camp=0;G.civs[u.civ].gold+=40;if(me){G.stats.barbCamps++;notify('Barbarian camp destroyed! +40 Gold',{x,y});toast('⚔️ Barbarian camp cleared! +40 Gold');SFX.coin()}dirtyMap()}
+if(me)updateVis(u.civ)}
+if(!canStack(u.type,u.civ,u.x,u.y)){u.x=lastValid[0];u.y=lastValid[1]}
+if(i<path.length&&u.moves<=0){const e=path[path.length-1];u.dest={x:e[0],y:e[1]}}else u.dest=null;
+if(me){SFX.move();updateVis(u.civ)}}
+function captureCivilian(v,ci){v.civ=ci;if(v.type==='settler')v.type='worker';v.moves=0;v.dest=null;v.order=null;v.auto=false;if(ci===G.player){notify(`Captured a ${UNITS[v.type].name}!`,{x:v.x,y:v.y});SFX.coin()}}
+function goTo(u,x,y,opts){const p=findPath(u,x,y,opts||{attack:true});if(p){moveUnit(u,p);return true}return false}
+
+// ============================ COMBAT ============================
+function effStr(u,o={}){const d=UNITS[u.type];let s=(o.atk&&d.range&&o.ranged)?d.rstr:d.str;if(d.range&&o.def)s=d.str;let m=1;const civ=G.civs[u.civ];
+m*=.5+.5*u.hp/100;
+if(o.def){const t=G.tiles[idx(u.x,u.y)];if(t.hill||t.forest)m+=.25;m+=Math.min(2,u.fort)*.125;if(u.type==='redcoat')m+=.25}
+if(u.xp>=60)m+=.3;else if(u.xp>=30)m+=.2;else if(u.xp>=10)m+=.1;
+if(hasPol(civ,'discipline'))m+=.15;
+const tgt=o.target;if(tgt){const tc=tgt.civ!=null?tgt.civ:-1;if(tc===G.barb){if(civ.id==='mongolia')m+=.3;if(hasPol(civ,'warriorcode'))m+=.25}if(d.vsMounted&&tgt.type&&UNITS[tgt.type].cls==='mounted')m+=d.vsMounted/100}
+if(o.vsCity&&d.cls==='siege')m+=.5;
+if(u.civ===G.barb)m*=DIFFS[G.diff].barb>1?1.1:(DIFFS[G.diff].barb<1?.85:1);
+return s*m}
+function combatDmg(a,d){const r=a/Math.max(1,d);return clamp(Math.round(30*Math.pow(r,1.4)*(.8+.4*rng())),3,100)}
+function attack(u,tx,ty){const d=UNITS[u.type];if(!isMil(u)||u.moves<=0||u.attacked)return false;const dist=hdist(u.x,u.y,tx,ty);const ranged=!!d.range;if(ranged?dist>d.range:dist!==1)return false;
+const t=G.tiles[idx(tx,ty)];let city=t.city>=0?G.cities[t.city]:null;if(city&&!atWar(u.civ,city.civ))city=null;const def=unitsAt(tx,ty).filter(v=>atWar(u.civ,v.civ));const mil=def.find(isMil);const me=u.civ===G.player;const vis=pvis(tx,ty)===2||pvis(u.x,u.y)===2;
+let killed=false;
+if(city){const aS=effStr(u,{atk:true,ranged,vsCity:true}),dS=cityStrength(city);const dmg=combatDmg(aS,dS);const back=ranged?0:Math.round(combatDmg(dS,aS)*.6);
+city.hp-=dmg;city.attackedTurn=G.turn;u.hp-=back;u.xp+=3;if(vis){fxHit(tx,ty,dmg,'#ff6');if(back)fxHit(u.x,u.y,back,'#f66');shake(4);SFX.hit()}
+if(city.civ===G.player&&!G.tut.attacked){G.tut.attacked=1;notify(`${city.name} is under attack!`,{x:tx,y:ty,bad:1})}
+if(city.hp<=0){city.hp=0;if(!ranged&&u.hp>0&&u.civ!==G.barb){captureCity(city,u.civ);u.x=tx;u.y=ty;for(const v of unitsAt(tx,ty))if(v.civ!==u.civ){if(isMil(v))killUnit(v,u.civ);else captureCivilian(v,u.civ)}}}
+if(u.hp<=0)killUnit(u,city.civ)}
+else if(mil){const aS=effStr(u,{atk:true,ranged,target:mil}),dS=effStr(mil,{def:true,target:u});const dmg=combatDmg(aS,dS);const back=ranged?0:Math.round(combatDmg(dS,aS)*.7);
+mil.hp-=dmg;u.hp-=back;u.xp+=hasPol(G.civs[u.civ],'militarytradition')?8:5;mil.xp+=3;mil.fort=0;
+if(vis){fxHit(tx,ty,dmg,'#ff6');if(back)fxHit(u.x,u.y,back,'#f66');shake(ranged?3:5);SFX.hit()}
+if(mil.hp<=0){killed=true;killUnit(mil,u.civ);if(vis){fxBurst(tx,ty,'#f44');SFX.die()}if(mil.civ===G.player)notify(`Your ${UNITS[mil.type].name} was killed by ${G.civs[u.civ].def.name}`,{x:tx,y:ty,bad:1});if(me)notify(`Killed a ${G.civs[mil.civ].def.name} ${UNITS[mil.type].name}`,{x:tx,y:ty});
+if(!ranged&&u.hp>0){u.x=tx;u.y=ty;for(const v of unitsAt(tx,ty))if(v.civ!==u.civ)captureCivilian(v,u.civ);if(t.camp&&u.civ!==G.barb){t.camp=0;G.civs[u.civ].gold+=40;if(me){G.stats.barbCamps++;toast('⚔️ Barbarian camp cleared! +40 Gold')}dirtyMap()}}}
+if(u.hp<=0){killUnit(u,mil.civ);if(vis){fxBurst(u.x,u.y,'#f44');SFX.die()}if(me)notify(`Your ${UNITS[u.type].name} died attacking`,{x:u.x,y:u.y,bad:1})}}
+else if(def.length){if(ranged)return false;for(const v of def)captureCivilian(v,u.civ);u.x=tx;u.y=ty}
+else return false;
+if(u.alive){u.moves=ranged?u.moves-1:0;u.attacked=true;u.acted=true;u.fort=0;u.sleep=false;u.dest=null;if(u.moves<0)u.moves=0}
+if(me){updateVis(u.civ);tut('combat')}return true}
+function captureCity(city,ci){const old=city.civ,oc=G.civs[old];const nc=G.civs[ci];
+for(const ti of city.tiles){const t=G.tiles[ti];t.owner=ci;t.worked=-1}
+city.civ=ci;city.pop=Math.max(1,city.pop-1);city.hp=Math.floor(city.maxhp*.4);city.build=null;city.worked=[];city.prod=0;city.food=0;delete city.b.palace;
+for(const w in city.hasW)G.wonders[w]=ci;
+const wasCap=city.capital;city.capital=false;
+if(wasCap){const rest=G.cities.filter(c=>c.civ===old);if(rest.length){rest.sort((a,b)=>b.pop-a.pop);rest[0].capital=true;rest[0].b.palace=1}}
+assignTiles(city);G.rel[old][ci].att-=30;
+notify(`${nc.def.name} captured ${city.name} from ${oc.def.name}!`,{x:city.x,y:city.y,civ:ci,bad:old===G.player});
+if(ci===G.player){G.stats.citiesCaptured++;toast(`🏰 ${city.name} captured!`);SFX.capture();fxRing(city.x,city.y,nc.def.color)}else if(old===G.player){toast(`${city.name} has fallen!`,true);SFX.war()}
+for(let k=0;k<G.civs.length;k++)if(k!==ci&&k!==G.barb&&k!==old)G.rel[k][ci].att-=8;
+if(!G.cities.some(c=>c.civ===old))eliminateCiv(old);
+updateVis(ci);updateVis(old);dirtyMap()}
+function eliminateCiv(ci){const civ=G.civs[ci];civ.alive=false;for(const u of G.units)if(u.alive&&u.civ===ci)u.alive=false;for(let k=0;k<G.civs.length;k++){G.rel[ci][k].war=false;G.rel[k][ci].war=false;G.rel[ci][k].ally=G.rel[k][ci].ally=false}
+notify(`${civ.def.name} has been destroyed!`,{civ:ci});if(ci!==G.player){toast(`💀 ${civ.def.name} has been eliminated`);}}
+function cityBombard(c){if(c.rangeUsed)return;const tg=[];for(const [x,y] of within(c.x,c.y,2)){for(const u of unitsAt(x,y))if(isMil(u)&&atWar(c.civ,u.civ))tg.push(u)}if(!tg.length)return;
+tg.sort((a,b)=>a.hp-b.hp);const u=tg[0];const dmg=Math.round(combatDmg(cityStrength(c)*.7,effStr(u,{def:true}))*.8);u.hp-=dmg;c.rangeUsed=true;if(pvis(u.x,u.y)===2){fxHit(u.x,u.y,dmg,'#ff6');SFX.hit()}
+if(u.hp<=0){killUnit(u,c.civ);if(pvis(u.x,u.y)===2)fxBurst(u.x,u.y,'#f44');if(u.civ===G.player)notify(`Your ${UNITS[u.type].name} was destroyed by ${c.name}'s defenses`,{x:u.x,y:u.y,bad:1})}}
+function pillage(u){const t=G.tiles[idx(u.x,u.y)];if(!isMil(u)||u.moves<=0)return false;if(!(t.owner>=0&&atWar(u.civ,t.owner)))return false;if(!((t.imp&&!t.pill)||t.road))return false;
+if(t.imp&&!t.pill)t.pill=1;else t.road=0;u.moves=Math.max(0,u.moves-1);u.hp=Math.min(100,u.hp+25);G.civs[u.civ].gold+=15;u.acted=true;
+if(t.owner===G.player)notify(`${G.civs[u.civ].def.name} pillaged your ${t.imp?IMPS[t.imp].name:'road'}!`,{x:u.x,y:u.y,bad:1});if(u.civ===G.player){SFX.coin();fxBurst(u.x,u.y,'#fa0')}dirtyMap();return true}
+function canUpgrade(u){let n=UPGRADE[u.type];if(!n)return null;if(n==='legion_or_swordsman')n='swordsman';const civ=G.civs[u.civ];n=civUnitType(civ,n);const d=UNITS[n];if(!d)return null;if(d.tech&&!civ.techs[d.tech])return null;if(d.res&&!hasRes(civ,d.res))return null;const t=G.tiles[idx(u.x,u.y)];if(t.owner!==u.civ)return null;const cost=Math.round((d.cost-UNITS[u.type].cost)*1.5+30);return{to:n,cost}}
+function upgradeUnit(u){const up=canUpgrade(u);const civ=G.civs[u.civ];if(!up||civ.gold<up.cost||u.moves<=0)return false;civ.gold-=up.cost;u.type=up.to;u.maxMoves=UNITS[up.to].move+(UNITS[up.to].cls==='mounted'&&civ.id==='mongolia'?1:0);u.moves=0;u.acted=true;if(u.civ===G.player){SFX.build();fxRing(u.x,u.y,'#9cf')}return true}
+
+// ============================ WORKERS ============================
+function desiredImp(t,civ,ti){if(t.mtn||TERRAIN[t.t].water||t.city>=0)return null;
+if(t.res&&resVisible(civ,t.res)){const im=RES[t.res].imp;if(im&&civ.techs[IMPS[im].tech])return im}
+if(t.hill)return civ.techs.mining?'mine':null;
+if(t.forest)return null;
+if(t.t==='grass'||t.t==='plains'){if(civ.techs.currency&&(ti%4===0||t.t==='plains'&&ti%2===0)&&civ.techs.agriculture)return'tradingpost';return civ.techs.agriculture?'farm':null}
+if(t.t==='desert'||t.t==='tundra')return civ.techs.currency?'tradingpost':null;return null}
+function canBuildImp(u,imp){const t=G.tiles[idx(u.x,u.y)];const civ=G.civs[u.civ];if(t.owner>=0&&t.owner!==u.civ)return false;if(TERRAIN[t.t].water||t.mtn||t.city>=0)return false;
+if(imp==='road')return civ.techs.thewheel&&!t.road;const I=IMPS[imp];if(!I||!civ.techs[I.tech])return false;if(t.imp===imp&&!t.pill)return false;
+if(I.resOnly)return t.res&&RES[t.res].imp===imp&&resVisible(civ,t.res);
+if(imp==='mine')return t.hill||(t.res&&RES[t.res].imp==='mine');
+if(imp==='farm')return !t.hill&&['grass','plains','desert','tundra'].includes(t.t)&&(t.t!=='desert'||t.res==='wheat'||true)&&(!t.res||RES[t.res].imp==='farm'||!RES[t.res].imp);
+if(imp==='tradingpost')return !t.res||!RES[t.res].imp;return false}
+function workerOptions(u){return Object.keys(IMPS).concat(['road']).filter(k=>canBuildImp(u,k))}
+function startImprove(u,imp){if(!canBuildImp(u,imp))return false;const civ=G.civs[u.civ];let turns=imp==='road'?2:IMPS[imp].turns;let m=1;if(G.wonders.pyramids===u.civ)m*=.67;if(hasPol(civ,'citizenship'))m*=.8;turns=Math.max(1,Math.round(turns*m));
+const t=G.tiles[idx(u.x,u.y)];if(t.imp&&t.pill&&t.imp===imp)turns=1;u.order={imp,turns,ti:idx(u.x,u.y)};u.moves=0;u.acted=true;u.dest=null;return true}
+function progressOrder(u){if(!u.order)return;const t=G.tiles[u.order.ti];if(idx(u.x,u.y)!==u.order.ti||(t.owner>=0&&t.owner!==u.civ)){u.order=null;return}
+u.order.turns--;u.moves=0;if(u.order.turns<=0){const imp=u.order.imp;if(imp==='road')t.road=1;else{t.imp=imp;t.pill=0;if(imp==='farm'||imp==='tradingpost'||imp==='pasture')t.forest=0}u.order=null;dirtyMap();if(u.civ===G.player){SFX.build();fxRing(u.x,u.y,'#9f9',.5);if(!G.tut.imp){G.tut.imp=1;notify(`${imp==='road'?'Road':IMPS[imp].name} completed`,{x:u.x,y:u.y})}}
+const c=G.cities.find(c=>c.tiles.includes(u.order?u.order.ti:idx(u.x,u.y)));if(c)assignTiles(c)}}
+function findWorkerTask(u){const civ=G.civs[u.civ];let best=null,bv=-1;for(const c of G.cities){if(c.civ!==u.civ)continue;const dc=hdist(u.x,u.y,c.x,c.y);if(dc>12)continue;for(const ti of c.tiles){const t=G.tiles[ti];const want=desiredImp(t,civ,ti);if(!want)continue;if(t.imp===want&&!t.pill)continue;const x=ti%G.W,y=(ti/G.W)|0;if(unitsAt(x,y).some(v=>v.civ!==u.civ&&isMil(v)))continue;if(G.units.some(v=>v.alive&&v!==u&&v.civ===u.civ&&v.order&&v.order.ti===ti))continue;
+let v=10-hdist(u.x,u.y,x,y)+(c.worked.includes(ti)?6:0)+(t.res?4:0)+(t.pill?5:0)+(c.capital?1:0);if(v>bv){bv=v;best={ti,x,y,imp:want}}}}
+return best}
+function dangerNear(u,R=2){for(const [x,y] of within(u.x,u.y,R))for(const v of unitsAt(x,y))if(isMil(v)&&atWar(u.civ,v.civ))return true;return false}
+function nearestOwnCity(u){let b=null,bd=1e9;for(const c of G.cities)if(c.civ===u.civ){const d=hdist(u.x,u.y,c.x,c.y);if(d<bd){bd=d;b=c}}return b}
+function aiWorker(u){if(u.order)return;if(dangerNear(u)){const c=nearestOwnCity(u);if(c)goTo(u,c.x,c.y,{});return}
+const task=findWorkerTask(u);if(!task){if(u.civ!==G.player){const c=nearestOwnCity(u);if(c&&(c.x!==u.x||c.y!==u.y))goTo(u,c.x,c.y,{})}u.skip=true;return}
+if(task.ti===idx(u.x,u.y)){startImprove(u,task.imp)}else{goTo(u,task.x,task.y,{});if(u.x===task.x&&u.y===task.y&&u.moves>0)startImprove(u,task.imp)}}
+
+// ============================ AI ============================
+function siteScore(x,y,civ){let s=0;let land=0;for(const [nx,ny] of within(x,y,2)){const t=G.tiles[idx(nx,ny)];if(t.owner>=0&&t.owner!==civ.idx)s-=3;const yl=rawYield(t);const w=hdist(x,y,nx,ny)===1?1.2:1;s+=(yl.f*1.4+yl.p+yl.g*.5)*w;if(t.res)s+=2.5;if(!TERRAIN[t.t].water)land++;if(t.t==='coast')s+=.6}
+const ct=G.tiles[idx(x,y)];if(ct.hill)s+=2;if(ct.res)s+=1;if(land<8)s-=10;return s}
+function bestSite(u){const civ=G.civs[u.civ];let best=null,bv=-1;const cap=G.cities.find(c=>c.civ===u.civ);const ox=cap?cap.x:u.x,oy=cap?cap.y:u.y;
+for(const [x,y] of within(u.x,u.y,10)){const ti=idx(x,y);const t=G.tiles[ti];if(civ.vis[ti]===0||!t.main||t.t==='snow'||!canFound(x,y,u.civ))continue;const dc=hdist(ox,oy,x,y);if(cap&&dc>11)continue;let v=siteScore(x,y,civ)-hdist(u.x,u.y,x,y)*.9;if(G.cities.some(c=>c.civ!==u.civ&&hdist(c.x,c.y,x,y)<5))v-=8;let mind=99;for(const c of G.cities)if(c.civ===u.civ)mind=Math.min(mind,hdist(c.x,c.y,x,y));if(mind>=4&&mind<=6)v+=3;if(v>bv){bv=v;best={x,y}}}return best}
+function aiSettler(u){const civ=G.civs[u.civ];if(dangerNear(u,2)){const c=nearestOwnCity(u);if(c&&(c.x!==u.x||c.y!==u.y)){goTo(u,c.x,c.y,{});return}}
+const noCity=!G.cities.some(c=>c.civ===u.civ);
+if(noCity&&canFound(u.x,u.y,u.civ)&&(G.turn>2||siteScore(u.x,u.y,civ)>=siteScore(u.x,u.y,civ)-1)){foundCity(u.civ,u.x,u.y);u.alive=false;return}
+if(u.target&&u.target.x===u.x&&u.target.y===u.y&&canFound(u.x,u.y,u.civ)){foundCity(u.civ,u.x,u.y);u.alive=false;return}
+if(!u.target||!canFound(u.target.x,u.target.y,u.civ)||(u.wait||0)>8)u.target=bestSite(u),u.wait=0;
+if(!u.target){if(canFound(u.x,u.y,u.civ)){foundCity(u.civ,u.x,u.y);u.alive=false}else wander(u);return}
+const px=u.x,py=u.y;goTo(u,u.target.x,u.target.y,{});if(u.x===px&&u.y===py)u.wait=(u.wait||0)+1;
+if(u.x===u.target.x&&u.y===u.target.y&&canFound(u.x,u.y,u.civ)){foundCity(u.civ,u.x,u.y);u.alive=false}}
+function wander(u){const opts=nbrs(u.x,u.y).filter(([x,y])=>passable(x,y)&&!unitsAt(x,y).length&&!(G.tiles[idx(x,y)].city>=0));if(opts.length){const [x,y]=pick(opts);moveUnit(u,[[x,y]])}}
+function aiExplore(u){const civ=G.civs[u.civ];let best=null,bd=1e9;for(const [x,y] of within(u.x,u.y,9)){const ti=idx(x,y);if(civ.vis[ti]!==0||!passable(x,y))continue;const d=hdist(u.x,u.y,x,y);if(d<bd){bd=d;best=[x,y]}}
+if(best){if(!goTo(u,best[0],best[1],{}))wander(u);if(u.moves>0&&!u.acted)wander(u);return true}
+if(u.civ!==G.player)aiMilitary(u);else{u.skip=true;u.auto=false;toast('Nothing left to explore nearby')}return false}
+function bestAttackTarget(u){const d=UNITS[u.type];const R=d.range||1;let best=null,bv=-1e9;for(const [x,y] of within(u.x,u.y,R)){if(x===u.x&&y===u.y)continue;const t=G.tiles[idx(x,y)];const ranged=!!d.range;
+if(t.city>=0){const c=G.cities[t.city];if(atWar(u.civ,c.civ)){if(c.hp<=0&&ranged)continue;const aS=effStr(u,{atk:true,ranged,vsCity:true}),dS=cityStrength(c);const dmg=30*Math.pow(aS/Math.max(1,dS),1.4);const back=ranged?0:30*Math.pow(dS/Math.max(1,aS),1.4)*.6;let v=dmg*1.2-back+(c.hp-dmg<=0?(ranged?10:200):0);if(!ranged&&back>=u.hp&&c.hp-dmg>0)v-=500;if(v>bv){bv=v;best={x,y,v}}}continue}
+const mil=unitsAt(x,y).find(v=>isMil(v)&&atWar(u.civ,v.civ));const civs=unitsAt(x,y).filter(v=>!isMil(v)&&atWar(u.civ,v.civ));
+if(mil){const aS=effStr(u,{atk:true,ranged,target:mil}),dS=effStr(mil,{def:true,target:u});const dmg=30*Math.pow(aS/Math.max(1,dS),1.4);const back=ranged?0:30*Math.pow(dS/Math.max(1,aS),1.4)*.7;let v=dmg-back*.8+(mil.hp-dmg<=0?60:0)+(mil.civ===G.barb?0:10);if(!ranged&&back>=u.hp)v-=400;if(v>bv){bv=v;best={x,y,v}}}
+else if(civs.length&&!ranged){if(50>bv){bv=50;best={x,y,v:50}}}}
+return best&&best.v>-20?best:null}
+function milPower(ci){let p=0;for(const u of G.units)if(u.alive&&u.civ===ci&&isMil(u))p+=UNITS[u.type].str+(UNITS[u.type].rstr||0)*.6;return p}
+function aiMilitary(u){const civ=G.civs[u.civ];const d=UNITS[u.type];const ranged=!!d.range;const barb=u.civ===G.barb;
+let tg=bestAttackTarget(u);if(tg){attack(u,tg.x,tg.y);if(!u.alive||u.moves<=0)return}
+const here=G.tiles[idx(u.x,u.y)];const inCity=here.city>=0&&G.cities[here.city].civ===u.civ?G.cities[here.city]:null;
+if(!barb&&u.hp<45){if(inCity){u.sleep=true;return}const c=nearestOwnCity(u);if(c){goTo(u,c.x,c.y,{});return}}
+// threats near own cities
+let threat=null,td=1e9;for(const c of G.cities){if(c.civ!==u.civ)continue;for(const [x,y] of within(c.x,c.y,4))for(const v of unitsAt(x,y))if(isMil(v)&&atWar(u.civ,v.civ)&&civ.vis[idx(x,y)]){const dd=hdist(u.x,u.y,x,y);if(dd<td){td=dd;threat=v}}}
+if(threat&&td<=8){const gar=unitsAt(u.x,u.y).filter(isMil);if(inCity&&gar.length===1&&ranged){u.sleep=true;return}
+approach(u,threat.x,threat.y);return}
+if(inCity){const needGar=!unitsAt(u.x,u.y).some(v=>v!==u&&isMil(v)&&v.civ===u.civ);if(needGar&&(civ.def.pers.war<.6||rng()<.6)){u.sleep=true;u.fort=Math.min(2,u.fort+1);return}}
+// offensive
+const enemies=[];for(let k=0;k<G.civs.length;k++)if(k!==u.civ&&atWar(u.civ,k)&&G.civs[k].alive&&k!==G.barb)enemies.push(k);
+if(enemies.length){let tc=null,bd=1e9;for(const c of G.cities)if(enemies.includes(c.civ)){const dd=hdist(u.x,u.y,c.x,c.y);if(dd<bd&&(civ.vis[idx(c.x,c.y)]||barb)){bd=dd;tc=c}}
+if(tc&&bd<=14){const allies=G.units.filter(v=>v.alive&&v.civ===u.civ&&isMil(v)&&hdist(v.x,v.y,tc.x,tc.y)<=4).length;const mine=hdist(u.x,u.y,tc.x,tc.y);
+if(mine>3&&allies<2&&milPower(u.civ)<milPower(tc.civ)*.8&&!barb){const rally=G.cities.filter(c=>c.civ===u.civ).sort((a,b)=>hdist(a.x,a.y,tc.x,tc.y)-hdist(b.x,b.y,tc.x,tc.y))[0];if(rally&&hdist(u.x,u.y,rally.x,rally.y)>1){goTo(u,rally.x,rally.y,{});return}u.sleep=true;return}
+approach(u,tc.x,tc.y);return}}
+if(barb){// barbarians: hunt nearby or wander
+let t=null,bd=1e9;for(const [x,y] of within(u.x,u.y,6)){const tt=G.tiles[idx(x,y)];if(tt.city>=0){const dd=hdist(u.x,u.y,x,y);if(dd<bd&&G.cities[tt.city].hp>60){bd=dd+2;t=[x,y]}}for(const v of unitsAt(x,y))if(v.civ!==G.barb){const dd=hdist(u.x,u.y,x,y)-(isMil(v)?0:1);if(dd<bd){bd=dd;t=[x,y]}}}
+if(t){approach(u,t[0],t[1])}else{if(here.owner>=0&&here.owner!==G.barb&&((here.imp&&!here.pill)||here.road))pillage(u);else if(rng()<.7)wander(u)}return}
+// barbarian camps
+let camp=null,cd=1e9;for(const [x,y] of within(u.x,u.y,8)){const tt=G.tiles[idx(x,y)];if(tt.camp&&civ.vis[idx(x,y)]){const dd=hdist(u.x,u.y,x,y);if(dd<cd){cd=dd;camp=[x,y]}}}
+if(camp&&u.hp>60){approach(u,camp[0],camp[1]);return}
+// garrison empty cities
+let gc=null,gd=1e9;for(const c of G.cities)if(c.civ===u.civ&&!unitsAt(c.x,c.y).some(v=>isMil(v))){const dd=hdist(u.x,u.y,c.x,c.y);if(dd<gd){gd=dd;gc=c}}
+if(gc){goTo(u,gc.x,gc.y,{});return}
+if(!inCity){const c=nearestOwnCity(u);if(c&&hdist(u.x,u.y,c.x,c.y)>2){goTo(u,c.x,c.y,{});return}}
+u.sleep=true;u.fort=Math.min(2,u.fort+1)}
+function approach(u,x,y){const d=UNITS[u.type];const R=d.range||1;if(hdist(u.x,u.y,x,y)<=R){const tg=bestAttackTarget(u);if(tg)attack(u,tg.x,tg.y);return}
+// move to a tile within range
+let best=null,bv=1e9;for(const [nx,ny] of within(x,y,R)){if(!passable(nx,ny))continue;if(hdist(nx,ny,x,y)===0)continue;if(unitsAt(nx,ny).some(v=>v.civ!==u.civ))continue;if(!canStack(u.type,u.civ,nx,ny))continue;const dd=hdist(u.x,u.y,nx,ny)-(G.tiles[idx(nx,ny)].hill?.5:0);if(dd<bv){bv=dd;best=[nx,ny]}}
+const tgt=best||[x,y];const p=findPath(u,tgt[0],tgt[1],{attack:true});if(p){const lim=p.filter(([px,py])=>!(px===x&&py===y));moveUnit(u,lim.length?lim:p)}else wander(u);
+if(u.alive&&u.moves>0&&!u.attacked){const tg=bestAttackTarget(u);if(tg)attack(u,tg.x,tg.y)}}
+function aiChooseBuild(c){const civ=G.civs[c.civ];const pr=civ.def.pers;const cities=G.cities.filter(x=>x.civ===c.civ);const units=G.units.filter(u=>u.alive&&u.civ===c.civ);
+const mil=units.filter(isMil).length,settlers=units.filter(u=>u.type==='settler').length,workers=units.filter(u=>u.type==='worker').length;
+const atWarAny=G.civs.some((o,k)=>k!==G.barb&&k!==c.civ&&o.alive&&atWar(c.civ,k));const threatened=within(c.x,c.y,4).some(([x,y])=>unitsAt(x,y).some(v=>isMil(v)&&atWar(c.civ,v.civ)));
+const ub=buildableUnits(c);const bestMil=()=>{const m=ub.filter(k=>!UNITS[k].civ&&UNITS[k].cls!=='recon');if(!m.length)return null;m.sort((a,b)=>(UNITS[b].str+(UNITS[b].rstr||0)*1.2)-(UNITS[a].str+(UNITS[a].rstr||0)*1.2));const rangedN=units.filter(u=>UNITS[u.type].range).length;if(rangedN<mil*.4){const r=m.find(k=>UNITS[k].range);if(r)return r}return m[0]};
+const set=(kind,id)=>{c.build={kind,id}};
+const targetCities=3+Math.round(pr.exp*5);
+if(threatened||(atWarAny&&mil<cities.length*2+2)){const m=bestMil();if(m){set('unit',m);return}}
+if(mil<cities.length+1){const m=bestMil();if(m){set('unit',m);return}}
+if(G.turn<180&&cities.length<targetCities&&settlers===0&&c.pop>=2&&(c.capital||c.pop>=4)&&rng()<.8){set('unit','settler');return}
+if(workers<Math.ceil(cities.length*.7)&&c.pop>=2&&rng()<.6){set('unit','worker');return}
+if(G.turn<30&&units.filter(u=>u.type==='scout').length===0&&civ.vis.filter(v=>v===0).length>G.W*G.H*.5&&ub.includes('scout')&&rng()<.5){set('unit','scout');return}
+// science victory push
+if(civ.techs.rocketry&&pr.sci>=.5){const pj=buildableProjects(c);if(pj.length&&(c.capital||c.pop>=8)){set('project',pj[0]);return}}
+// buildings
+const bb=buildableBld(c);const prio={monument:9,granary:8,library:8+pr.sci*3,walls:threatened?12:3,market:6,barracks:pr.war*4,temple:3+pr.cul*5,colosseum:3+pr.cul*2,aqueduct:5,workshop:6,university:6+pr.sci*4,observatory:4+pr.sci*2,bank:5,museum:2+pr.cul*5,publicschool:5+pr.sci*3,factory:7,stockexchange:4,hospital:4,broadcasttower:2+pr.cul*4,researchlab:5+pr.sci*3,lighthouse:3};
+let options=bb.map(k=>({kind:'bld',id:k,v:(prio[k]||3)*(1+rng()*.5)/Math.sqrt(BLD[k].cost/60)}));
+const bw=buildableWonders(c);if(c.pop>=4&&bw.length&&rng()<.25+pr.cul*.4){const w=pick(bw);options.push({kind:'wonder',id:w,v:5+pr.cul*6})}
+if(mil<cities.length*2+3&&rng()<.3+pr.war*.4){const m=bestMil();if(m)options.push({kind:'unit',id:m,v:5+pr.war*5})}
+if(!options.length){const m=bestMil();if(m)set('unit',m);return}
+options.sort((a,b)=>b.v-a.v);set(options[0].kind,options[0].id)}
+function aiPolicies(civ){let guard=0;while(canAdoptPolicy(civ)&&guard++<5){const pr=civ.def.pers;const av=POLICIES.filter(p=>policyAvailable(civ,p));if(!av.length)break;const w=av.map(p=>({p,v:rng()+(p.tree==='Honor'?pr.war:p.tree==='Rationalism'?pr.sci:p.tree==='Tradition'||p.tree==='Commerce'?pr.cul*.7+.3:pr.exp)}));w.sort((a,b)=>b.v-a.v);adoptPolicy(civ,w[0].p)}}
+function aiTurn(ci){const civ=G.civs[ci];if(!civ.alive)return;if(civ.barb){barbTurn();return}
+aiDiplomacy(civ);if(!civ.research)pickResearchAI(civ);
+const units=G.units.filter(u=>u.alive&&u.civ===ci);
+for(const u of units){if(!u.alive)continue;try{const d=UNITS[u.type];if(u.order){continue}if(d.civ){if(u.type==='settler')aiSettler(u);else aiWorker(u)}else if(d.cls==='recon')aiExplore(u);else aiMilitary(u)}catch(e){console.error('AI unit error',e)}}
+for(const c of G.cities){if(c.civ!==ci)continue;if(!c.build)aiChooseBuild(c);if(c.build&&civ.gold>buyCost(c,c.build)+120&&rng()<.35){civ.gold-=buyCost(c,c.build);c.prod=buildCost(c.build);completeBuild(c);if(!c.build)aiChooseBuild(c)}
+// upgrade units in city
+for(const u of unitsAt(c.x,c.y)){const up=canUpgrade(u);if(up&&civ.gold>up.cost+80)upgradeUnit(u)}}
+updateVis(ci)}
+
+// ============================ BARBARIANS ============================
+function barbTurn(){const B=G.barb;const D=DIFFS[G.diff];const camps=G.tiles.filter(t=>t.camp).length;const maxCamps=Math.ceil(G.cities.length*.6+2);
+if(camps<maxCamps&&rng()<.25*D.barb){for(let tries=0;tries<40;tries++){const x=ri(1,G.W-2),y=ri(1,G.H-2);const ti=idx(x,y);const t=G.tiles[ti];if(!passable(x,y)||t.owner>=0||t.camp||unitsAt(x,y).length)continue;if(G.civs.some((c,k)=>k!==B&&c.alive&&c.vis[ti]===2))continue;if(G.cities.some(c=>hdist(c.x,c.y,x,y)<5))continue;t.camp=1;t.forest=0;dirtyMap();if(D.barb>0){spawnUnit(barbType(),B,x,y)}break}}
+let era=0;for(const c of G.civs)if(!c.barb&&c.alive)era=Math.max(era,civEra(c));
+for(let i=0;i<G.tiles.length;i++){const t=G.tiles[i];if(!t.camp)continue;const x=i%G.W,y=(i/G.W)|0;const here=unitsAt(x,y);if(!here.length&&rng()<.12*D.barb){spawnUnit(barbType(era),B,x,y)}}
+for(const u of G.units.filter(u=>u.alive&&u.civ===B)){try{aiMilitary(u)}catch(e){console.error(e)}}
+// camp defenders stay
+}
+function barbType(era=0){const by=[['warrior','archer'],['swordsman','horseman','archer'],['knight','crossbowman','swordsman'],['musketeer','crossbowman'],['rifleman','cannon'],['infantry','artillery']];return pick(by[clamp(era,0,5)])}
+
+// ============================ DIPLOMACY ============================
+function civDist(a,b){let d=99;for(const c of G.cities)if(c.civ===a)for(const o of G.cities)if(o.civ===b)d=Math.min(d,hdist(c.x,c.y,o.x,o.y));return d}
+function declareWar(a,b,silent){const r=G.rel[a][b],r2=G.rel[b][a];if(r.war)return;r.war=r2.war=true;r.warSince=r2.warSince=G.turn;r.ally=r2.ally=false;r2.att-=35;r.att-=10;
+for(let k=0;k<G.civs.length;k++){if(k===a||k===b||k===G.barb)continue;G.rel[k][a].att-=6;if(G.rel[k][b].ally&&!G.rel[k][a].war)declareWar(k,a,true)}
+const A=G.civs[a],Bc=G.civs[b];if(a===G.player||b===G.player){notify(`${A.def.name} declared war on ${Bc.def.name}!`,{civ:a,bad:1});toast(`⚔️ ${A.def.name} has declared war on ${Bc.def.name}!`,true);SFX.war();Music.setWar(true);tut('war')}else if(G.rel[G.player][a].met||G.rel[G.player][b].met)notify(`${A.def.name} declared war on ${Bc.def.name}`,{civ:a});
+for(const u of G.units)if(u.alive&&(u.civ===a&&G.tiles[idx(u.x,u.y)].owner===b||u.civ===b&&G.tiles[idx(u.x,u.y)].owner===a)){/* units stay; they are now in enemy land */}}
+function makePeace(a,b){const r=G.rel[a][b],r2=G.rel[b][a];r.war=r2.war=false;r.peaceUntil=r2.peaceUntil=G.turn+15;r.att+=10;r2.att+=10;const A=G.civs[a],Bc=G.civs[b];
+if(a===G.player||b===G.player){notify(`Peace between ${A.def.name} and ${Bc.def.name}`,{civ:a});toast(`🕊️ Peace with ${a===G.player?Bc.def.name:A.def.name}`);SFX.peace();Music.setWar(playerAtWar())}}
+function playerAtWar(){return G.civs.some((c,k)=>k!==G.barb&&k!==G.player&&c.alive&&atWar(G.player,k))}
+function aiAcceptsPeace(ai,other){const r=G.rel[ai][other];if(G.turn-r.warSince<8)return false;const ratio=milPower(ai)/Math.max(1,milPower(other));if(ratio<.75)return true;if(r.att>-15&&rng()<.6)return true;return rng()<.15}
+function aiDiplomacy(civ){const i=civ.idx;const pr=civ.def.pers;const myPow=milPower(i);
+for(let j=0;j<G.civs.length;j++){if(j===i||j===G.barb)continue;const o=G.civs[j];if(!o.alive)continue;const r=G.rel[i][j];if(!r.met)continue;
+let t=(pr.war<.5?12:-8);const d=civDist(i,j);if(d<7)t-=14;else if(d<10)t-=5;const ratio=milPower(j)/Math.max(1,myPow);if(ratio>1.6)t+=10;else if(ratio<.55&&pr.war>.5)t-=18;
+if(r.ally)t+=40;if(r.war)t-=30;for(let k=0;k<G.civs.length;k++)if(k!==i&&k!==j&&k!==G.barb&&atWar(i,k)&&atWar(j,k))t+=12;
+const myScore=civScore(i),theirScore=civScore(j);if(theirScore>myScore*1.5&&G.turn>100)t-=12;
+if(r.gift){t+=r.gift;r.gift*=.97}if(o.denounced>G.turn-20)t-=5;
+r.att+=clamp(t-r.att,-2.5,2.5);r.att=clamp(r.att,-100,100);
+if(G.turn<15)continue;
+if(!r.war&&G.turn>r.peaceUntil&&r.att<-25&&myPow>milPower(j)*1.15&&rng()<.035*(pr.war+.3)&&!r.ally){declareWar(i,j);continue}
+if(r.war&&G.turn-r.warSince>10){const losing=myPow<milPower(j)*.8||civ.losses>civ.kills+3;if((losing&&rng()<.25)||(r.att>-20&&rng()<.06)){if(j===G.player){if(!G.pendingPeace.some(p=>p.from===i&&p.kind==='peace'))G.pendingPeace.push({from:i,kind:'peace'})}else if(aiAcceptsPeace(j,i))makePeace(i,j)}}
+if(!r.war&&!r.ally&&r.att>55&&rng()<.04){if(j===G.player){if(!G.pendingPeace.some(p=>p.from===i&&p.kind==='alliance'))G.pendingPeace.push({from:i,kind:'alliance'})}else if(G.rel[j][i].att>45){r.ally=G.rel[j][i].ally=true;if(G.rel[G.player][i].met)notify(`${civ.def.name} and ${o.def.name} formed an alliance`,{civ:i})}}}}
+function diploAction(j,act){const p=G.player,r=G.rel[p][j],r2=G.rel[j][p],civ=G.civs[p],o=G.civs[j];
+switch(act){
+case'war':if(r.ally){r.ally=r2.ally=false;r2.att-=20}declareWar(p,j);break;
+case'peace':if(aiAcceptsPeace(j,p)){makePeace(p,j)}else{toast(`${o.def.leader} refuses to make peace.`,true);r2.att-=2;SFX.error()}break;
+case'ally':if(r2.att>50&&!r.war){r.ally=r2.ally=true;toast(`🤝 Alliance formed with ${o.def.name}!`);SFX.peace();notify(`Alliance with ${o.def.name}`,{civ:j})}else{toast(`${o.def.leader} is not interested in an alliance.`,true);SFX.error()}break;
+case'unally':r.ally=r2.ally=false;r2.att-=25;toast(`Alliance with ${o.def.name} cancelled`);break;
+case'gift50':if(civ.gold>=50){civ.gold-=50;o.gold+=50;r2.gift=(r2.gift||0)+8;r2.att+=8;toast(`${o.def.leader} appreciates your gift (+8)`);SFX.coin()}break;
+case'gift200':if(civ.gold>=200){civ.gold-=200;o.gold+=200;r2.gift=(r2.gift||0)+25;r2.att+=25;toast(`${o.def.leader} is delighted (+25)`);SFX.coin()}break;
+case'demand':{const ratio=milPower(p)/Math.max(1,milPower(j));if(ratio>1.5&&r2.att>-30&&o.gold>=60){const amt=Math.min(o.gold,60+G.turn);o.gold-=amt;civ.gold+=amt;r2.att-=15;toast(`${o.def.leader} pays ${amt} Gold tribute`);SFX.coin()}else{r2.att-=12;toast(`${o.def.leader} refuses your demand! (-12)`,true);SFX.error()}break}
+case'ra':if(civ.gold>=150&&o.gold>=150&&r2.att>15&&!r.war&&!(civ.raTurns>0)){civ.gold-=150;o.gold-=150;civ.raTurns=10;o.raTurns=10;r2.att+=10;toast('🔬 Research Agreement signed: +25% Science for 10 turns');SFX.tech()}else{toast(civ.gold<150?'You need 150 Gold':o.gold<150?`${o.def.name} cannot afford it`:r.war?'Not during war':civ.raTurns>0?'Agreement already active':`${o.def.leader} does not trust you enough`,true);SFX.error()}break;
+case'denounce':r2.att-=20;o.denounced=G.turn;for(let k=0;k<G.civs.length;k++)if(k!==p&&k!==j&&k!==G.barb&&G.rel[k][j].att<0)G.rel[k][p].att+=5;toast(`You denounced ${o.def.name}`);break;
+case'embassy':if(civ.gold>=30&&!r.open){civ.gold-=30;r.open=r2.open=true;r2.att+=5;for(const c of G.cities)if(c.civ===j)for(const [x,y] of within(c.x,c.y,2))if(civ.vis[idx(x,y)]===0)civ.vis[idx(x,y)]=1;toast(`Embassy established with ${o.def.name}`);dirtyMap()}else{toast(civ.gold<30?'You need 30 Gold':'Embassy already established',true)}break;}
+refreshAll();if($('modalWrap').style.display==='flex')showDiplo()}
+function resolvePending(pp,accept){const i=pp.from;if(pp.kind==='peace'){if(accept)makePeace(G.player,i);else G.rel[i][G.player].att-=5}else if(pp.kind==='alliance'){if(accept){G.rel[i][G.player].ally=G.rel[G.player][i].ally=true;toast(`🤝 Alliance formed with ${G.civs[i].def.name}!`);SFX.peace()}else G.rel[i][G.player].att-=8}}
+
+// ============================ TURN FLOW ============================
+let busy=false;
+function processUnitsStart(ci){const civ=G.civs[ci];for(const u of G.units){if(!u.alive||u.civ!==ci)continue;
+if(!u.acted&&u.hp<100&&isMil(u)){const t=G.tiles[idx(u.x,u.y)];let h=t.city>=0&&G.cities[t.city].civ===ci?20:t.owner===ci?10:(t.owner>=0&&atWar(ci,t.owner))?0:5;if(hasPol(civ,'militarytradition'))h+=10;u.hp=Math.min(100,u.hp+h)}
+if(!u.acted)u.fort=Math.min(2,u.fort+1);else u.fort=0;
+u.moves=u.maxMoves;u.acted=false;u.attacked=false;u.skip=false;
+if(u.order)progressOrder(u);
+if(u.alive&&u.dest&&u.moves>0&&!u.order){const p=findPath(u,u.dest.x,u.dest.y,{attack:false});if(p&&p.length)moveUnit(u,p);else u.dest=null;if(u.x===(u.dest&&u.dest.x)&&u.y===(u.dest&&u.dest.y))u.dest=null}
+if(u.alive&&u.auto&&!u.order&&u.moves>0&&ci===G.player){if(u.type==='worker')aiWorker(u);else if(isMil(u))aiExplore(u)}}}
+function endTurn(){if(busy||!G)return;if(G.over&&!G.cont)return;busy=true;$('endTurn').textContent='Processing...';
+try{const P=G.player;processCivEconomy(P);for(const c of G.cities)if(c.civ===P)cityBombard(c);
+for(let ci=0;ci<G.civs.length;ci++){const civ=G.civs[ci];if(ci===P||!civ.alive)continue;if(civ.barb){barbTurn();continue}aiTurn(ci);processCivEconomy(ci);for(const c of G.cities)if(c.civ===ci)cityBombard(c)}
+G.turn++;for(let ci=0;ci<G.civs.length;ci++)if(G.civs[ci].alive)processUnitsStart(ci);
+for(let ci=0;ci<G.civs.length;ci++)if(G.civs[ci].alive)updateVis(ci);
+checkVictory();
+// AI war music
+Music.setWar(playerAtWar());
+}catch(e){console.error(e)}
+busy=false;$('endTurn').textContent='End Turn';
+pruneUnits();refreshAll();dirtyMap();autosave();SFX.turn();
+if(G.pendingPeace.length)showPending();
+tut('turn2');}
+function pruneUnits(){G.units=G.units.filter(u=>u.alive)}
+function dominates(ci){const others=G.civs.filter((c,k)=>k!==ci&&k!==G.barb);if(!others.length)return false;const me=G.civs[ci];const myCap=G.tiles[me.capTile];if(!myCap||myCap.city<0||G.cities[myCap.city].civ!==ci)return false;return others.every(o=>{if(!o.alive)return true;const t=G.tiles[o.capTile];return t&&t.city>=0&&G.cities[t.city].civ===ci})}
+function checkVictory(){if(G.over)return;if(!G.civs[G.player].alive){endGame(null,'defeat');return}
+for(let ci=0;ci<G.civs.length;ci++){const c=G.civs[ci];if(c.barb||!c.alive)continue;if(dominates(ci)){endGame(ci,'domination');return}}
+if(G.turn>G.maxTurn){let best=-1,bs=-1;for(let ci=0;ci<G.civs.length;ci++){const c=G.civs[ci];if(c.barb||!c.alive)continue;const s=civScore(ci);if(s>bs){bs=s;best=ci}}endGame(best,'score')}}
+function endGame(winner,type){if(G.over)return;G.over={winner,type,turn:G.turn};const won=winner===G.player;
+const hof=lsGet('civmicro_hof',[]);hof.unshift({civ:G.civs[G.player].def.name,won,type,turn:G.turn,score:civScore(G.player),diff:DIFFS[G.diff].name,date:new Date().toLocaleDateString()});lsSet('civmicro_hof',hof.slice(0,20));
+const prog=lsGet('civmicro_progress',{games:0,wins:0,bestScore:0});prog.games++;if(won){prog.wins++;prog['win_'+type]=(prog['win_'+type]||0)+1;prog['diff_'+DIFFS[G.diff].id]=1}prog.bestScore=Math.max(prog.bestScore,civScore(G.player));lsSet('civmicro_progress',prog);
+setTimeout(()=>showGameOver(),300);if(won){SFX.victory();Music.setMode('victory')}else{SFX.defeat();Music.setMode('defeat')}}
+// ============================ RENDERING ============================
+const cv=$('map'),ctx=cv.getContext('2d');let cw=1,ch=1,dpr=1;const cam={x:0,y:0,z:1};
+function resize(){dpr=Math.min(2,window.devicePixelRatio||1);cw=innerWidth;ch=innerHeight;cv.width=Math.floor(cw*dpr);cv.height=Math.floor(ch*dpr);cv.style.width=cw+'px';cv.style.height=ch+'px'}
+addEventListener('resize',resize);resize();
+let mapDirty=true,terrainCv=null,mmDirty=true;function dirtyMap(){mapDirty=true;mmDirty=true}
+const civColor=ci=>G.civs[ci].def.color;
+function hexPath(c,x,y,r){c.beginPath();for(let k=0;k<6;k++){const a=Math.PI/180*(60*k+30);const px=x+r*Math.cos(a),py=y+r*Math.sin(a);k?c.lineTo(px,py):c.moveTo(px,py)}c.closePath()}
+function hexCorner(x,y,k,r=HS){const a=Math.PI/180*(60*k+30);return[x+r*Math.cos(a),y+r*Math.sin(a)]}
+// edge k (between corner k and k+1) faces neighbor direction; mapping for pointy-top odd-r
+function edgeNeighbor(x,y,k){const dirs=(y&1)?[[1,1],[0,1],[-1,0],[0,-1],[1,-1],[1,0]]:[[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,0]];const [dx,dy]=dirs[k];return[x+dx,y+dy]}
+function shade(col,amt){const n=parseInt(col.slice(1),16);let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;return`rgb(${clamp(r,0,255)},${clamp(g,0,255)},${clamp(b,0,255)})`}
+function buildTerrain(){const tw=Math.ceil(hexX(G.W,1)+HS*2),th=Math.ceil(hexY(G.H)+HS*2);if(!terrainCv||terrainCv.width!==tw){terrainCv=document.createElement('canvas');terrainCv.width=tw;terrainCv.height=th}
+const c=terrainCv.getContext('2d');c.clearRect(0,0,tw,th);const pv=G.civs[G.player].vis;const pc=G.civs[G.player];
+for(let y=0;y<G.H;y++)for(let x=0;x<G.W;x++){const i=idx(x,y);if(pv[i]===0)continue;const t=G.tiles[i];const px=hexX(x,y),py=hexY(y);const T=TERRAIN[t.t];
+hexPath(c,px,py,HS+.7);c.fillStyle=T.color;c.fill();
+if(T.water){c.strokeStyle='rgba(255,255,255,.08)';c.lineWidth=1;c.beginPath();c.moveTo(px-10,py-4);c.quadraticCurveTo(px-5,py-8,px,py-4);c.quadraticCurveTo(px+5,py,px+10,py-4);c.stroke();c.beginPath();c.moveTo(px-8,py+8);c.quadraticCurveTo(px-3,py+4,px+2,py+8);c.stroke()}
+if(t.hill){c.fillStyle=shade(T.color,-28);c.beginPath();c.moveTo(px-16,py+8);c.quadraticCurveTo(px-6,py-10,px+2,py+8);c.fill();c.beginPath();c.moveTo(px-2,py+10);c.quadraticCurveTo(px+8,py-6,px+17,py+10);c.fill()}
+if(t.mtn){c.fillStyle='#6b645e';c.beginPath();c.moveTo(px-18,py+14);c.lineTo(px-4,py-16);c.lineTo(px+4,py-6);c.lineTo(px+10,py-12);c.lineTo(px+19,py+14);c.closePath();c.fill();c.fillStyle='#eef';c.beginPath();c.moveTo(px-8,py-8);c.lineTo(px-4,py-16);c.lineTo(px+1,py-6);c.closePath();c.fill()}
+if(t.forest){c.fillStyle=shade(T.color,-45);for(const [ox,oy] of [[-10,4],[2,-6],[11,6],[-2,10]]){c.beginPath();c.moveTo(px+ox,py+oy+6);c.lineTo(px+ox+6,py+oy+6);c.lineTo(px+ox+3,py+oy-7);c.closePath();c.fill()}}
+if(t.imp&&!t.mtn){c.save();c.globalAlpha=t.pill?.5:1;const im=t.imp;if(im==='farm'){c.strokeStyle='#e8d060';c.lineWidth=2;for(let k=-1;k<=1;k++){c.beginPath();c.moveTo(px-12,py+k*6+2);c.lineTo(px+12,py+k*6+2);c.stroke()}}
+else if(im==='mine'){c.fillStyle='#3a2a1a';c.beginPath();c.arc(px,py+2,7,Math.PI,0);c.fill();c.fillStyle='#111';c.beginPath();c.arc(px,py+2,4,Math.PI,0);c.fill()}
+else if(im==='pasture'){c.strokeStyle='#8a5a2a';c.lineWidth=2;c.strokeRect(px-12,py-6,24,13)}
+else if(im==='tradingpost'){c.fillStyle='#d58a3a';c.fillRect(px-7,py-4,14,11);c.fillStyle='#8a3a1a';c.beginPath();c.moveTo(px-9,py-4);c.lineTo(px,py-12);c.lineTo(px+9,py-4);c.fill()}
+else if(im==='quarry'){c.fillStyle='#777';c.fillRect(px-10,py-6,20,12);c.fillStyle='#999';c.fillRect(px-6,py-2,8,5)}
+else if(im==='camp'){c.fillStyle='#c8b080';c.beginPath();c.moveTo(px-10,py+8);c.lineTo(px,py-8);c.lineTo(px+10,py+8);c.fill()}
+else if(im==='plantation'){c.fillStyle='#2f7a2f';for(const [ox,oy] of [[-8,0],[0,-4],[8,2]]){c.beginPath();c.ellipse(px+ox,py+oy,5,8,0,0,7);c.fill()}}
+if(t.pill){c.strokeStyle='#f33';c.lineWidth=3;c.beginPath();c.moveTo(px-8,py-8);c.lineTo(px+8,py+8);c.moveTo(px+8,py-8);c.lineTo(px-8,py+8);c.stroke()}c.restore()}
+if(t.camp){c.fillStyle='#2a1a1a';c.beginPath();c.moveTo(px-14,py+10);c.lineTo(px,py-12);c.lineTo(px+14,py+10);c.fill();c.fillStyle='#f33';c.fillRect(px-2,py-18,2,10);c.fillStyle='#f55';c.beginPath();c.moveTo(px,py-18);c.lineTo(px+9,py-15);c.lineTo(px,py-12);c.fill()}
+if(t.res&&resVisible(pc,t.res)){c.font='13px serif';c.textAlign='center';c.textBaseline='middle';c.fillText(RES[t.res].icon,px-14,py-12)}}
+// roads
+c.strokeStyle='#8a6a3a';c.lineWidth=3.5;c.lineCap='round';for(let y=0;y<G.H;y++)for(let x=0;x<G.W;x++){const i=idx(x,y);const t=G.tiles[i];if(pv[i]===0||!(t.road||t.city>=0))continue;const px=hexX(x,y),py=hexY(y);let any=false;for(const [nx,ny] of nbrs(x,y)){const j=idx(nx,ny);const n=G.tiles[j];if((n.road||n.city>=0)&&(t.road||n.road)&&pv[j]){any=true;c.beginPath();c.moveTo(px,py);c.lineTo((px+hexX(nx,ny))/2,(py+hexY(ny))/2);c.stroke()}}if(t.road&&!any){c.beginPath();c.arc(px,py,3,0,7);c.stroke()}}
+mapDirty=false}
+const fx=[];let shakeT=0,shakeA=0,hover=null,hoverPath=null,hoverPathKey='';
+function shake(a){shakeA=Math.max(shakeA,a);shakeT=.3}
+function fxHit(x,y,dmg,col){fx.push({k:'txt',x:hexX(x,y),y:hexY(y)-10,txt:'-'+dmg,col,t:0,life:1.1});fxBurst(x,y,col,6)}
+function fxBurst(x,y,col,n=14){const cx=hexX(x,y),cy=hexY(y);for(let i=0;i<n;i++){const a=rng()*6.28,s=40+rng()*90;fx.push({k:'p',x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s-30,col,t:0,life:.5+rng()*.5,r:2+rng()*3})}}
+function fxRing(x,y,col,life=1){fx.push({k:'ring',x:hexX(x,y),y:hexY(y),col,t:0,life})}
+function fxText(x,y,txt,col){fx.push({k:'txt',x:hexX(x,y),y:hexY(y)-14,txt,col,t:0,life:1.4})}
+function centerOn(x,y,anim){const tx=hexX(x,y),ty=hexY(y);if(anim&&settings.anim){camTarget={x:tx,y:ty}}else{cam.x=tx;cam.y=ty;camTarget=null}}
+let camTarget=null,lastT=performance.now(),mmTimer=0;
+function frame(now){requestAnimationFrame(frame);const dt=Math.min(.1,(now-lastT)/1000);lastT=now;if(!G){return}
+if(camTarget){cam.x=lerp(cam.x,camTarget.x,Math.min(1,dt*8));cam.y=lerp(cam.y,camTarget.y,Math.min(1,dt*8));if(Math.hypot(cam.x-camTarget.x,cam.y-camTarget.y)<1)camTarget=null}
+keyPan(dt);if(shakeT>0){shakeT-=dt;if(shakeT<=0)shakeA=0}
+const sp=settings.anim?Math.min(1,dt*10):1;for(const u of G.units){const tx=u.x,ty=u.y;if(Math.abs(u.ax-tx)+Math.abs(u.ay-ty)>6){u.ax=tx;u.ay=ty}else{u.ax=lerp(u.ax,tx,sp);u.ay=lerp(u.ay,ty,sp)}}
+for(let i=fx.length-1;i>=0;i--){const f=fx[i];f.t+=dt;if(f.k==='p'){f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=120*dt}if(f.t>=f.life)fx.splice(i,1)}
+draw();mmTimer+=dt;if(mmTimer>.5||mmDirty){mmTimer=0;drawMinimap();mmDirty=false}}
+function draw(){if(mapDirty)buildTerrain();const z=cam.z;const sx=shakeT>0?(rng()-.5)*shakeA*2:0,sy=shakeT>0?(rng()-.5)*shakeA*2:0;
+ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#05080c';ctx.fillRect(0,0,cw,ch);
+ctx.setTransform(dpr*z,0,0,dpr*z,dpr*(cw/2-cam.x*z+sx),dpr*(ch/2-cam.y*z+sy));
+ctx.drawImage(terrainCv,0,0);
+const [wx0,wy0]=s2w(0,0),[wx1,wy1]=s2w(cw,ch);const y0=clamp(Math.floor(wy0/(HS*1.5))-1,0,G.H-1),y1=clamp(Math.ceil(wy1/(HS*1.5))+1,0,G.H-1),x0=clamp(Math.floor(wx0/(HS*SQ3))-1,0,G.W-1),x1=clamp(Math.ceil(wx1/(HS*SQ3))+1,0,G.W-1);
+const pv=G.civs[G.player].vis;const P=G.player;
+// borders & fog & grid
+for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const i=idx(x,y);const v=pv[i];if(v===0)continue;const t=G.tiles[i];const px=hexX(x,y),py=hexY(y);
+if(t.owner>=0){const col=civColor(t.owner);hexPath(ctx,px,py,HS);ctx.fillStyle=col+'22';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=3;for(let k=0;k<6;k++){const [nx,ny]=edgeNeighbor(x,y,k);if(!inB(nx,ny)||G.tiles[idx(nx,ny)].owner!==t.owner){const a=hexCorner(px,py,k,HS-1.5),b=hexCorner(px,py,k+1,HS-1.5);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}}}
+if(settings.grid){hexPath(ctx,px,py,HS);ctx.strokeStyle='rgba(0,0,0,.18)';ctx.lineWidth=1;ctx.stroke()}
+if(v===1){hexPath(ctx,px,py,HS+.7);ctx.fillStyle='rgba(5,8,12,.5)';ctx.fill()}}
+// city worked tiles
+if(sel.city&&sel.city.civ===P){for(const ti of sel.city.worked){const x=ti%G.W,y=(ti/G.W)|0;hexPath(ctx,hexX(x,y),hexY(y),HS-6);ctx.strokeStyle='rgba(120,255,120,.8)';ctx.lineWidth=2;ctx.stroke()}for(const ti of sel.city.tiles){const x=ti%G.W,y=(ti/G.W)|0;const yl=tileYield(ti,G.civs[P],sel.city);ctx.font='9px Inter';ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText(`${yl.f}🍖${yl.p}⚙${yl.g}💰`,hexX(x,y),hexY(y)+22)}}
+// cities
+for(const c of G.cities){if(c.x<x0||c.x>x1||c.y<y0||c.y>y1)continue;if(pv[idx(c.x,c.y)]===0)continue;const px=hexX(c.x,c.y),py=hexY(c.y);const col=civColor(c.civ);
+ctx.fillStyle='#222';ctx.beginPath();ctx.roundRect(px-14,py-14,28,28,5);ctx.fill();ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(px-12,py-12,24,24,4);ctx.fill();
+ctx.fillStyle='#fff';ctx.font='bold 13px Inter';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(c.pop,px,py+1);
+if(c.capital){ctx.font='11px serif';ctx.fillText('★',px+13,py-13)}
+const label=c.name;ctx.font='bold 11px Inter';const w=ctx.measureText(label).width+10;ctx.fillStyle='rgba(0,0,0,.6)';ctx.beginPath();ctx.roundRect(px-w/2,py+16,w,14,3);ctx.fill();ctx.fillStyle=sel.city===c?'#ffe':'#eee';ctx.fillText(label,px,py+23);
+if(c.hp<c.maxhp){ctx.fillStyle='#400';ctx.fillRect(px-14,py-20,28,4);ctx.fillStyle='#f44';ctx.fillRect(px-14,py-20,28*c.hp/c.maxhp,4)}
+if(c.civ===P&&c.build){const y=c.y_||cityYields(c);c.y_=y;const pr=prodFor(c,y,c.build);const left=Math.max(1,Math.ceil((buildCost(c.build)-c.prod)/Math.max(1,pr)));ctx.font='9px Inter';ctx.fillStyle='#ccc';ctx.fillText(`${buildName(c.build)} ${left}`,px,py+36)}
+if(sel.city===c){hexPath(ctx,px,py,HS-2);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke()}}
+// units
+const now=performance.now()/1000;const drawn=new Set();
+for(const u of G.units){if(!u.alive)continue;const ti=idx(u.x,u.y);if(u.civ!==P&&pv[ti]!==2)continue;if(u.x<x0-1||u.x>x1+1||u.y<y0-1||u.y>y1+1)continue;
+const civU=UNITS[u.type].civ;const px=hexX(u.ax,Math.round(u.ay))+(u.ay-Math.round(u.ay))*0+(civU?9:-5),py=hexY(u.ay)+(civU?9:-3);const key=idx(u.x,u.y)+(civU?'c':'m');if(drawn.has(key)&&u!==sel.unit)continue;drawn.add(key);
+const r=civU?9:12;const col=civColor(u.civ);
+if(u===sel.unit){ctx.beginPath();ctx.arc(px,py,r+5+Math.sin(now*6)*1.5,0,7);ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke()}
+ctx.beginPath();ctx.arc(px,py,r+1.5,0,7);ctx.fillStyle=u.civ===P&&u.moves>0&&!u.sleep&&!u.order?'#fff':'#111';ctx.fill();ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fillStyle=col;ctx.fill();
+ctx.font=(civU?11:14)+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(UNITS[u.type].icon,px,py+1);
+if(u.hp<100){ctx.fillStyle='#400';ctx.fillRect(px-r,py+r+2,r*2,3);ctx.fillStyle=u.hp>50?'#4f4':u.hp>25?'#fc4':'#f44';ctx.fillRect(px-r,py+r+2,r*2*u.hp/100,3)}
+if(u.fort>=1&&isMil(u)&&u.sleep){ctx.font='9px serif';ctx.fillText('🛡',px+r,py-r)}
+if(u.order){ctx.font='9px serif';ctx.fillText('⚒',px+r,py-r)}
+const n=unitsAt(u.x,u.y).filter(v=>(!!UNITS[v.type].civ)===(!!civU)).length;if(n>1){ctx.fillStyle='#fff';ctx.font='bold 9px Inter';ctx.fillText(n,px-r-2,py-r)}}
+// selected unit helpers
+if(sel.unit&&sel.unit.alive){const u=sel.unit;const d=UNITS[u.type];if(d.range&&u.moves>0&&!u.attacked){for(const [x,y] of within(u.x,u.y,d.range)){if(enemyAt(x,y,u.civ)&&pv[idx(x,y)]===2){hexPath(ctx,hexX(x,y),hexY(y),HS-4);ctx.strokeStyle='rgba(255,60,60,.9)';ctx.lineWidth=2.5;ctx.stroke()}}}
+if(u.dest){ctx.font='11px Inter';ctx.fillStyle='#9cf';ctx.fillText('⤵',hexX(u.dest.x,u.dest.y),hexY(u.dest.y)-14)}
+if(hoverPath&&hoverPath.length){ctx.fillStyle='rgba(255,255,255,.85)';let lx=hexX(u.x,u.y),ly=hexY(u.y);for(const [x,y] of hoverPath){const px=hexX(x,y),py=hexY(y);ctx.beginPath();ctx.arc(px,py,4,0,7);ctx.fill();lx=px;ly=py}const e=hoverPath[hoverPath.length-1];const tn=pathTurns(u,hoverPath);ctx.font='bold 12px Inter';ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=3;ctx.strokeText(tn,lx+12,ly-12);ctx.fillText(tn,lx+12,ly-12)}}
+if(hover&&pv[idx(hover[0],hover[1])]){hexPath(ctx,hexX(hover[0],hover[1]),hexY(hover[1]),HS-1);ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.5;ctx.stroke()}
+// fx
+for(const f of fx){const k=f.t/f.life;if(f.k==='p'){ctx.globalAlpha=1-k;ctx.fillStyle=f.col;ctx.beginPath();ctx.arc(f.x,f.y,f.r*(1-k*.5),0,7);ctx.fill()}else if(f.k==='txt'){ctx.globalAlpha=1-k*k;ctx.font='bold 15px Inter';ctx.textAlign='center';ctx.fillStyle=f.col;ctx.strokeStyle='#000';ctx.lineWidth=3;const yy=f.y-k*30;ctx.strokeText(f.txt,f.x,yy);ctx.fillText(f.txt,f.x,yy)}else if(f.k==='ring'){ctx.globalAlpha=1-k;ctx.strokeStyle=f.col;ctx.lineWidth=3;ctx.beginPath();ctx.arc(f.x,f.y,10+k*50,0,7);ctx.stroke()}ctx.globalAlpha=1}}
+function drawMinimap(){const mc=$('minimap');const W=G.W,H=G.H;const sw=180,sh=Math.round(sw*H/W*.87);if(mc.width!==sw||mc.height!==sh){mc.width=sw;mc.height=sh}const c=mc.getContext('2d');c.fillStyle='#05080c';c.fillRect(0,0,sw,sh);const tw=sw/(W+.5),th=sh/H;const pv=G.civs[G.player].vis;
+for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(!pv[i])continue;const t=G.tiles[i];c.fillStyle=t.owner>=0?civColor(t.owner):(t.mtn?'#777':TERRAIN[t.t].color);c.globalAlpha=pv[i]===1?.55:1;c.fillRect((x+(y&1)*.5)*tw,y*th,tw+.5,th+.5)}
+c.globalAlpha=1;for(const ct of G.cities){if(!pv[idx(ct.x,ct.y)])continue;c.fillStyle='#fff';c.fillRect((ct.x+(ct.y&1)*.5)*tw-1,ct.y*th-1,tw+2,th+2)}
+for(const u of G.units){if(!u.alive||(u.civ!==G.player&&pv[idx(u.x,u.y)]!==2))continue;c.fillStyle=u.civ===G.player?'#fff':(u.civ===G.barb?'#f33':civColor(u.civ));c.fillRect((u.x+(u.y&1)*.5)*tw+1,u.y*th+1,Math.max(1,tw-2),Math.max(1,th-2))}
+const [wx0,wy0]=s2w(0,0),[wx1,wy1]=s2w(cw,ch);c.strokeStyle='#fff';c.lineWidth=1;c.strokeRect(wx0/(HS*SQ3)*tw,wy0/(HS*1.5)*th,(wx1-wx0)/(HS*SQ3)*tw,(wy1-wy0)/(HS*1.5)*th)}
+const w2s=(wx,wy)=>[(wx-cam.x)*cam.z+cw/2,(wy-cam.y)*cam.z+ch/2];
+const s2w=(sx,sy)=>[(sx-cw/2)/cam.z+cam.x,(sy-ch/2)/cam.z+cam.y];
+function clampCam(){cam.x=clamp(cam.x,0,hexX(G.W,0));cam.y=clamp(cam.y,0,hexY(G.H))}
+
+// ============================ INPUT ============================
+const keys={};let mdown=null,dragged=false,lastTouchDist=0;
+function keyPan(dt){if(!G||modalOpen())return;const s=600*dt/cam.z;let m=false;if(keys.ArrowLeft||keys.a||keys.A){cam.x-=s;m=true}if(keys.ArrowRight||keys.d||keys.D){cam.x+=s;m=true}if(keys.ArrowUp||keys.w||keys.W){cam.y-=s;m=true}if(keys.ArrowDown||keys.s||keys.S){cam.y+=s;m=true}if(m){camTarget=null;clampCam()}}
+cv.addEventListener('mousedown',e=>{mdown={x:e.clientX,y:e.clientY,b:e.button};dragged=false;audioInit()});
+addEventListener('mousemove',e=>{if(mdown&&(Math.abs(e.clientX-mdown.x)>4||Math.abs(e.clientY-mdown.y)>4||dragged)){if(mdown.b===0||mdown.b===1){cam.x-=e.movementX/cam.z;cam.y-=e.movementY/cam.z;camTarget=null;clampCam();dragged=true;cv.classList.add('drag')}}
+if(!G)return;const [wx,wy]=s2w(e.clientX,e.clientY);const h=pixToHex(wx,wy);const changed=!h||!hover||h[0]!==hover[0]||h[1]!==hover[1];hover=h;if(changed){updateHoverPath();updateTileInfo()}});
+addEventListener('mouseup',e=>{if(!mdown)return;const b=mdown.b;mdown=null;cv.classList.remove('drag');if(dragged||e.target!==cv)return;const [wx,wy]=s2w(e.clientX,e.clientY);const h=pixToHex(wx,wy);if(h)clickHex(h[0],h[1],b)});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{e.preventDefault();const [wx,wy]=s2w(e.clientX,e.clientY);cam.z=clamp(cam.z*(e.deltaY>0?.88:1.14),.35,2.4);const [wx2,wy2]=s2w(e.clientX,e.clientY);cam.x+=wx-wx2;cam.y+=wy-wy2;clampCam()},{passive:false});
+cv.addEventListener('touchstart',e=>{audioInit();if(e.touches.length===1){const t=e.touches[0];mdown={x:t.clientX,y:t.clientY,b:0,tx:t.clientX,ty:t.clientY,time:Date.now()};dragged=false}else if(e.touches.length===2){lastTouchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);mdown=null}},{passive:true});
+cv.addEventListener('touchmove',e=>{e.preventDefault();if(e.touches.length===1&&mdown){const t=e.touches[0];const dx=t.clientX-mdown.tx,dy=t.clientY-mdown.ty;if(Math.abs(t.clientX-mdown.x)>6||Math.abs(t.clientY-mdown.y)>6)dragged=true;if(dragged){cam.x-=dx/cam.z;cam.y-=dy/cam.z;camTarget=null;clampCam()}mdown.tx=t.clientX;mdown.ty=t.clientY}else if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(lastTouchDist>0)cam.z=clamp(cam.z*d/lastTouchDist,.35,2.4);lastTouchDist=d}},{passive:false});
+cv.addEventListener('touchend',e=>{if(mdown&&!dragged&&e.changedTouches.length){const t=e.changedTouches[0];const [wx,wy]=s2w(t.clientX,t.clientY);const h=pixToHex(wx,wy);const long=Date.now()-mdown.time>450;if(h)clickHex(h[0],h[1],long?2:0)}mdown=null;lastTouchDist=0});
+addEventListener('keydown',e=>{keys[e.key]=true;if(!G||e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;const k=e.key;
+if(k==='Escape'){if(modalOpen())closeModal();else if(sel.unit||sel.city){selectUnit(null);selectCity(null)}else showPause();return}
+if(modalOpen())return;
+if(k==='Enter'){if(e.shiftKey)endTurn();else endTurnBtn();e.preventDefault()}
+else if(k===' '){if(sel.unit){sel.unit.skip=true;nextUnit()}e.preventDefault()}
+else if(k==='n'||k==='N')nextUnit();else if(k==='f'||k==='F')unitCmd('fortify');else if(k==='z'||k==='Z')unitCmd('sleep');else if(k==='b'||k==='B')unitCmd('found');else if(k==='t'||k==='T')showTech();else if(k==='p'||k==='P')showPolicies();else if(k==='h'||k==='H')showHelp();else if(k==='c'||k==='C'){if(sel.unit)centerOn(sel.unit.x,sel.unit.y,true)}else if(k==='+'||k==='=')cam.z=clamp(cam.z*1.2,.35,2.4);else if(k==='-')cam.z=clamp(cam.z/1.2,.35,2.4);else if(k==='m'||k==='M')toggleMute();else if(k==='e'||k==='E')unitCmd('explore');else if(k==='i'||k==='I')showDiplo();else if(k==='o'||k==='O')showStats()});
+addEventListener('keyup',e=>{keys[e.key]=false});
+addEventListener('blur',()=>{for(const k in keys)keys[k]=false;mdown=null});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&AC.ctx)Music.pause();else if(AC.ctx)Music.resume()});
+function modalOpen(){return $('modalWrap').style.display==='flex'||$('title').style.display!=='none'}
+function updateHoverPath(){hoverPath=null;if(!sel.unit||!hover||!sel.unit.alive)return;const u=sel.unit;if(hover[0]===u.x&&hover[1]===u.y)return;if(pvis(hover[0],hover[1])===0)return;hoverPath=findPath(u,hover[0],hover[1],{attack:true})}
+function updateTileInfo(){const el=$('tileInfo');if(!hover||!G||pvis(hover[0],hover[1])===0){el.style.display='none';return}const [x,y]=hover;const t=G.tiles[idx(x,y)];const civ=G.civs[G.player];const y2=tileYield(idx(x,y),civ,null);
+let s=`<b>${TERRAIN[t.t].name}</b>${t.hill?' Hills':''}${t.forest?' Forest':''}${t.mtn?' Mountain':''}`;if(t.res&&resVisible(civ,t.res))s+=` · ${RES[t.res].icon} ${RES[t.res].name}`;if(t.imp)s+=` · ${IMPS[t.imp].name}${t.pill?' (pillaged)':''}`;if(t.road)s+=' · Road';if(t.camp)s+=' · <span style="color:#f66">Barbarian Camp</span>';
+s+=` · <span class="yl">${y2.f}🍖</span> <span class="yp">${y2.p}⚙</span> <span class="yg">${y2.g}💰</span>`;if(t.owner>=0)s+=` · <span style="color:${civColor(t.owner)}">${G.civs[t.owner].def.name}</span>`;
+if(pvis(x,y)===2){const us=unitsAt(x,y);if(us.length)s+=' · '+us.map(u=>`${UNITS[u.type].icon} ${G.civs[u.civ].def.name} ${UNITS[u.type].name} (${u.hp}hp)`).join(', ')}
+el.innerHTML=s;el.style.display='block'}
+function clickHex(x,y,button){if(!G||modalOpen())return;const P=G.player;const t=G.tiles[idx(x,y)];const own=unitsAt(x,y).filter(u=>u.civ===P);const city=t.city>=0?G.cities[t.city]:null;
+if(sel.unit&&sel.unit.alive&&(button===2||(!own.length&&!(city&&city.civ===P)))){orderUnit(sel.unit,x,y);return}
+if(button===2){selectUnit(null);selectCity(null);return}
+if(city&&city.civ===P){selectUnit(null);selectCity(city);SFX.click();tut('city');return}
+if(own.length){let i=own.indexOf(sel.unit);let u;if(i>=0)u=own[(i+1)%own.length];else u=own.find(v=>v.moves>0&&!v.sleep)||own[0];selectCity(null);selectUnit(u);SFX.click();return}
+if(city&&pvis(x,y)){toast(`${city.name} (${G.civs[city.civ].def.name}) — Pop ${city.pop}, Strength ${cityStrength(city).toFixed(0)}, HP ${city.hp}/${city.maxhp}`)}
+selectUnit(null);selectCity(null)}
+function orderUnit(u,x,y){if(u.civ!==G.player)return;if(u.order)u.order=null;u.sleep=false;u.auto=false;
+const en=enemyAt(x,y,u.civ);const d=UNITS[u.type];const dist=hdist(u.x,u.y,x,y);
+if(en&&isMil(u)){if(d.range&&dist<=d.range){if(attack(u,x,y)){refreshAll();return}}if(!d.range&&dist===1){if(attack(u,x,y)){refreshAll();return}}}
+if(en&&!isMil(u)){toast('Civilians cannot attack',true);SFX.error();return}
+const p=findPath(u,x,y,{attack:!!isMil(u)});if(!p){toast('No path to that tile',true);SFX.error();return}
+if(en&&isMil(u)){const stop=p.slice(0,-1);if(stop.length)moveUnit(u,stop);if(u.alive&&u.moves>0){const dd=hdist(u.x,u.y,x,y);if((d.range&&dd<=d.range)||(!d.range&&dd===1))attack(u,x,y);else u.dest={x,y}}else if(u.alive)u.dest={x,y}}
+else moveUnit(u,p);
+updateHoverPath();refreshAll();if(u.alive&&u.moves<=0&&!u.dest)setTimeout(()=>{if(sel.unit===u)nextUnit(true)},250)}
+
+// ============================ AUDIO ============================
+const AC={ctx:null,master:null,sfx:null,music:null,muted:lsGet('civmicro_muted',false)};
+function audioInit(){if(AC.ctx)return;try{const C=window.AudioContext||window.webkitAudioContext;AC.ctx=new C();AC.master=AC.ctx.createGain();AC.master.connect(AC.ctx.destination);AC.sfx=AC.ctx.createGain();AC.sfx.connect(AC.master);AC.music=AC.ctx.createGain();AC.music.connect(AC.master);applyVolumes();Music.start()}catch(e){console.warn('audio unavailable',e)}}
+function applyVolumes(){if(!AC.ctx)return;AC.master.gain.value=AC.muted?0:settings.master;AC.sfx.gain.value=settings.sfx;AC.music.gain.value=settings.music}
+function toggleMute(){AC.muted=!AC.muted;lsSet('civmicro_muted',AC.muted);applyVolumes();toast(AC.muted?'🔇 Muted':'🔊 Sound on');updateTopbar()}
+function tone(o){if(!AC.ctx||AC.muted)return;const c=AC.ctx;const t=c.currentTime+(o.delay||0);const osc=c.createOscillator();const g=c.createGain();osc.type=o.type||'sine';osc.frequency.setValueAtTime(o.f,t);if(o.f2)osc.frequency.exponentialRampToValueAtTime(o.f2,t+(o.dur||.2));g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(o.vol||.2,t+(o.a||.01));g.gain.exponentialRampToValueAtTime(.0001,t+(o.dur||.2));osc.connect(g);g.connect(o.dest||AC.sfx);osc.start(t);osc.stop(t+(o.dur||.2)+.05)}
+function noise(o){if(!AC.ctx||AC.muted)return;const c=AC.ctx;const t=c.currentTime+(o.delay||0);const len=Math.floor(c.sampleRate*(o.dur||.2));const b=c.createBuffer(1,len,c.sampleRate);const d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);const s=c.createBufferSource();s.buffer=b;const f=c.createBiquadFilter();f.type=o.ft||'lowpass';f.frequency.value=o.ff||800;const g=c.createGain();g.gain.setValueAtTime(o.vol||.3,t);g.gain.exponentialRampToValueAtTime(.0001,t+(o.dur||.2));s.connect(f);f.connect(g);g.connect(AC.sfx);s.start(t)}
+const SFX={
+click(){tone({f:900,type:'triangle',dur:.05,vol:.08})},
+move(){noise({dur:.08,ff:1200,vol:.12});tone({f:300,f2:200,type:'triangle',dur:.08,vol:.05})},
+hit(){noise({dur:.18,ff:600,vol:.35});tone({f:120,f2:50,type:'square',dur:.18,vol:.18})},
+die(){noise({dur:.4,ff:400,vol:.4});tone({f:260,f2:40,type:'sawtooth',dur:.45,vol:.15})},
+found(){[523,659,784,1047].forEach((f,i)=>tone({f,type:'triangle',dur:.35,vol:.15,delay:i*.09}))},
+build(){tone({f:440,type:'triangle',dur:.12,vol:.12});tone({f:660,type:'triangle',dur:.2,vol:.12,delay:.1})},
+tech(){[440,554,659,880,1108].forEach((f,i)=>tone({f,type:'sine',dur:.4,vol:.14,delay:i*.07}))},
+wonder(){[392,494,587,784,988,1175].forEach((f,i)=>tone({f,type:'triangle',dur:.6,vol:.14,delay:i*.1}));[196,247].forEach((f,i)=>tone({f,type:'sawtooth',dur:1.2,vol:.06,delay:i*.1}))},
+war(){tone({f:110,f2:80,type:'sawtooth',dur:.9,vol:.22});tone({f:165,f2:110,type:'sawtooth',dur:.9,vol:.15,delay:.05});noise({dur:.6,ff:300,vol:.3,delay:.1})},
+peace(){[523,659,784].forEach((f,i)=>tone({f,type:'sine',dur:.5,vol:.12,delay:i*.12}))},
+coin(){tone({f:1200,type:'square',dur:.06,vol:.06});tone({f:1600,type:'square',dur:.12,vol:.06,delay:.06})},
+turn(){tone({f:330,type:'sine',dur:.15,vol:.08});tone({f:440,type:'sine',dur:.2,vol:.08,delay:.08})},
+error(){tone({f:200,f2:150,type:'square',dur:.15,vol:.08})},
+meet(){[660,880].forEach((f,i)=>tone({f,type:'triangle',dur:.25,vol:.1,delay:i*.1}))},
+policy(){[587,740,880,1175].forEach((f,i)=>tone({f,type:'sine',dur:.4,vol:.12,delay:i*.08}))},
+capture(){[330,415,494,659,830].forEach((f,i)=>tone({f,type:'square',dur:.3,vol:.08,delay:i*.08}));noise({dur:.5,ff:500,vol:.25})},
+victory(){[523,659,784,1047,784,1047,1319].forEach((f,i)=>tone({f,type:'triangle',dur:.5,vol:.15,delay:i*.15}))},
+defeat(){[440,415,392,370,349].forEach((f,i)=>tone({f,type:'sawtooth',dur:.6,vol:.1,delay:i*.3}))}};
+const Music={timer:null,next:0,bar:0,era:0,war:false,mode:'play',paused:false,
+chords:{peace:[[0,4,7,11],[5,9,12,16],[7,11,14,17],[2,5,9,12]],war:[[0,3,7,10],[-2,1,5,8],[3,7,10,14],[-4,0,3,7]]},
+scale:[0,2,4,7,9],base:[220,196,246.9,220,174.6,164.8],
+start(){if(this.timer)return;this.next=AC.ctx.currentTime+.1;this.timer=setInterval(()=>this.tick(),120)},
+setEra(e){this.era=clamp(e,0,5)},setWar(w){this.war=w},setMode(m){this.mode=m;this.bar=0},pause(){this.paused=true},resume(){this.paused=false;if(AC.ctx)this.next=Math.max(this.next,AC.ctx.currentTime+.1)},
+tick(){if(!AC.ctx||this.paused||AC.muted)return;const c=AC.ctx;if(this.next<c.currentTime)this.next=c.currentTime+.05;const bpm=this.mode==='victory'?110:this.war?108:72+this.era*3;const beat=60/bpm;while(this.next<c.currentTime+.4){this.playBar(this.next,beat);this.next+=beat*4;this.bar++}},
+n(semi){return this.base[this.era]*Math.pow(2,semi/12)},
+playBar(t,beat){const dest=AC.music;const set=this.mode==='defeat'?this.chords.war:(this.war?this.chords.war:this.chords.peace);const ch=set[this.bar%set.length];
+// pad
+for(const s of ch){tone({f:this.n(s)/2,type:'triangle',dur:beat*4,vol:.045,a:beat,delay:t-AC.ctx.currentTime,dest});tone({f:this.n(s),type:'sine',dur:beat*4,vol:.03,a:beat*1.5,delay:t-AC.ctx.currentTime+.02,dest})}
+// bass
+tone({f:this.n(ch[0])/4,type:this.war?'sawtooth':'triangle',dur:beat*1.5,vol:.08,delay:t-AC.ctx.currentTime,dest});if(this.war)tone({f:this.n(ch[0])/4,type:'sawtooth',dur:beat*.8,vol:.07,delay:t-AC.ctx.currentTime+beat*2,dest});
+// melody
+if(this.mode==='play'||this.mode==='victory'){const dens=this.mode==='victory'?.9:.35+this.era*.08+(this.war?.2:0);for(let b=0;b<4;b++){for(let h=0;h<2;h++){if(Math.random()<dens){const deg=ch[Math.floor(Math.random()*ch.length)]+(Math.random()<.5?12:24)+(Math.random()<.3?2:0);tone({f:this.n(deg),type:this.era>=4?'square':'sine',dur:beat*(h?.5:.9),vol:this.era>=4?.025:.045,a:.03,delay:t-AC.ctx.currentTime+b*beat+h*beat*.5,dest})}}}}
+// war drums
+if(this.war&&this.mode==='play'){for(let b=0;b<4;b++){const dl=t-AC.ctx.currentTime+b*beat;if(!AC.ctx||AC.muted)return;const c=AC.ctx;const tt=c.currentTime+dl;const o=c.createOscillator(),g=c.createGain();o.frequency.setValueAtTime(90,tt);o.frequency.exponentialRampToValueAtTime(35,tt+.25);g.gain.setValueAtTime(.18,tt);g.gain.exponentialRampToValueAtTime(.0001,tt+.3);o.connect(g);g.connect(dest);o.start(tt);o.stop(tt+.32)}}}};
+// ============================ UI: SELECTION & PANELS ============================
+function selectUnit(u){sel.unit=u&&u.alive?u:null;if(sel.unit){sel.city=null;$('cityPanel').style.display='none'}updateUnitPanel();updateHoverPath()}
+function selectCity(c){sel.city=c||null;if(c){sel.unit=null;updateUnitPanel()}updateCityPanel()}
+function needsOrders(u){return u.alive&&u.civ===G.player&&u.moves>0&&!u.sleep&&!u.order&&!u.skip&&!u.dest&&!u.auto}
+function nextUnit(auto){const list=G.units.filter(needsOrders);if(!list.length){if(!auto||sel.unit&&!needsOrders(sel.unit))selectUnit(null);updateEndTurn();return}let i=sel.unit?list.indexOf(sel.unit):-1;const u=list[(i+1)%list.length];selectUnit(u);centerOn(u.x,u.y,true);updateEndTurn()}
+function unitCmd(cmd,arg){const u=sel.unit;if(!u||!u.alive||u.civ!==G.player)return;const civ=G.civs[G.player];
+switch(cmd){
+case'fortify':u.sleep=true;u.skip=true;u.dest=null;u.auto=false;break;
+case'sleep':u.sleep=true;u.dest=null;u.auto=false;break;
+case'skip':u.skip=true;break;
+case'wake':u.sleep=false;u.skip=false;u.dest=null;u.auto=false;u.order=null;updateUnitPanel();updateEndTurn();return;
+case'found':if(u.type!=='settler')return;if(!canFound(u.x,u.y,u.civ)){toast('Cannot found a city here (too close to another city or invalid terrain)',true);SFX.error();return}if(u.moves<=0){toast('Settler has no moves left',true);return}foundCity(u.civ,u.x,u.y);u.alive=false;pruneUnits();selectUnit(null);const c=G.cities[G.cities.length-1];selectCity(c);refreshAll();return;
+case'auto':if(u.type!=='worker')return;u.auto=true;u.sleep=false;aiWorker(u);break;
+case'explore':if(UNITS[u.type].cls!=='recon'&&isMil(u)){u.auto=true;aiExplore(u)}else if(UNITS[u.type].cls==='recon'){u.auto=true;aiExplore(u)}break;
+case'build':if(!startImprove(u,arg)){toast('Cannot build that here',true);SFX.error();return}SFX.click();break;
+case'pillage':if(!pillage(u)){toast('Nothing to pillage here (must be enemy improvement)',true);SFX.error();return}break;
+case'upgrade':{const up=canUpgrade(u);if(!up){toast('Upgrade unavailable here',true);return}if(civ.gold<up.cost){toast(`Need ${up.cost} Gold`,true);SFX.error();return}upgradeUnit(u);toast(`Upgraded to ${UNITS[u.type].name}`);break}
+case'disband':u.alive=false;pruneUnits();selectUnit(null);refreshAll();return;}
+refreshAll();if(!needsOrders(u))setTimeout(()=>{if(sel.unit===u)nextUnit(true)},150)}
+function updateUnitPanel(){const el=$('unitPanel');const u=sel.unit;if(!u||!u.alive){el.style.display='none';return}const d=UNITS[u.type];const civ=G.civs[u.civ];const mine=u.civ===G.player;
+let st='';if(u.order)st=`Building ${u.order.imp==='road'?'Road':IMPS[u.order.imp].name} (${u.order.turns} turns)`;else if(u.auto)st='Automated';else if(u.sleep)st=isMil(u)?`Fortified (+${Math.min(2,u.fort)*12.5}%)`:'Sleeping';else if(u.dest)st=`Moving to (${u.dest.x},${u.dest.y})`;
+const lvl=u.xp>=60?'Elite +30%':u.xp>=30?'Veteran +20%':u.xp>=10?'Trained +10%':'';
+let h=`<div class="row" style="justify-content:space-between"><div><span style="font-size:22px">${d.icon}</span> <b class="cz">${d.name}</b> <span class="tag" style="background:${civ.def.color}">${civ.def.name}</span></div><span class="hint">#${u.id}</span></div>`;
+h+=`<div class="row" style="margin:6px 0"><span>HP</span><div class="bar"><div style="width:${u.hp}%;background:${u.hp>50?'#4c4':u.hp>25?'#fc4':'#f44'}"></div></div><span>${u.hp}</span></div>`;
+h+=`<div class="kv"><b>Moves</b><span>${u.moves}/${u.maxMoves}</span>${isMil(u)?`<b>Strength</b><span>${d.str}${d.rstr?` / ${d.rstr} ranged (${d.range})`:''} · eff ${effStr(u,{def:true}).toFixed(1)}</span><b>XP</b><span>${u.xp} ${lvl}</span>`:''}${st?`<b>Status</b><span>${st}</span>`:''}</div>`;
+if(d.desc)h+=`<div class="hint" style="margin-top:4px">${d.desc}</div>`;
+if(mine){h+='<div class="row" style="margin-top:8px">';
+if(u.type==='settler')h+=`<button class="btn sm primary" onclick="unitCmd('found')">Found City (B)</button>`;
+if(u.type==='worker'){for(const k of workerOptions(u))h+=`<button class="btn sm" onclick="unitCmd('build','${k}')">${k==='road'?'🛣️ Road':IMPS[k].icon+' '+IMPS[k].name}</button>`;h+=`<button class="btn sm ${u.auto?'good':''}" onclick="unitCmd('auto')">Automate</button>`}
+if(isMil(u)){h+=`<button class="btn sm" onclick="unitCmd('fortify')">Fortify (F)</button><button class="btn sm" onclick="unitCmd('pillage')">Pillage</button>`;const up=canUpgrade(u);if(up)h+=`<button class="btn sm good" onclick="unitCmd('upgrade')">⬆ ${UNITS[up.to].name} (${up.cost}g)</button>`;if(d.cls==='recon'||true)h+=`<button class="btn sm" onclick="unitCmd('explore')">Explore (E)</button>`}
+h+=`<button class="btn sm" onclick="unitCmd('sleep')">Sleep (Z)</button><button class="btn sm" onclick="unitCmd('skip')">Skip (Space)</button>`;
+if(u.sleep||u.auto||u.dest||u.order)h+=`<button class="btn sm" onclick="unitCmd('wake')">Wake</button>`;
+h+=`<button class="btn sm danger" onclick="unitCmd('disband')">Disband</button></div><div class="hint" style="margin-top:4px">Right-click / click a tile to move or attack. C = center.</div>`}
+el.innerHTML=h;el.style.display='block'}
+function updateCityPanel(){const el=$('cityPanel');const c=sel.city;if(!c){el.style.display='none';return}const civ=G.civs[c.civ];const y=cityYields(c);c.y_=y;const mine=c.civ===G.player;
+const need=foodNeed(c.pop);const grow=y.sur>0?Math.ceil((need-c.food)/y.sur):'∞';
+let h=`<div class="row" style="justify-content:space-between"><h2 style="margin:0">${c.capital?'★ ':''}${esc(c.name)}</h2><span class="btn sm" onclick="selectCity(null)">✕</span></div>`;
+h+=`<div class="hint">${civ.def.name} · Pop ${c.pop} · Founded T${c.founded} · Str ${cityStrength(c).toFixed(0)} · HP ${c.hp}/${c.maxhp}</div>`;
+h+=`<div class="row" style="margin:6px 0;gap:10px"><span class="yl">🍖${y.f} (${y.sur>=0?'+':''}${y.sur})</span><span class="yp">⚙${y.p}</span><span class="yg">💰${y.g}</span><span class="ys">🔬${y.s}</span><span class="yc">🎭${y.c}</span></div>`;
+h+=`<div class="row"><span style="width:60px">Growth</span><div class="bar"><div style="width:${clamp(c.food/need*100,0,100)}%;background:#6c3"></div></div><span class="hint">${c.food}/${need} · ${grow}t</span></div>`;
+if(c.build){const cost=buildCost(c.build);const pr=prodFor(c,y,c.build);const left=Math.max(1,Math.ceil((cost-c.prod)/Math.max(1,pr)));h+=`<div class="row" style="margin-top:4px"><span style="width:60px">Building</span><div class="bar"><div style="width:${clamp(c.prod/cost*100,0,100)}%;background:#e8a35a"></div></div><span class="hint">${c.prod}/${cost} · ${left}t</span></div><div class="row" style="margin-top:4px"><b>${buildName(c.build)}</b>${mine?`<button class="btn sm good" onclick="buyBuild(${c.id})" ${civ.gold<buyCost(c,c.build)?'disabled':''}>Buy ${buyCost(c,c.build)}g</button>`:''}</div>`}
+else h+=`<div style="color:#f88;margin-top:6px">⚠ No production selected</div>`;
+if(mine){h+=`<div class="row" style="margin-top:6px"><span>Focus:</span><select onchange="setFocus(${c.id},this.value)">${['bal','food','prod','gold'].map(f=>`<option value="${f}" ${c.focus===f?'selected':''}>${{bal:'Balanced',food:'Food',prod:'Production',gold:'Gold'}[f]}</option>`).join('')}</select><span class="hint">Border growth: ${c.cultureAcc}/${cultureCostTiles(c.tiles.length-6)}</span></div>`;
+const item=(kind,id,name,cost,desc,icon='')=>{const pr=prodFor(c,y,{kind,id});const t=Math.max(1,Math.ceil((cost-c.prod)/Math.max(1,pr)));const cur=c.build&&c.build.kind===kind&&c.build.id===id;return`<div class="item ${cur?'sel':''}" title="${esc(desc||'')}" onclick="setBuild(${c.id},'${kind}','${id}')"><span>${icon} ${name}</span><small>${cost}⚙ · ${t}t</small></div>`};
+h+='<h3>Units</h3><div class="list">'+buildableUnits(c).map(k=>item('unit',k,UNITS[k].name,UNITS[k].cost,(UNITS[k].desc||'')+` Str ${UNITS[k].str}${UNITS[k].rstr?'/'+UNITS[k].rstr+' R'+UNITS[k].range:''} Move ${UNITS[k].move}`,UNITS[k].icon)).join('')+'</div>';
+h+='<h3>Buildings</h3><div class="list">'+buildableBld(c).map(k=>item('bld',k,BLD[k].name,BLD[k].cost,BLD[k].desc+(BLD[k].maint?` (maint ${BLD[k].maint}g)`:''),'🏛')).join('')+'</div>';
+const bw=buildableWonders(c);if(bw.length)h+='<h3>Wonders</h3><div class="list">'+bw.map(k=>item('wonder',k,WONDERS[k].name,WONDERS[k].cost,WONDERS[k].desc,'🗿')).join('')+'</div>';
+const bp=buildableProjects(c);if(bp.length)h+='<h3>Projects</h3><div class="list">'+bp.map(k=>item('project',k,PROJECTS[k].name,PROJECTS[k].cost,PROJECTS[k].desc,'🚀')).join('')+'</div>';}
+const owned=Object.keys(c.b).filter(k=>BLD[k]).map(k=>`<span class="tag" title="${BLD[k].desc}">${BLD[k].name}</span>`).join('')+Object.keys(c.hasW).map(k=>`<span class="tag" style="background:#664" title="${WONDERS[k].desc}">🗿 ${WONDERS[k].name}</span>`).join('');
+h+=`<h3>Buildings owned</h3><div>${owned||'<span class="hint">None</span>'}</div>`;
+const gar=unitsAt(c.x,c.y).filter(isMil);h+=`<div class="hint" style="margin-top:6px">Garrison: ${gar.length?gar.map(u=>UNITS[u.type].name).join(', '):'none'}</div>`;
+el.innerHTML=h;el.style.display='block'}
+function setBuild(cid,kind,id){const c=G.cities[cid];if(c.civ!==G.player)return;c.build={kind,id};SFX.click();updateCityPanel();updateEndTurn();tut('prod')}
+function setFocus(cid,f){const c=G.cities[cid];c.focus=f;assignTiles(c);updateCityPanel()}
+function buyBuild(cid){const c=G.cities[cid];const civ=G.civs[G.player];if(!c.build)return;const cost=buyCost(c,c.build);if(civ.gold<cost){SFX.error();return}civ.gold-=cost;c.prod=buildCost(c.build);completeBuild(c);SFX.coin();refreshAll()}
+
+// ============================ UI: TOPBAR / END TURN / NOTIFS ============================
+function updateTopbar(){if(!G)return;const P=G.player,civ=G.civs[P];const ey=empireYields(P);const cost=civ.research?techCost(civ,civ.research):0;const tleft=civ.research?Math.max(1,Math.ceil((cost-civ.rp)/Math.max(1,ey.s))):0;
+const pc=policyCost(civ.policies.length);const pleft=ey.c>0?Math.max(0,Math.ceil((pc-civ.cultureAcc)/ey.c)):'∞';const era=ERAS[civEra(civ)];
+$('topbar').innerHTML=`<span class="cz" style="color:${civ.def.color};font-weight:700">${civ.def.name}</span><span class="hint">Turn ${G.turn}/${G.maxTurn} · ${era} Era</span>
+<span class="stat yg" title="Gold (net per turn)">💰 ${civ.gold} <span class="hint">(${ey.net>=0?'+':''}${ey.net})</span></span>
+<span class="stat ys" onclick="showTech()" title="Science — click for tech tree">🔬 +${ey.s} <span class="hint">${civ.research?TECHS[civ.research].name+' ('+tleft+'t)':'— choose research'}</span></span>
+<span class="stat yc" onclick="showPolicies()" title="Culture — click for policies">🎭 +${ey.c} <span class="hint">${canAdoptPolicy(civ)?'<b style="color:#fd8">Policy available!</b>':'policy in '+pleft+'t'}</span></span>
+<span class="stat" title="Score">🏆 ${civScore(P)}</span><span class="spacer"></span>
+<button class="btn sm" onclick="showTech()">Tech (T)</button><button class="btn sm" onclick="showPolicies()">Policies (P)</button><button class="btn sm" onclick="showDiplo()">Diplomacy (I)</button><button class="btn sm" onclick="cycleCity()">Cities</button><button class="btn sm" onclick="showStats()">Overview (O)</button><button class="btn sm" onclick="toggleMute()">${AC.muted?'🔇':'🔊'}</button><button class="btn sm" onclick="showPause()">☰</button>`}
+let cityCycle=0;function cycleCity(){const cs=G.cities.filter(c=>c.civ===G.player);if(!cs.length)return;const c=cs[cityCycle++%cs.length];selectCity(c);centerOn(c.x,c.y,true)}
+function blocker(){const P=G.player,civ=G.civs[P];if(!civ.research&&availableTechs(civ).length)return{t:'Choose Research',f:showTech};const c=G.cities.find(c=>c.civ===P&&!c.build);if(c)return{t:'Choose Production',f:()=>{selectCity(c);centerOn(c.x,c.y,true)}};if(G.units.some(needsOrders))return{t:'Unit Needs Orders',f:()=>nextUnit(false)};return null}
+function updateEndTurn(){const b=$('endTurn');if(!G)return;if(G.over&&!G.cont){b.textContent='Game Over';$('forceEnd').style.display='none';return}const bl=blocker();b.textContent=bl?bl.t:'End Turn (Enter)';b.classList.toggle('attn',!bl);$('forceEnd').style.display=bl?'block':'none'}
+function endTurnBtn(){if(busy)return;if(G.over&&!G.cont){showGameOver();return}const bl=blocker();if(bl){bl.f();SFX.click()}else endTurn()}
+$('endTurn').onclick=()=>{audioInit();endTurnBtn()};$('forceEnd').onclick=()=>{audioInit();endTurn()};
+function notify(text,o={}){if(!G)return;G.notifs.unshift({text,x:o.x,y:o.y,civ:o.civ,open:o.open,bad:o.bad,turn:G.turn});G.notifs=G.notifs.slice(0,40);renderNotifs()}
+function renderNotifs(){const el=$('notifs');if(!G)return;const list=G.notifs.filter(n=>G.turn-n.turn<8).slice(0,8);el.innerHTML=list.map((n,i)=>`<div class="notif" style="border-color:${n.bad?'#e44':n.civ!=null?civColor(n.civ):'#d4af37'}" onclick="notifClick(${i})"><span class="hint">T${n.turn}</span> ${esc(n.text)}</div>`).join('')}
+function notifClick(i){const list=G.notifs.filter(n=>G.turn-n.turn<8).slice(0,8);const n=list[i];if(!n)return;if(n.open==='policies')showPolicies();else if(n.open==='tech')showTech();else if(n.x!=null)centerOn(n.x,n.y,true);else if(n.civ!=null)showDiplo()}
+function toast(t,bad){const el=document.createElement('div');el.className='toast'+(bad?' bad':'');el.textContent=t;const box=$('toasts');box.appendChild(el);while(box.children.length>4)box.removeChild(box.firstChild);setTimeout(()=>{el.style.transition='opacity .4s';el.style.opacity='0';setTimeout(()=>el.remove(),400)},3400)}
+function refreshAll(){if(!G)return;updateTopbar();updateUnitPanel();if(sel.city)updateCityPanel();updateEndTurn();renderNotifs()}
+
+// ============================ MODALS ============================
+function openModal(html){$('modal').innerHTML=`<span class="close" onclick="closeModal()">✕</span>`+html;$('modalWrap').style.display='flex'}
+function closeModal(){$('modalWrap').style.display='none';if(G)refreshAll()}
+$('modalWrap').addEventListener('mousedown',e=>{if(e.target===$('modalWrap'))closeModal()});
+function showTech(){if(!G)return;const civ=G.civs[G.player];const ey=empireYields(G.player);const path=civ.goal?techPath(civ,civ.goal):[];
+let h=`<h2>Technology</h2><div class="hint" style="margin-bottom:8px">Click a technology to research it (prerequisites are queued automatically). Science: +${ey.s}/turn. ${civ.research?`Researching <b>${TECHS[civ.research].name}</b> ${civ.rp}/${techCost(civ,civ.research)}`:'<b style="color:#f88">No research selected!</b>'}${civ.raTurns>0?` · Research Agreement active (${civ.raTurns}t)`:''}</div><div class="eras">`;
+for(let e=0;e<ERAS.length;e++){h+=`<div class="era"><h3>${ERAS[e]}</h3>`;for(const k in TECHS){const T=TECHS[k];if(T.era!==e)continue;const done=civ.techs[k],avail=T.pre.every(p=>civ.techs[p]);const cls=done?'done':k===civ.research?'cur':path.includes(k)?'queued':avail?'avail':'locked';const turns=done?'':Math.max(1,Math.ceil((techCost(civ,k)-(k===civ.research?civ.rp:0))/Math.max(1,ey.s)))+'t';
+h+=`<div class="tech ${cls}" onclick="setResearch('${k}')"><b>${T.name}</b> <span class="hint">${done?'✓':techCost(civ,k)+'🔬 '+turns}</span><span class="u">${T.u}</span>${T.pre.length?`<span class="pr">Req: ${T.pre.map(p=>TECHS[p].name).join(', ')}</span>`:''}</div>`}h+='</div>'}
+h+='</div>';openModal(h)}
+function setResearch(k){const civ=G.civs[G.player];if(civ.techs[k])return;const p=techPath(civ,k);civ.goal=k;if(civ.research!==p[0]){civ.research=p[0]}SFX.click();showTech();tut('research');updateEndTurn()}
+function showPolicies(){if(!G)return;const civ=G.civs[G.player];const trees=[...new Set(POLICIES.map(p=>p.tree))];const can=canAdoptPolicy(civ);
+let h=`<h2>Social Policies</h2><div class="hint" style="margin-bottom:8px">Culture: ${civ.cultureAcc}/${policyCost(civ.policies.length)} for next policy · Adopted ${civ.policies.length}/${CULTURE_WIN} (Culture Victory at ${CULTURE_WIN})${civ.freePolicies?` · <b>${civ.freePolicies} free policy!</b>`:''}${can?' · <b style="color:#fd8">You may adopt a policy now</b>':''}</div><div class="trees">`;
+for(const tr of trees){h+=`<div class="tree"><h3 style="margin-top:0">${tr}</h3>`;for(const p of POLICIES.filter(p=>p.tree===tr)){const done=civ.policies.includes(p.id);const av=policyAvailable(civ,p);h+=`<div class="pol ${done?'done':av&&can?'avail':'locked'}" onclick="adoptUI('${p.id}')"><b>${p.name}</b><br><span class="hint">${p.desc}</span></div>`}h+='</div>'}
+h+='</div>';openModal(h)}
+function adoptUI(id){const civ=G.civs[G.player];const p=POLICIES.find(q=>q.id===id);if(!p)return;if(!canAdoptPolicy(civ)){toast('Not enough culture yet',true);SFX.error();return}if(!policyAvailable(civ,p)){toast('Adopt earlier policies in this tree first',true);SFX.error();return}adoptPolicy(civ,p);if(civ.policies.length>=CULTURE_WIN)endGame(G.player,'culture');showPolicies()}
+function attLabel(a){return a<-40?['Hostile','#f55']:a<-10?['Guarded','#f96']:a<25?['Neutral','#ccc']:a<60?['Friendly','#8d8']:['Admiring','#4f4']}
+function showDiplo(){if(!G)return;const P=G.player;let h=`<h2>Diplomacy</h2><div class="diplo">`;
+for(let j=0;j<G.civs.length;j++){if(j===P||j===G.barb)continue;const o=G.civs[j];const r=G.rel[P][j],r2=G.rel[j][P];const col=o.def.color;
+if(!o.alive){h+=`<div class="dcard" style="border-color:${col};opacity:.5"><b>${o.def.name}</b> — destroyed</div>`;continue}
+if(!r.met){h+=`<div class="dcard" style="border-color:${col};opacity:.6"><b>${o.def.name}</b> — not yet met</div>`;continue}
+const [al,ac]=attLabel(r2.att);const cities=G.cities.filter(c=>c.civ===j).length;const status=r.war?'<b style="color:#f55">AT WAR</b>':r.ally?'<b style="color:#4f4">ALLIED</b>':'Peace';
+const others=[];for(let k=0;k<G.civs.length;k++)if(k!==j&&k!==G.barb&&k!==P&&G.civs[k].alive&&G.rel[P][k].met){if(G.rel[j][k].war)others.push(`war with ${G.civs[k].def.name}`);else if(G.rel[j][k].ally)others.push(`allied with ${G.civs[k].def.name}`)}
+h+=`<div class="dcard" style="border-color:${col}"><div class="row" style="justify-content:space-between"><div><b class="cz" style="font-size:16px">${o.def.leader}</b> of <b>${o.def.name}</b> <span class="hint">· ${o.def.bonus}</span></div><div>${status} · <span class="att" style="color:${ac}">${al} (${Math.round(r2.att)})</span></div></div>
+<div class="hint" style="margin:4px 0">Cities ${cities} · Score ${civScore(j)} · Military ${Math.round(milPower(j))} (yours ${Math.round(milPower(P))}) · Techs ${Object.keys(o.techs).length} · Policies ${o.policies.length}${o.projects.apollo?' · <b style="color:#f88">Building spaceship!</b>':''}${others.length?' · '+others.join(', '):''}${r.peaceUntil>G.turn?` · peace treaty ${r.peaceUntil-G.turn}t`:''}</div>
+<div class="row">${r.war?`<button class="btn sm good" onclick="diploAction(${j},'peace')">Propose Peace</button>`:`<button class="btn sm danger" onclick="diploAction(${j},'war')" ${r.peaceUntil>G.turn?'disabled title="Peace treaty in effect"':''}>Declare War</button>${r.ally?`<button class="btn sm" onclick="diploAction(${j},'unally')">Cancel Alliance</button>`:`<button class="btn sm" onclick="diploAction(${j},'ally')">Propose Alliance</button>`}<button class="btn sm" onclick="diploAction(${j},'ra')">Research Agreement (150g)</button>${!r.open?`<button class="btn sm" onclick="diploAction(${j},'embassy')">Embassy (30g)</button>`:''}`}
+<button class="btn sm" onclick="diploAction(${j},'gift50')">Gift 50g</button><button class="btn sm" onclick="diploAction(${j},'gift200')">Gift 200g</button><button class="btn sm" onclick="diploAction(${j},'demand')">Demand Tribute</button><button class="btn sm" onclick="diploAction(${j},'denounce')">Denounce</button></div></div>`}
+h+=`</div><div class="hint" style="margin-top:8px">Attitude is shaped by borders, military balance, shared enemies, gifts, alliances and your warmongering. Allies join your wars and share vision. Alliances require Friendly+ attitude.</div>`;
+openModal(h)}
+function showPending(){const pp=G.pendingPeace.shift();if(!pp)return;const o=G.civs[pp.from];const txt=pp.kind==='peace'?`"Enough blood has been spilled. ${o.def.name} proposes a peace treaty."`:`"Our peoples share much. ${o.def.name} proposes a formal alliance — we would stand together in war."`;
+openModal(`<h2 style="color:${o.def.color}">${o.def.leader} of ${o.def.name}</h2><p style="font-style:italic;margin:10px 0">${txt}</p><div class="row"><button class="btn good" onclick="pendResolve(true)">Accept</button><button class="btn danger" onclick="pendResolve(false)">Decline</button></div>`);G._pp=pp;SFX.meet()}
+function pendResolve(a){resolvePending(G._pp,a);G._pp=null;closeModal();if(G.pendingPeace.length)showPending()}
+function showHelp(){openModal(`<h2>How to Play</h2><div class="grid2"><div><h3>Goal</h3><p style="font-size:13px">Lead your civilization from the Ancient to the Modern era. Win by <b>Domination</b> (capture every rival's original capital), <b>Science</b> (research Rocketry, build the Apollo Program and 3 spaceship parts), <b>Culture</b> (adopt ${CULTURE_WIN} Social Policies), or have the highest <b>Score</b> at turn ${MAX_TURN}. You lose if you are eliminated or another civ wins first.</p>
+<h3>Core Loop</h3><p style="font-size:13px">Found cities with Settlers → work tiles for 🍖Food (growth), ⚙Production (build), 💰Gold (upkeep, purchases), 🔬Science (tech) and 🎭Culture (policies, borders). Workers improve tiles (farms, mines, pastures, trading posts, roads). Strategic resources (Horses, Iron) must be improved to unlock units.</p>
+<h3>Combat</h3><p style="font-size:13px">Damage depends on the strength ratio. Melee attackers take damage back; ranged units don't. Hills/forest +25% defense, fortify up to +25%, damaged units are weaker. Siege units are +50% vs cities. Cities bombard adjacent enemies and must be captured by a melee unit after their HP hits 0. Units gain XP → +10/20/30% strength. Capture enemy Workers/Settlers by moving onto them.</p>
+<h3>Diplomacy & Barbarians</h3><p style="font-size:13px">AI attitude depends on borders, military balance, gifts and your wars. Allies join wars. Barbarian camps spawn in the fog and raid your lands — clearing one gives 40 Gold.</p></div>
+<div><h3>Controls</h3><table><tr><td>Left click</td><td>Select unit / city; with a unit selected, click a tile to move or attack</td></tr><tr><td>Right click / long-press</td><td>Move or attack with selected unit</td></tr><tr><td>Drag / WASD / Arrows</td><td>Pan map</td></tr><tr><td>Wheel / pinch / + −</td><td>Zoom</td></tr><tr><td>Enter</td><td>End turn (or resolve what needs attention)</td></tr><tr><td>Shift+Enter</td><td>Force end turn</td></tr><tr><td>Space / N</td><td>Skip unit / next unit</td></tr><tr><td>F / Z / E</td><td>Fortify / Sleep / Auto-explore</td></tr><tr><td>B</td><td>Found city (Settler)</td></tr><tr><td>T / P / I / O</td><td>Tech tree / Policies / Diplomacy / Empire overview</td></tr><tr><td>C</td><td>Center on selected unit</td></tr><tr><td>M</td><td>Mute</td></tr><tr><td>H / Esc</td><td>Help / Pause menu</td></tr></table>
+<h3>Tips</h3><ul style="font-size:12px;padding-left:18px"><li>Monument + Granary + Library early; keep 1 defender per city.</li><li>Settle 4–6 cities before turn 100; expand toward resources.</li><li>Walls + ranged garrison make cities very hard to take.</li><li>Trade Posts on plains fund a big army; Research Agreements boost science.</li><li>Buying with gold rushes emergency defenders.</li></ul></div></div>`)}
+function showSettings(){const d=G?`<div class="row"><span>Difficulty (applies next turn):</span><select onchange="G.diff=+this.value;toast('Difficulty: '+DIFFS[G.diff].name)">${DIFFS.map((x,i)=>`<option value="${i}" ${G.diff===i?'selected':''}>${x.name}</option>`).join('')}</select></div>`:'';
+openModal(`<h2>Settings</h2><div class="list" style="gap:10px">
+<div class="row"><span style="width:120px">Master volume</span><input type="range" min="0" max="1" step=".05" value="${settings.master}" oninput="settings.master=+this.value;applyVolumes();saveSettings()"><button class="btn sm" onclick="toggleMute();showSettings()">${AC.muted?'Unmute':'Mute'}</button></div>
+<div class="row"><span style="width:120px">Music</span><input type="range" min="0" max="1" step=".05" value="${settings.music}" oninput="settings.music=+this.value;applyVolumes();saveSettings()"></div>
+<div class="row"><span style="width:120px">Sound FX</span><input type="range" min="0" max="1" step=".05" value="${settings.sfx}" oninput="settings.sfx=+this.value;applyVolumes();saveSettings();SFX.click()"></div>
+<div class="row"><label><input type="checkbox" ${settings.anim?'checked':''} onchange="settings.anim=this.checked?1:0;saveSettings()"> Smooth animations</label></div>
+<div class="row"><label><input type="checkbox" ${settings.grid?'checked':''} onchange="settings.grid=this.checked?1:0;saveSettings()"> Show hex grid</label></div>
+<div class="row"><label><input type="checkbox" ${settings.tutorial?'checked':''} onchange="settings.tutorial=this.checked?1:0;saveSettings()"> Tutorial tips</label></div>
+${d}<div class="row"><button class="btn" onclick="closeModal()">Done</button></div></div>`)}
+function showPause(){if(!G)return;openModal(`<h2>Paused</h2><div class="menu"><button class="btn primary" onclick="closeModal()">Resume</button><button class="btn" onclick="showSettings()">Settings</button><button class="btn" onclick="showHelp()">Help</button><button class="btn" onclick="showStats()">Empire Overview</button><button class="btn" onclick="autosave();toast('Game saved');closeModal()">Save Game</button><button class="btn" onclick="autosave();showTitle()">Save & Quit to Title</button><button class="btn danger" onclick="if(confirm('Abandon this game and start a new one?')){showSetup()}">New Game</button></div>`)}
+function showStats(){const P=G.player;const rows=G.civs.map((c,i)=>({c,i})).filter(x=>!x.c.barb).sort((a,b)=>civScore(b.i)-civScore(a.i)).map(({c,i})=>`<tr><td style="color:${c.def.color}">${c.def.name}${i===P?' (you)':''}</td><td>${c.alive?civScore(i):'—'}</td><td>${G.cities.filter(x=>x.civ===i).length}</td><td>${G.cities.filter(x=>x.civ===i).reduce((a,x)=>a+x.pop,0)}</td><td>${Object.keys(c.techs).length}</td><td>${c.policies.length}</td><td>${Math.round(milPower(i))}</td><td>${Object.values(G.wonders).filter(w=>w===i).length}</td></tr>`).join('');
+openModal(`<h2>Empire Overview — Turn ${G.turn}</h2><table><tr><th>Civ</th><th>Score</th><th>Cities</th><th>Pop</th><th>Techs</th><th>Policies</th><th>Military</th><th>Wonders</th></tr>${rows}</table><h3>Your statistics</h3><div class="kv"><b>Cities founded</b><span>${G.stats.citiesFounded}</span><b>Cities captured</b><span>${G.stats.citiesCaptured}</span><b>Units killed / lost</b><span>${G.stats.killed} / ${G.stats.lost}</span><b>Barbarian camps cleared</b><span>${G.stats.barbCamps}</span><b>Wonders built</b><span>${G.stats.wonders}</span><b>Total culture</b><span>${G.civs[P].cultureTotal}</span><b>Gold earned</b><span>${G.stats.goldEarned}</span></div><h3>World Wonders</h3><div>${Object.keys(G.wonders).map(w=>`<span class="tag" style="background:${civColor(G.wonders[w])}">${WONDERS[w].name}</span>`).join('')||'<span class="hint">None yet</span>'}</div>`)}
+function showGameOver(){const o=G.over;if(!o)return;const won=o.winner===G.player;const P=G.player;const W=o.winner!=null?G.civs[o.winner]:null;
+const title=won?`🏆 ${o.type==='domination'?'Domination':o.type==='science'?'Science':o.type==='culture'?'Cultural':'Score'} Victory!`:o.type==='defeat'?'💀 Your civilization has been destroyed':`${W?W.def.name:'Someone'} achieved a ${o.type} victory`;
+const desc={domination:'Every rival capital flies your banner.',science:'Your spaceship has launched toward Alpha Centauri.',culture:'Your culture dominates the hearts and minds of the world.',score:'When the clock ran out, your legacy stood tallest.',defeat:'History will remember you as a footnote.'}[o.type]||'';
+const rows=G.civs.map((c,i)=>({c,i})).filter(x=>!x.c.barb).sort((a,b)=>civScore(b.i)-civScore(a.i)).map(({c,i})=>`<tr><td style="color:${c.def.color}">${c.def.name}${i===P?' (you)':''}</td><td>${c.alive?civScore(i):'destroyed'}</td><td>${G.cities.filter(x=>x.civ===i).length}</td><td>${Object.keys(c.techs).length}</td></tr>`).join('');
+const mins=Math.round((Date.now()-G.started)/60000);
+openModal(`<h2 style="font-size:26px;color:${won?'#e9c766':'#f88'}">${title}</h2><p style="font-style:italic;margin-bottom:10px">${won?desc:(o.type==='defeat'?desc:'Better luck next time, '+G.civs[P].def.leader+'.')}</p>
+<div class="grid3" id="stats"><div><div class="bigstat">${civScore(P)}</div>Score</div><div><div class="bigstat">${G.turn}</div>Turns</div><div><div class="bigstat">${G.cities.filter(c=>c.civ===P).length}</div>Cities</div><div><div class="bigstat">${Object.keys(G.civs[P].techs).length}</div>Techs</div><div><div class="bigstat">${G.stats.wonders}</div>Wonders</div><div><div class="bigstat">${G.civs[P].policies.length}</div>Policies</div><div><div class="bigstat">${G.stats.killed}/${G.stats.lost}</div>Killed / Lost</div><div><div class="bigstat">${G.stats.citiesCaptured}</div>Captured</div><div><div class="bigstat">${mins}m</div>Played · ${DIFFS[G.diff].name}</div></div>
+<h3>Final Standings</h3><table><tr><th>Civ</th><th>Score</th><th>Cities</th><th>Techs</th></tr>${rows}</table>
+<div class="row" style="margin-top:14px">${G.civs[P].alive?`<button class="btn" onclick="G.cont=true;closeModal();toast('Continuing — just one more turn...')">Continue Playing</button>`:''}<button class="btn primary" onclick="showSetup()">New Game</button><button class="btn" onclick="showTitle()">Main Menu</button></div>`)}
+function showHOF(){const hof=lsGet('civmicro_hof',[]);const prog=lsGet('civmicro_progress',{games:0,wins:0,bestScore:0});openModal(`<h2>Hall of Fame</h2><div class="hint" style="margin-bottom:8px">Games ${prog.games} · Wins ${prog.wins} · Best score ${prog.bestScore} · Victories: ${['domination','science','culture','score'].map(t=>`${t} ${prog['win_'+t]||0}`).join(', ')}</div>${hof.length?`<table><tr><th>Date</th><th>Civ</th><th>Result</th><th>Turn</th><th>Score</th><th>Difficulty</th></tr>${hof.map(h=>`<tr><td>${h.date}</td><td>${h.civ}</td><td style="color:${h.won?'#4f4':'#f66'}">${h.won?'Won':'Lost'} (${h.type})</td><td>${h.turn}</td><td>${h.score}</td><td>${h.diff}</td></tr>`).join('')}</table>`:'<p>No finished games yet. Make history!</p>'}`)}
+
+// ============================ TITLE & SETUP ============================
+const setup={civ:'rome',diff:1,map:'medium',seed:''};
+function showTitle(){closeModal();const t=$('title');t.style.display='flex';const hasSave=!!LS.getItem('civmicro_save');const prog=lsGet('civmicro_progress',{games:0,wins:0});
+t.innerHTML=`<h1>CIVILIZATION<br>MICRO</h1><div class="sub">Build an empire to stand the test of time — in under an hour.</div><div class="menu">${hasSave?`<button class="btn primary" onclick="loadGame()">Continue</button>`:''}<button class="btn ${hasSave?'':'primary'}" onclick="showSetup()">New Game</button><button class="btn" onclick="showHelp()">How to Play</button><button class="btn" onclick="showHOF()">Hall of Fame</button><button class="btn" onclick="showSettings()">Settings</button></div><div class="hint" style="margin-top:22px">Games played: ${prog.games} · Wins: ${prog.wins} · Hex 4X · Keyboard, mouse & touch</div>`;
+G=G||null;if(AC.ctx)Music.setMode('play')}
+function showSetup(){$('title').style.display='flex';const prog=lsGet('civmicro_progress',{});
+$('title').innerHTML=`<div style="max-width:900px;width:100%"><h2 style="text-align:center;font-size:28px">New Game</h2><h3>Choose your civilization</h3><div class="grid3">${CIVS.map(c=>`<div class="civcard ${setup.civ===c.id?'sel':''}" onclick="setup.civ='${c.id}';showSetup()"><div class="swatch" style="background:${c.color}"></div><div><b>${c.name}</b> <span class="hint">· ${c.leader}</span><div class="hint">${c.bonus}. Unique: ${UNITS[c.unique].name}</div></div></div>`).join('')}</div>
+<div class="grid2" style="margin-top:12px"><div><h3>Difficulty</h3>${DIFFS.map((d,i)=>`<div class="civcard ${setup.diff===i?'sel':''}" onclick="setup.diff=${i};showSetup()"><div><b>${d.name}</b>${prog['diff_'+d.id]?' <span class="tag" style="background:#363">beaten</span>':''}<div class="hint">${d.desc}</div></div></div>`).join('')}</div>
+<div><h3>Map</h3>${MAPS.map(m=>`<div class="civcard ${setup.map===m.id?'sel':''}" onclick="setup.map='${m.id}';showSetup()"><div><b>${m.name}</b> <span class="hint">${m.w}×${m.h} hexes</span></div></div>`).join('')}<h3>Seed (optional)</h3><input type="text" placeholder="random" value="${esc(setup.seed)}" oninput="setup.seed=this.value"><div class="hint" style="margin-top:8px">3 AI rivals · ${MAX_TURN} turns · Victory: Domination, Science, Culture, Score</div></div></div>
+<div class="row" style="margin-top:16px;justify-content:center"><button class="btn primary" style="padding:12px 30px;font-size:16px" onclick="startGame()">Begin</button><button class="btn" onclick="showTitle()">Back</button></div></div>`}
+function startGame(){audioInit();let seed=0;if(setup.seed){for(let i=0;i<setup.seed.length;i++)seed=(seed*31+setup.seed.charCodeAt(i))|0;seed=Math.abs(seed)||1}
+closeModal();newGame({civ:setup.civ,diff:setup.diff,map:setup.map,seed});
+sel.unit=null;sel.city=null;fx.length=0;terrainCv=null;dirtyMap();$('title').style.display='none';cam.z=1;
+const s=G.units.find(u=>u.civ===G.player&&u.type==='settler');if(s){centerOn(s.x,s.y);selectUnit(s)}
+Music.setMode('play');Music.setEra(0);Music.setWar(false);refreshAll();updateTileInfo();autosave();tut('start')}
+// ============================ TUTORIAL ============================
+const TUT={start:`<b>Welcome, leader!</b> Your <b>Settler</b> is selected. Press <b>B</b> or click <b>Found City</b> to establish your capital right here (the starting spot is good). Pan with drag/WASD, zoom with the wheel.`,
+found:`<b>Your capital is founded.</b> Click the city to open it and choose what to <b>build</b> — a Warrior for safety or a Monument for culture is a good start. Cities grow by working nearby tiles.`,
+prod:`<b>Production set.</b> Now pick a <b>technology</b>: press <b>T</b> (or click 🔬 at the top). Pottery, Mining and Bronze Working are strong openers.`,
+research:`<b>Research underway.</b> Select your Warrior/Scout and <b>click a tile</b> to explore (numbers show turns to arrive). Press <b>E</b> to auto-explore. When all units have orders, press <b>Enter</b> to end the turn.`,
+turn2:`<b>The loop:</b> give orders → manage cities → end turn. Dark units are <b>barbarians</b>; clear their camps for gold. Meet rivals and open <b>Diplomacy (D)</b>. Win by Domination, Science, Culture or Score at turn ${MAX_TURN}.`,
+grow:`<b>Your city grew!</b> Each citizen works one tile. Build <b>Workers</b> to add farms, mines and trading posts; a 2nd <b>Settler</b> early snowballs your empire.`,
+city:`<b>City screen:</b> the bars show growth and production. Set a <b>focus</b>, <b>buy</b> items with gold in an emergency, and queue Buildings/Wonders as techs unlock them.`,
+combat:`<b>Combat!</b> Damage follows the strength ratio. Ranged units shoot without retaliation; melee attackers take damage back. Fortify (<b>F</b>) and hills/forests add defense. Heal by resting inside your borders.`,
+policy:`<b>Culture milestone!</b> Press <b>P</b> to adopt a Social Policy. Policies give permanent empire bonuses — ${CULTURE_WIN} of them wins a Culture Victory.`,
+war:`<b>War!</b> Keep a garrison in each city, build Walls, and use ranged units behind melee. After 8+ turns you can propose peace in Diplomacy (D). Allies will join you.`,
+tech:`<b>Discovery!</b> New techs unlock units, buildings and wonders. Click a distant tech in the tree to queue the whole path.`};
+function tut(key){if(!G||!settings.tutorial||!TUT[key]||G.tut[key])return;G.tut[key]=1;const el=$('tutorial');el.innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start"><div style="flex:1">${TUT[key]}</div><button class="btn sm" onclick="$('tutorial').style.display='none'">Got it</button></div>`;el.style.display='block';clearTimeout(tut._t);tut._t=setTimeout(()=>{el.style.display='none'},16000)}
+
+// ============================ SAVE / LOAD ============================
+function serialize(){return JSON.stringify(G,(k,v)=>{if(k==='y_'||k==='_pp')return undefined;if(v instanceof Uint8Array)return{__u8:Array.from(v)};return v})}
+function autosave(){if(!G)return;try{LS.setItem('civmicro_save',serialize())}catch(e){console.warn('save failed',e)}}
+function loadGame(){try{const raw=LS.getItem('civmicro_save');if(!raw){toast('No save found',true);return}const g=JSON.parse(raw,(k,v)=>v&&v.__u8?Uint8Array.from(v.__u8):v);if(!g||!g.tiles||!g.civs)throw new Error('bad save');G=g;G.pendingPeace=G.pendingPeace||[];G.tut=G.tut||{};rng=mulberry(G.seed+G.turn*7919);
+for(const u of G.units){u.ax=u.x;u.ay=u.y}sel.unit=null;sel.city=null;fx.length=0;terrainCv=null;dirtyMap();closeModal();$('title').style.display='none';audioInit();
+const cap=G.cities.find(c=>c.civ===G.player&&c.capital)||G.cities.find(c=>c.civ===G.player)||G.units.find(u=>u.civ===G.player);if(cap)centerOn(cap.x,cap.y);
+if(AC.ctx){Music.setMode(G.over&&!G.cont?'defeat':'play');Music.setEra(civEra(G.civs[G.player]));Music.setWar(playerAtWar())}refreshAll();toast(`Welcome back, ${G.civs[G.player].def.leader}. Turn ${G.turn}.`);if(G.over&&!G.cont)showGameOver()}catch(e){console.error(e);toast('Save file is corrupted; starting fresh',true);try{LS.removeItem('civmicro_save')}catch(_){}showTitle()}}
+addEventListener('beforeunload',()=>{if(G)autosave()});
+// ============================ BOOT ============================
+document.addEventListener('pointerdown',audioInit,{once:true});document.addEventListener('keydown',audioInit,{once:true});
+showTitle();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARS HABITAT — Life Support Command</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  html{background:#0b0f14} body{font-family:'Rajdhani',system-ui,sans-serif;background:#0b0f14;color:#e5edf5}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .panel{background:#111922;border:1px solid #263445;border-radius:14px}
+  .panel2{background:#0e151e;border:1px solid #223144;border-radius:12px}
+  .btn{background:#1b2a3a;border:1px solid #35506d;color:#e8f2ff;border-radius:9px;padding:.45rem .7rem;font-weight:700;letter-spacing:.02em;transition:.15s;cursor:pointer}
+  .btn:hover{background:#27415c;transform:translateY(-1px)} .btn:active{transform:translateY(0)}
+  .btn:disabled{opacity:.38;cursor:not-allowed;transform:none}
+  .btn-accent{background:#c8501e;border-color:#ff8a4c;color:white}.btn-accent:hover{background:#e05e24}
+  .btn-green{background:#14532d;border-color:#22c55e}.btn-green:hover{background:#166534}
+  .btn-red{background:#571d1d;border-color:#ef4444}.btn-red:hover{background:#7f1d1d}
+  .btn.active{background:#c8501e;border-color:#ffb08a;color:#fff}
+  input[type=range]{accent-color:#f06423;width:100%}
+  select,input[type=text],input[type=number]{background:#0b141d;border:1px solid #334155;border-radius:8px;color:#e5edf5;padding:.35rem .5rem}
+  .meter{height:8px;background:#1e293b;border-radius:99px;overflow:hidden}.meter>div{height:100%;transition:width .4s ease}
+  .scenario-card{cursor:pointer;transition:.18s}.scenario-card:hover{transform:translateY(-3px);border-color:#f06423}.scenario-card.selected{border-color:#ff7a33;background:#1a222d;box-shadow:0 0 0 2px #7c2d12 inset}
+  .tut-highlight{outline:3px solid #ffb020!important;outline-offset:3px}
+  .toast{animation:slideIn .25s ease both}.toast.out{opacity:0;transform:translateX(20px);transition:.3s}
+  @keyframes slideIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+  @keyframes pulseRed{0%,100%{opacity:1}50%{opacity:.35}} .alarmPulse{animation:pulseRed 1s infinite}
+  .logItem{border-left:3px solid #35506d}.logItem.warn{border-color:#f59e0b}.logItem.bad{border-color:#ef4444}.logItem.good{border-color:#22c55e}
+  details summary{cursor:pointer;font-weight:700}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}::-webkit-scrollbar-track{background:#0b0f14}
+  .modalBg{background:rgba(2,6,12,.82);backdrop-filter:blur(3px)}
+  .kbd{font-family:'IBM Plex Mono',monospace;background:#1e293b;border:1px solid #475569;border-bottom-width:3px;border-radius:6px;padding:0 .35rem;font-size:.75rem}
+  @media(max-width:1023px){.gamegrid{grid-template-columns:1fr!important}}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============ TOASTS ============ -->
+<div id="toastBox" class="fixed top-3 right-3 z-[90] flex flex-col gap-2 w-[320px] max-w-[90vw]"></div>
+
+<!-- ============ TITLE SCREEN ============ -->
+<div id="titleScreen" class="min-h-screen flex flex-col">
+  <div class="flex-1 max-w-6xl w-full mx-auto px-4 py-8 flex flex-col justify-center">
+    <div class="text-center mb-2"><span class="mono text-orange-400 tracking-[.35em] text-xs">ARES PROGRAM // ECLSS COMMAND SIMULATION</span></div>
+    <h1 class="text-center text-5xl md:text-7xl font-bold tracking-wide">MARS <span class="text-orange-500">HABITAT</span></h1>
+    <p class="text-center text-slate-300 max-w-2xl mx-auto mt-3 text-lg">Keep a crew alive inside a closed loop of air, water, power and food. Every watt, litre and breath is connected — when one system fails, the others follow. Survive the capstone dust storm and become self-sufficient before the final evaluation.</p>
+    <div id="titleBest" class="text-center mono text-sm text-cyan-300 mt-3"></div>
+
+    <h2 class="font-bold text-xl mt-8 mb-3 text-slate-200">1 · Select Mission Scenario</h2>
+    <div class="grid md:grid-cols-3 gap-4" id="scenarioGrid">
+      <div class="panel scenario-card p-5 selected" data-scen="ares">
+        <div class="flex justify-between"><h3 class="font-bold text-xl text-orange-300">ARES PRIME</h3><span class="mono text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded">TRAINING</span></div>
+        <p class="text-slate-300 mt-2">4 crew · 120 sols · generous stores. Learn the life-support loop, grow your first crops and weather a moderate storm at Sol 90.</p>
+        <ul class="mono text-xs text-slate-400 mt-3 space-y-1"><li>Target self-sufficiency: 55%</li><li>Dust: mild · Wear: slow</li><li>Best for first commanders</li></ul>
+        <div class="badgeDone mono text-xs text-amber-300 mt-2"></div>
+      </div>
+      <div class="panel scenario-card p-5" data-scen="jezero">
+        <div class="flex justify-between"><h3 class="font-bold text-xl text-orange-300">JEZERO OUTPOST</h3><span class="mono text-xs bg-amber-900 text-amber-300 px-2 py-1 rounded">STANDARD</span></div>
+        <p class="text-slate-300 mt-2">6 crew · 180 sols · balanced resources. Research new technology, run EVAs for ice, and survive a 9-sol storm at Sol 135.</p>
+        <ul class="mono text-xs text-slate-400 mt-3 space-y-1"><li>Target self-sufficiency: 70%</li><li>Dust: seasonal · Wear: normal</li><li>Resupply every 45 sols</li></ul>
+        <div class="badgeDone mono text-xs text-amber-300 mt-2"></div>
+      </div>
+      <div class="panel scenario-card p-5" data-scen="olympus">
+        <div class="flex justify-between"><h3 class="font-bold text-xl text-orange-300">OLYMPUS DUST SIEGE</h3><span class="mono text-xs bg-red-900 text-red-300 px-2 py-1 rounded">CAPSTONE</span></div>
+        <p class="text-slate-300 mt-2">6 crew · 240 sols · scarce spares, fast wear, thin margins. A brutal 14-sol planet-encircling storm hits at Sol 180. Only a truly closed loop survives.</p>
+        <ul class="mono text-xs text-slate-400 mt-3 space-y-1"><li>Target self-sufficiency: 80%</li><li>Dust: severe · Wear: fast</li><li>For veteran commanders</li></ul>
+        <div class="badgeDone mono text-xs text-amber-300 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-[1fr_auto_auto_auto] gap-3 items-end mt-6">
+      <label class="text-sm text-slate-300">Mission seed (same seed = same Mars)
+        <input id="seedInput" type="number" value="2026" class="w-full mt-1 mono">
+      </label>
+      <button id="btnContinue" class="btn hidden">CONTINUE SAVED MISSION</button>
+      <button id="btnStart" class="btn btn-accent text-lg px-6 py-3">START MISSION</button>
+      <div class="flex gap-2"><button id="btnTitleHelp" class="btn">HOW TO PLAY</button><button id="btnTitleSettings" class="btn">SETTINGS</button></div>
+    </div>
+    <div class="grid md:grid-cols-4 gap-3 mt-8 text-center">
+      <div class="panel2 p-3"><div class="text-orange-400 font-bold text-lg">AIR LOOP</div><div class="text-slate-400 text-sm">Electrolysis · Sabatier · Scrubbers · Crops</div></div>
+      <div class="panel2 p-3"><div class="text-cyan-300 font-bold text-lg">WATER LOOP</div><div class="text-slate-400 text-sm">Recycling · Ice mining · Transpiration</div></div>
+      <div class="panel2 p-3"><div class="text-amber-300 font-bold text-lg">POWER GRID</div><div class="text-slate-400 text-sm">Solar · RTG · Batteries · Dust soiling</div></div>
+      <div class="panel2 p-3"><div class="text-emerald-300 font-bold text-lg">CREW &amp; CROPS</div><div class="text-slate-400 text-sm">Skills · Sleep · Stress · Harvests</div></div>
+    </div>
+    <p class="text-center text-slate-500 text-sm mt-6">Keyboard: <span class="kbd">Space</span> pause · <span class="kbd">1–4</span> speed · <span class="kbd">H</span> help · <span class="kbd">M</span> mute · <span class="kbd">S</span> save · Click habitat modules and crew to inspect them.</p>
+  </div>
+</div>
+
+<!-- ============ GAME SCREEN ============ -->
+<div id="gameScreen" class="hidden min-h-screen flex flex-col">
+  <!-- HUD -->
+  <header class="sticky top-0 z-40 bg-[#0d141d] border-b border-[#263445]">
+    <div class="max-w-[1700px] mx-auto px-3 py-2 flex flex-wrap items-center gap-2">
+      <div>
+        <div id="hudMission" class="font-bold text-orange-300 leading-none">ARES PRIME</div>
+        <div class="mono text-[11px] text-slate-400">MARS HABITAT COMMAND</div>
+      </div>
+      <div class="panel2 px-3 py-1 text-center"><div class="mono text-[10px] text-slate-400">MISSION TIME</div><div id="hudSol" class="mono font-bold text-cyan-200">Sol 1 · 06:00</div></div>
+      <div class="flex items-center gap-1" role="group" aria-label="Simulation speed">
+        <button class="btn spdBtn" data-speed="0.5">0.5×</button><button class="btn spdBtn active" data-speed="1">1×</button><button class="btn spdBtn" data-speed="2">2×</button><button class="btn spdBtn" data-speed="4">4×</button>
+        <button id="btnPauseTop" class="btn btn-accent">PAUSE</button>
+      </div>
+      <div class="flex gap-1 ml-auto">
+        <button id="btnSave" class="btn" title="Save (S)">SAVE</button>
+        <button id="btnMute" class="btn" title="Mute (M)">SOUND ON</button>
+        <button id="btnHelp" class="btn" title="Help (H)">HELP</button>
+        <button id="btnSettings" class="btn">SETTINGS</button>
+        <button id="btnMenu" class="btn">MENU</button>
+      </div>
+    </div>
+    <!-- resource strip -->
+    <div class="max-w-[1700px] mx-auto px-3 pb-2 grid grid-cols-3 sm:grid-cols-5 xl:grid-cols-10 gap-2 mono text-[11px]">
+      <div class="panel2 p-2">O₂ STOCK<div id="rO2" class="text-base font-bold text-sky-300">—</div><div class="meter"><div id="bO2" style="background:#38bdf8;width:50%"></div></div></div>
+      <div class="panel2 p-2">CO₂ LEVEL<div id="rCO2" class="text-base font-bold text-lime-300">—</div><div class="meter"><div id="bCO2" style="background:#a3e635;width:20%"></div></div></div>
+      <div class="panel2 p-2">CLEAN WATER<div id="rWater" class="text-base font-bold text-cyan-300">—</div><div class="meter"><div id="bWater" style="background:#22d3ee;width:50%"></div></div></div>
+      <div class="panel2 p-2">FOOD<div id="rFood" class="text-base font-bold text-emerald-300">—</div><div class="meter"><div id="bFood" style="background:#34d399;width:50%"></div></div></div>
+      <div class="panel2 p-2">POWER NET<div id="rPower" class="text-base font-bold text-amber-300">—</div><div class="text-slate-400" id="rPowerSub">—</div></div>
+      <div class="panel2 p-2">BATTERY<div id="rBattery" class="text-base font-bold text-yellow-200">—</div><div class="meter"><div id="bBattery" style="background:#facc15;width:50%"></div></div></div>
+      <div class="panel2 p-2">CABIN TEMP<div id="rTemp" class="text-base font-bold text-orange-300">—</div><div class="text-slate-400" id="rTempSub">—</div></div>
+      <div class="panel2 p-2">SPARES<div id="rSpares" class="text-base font-bold text-slate-200">—</div><div class="text-slate-400">RESEARCH <span id="rResearch" class="text-violet-300 font-bold">0</span></div></div>
+      <div class="panel2 p-2">SUPPORT<div id="rSupport" class="text-base font-bold text-pink-300">—</div><div class="text-slate-400" id="rResupply">resupply —</div></div>
+      <div class="panel2 p-2">SELF-SUFFICIENCY<div id="rSelf" class="text-base font-bold text-teal-300">—</div><div class="meter"><div id="bSelf" style="background:#2dd4bf;width:20%"></div></div></div>
+    </div>
+    <div id="alertBanner" class="hidden max-w-[1700px] mx-auto px-3 pb-2"><div class="bg-red-950 border border-red-500 text-red-200 rounded-lg px-3 py-2 font-bold alarmPulse" id="alertText"></div></div>
+  </header>
+
+  <main class="flex-1 max-w-[1700px] w-full mx-auto p-3 grid gap-3 gamegrid" style="grid-template-columns:330px minmax(0,1fr) 340px">
+    <!-- LEFT: CONTROLS -->
+    <section class="space-y-3 min-w-0">
+      <div class="panel p-4" id="objectivePanel">
+        <h2 class="font-bold text-lg text-orange-300">MISSION OBJECTIVES</h2>
+        <p id="objectiveText" class="text-sm text-slate-300"></p>
+        <ul id="objectiveList" class="text-sm mt-2 space-y-1"></ul>
+        <div id="capstoneBadge" class="mono text-xs mt-2 text-amber-300"></div>
+      </div>
+
+      <div class="panel p-4" id="controlPanel">
+        <h2 class="font-bold text-lg text-cyan-200">LIFE-SUPPORT CONTROLS</h2>
+        <p class="text-xs text-slate-400 mb-2">Sliders draw real power. Watch POWER NET — deficits brown-out every system.</p>
+        <div class="space-y-3 text-sm">
+          <div><div class="flex justify-between"><label for="sElectro">Electrolysis (H₂O → O₂)</label><span class="mono" id="vElectro"></span></div><input id="sElectro" type="range" min="0" max="100" value="55"></div>
+          <div><div class="flex justify-between"><label for="sScrub">CO₂ Scrubber</label><span class="mono" id="vScrub"></span></div><input id="sScrub" type="range" min="0" max="100" value="60"></div>
+          <div><div class="flex justify-between"><label for="sSabatier">Sabatier Reactor (CO₂+H₂ → H₂O)</label><span class="mono" id="vSabatier"></span></div><input id="sSabatier" type="range" min="0" max="100" value="40"></div>
+          <div><div class="flex justify-between"><label for="sRecycler">Water Recycler</label><span class="mono" id="vRecycler"></span></div><input id="sRecycler" type="range" min="0" max="100" value="70"></div>
+          <div><div class="flex justify-between"><label for="sLights">Grow-Light Intensity</label><span class="mono" id="vLights"></span></div><input id="sLights" type="range" min="0" max="100" value="65"></div>
+          <div><div class="flex justify-between"><label for="sHeater">Heater Power</label><span class="mono" id="vHeater"></span></div><input id="sHeater" type="range" min="0" max="100" value="50"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <label>Food ration<select id="selFoodRation" class="w-full mt-1"><option value="0.7">Reduced (70%)</option><option value="1" selected>Standard</option><option value="1.25">Generous (125%)</option></select></label>
+            <label>Water ration<select id="selWaterRation" class="w-full mt-1"><option value="0.7">Conserve</option><option value="1" selected>Standard</option><option value="1.2">Generous</option></select></label>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          <button id="btnMeal" class="btn">COMMUNAL MEAL <span class="mono text-xs">(5 food)</span></button>
+          <button id="btnDrill" class="btn">TRAINING DRILL <span class="mono text-xs">(+skill)</span></button>
+        </div>
+      </div>
+
+      <div class="panel p-4" id="cropPanel">
+        <h2 class="font-bold text-lg text-emerald-300">GREENHOUSE</h2>
+        <div id="cropInfo" class="text-sm text-slate-300"></div>
+        <div class="meter mt-2"><div id="cropBar" style="background:#22c55e;width:0%"></div></div>
+        <label class="text-sm block mt-3">Crop type<select id="selCrop" class="w-full mt-1">
+          <option value="greens">Leafy Greens — 8 sols, 38 kg, high O₂</option>
+          <option value="potato" selected>Potato — 15 sols, 95 kg, reliable calories</option>
+          <option value="soy">Soy — 20 sols, 75 kg, morale + protein</option>
+          <option value="wheat">Wheat — 26 sols, 120 kg, water-hungry</option>
+        </select></label>
+        <div class="grid grid-cols-2 gap-2 mt-3"><button id="btnPlant" class="btn btn-green">PLANT CROP</button><button id="btnHarvest" class="btn btn-accent" disabled>HARVEST</button></div>
+      </div>
+
+      <div class="panel p-4" id="evaPanel">
+        <h2 class="font-bold text-lg text-amber-300">EVA MISSIONS <span class="mono text-xs text-slate-400">(6 h, outside airlock)</span></h2>
+        <div id="evaInfo" class="text-sm text-slate-300 mb-2">No EVA in progress.</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="btn evaBtn" data-eva="clean">CLEAN SOLAR ARRAY</button>
+          <button class="btn evaBtn" data-eva="ice">MINE ICE (+WATER)</button>
+          <button class="btn evaBtn" data-eva="repair">EXTERIOR REPAIR</button>
+          <button class="btn evaBtn" data-eva="science">SCIENCE EXPEDITION</button>
+        </div>
+        <h3 class="font-bold mt-4 text-slate-200">MAINTENANCE</h3>
+        <div class="flex gap-2 mt-1"><select id="selComponent" class="flex-1"></select><button id="btnRepair" class="btn">REPAIR (1 SPARE)</button></div>
+        <h3 class="font-bold mt-4 text-slate-200">RESUPPLY <span class="mono text-xs text-slate-400">(window every 45 sols)</span></h3>
+        <div id="resupplyInfo" class="text-sm text-slate-300"></div>
+        <div class="grid grid-cols-3 gap-2 mt-2">
+          <button class="btn packBtn" data-pack="supplies">SUPPLIES<br><span class="mono text-[10px]">10 support</span></button>
+          <button class="btn packBtn" data-pack="spares">SPARES ×6<br><span class="mono text-[10px]">12 support</span></button>
+          <button class="btn packBtn" data-pack="tech">LAB KIT<br><span class="mono text-[10px]">15 sup · +20 RP</span></button>
+        </div>
+      </div>
+
+      <div class="panel p-4">
+        <h2 class="font-bold text-lg text-violet-300">RESEARCH <span class="mono text-xs text-slate-400">scientists generate RP</span></h2>
+        <div id="techList" class="space-y-2 mt-2"></div>
+      </div>
+    </section>
+
+    <!-- CENTER -->
+    <section class="space-y-3 min-w-0">
+      <div class="panel p-2 relative">
+        <canvas id="simCanvas" class="w-full rounded-lg block" style="height:430px;background:#160f0c"></canvas>
+        <div id="selectedInfo" class="panel2 mt-2 p-3 text-sm text-slate-200">Click a habitat module, the solar array, or a crew member on the right to inspect it. Systems are live: bubbles rise when electrolysis runs, lamps glow when crops are lit, dust cuts solar power.</div>
+      </div>
+      <div class="panel p-4">
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <h2 class="font-bold text-lg">TELEMETRY HISTORY</h2>
+          <select id="selChart"><option value="o2pp">O₂ partial pressure (kPa)</option><option value="co2">CO₂ (ppm)</option><option value="water">Clean water (L)</option><option value="food">Food (kg)</option><option value="battery">Battery (kWh)</option><option value="temp">Cabin temp (°C)</option><option value="health">Mean crew health (%)</option><option value="self">Self-sufficiency (%)</option></select>
+        </div>
+        <canvas id="chartCanvas" class="w-full mt-2" height="140"></canvas>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mono text-xs mt-2" id="statsMini"></div>
+      </div>
+      <div class="panel p-4">
+        <h2 class="font-bold text-lg">MISSION LOG</h2>
+        <div id="logList" class="space-y-1 mt-2 max-h-56 overflow-y-auto pr-1 text-sm"></div>
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <aside class="space-y-3 min-w-0">
+      <div class="panel p-4">
+        <h2 class="font-bold text-lg text-sky-300">CREW <span class="mono text-xs text-slate-400">assign roles — skills matter</span></h2>
+        <div id="crewList" class="space-y-3 mt-2"></div>
+      </div>
+      <div class="panel p-4">
+        <h2 class="font-bold text-lg text-slate-200">HABITAT COMPONENTS</h2>
+        <div id="componentList" class="space-y-2 mt-2 text-sm"></div>
+      </div>
+      <div class="panel p-4">
+        <h2 class="font-bold text-lg">SESSION STATISTICS</h2>
+        <div id="statsPanel" class="mono text-xs space-y-1 text-slate-300"></div>
+        <button id="btnAbort" class="btn btn-red w-full mt-3">ABORT MISSION</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- ============ TUTORIAL CARD ============ -->
+<div id="tutorialCard" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-[70] w-[560px] max-w-[94vw] panel p-4 border-amber-500" style="border-color:#f59e0b">
+  <div class="mono text-[10px] text-amber-400 tracking-widest" id="tutStep">FIELD TRAINING</div>
+  <h3 id="tutTitle" class="font-bold text-xl"></h3><p id="tutText" class="text-slate-300"></p>
+  <div class="flex gap-2 mt-3 justify-end"><button id="btnTutSkip" class="btn">SKIP</button><button id="btnTutNext" class="btn btn-accent">NEXT</button></div>
+</div>
+
+<!-- ============ HELP MODAL ============ -->
+<div id="helpModal" class="hidden fixed inset-0 z-[80] modalBg flex items-center justify-center p-3">
+  <div class="panel max-w-3xl w-full max-h-[92vh] overflow-y-auto p-6">
+    <div class="flex justify-between items-center"><h2 class="text-2xl font-bold text-orange-300">COMMANDER'S HANDBOOK</h2><button class="btn closeHelp">CLOSE</button></div>
+    <div class="space-y-3 text-slate-300 mt-3 text-[15px]">
+      <p><b class="text-white">Goal.</b> Reach your scenario's target Sol with every crew member alive, survive the announced capstone dust storm, and hit the required <b>self-sufficiency</b> by the final evaluation (30-sol grace period after target Sol).</p>
+      <p><b class="text-sky-300">Air.</b> Crew consume O₂ and exhale CO₂. Electrolysis turns water into O₂ + hydrogen. The Sabatier reactor combines stored CO₂ + hydrogen back into water — closing the loop. Scrubbers pull CO₂ from cabin air. Crops add O₂ while lit. CO₂ above ~2,500 ppm headaches the crew; above 4,000 it injures them. O₂ partial pressure below 12 kPa is an emergency.</p>
+      <p><b class="text-cyan-300">Water.</b> Crew and crops consume clean water; the recycler recovers most wastewater (efficiency rises with its slider, power and health). Electrolysis is a net water sink unless Sabatier runs. Ice-mining EVAs are your renewable source.</p>
+      <p><b class="text-amber-300">Power.</b> Solar peaks at midday and collapses under dust opacity and panel soiling — clean panels by EVA or unlock dust-repellent coating. The RTG gives constant baseline power. Batteries bridge the night; if demand exceeds supply + battery, everything browns out proportionally, heaters included.</p>
+      <p><b class="text-orange-300">Heat.</b> Mars swings from −20°C by day to −80°C at night. Heater power and waste heat keep the cabin near 21°C. Cold cabins stress crew, stall crops and thicken pump wear.</p>
+      <p><b class="text-emerald-300">Food &amp; crops.</b> Plant in the greenhouse, keep lights, water, warmth and CO₂ healthy, then harvest. Botanists accelerate growth. Harvested-versus-consumed food is one third of self-sufficiency, alongside water recovery and O₂ closure.</p>
+      <p><b class="text-white">Crew.</b> Assign roles: Engineers slow wear and speed repairs, Botanists grow crops, Scientists earn Research Points and Mission Support, Medics heal, EVA Specialists make sorties safer, Rest restores energy and lowers stress. Exhausted, hungry, frightened crew get sick — and a single death fails the mission.</p>
+      <p><b class="text-white">Wear &amp; failure.</b> Every running component wears. Below 25% health it may fail outright, cascading (a dead recycler quietly becomes a water crisis). Repair with spares before it breaks.</p>
+      <p><b class="text-white">Progression.</b> Spend Research Points on six technologies. Earn Mission Support from science and milestones, spend it during 3-sol resupply windows every 45 sols. Completing scenarios earns persistent commendations on the title screen.</p>
+      <p><b class="text-white">Controls.</b> Mouse/touch for everything; click canvas modules to inspect. <span class="kbd">Space</span> pause, <span class="kbd">1–4</span> speeds 0.5/1/2/4×, <span class="kbd">H</span> help, <span class="kbd">M</span> mute, <span class="kbd">S</span> save. The sim auto-pauses when the tab loses focus.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS MODAL ============ -->
+<div id="settingsModal" class="hidden fixed inset-0 z-[80] modalBg flex items-center justify-center p-3">
+  <div class="panel max-w-md w-full p-6">
+    <div class="flex justify-between items-center"><h2 class="text-2xl font-bold">SETTINGS</h2><button class="btn closeSettings">CLOSE</button></div>
+    <div class="space-y-4 mt-4 text-slate-200">
+      <div><label class="flex justify-between">Master volume <span class="mono" id="volOut"></span></label><input id="setVolume" type="range" min="0" max="100" value="70"></div>
+      <label class="flex justify-between items-center">Mute all audio <input id="setMute" type="checkbox" class="w-5 h-5"></label>
+      <label class="flex justify-between items-center">Ambient habitat hum <input id="setAmbient" type="checkbox" class="w-5 h-5" checked></label>
+      <label class="flex justify-between items-center">Dust / bubble particles <input id="setParticles" type="checkbox" class="w-5 h-5" checked></label>
+      <label class="flex justify-between items-center">Alarm sounds <input id="setAlarms" type="checkbox" class="w-5 h-5" checked></label>
+      <button id="btnWipe" class="btn btn-red w-full">ERASE SAVED MISSION &amp; COMMENDATIONS</button>
+      <p class="text-xs text-slate-400">Settings and commendations persist in localStorage. Audio is fully synthesized with the Web Audio API — no files.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PAUSE MODAL ============ -->
+<div id="pauseModal" class="hidden fixed inset-0 z-[80] modalBg flex items-center justify-center p-3">
+  <div class="panel max-w-sm w-full p-6 text-center">
+    <h2 class="text-3xl font-bold">PAUSED</h2><p class="text-slate-400 mono text-sm" id="pauseInfo"></p>
+    <div class="grid gap-2 mt-5">
+      <button id="btnResume" class="btn btn-accent">RESUME</button>
+      <button id="btnPauseSave" class="btn">SAVE MISSION</button>
+      <button id="btnPauseSettings" class="btn">SETTINGS</button>
+      <button id="btnPauseRestart" class="btn">RESTART SCENARIO</button>
+      <button id="btnPauseTitle" class="btn btn-red">RETURN TO TITLE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ END MODAL ============ -->
+<div id="endModal" class="hidden fixed inset-0 z-[85] modalBg flex items-center justify-center p-3">
+  <div class="panel max-w-2xl w-full p-6 text-center">
+    <div class="mono text-xs tracking-[.3em]" id="endKicker">MISSION COMPLETE</div>
+    <h2 class="text-4xl font-bold mt-1" id="endTitle">SELF-SUFFICIENT</h2>
+    <p id="endReason" class="text-slate-300 mt-2"></p>
+    <div id="endGrade" class="text-6xl font-bold text-amber-300 my-3">A</div>
+    <div id="endStats" class="grid grid-cols-2 md:grid-cols-4 gap-2 mono text-xs text-left"></div>
+    <div class="flex gap-2 justify-center mt-5"><button id="btnEndRestart" class="btn btn-accent">PLAY AGAIN</button><button id="btnEndTitle" class="btn">TITLE SCREEN</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= UTILITIES & SETTINGS ================= */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fmt=(v,d=0)=>Number(v||0).toFixed(d);
+function loadJSON(k,fb){try{const s=localStorage.getItem(k);return s?JSON.parse(s):fb}catch(e){return fb}}
+function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+let settings=Object.assign({volume:.7,muted:false,ambient:true,particles:true,alarms:true},loadJSON('mh_settings',{}));
+let best=loadJSON('mh_best',{completed:{},bestScore:0,missions:0});
+let selectedScen='ares';
+
+/* ================= AUDIO (synthesized) ================= */
+let AC=null,masterGain=null,ambNodes=null;
+function initAudio(){ if(AC) return; try{ AC=new (window.AudioContext||window.webkitAudioContext)(); masterGain=AC.createGain(); masterGain.gain.value=settings.muted?0:settings.volume; masterGain.connect(AC.destination);
+  if(settings.ambient){ const o=AC.createOscillator(),g=AC.createGain(); o.type='sine';o.frequency.value=54;g.gain.value=.018;o.connect(g);g.connect(masterGain);o.start();
+    const len=2*AC.sampleRate,buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0); for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+    const n=AC.createBufferSource();n.buffer=buf;n.loop=true; const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=320; const ng=AC.createGain();ng.gain.value=.006; n.connect(f);f.connect(ng);ng.connect(masterGain);n.start(); ambNodes={o,g,n,ng}; }
+}catch(e){AC=null} }
+function applyAudioSettings(){ if(masterGain)masterGain.gain.value=settings.muted?0:settings.volume; if(ambNodes){ambNodes.g.gain.value=settings.ambient?.018:0;ambNodes.ng.gain.value=settings.ambient?.006:0} saveJSON('mh_settings',settings); }
+function beep(freq=660,dur=.08,type='sine',vol=.12,when=0){ if(!AC||settings.muted)return; try{ const t=AC.currentTime+when,o=AC.createOscillator(),g=AC.createGain(); o.type=type;o.frequency.value=freq; g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur); o.connect(g);g.connect(masterGain);o.start(t);o.stop(t+dur+.02);}catch(e){} }
+const sfx={ click:()=>beep(620,.05,'square',.05), good:()=>{beep(660,.1,'sine',.1);beep(880,.12,'sine',.1,.09);beep(990,.16,'sine',.1,.18)}, bad:()=>{beep(180,.25,'sawtooth',.14);beep(140,.3,'sawtooth',.12,.12)}, alarm:()=>{if(settings.alarms){beep(880,.12,'square',.09);beep(880,.12,'square',.09,.16)}}, harvest:()=>{beep(523,.09,'triangle',.1);beep(659,.09,'triangle',.1,.08);beep(784,.14,'triangle',.1,.16)}, tech:()=>{beep(440,.1,'sine',.1);beep(660,.1,'sine',.1,.08);beep(880,.2,'sine',.12,.16)} };
+
+/* ================= SCENARIOS & DATA ================= */
+const SCEN={
+ ares:{name:'ARES PRIME',crew:4,target:120,req:55,stormSol:90,stormDur:6,stormInt:.75,wear:0.7,dustBase:.12,start:{o2:150,water:900,food:130,spares:8,support:25,research:10,battery:110}},
+ jezero:{name:'JEZERO OUTPOST',crew:6,target:180,req:70,stormSol:135,stormDur:9,stormInt:.9,wear:1,dustBase:.2,start:{o2:170,water:1000,food:170,spares:7,support:20,research:5,battery:100}},
+ olympus:{name:'OLYMPUS DUST SIEGE',crew:6,target:240,req:80,stormSol:180,stormDur:14,stormInt:1,wear:1.45,dustBase:.3,start:{o2:150,water:800,food:140,spares:5,support:15,research:0,battery:85}}
+};
+const CROPS={greens:{name:'Leafy Greens',days:8,yield:38,water:.55,o2:.030},potato:{name:'Potato',days:15,yield:95,water:.8,o2:.020},soy:{name:'Soy',days:20,yield:75,water:.7,o2:.022},wheat:{name:'Wheat',days:26,yield:120,water:1.15,o2:.018}};
+const TECHS=[
+ {id:'advElectro',name:'Catalytic Electrolysis',cost:30,desc:'+35% O₂ output, −20% water per kg O₂.'},
+ {id:'dustPanels',name:'Dust-Repellent Panels',cost:25,desc:'Soiling accumulates 60% slower, +10% solar.'},
+ {id:'sabatier2',name:'Sabatier Catalyst Mk II',cost:35,desc:'+50% CO₂→water conversion rate.'},
+ {id:'hydro',name:'Aeroponic Hydroponics',cost:30,desc:'Crops grow 35% faster, use 30% less water.'},
+ {id:'battery2',name:'High-Density Battery Bank',cost:25,desc:'+70 kWh storage capacity.'},
+ {id:'thermal',name:'Regolith Insulation',cost:20,desc:'Cabin heat loss reduced 40%.'},
+ {id:'repairDrones',name:'Maintenance Drones',cost:40,desc:'All components slowly self-repair; wear −30%.'},
+ {id:'medbay',name:'Advanced Medbay',cost:30,desc:'Crew healing +60%, illness severity halved.'}];
+const NAMES=['Amara Chen','Yusuf Adeyemi','Ingrid Solberg','Marco Reyes','Priya Nair','Tomás Herrera','June Park','Felix Wagner'];
+const ROLES=['Engineer','Botanist','Scientist','Medic','EVA Specialist','Rest'];
+const COMPDEF=[['electrolyzer','Electrolyzer'],['scrubber','CO₂ Scrubber'],['sabatier','Sabatier Reactor'],['recycler','Water Recycler'],['solar','Solar Array'],['batteryBank','Battery Bank'],['heater','Thermal / Heater'],['pumps','Pumps & Fans'],['lights','Grow Lights']];
+
+/* ================= GAME STATE ================= */
+let G=null, rafId=null, lastTs=0, uiAcc=0, chartAcc=0, alarmAcc=0, autosaveAcc=0;
+let particles=[], floaters=[], moduleRects={};
+function rand(){ G.rngState|=0; G.rngState=G.rngState+0x6D2B79F5|0; let t=Math.imul(G.rngState^G.rngState>>>15,1|G.rngState); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }
+function newGame(scenId,seed){
+ const sc=SCEN[scenId]; const startH=6;
+ G={ scen:scenId, rngState:(seed|0)||2026, time:(0*24+startH), speed:1, paused:false, ended:false,
+  o2:sc.start.o2, o2Ideal:170, co2:850, co2Store:20, h2:6, n2:100, water:sc.start.water, waste:60, food:sc.start.food,
+  battery:sc.start.battery, batteryCap:170, temp:21, dust:sc.dustBase, soiling:.12, support:sc.start.support, research:sc.start.research, spares:sc.start.spares,
+  self:20, foodSelfRatio:0, mealCd:0, drillCd:0, leak:0,
+  crop:{type:'potato',planted:false,growth:0,health:100,pests:false},
+  eva:null, tech:[], usedPacks:[], resupplyUsedSol:-99,
+  storm:{active:false,capstoneDone:false,warned:false,minorUntil:-1},
+  nextEventSol:4, hist:{t:[],o2pp:[],co2:[],water:[],food:[],battery:[],temp:[],health:[],self:[]},
+  stats:{harvested:0,consumed:0,mined:0,evas:0,repairs:0,researchEarned:0,o2Made:0,powerMade:0,events:0,science:0},
+  miles:{}, selected:null, tut:0, lastSol:1, powerNet:0, gen:0, load:0, brownout:1, extTemp:-48 };
+ G.crew=[]; for(let i=0;i<sc.crew;i++){ G.crew.push({name:NAMES[i], role:ROLES[i%5], skill:55+Math.floor(rand()*35), health:92+rand()*8, energy:80+rand()*20, stress:15+rand()*20, hunger:20, sick:0, x:.5,y:.5,tx:.5,ty:.5, forcedRest:false}); }
+ G.crew[0]&&(G.crew[0].role='Engineer'); if(G.crew[1])G.crew[1].role='Botanist'; if(G.crew[2])G.crew[2].role='Scientist'; if(G.crew[3])G.crew[3].role='Medic';
+ G.comp={}; COMPDEF.forEach(([id,name])=>G.comp[id]={id,name,health:92+rand()*8,failed:false,repairUntil:-1,wear:0});
+ if(G.tech.includes('battery2'))G.batteryCap=190;
+ buildCrewCards(); buildCompList(); buildTechList(); buildCompSelect();
+ $('sElectro').value=55;$('sScrub').value=60;$('sSabatier').value=40;$('sRecycler').value=70;$('sLights').value=65;$('sHeater').value=50;
+ log('Mission control established at '+sc.name+'. All systems nominal.','good'); log('Capstone dust storm forecast for Sol '+sc.stormSol+' ('+sc.stormDur+' sols). Prepare the habitat.','warn');
+ updateObjectives(); sampleHistory(true);
+}
+function solOf(){return Math.floor(G.time/24)+1} function hourOf(){return G.time%24}
+function hasTech(id){return G.tech.includes(id)}
+function aliveCrew(){return G.crew.filter(c=>c.health>0)}
+function roleCount(r){return aliveCrew().filter(c=>c.role===r&&!c.forcedRest).length}
+function resupplyOpen(){ if(!G)return false; const s=solOf(); return s>=45 && (s%45===0||s%45===1||s%45===2); }
+function resupplyWindowId(){ return Math.floor((solOf()+2)/45); }
+function compEff(id){const c=G.comp[id]; if(!c||c.failed)return 0; return clamp(c.health/100,.05,1)}
+function pushFloat(txt,x,y,color){floaters.push({txt,x,y,color:color||'#fff',life:1.6})}
+
+/* ================= LOG / TOASTS ================= */
+function log(msg,kind=''){ if(!G)return; const el=document.createElement('div'); el.className='logItem panel2 p-2 '+kind; el.innerHTML='<span class="mono text-[10px] text-slate-400">Sol '+solOf()+' '+padTime()+'</span> '+msg; const box=$('logList'); box.prepend(el); while(box.children.length>70)box.lastChild.remove(); }
+function padTime(){const h=Math.floor(hourOf()),m=Math.floor((hourOf()-h)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
+function toast(title,body,kind='info'){ const colors={info:'#38bdf8',good:'#22c55e',warn:'#f59e0b',bad:'#ef4444'}; const t=document.createElement('div'); t.className='toast panel p-3'; t.style.borderColor=colors[kind]||colors.info; t.innerHTML='<div class="font-bold" style="color:'+(colors[kind]||colors.info)+'">'+title+'</div><div class="text-sm text-slate-300">'+body+'</div>'; $('toastBox').appendChild(t); setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),350)},4200); }
+
+/* ================= SIMULATION STEP ================= */
+function slider(id){return Number($(id).value)/100}
+function step(dt){ // dt in sim-hours
+ if(!G||G.ended)return; const sc=SCEN[G.scen];
+ G.time+=dt; const sol=solOf(), hr=hourOf();
+ /* --- environment --- */
+ const dayFrac=hr/24; const daylight=clamp(Math.sin((hr-6)/12*Math.PI),0,1);
+ G.extTemp=-62+38*daylight-18*G.dust;
+ let targetDust=sc.dustBase + (G.storm.active?.55*SCEN[G.scen].stormInt:0);
+ G.dust += (targetDust-G.dust)*Math.min(1,dt*.15);
+ if(!G.storm.active) G.soiling=clamp(G.soiling + dt*.0016*(0.4+G.dust)*(hasTech('dustPanels')?.4:1),0,1);
+ /* storm scheduling */
+ if(!G.storm.warned && sol>=sc.stormSol-5 && sol<sc.stormSol){G.storm.warned=true; log('FORECAST: capstone dust storm arrives Sol '+sc.stormSol+'. Clean panels, charge batteries, stock water.','warn'); toast('STORM FORECAST','Capstone dust storm in '+(sc.stormSol-sol)+' sols. Solar output will collapse.','warn'); sfx.alarm();}
+ if(!G.storm.active && sol>=sc.stormSol && sol<sc.stormSol+sc.stormDur){G.storm.active=true; log('CAPSTONE DUST STORM has arrived. Solar generation severely reduced.','bad'); toast('DUST STORM','The capstone storm is here. Survive on RTG + batteries.','bad'); sfx.bad();}
+ if(G.storm.active && sol>=sc.stormSol+sc.stormDur){G.storm.active=false;G.storm.capstoneDone=true;G.stats.events++; log('The capstone storm has passed. The habitat held.','good'); toast('STORM SURVIVED','Capstone storm weathered. Focus on self-sufficiency.','good'); sfx.good(); milestone('storm','Survived the capstone dust storm',15);}
+ if(sol!==G.lastSol){G.lastSol=sol; onNewSol(sol);}
+ /* --- power --- */
+ const solarCap=42*(hasTech('dustPanels')?1.1:1);
+ let solarGen=solarCap*daylight*(1-G.dust*.92)*(1-G.soiling*.85)*compEff('solar');
+ let rtg=6.2*Math.pow(.999,G.time/24);
+ const sl={e:slider('sElectro'),s:slider('sScrub'),sa:slider('sSabatier'),r:slider('sRecycler'),l:slider('sLights'),h:slider('sHeater')};
+ let demand=2.2 + sl.e*5 + sl.s*2 + sl.sa*2.5 + sl.r*2 + sl.l*7 + sl.h*4.5 + roleCount('Scientist')*.6 + .5; // base + loads (nameplate)
+ demand*= (0.75+0.25*compEff('pumps'));
+ let gen=solarGen+rtg; G.gen=gen;
+ let net=gen-demand; G.brownout=1;
+ if(net>=0){ G.battery=clamp(G.battery+net*dt*.92,0,G.batteryCap); }
+ else { const draw=-net*dt; if(G.battery>=draw){G.battery-=draw;} else { const avail=gen + G.battery/Math.max(dt,.001); G.brownout=clamp(avail/Math.max(demand,.01),.15,1); G.battery=0; } }
+ G.powerNet = net>=0? net : (G.battery>0? net : gen-demand*G.brownout + (demand*G.brownout-demand));
+ G.load=demand*G.brownout; G.stats.powerMade+=gen*dt;
+ const bo=G.brownout;
+ /* --- component wear --- */
+ const engBoost=1-roleCount('Engineer')*.12;
+ const usage={electrolyzer:sl.e,scrubber:sl.s,sabatier:sl.sa,recycler:sl.r,solar:daylight, batteryBank:Math.abs(net)/20, heater:sl.h, pumps:.7, lights:sl.l};
+ for(const id in G.comp){ const c=G.comp[id]; const u=usage[id]||.2; let w=dt*.020*u*sc.wear*engBoost*(hasTech('repairDrones')?.7:1); c.health=clamp(c.health-w+(hasTech('repairDrones')?.012*dt*10:0),0,100);
+   if(c.repairUntil>0 && G.time>=c.repairUntil){c.repairUntil=-1;c.failed=false;c.health=clamp(c.health+48,0,100);G.stats.repairs++;log(c.name+' repaired and returned to service.','good');pushFloat('REPAIRED',.55,.35,'#4ade80');sfx.good();}
+   if(!c.failed && c.health<=22 && rand()<dt*.02){c.failed=true; log(c.name+' has FAILED. Cascade risk rising — repair it.','bad'); toast('COMPONENT FAILURE',c.name+' failed. Repair with a spare part.','bad'); sfx.bad();}
+   if(c.failed && c.health>35 && c.repairUntil<0){c.failed=false; log(c.name+' is back online after field repairs.','good');}
+   if(c.health<=0)c.failed=true;
+ }
+ const eff={e:compEff('electrolyzer'),s:compEff('scrubber'),sa:compEff('sabatier'),r:compEff('recycler'),l:compEff('lights')};
+ /* --- atmosphere --- */
+ const crewN=aliveCrew().length;
+ const activity=aliveCrew().reduce((a,c)=>a+(c.energy>15&&!c.forcedRest?1:.45),0)/Math.max(crewN,1);
+ let o2Use=crewN*.036*activity*(G.eva?1.15:1);
+ G.o2-=o2Use*dt; let co2Made=crewN*8.2*activity*dt; G.co2+=co2Made;
+ // electrolysis
+ const waterPerO2=hasTech('advElectro')?.9:1.12;
+ let eRate=sl.e*0.42*eff.e*bo*(hasTech('advElectro')?1.35:1); let eWater=eRate*waterPerO2*dt;
+ if(G.water<eWater){eRate*=G.water/Math.max(eWater,.001); eWater=G.water;}
+ G.water-=eWater; G.o2+=eRate*dt*8.9/8.9; // eRate is kg/h scale below
+ // NOTE: eRate defined as kg O2/h directly:
+ G.h2=clamp(G.h2+eRate*dt*.112,0,60); G.stats.o2Made+=eRate*dt;
+ // scrubber -> store
+ let scrub=sl.s*62*eff.s*bo*dt; scrub=Math.min(scrub,Math.max(G.co2-350,0)*.9); G.co2-=scrub; G.co2Store=clamp(G.co2Store+scrub*.012,0,80);
+ // sabatier: store CO2 + H2 -> water
+ let sab=sl.sa*(hasTech('sabatier2')?30:20)*eff.sa*bo*dt; sab=Math.min(sab,G.co2Store*8,G.h2*22,Math.max(G.co2-300,0)); if(sab>0){G.co2Store-=sab*.10; G.h2-=sab*.045; G.water+=sab*.16; G.co2-=sab*.25;}
+ // crops photosynthesis & growth
+ let photoO2=0;
+ if(G.crop.planted){ const cd=CROPS[G.crop.type]; const tempF=clamp(1-Math.abs(G.temp-22)/16,0,1); const co2F=clamp(G.co2/900,.35,1.25); const bot=1+roleCount('Botanist')*.22;
+   const gRate=(100/(cd.days*24))* (0.25+sl.l*1.15) * eff.l * bo * tempF * co2F * bot * (hasTech('hydro')?1.35:1) * (G.crop.pests?.55:1);
+   G.crop.growth=clamp(G.crop.growth+gRate*dt,0,100); G.crop.health=clamp(G.crop.health + (tempF>.4&&sl.l>.25? .25*dt : -.7*dt) - (G.crop.pests? .8*dt:0),0,100);
+   const wUse=cd.water*sl.l*dt*(hasTech('hydro')?.7:1)*(0.4+G.crop.growth/120); const wTake=Math.min(G.water,wUse); G.water-=wTake; G.waste+=wTake*.55; if(wTake<wUse*.6)G.crop.health-=1.2*dt;
+   photoO2=cd.o2*(G.crop.growth/60+0.4)*sl.l*eff.l*bo*dt*10; G.o2+=photoO2*.09; G.co2=Math.max(300,G.co2-photoO2*2.2); G.stats.o2Made+=photoO2*.09;
+   if(G.crop.health<=0){G.crop.planted=false;G.crop.growth=0;log('The '+cd.name+' crop died from neglect. Replant when conditions improve.','bad');toast('CROP LOST',cd.name+' died. Check heat, light and water.','bad');sfx.bad();}
+ }
+ // leaks (timed in simulation hours)
+ if(G.leak && G.leakUntil && G.time>G.leakUntil){G.leak=0;log('Hull seals re-seated. Leak stopped.','good');}
+ G.o2-=G.o2*0.00012*dt*(1+G.leak*8); G.n2=clamp(G.n2-dt*(.002+G.leak*.25),0,100);
+ const o2pp=clamp(G.o2/G.o2Ideal*21,0,30);
+ /* --- water loop --- */
+ const wr=Number($('selWaterRation').value), fr=Number($('selFoodRation').value);
+ let drink=crewN*.115*wr*activity*dt; drink=Math.min(G.water,drink); G.water-=drink; G.waste+=drink*.92;
+ let recMax=sl.r*4.2*eff.r*bo*dt; let rec=Math.min(G.waste,recMax); const recEff=.90; G.waste-=rec; G.water+=rec*recEff;
+ G.water=clamp(G.water,0,2500); G.waste=clamp(G.waste,0,900);
+ /* --- food --- */
+ let eat=crewN*.030*fr*dt; eat=Math.min(G.food,eat); G.food-=eat; G.stats.consumed+=eat; const hungerDelta=(eat<crewN*.030*fr*dt*.8? 6*dt : -4*dt);
+ /* --- thermal --- */
+ const heatLoss=(hasTech('thermal')?.6:1); const heaterKW=sl.h*4.5*bo*compEff('heater');
+ G.temp += (((G.extTemp-G.temp)*.018*heatLoss) + heaterKW*.8 + G.load*.05 - 1.1)*dt*.55;
+ G.temp=clamp(G.temp,-25,42);
+ /* --- crew --- */
+ let healthSum=0;
+ for(const c of G.crew){ if(c.health<=0)continue;
+   const working=!c.forcedRest && c.energy>12 && !(hr>=22||hr<5 && c.role!=='Scientist');
+   // energy & sleep: crew auto-sleep at night or when exhausted
+   const sleeping=(hr>=22||hr<5.5)||c.energy<8;
+   if(sleeping||c.forcedRest){c.energy=clamp(c.energy+7.5*dt,0,100); c.stress=clamp(c.stress-1.4*dt,0,100);} else {c.energy=clamp(c.energy-3.4*dt*(c.role==='EVA Specialist'&&G.eva?1.5:1),0,100); c.stress=clamp(c.stress+(G.storm.active?1.1:.35)*dt,0,100);}
+   c.hunger=clamp(c.hunger+hungerDelta+(fr<1?1.5*dt:0),0,100);
+   if(c.sick>0)c.sick=Math.max(0,c.sick-dt);
+   let dmg=0, heal=0;
+   if(o2pp<12)dmg+=(12-o2pp)*.55*dt; if(G.co2>2500)dmg+=(G.co2-2500)/900*dt; if(G.co2>4200)dmg+=2.2*dt;
+   if(G.temp<8)dmg+=(8-G.temp)*.22*dt; if(G.temp>32)dmg+=(G.temp-32)*.3*dt;
+   if(G.water<=0.01)dmg+=1.4*dt; if(c.hunger>80)dmg+=.55*dt; if(c.energy<5)dmg+=.25*dt; if(c.stress>88)dmg+=.3*dt; if(c.sick>0)dmg+=(hasTech('medbay')?.35:.7)*dt; if(G.eva&&G.eva.crew===c)dmg+= (G.storm.active?1.4:.12)*dt;
+   const medicCare=roleCount('Medic')>0?.55:0; if(o2pp>15&&G.co2<1800&&G.temp>14&&G.temp<29&&c.hunger<70)heal=(.55+medicCare+(hasTech('medbay')?.35:0))*dt*(c===G.crew.find(x=>x.role==='Medic')?.6:1);
+   if(sleeping)heal+=.25*dt;
+   c.health=clamp(c.health+heal-dmg,0,100); healthSum+=c.health;
+   if(c.role==='Scientist'&&working){const rp=dt*.5*(0.6+c.skill/100)*bo*(1-c.stress/220); G.research+=rp; G.stats.researchEarned+=rp; G.support+=dt*.03*(c.skill/80);}
+   if(c.health<=0){ onCrewDeath(c); return; }
+ }
+ /* EVA progress */
+ if(G.eva && G.time>=G.eva.end){ completeEVA(); }
+ if(G.mealCd>0)G.mealCd-=dt; if(G.drillCd>0)G.drillCd-=dt;
+ /* self-sufficiency */
+ const recentFood=G.stats.consumed>4? clamp(G.stats.harvested/Math.max(G.stats.consumed,1),0,1.2):0;
+ G.foodSelfRatio += (clamp(recentFood,0,1)-G.foodSelfRatio)*Math.min(1,dt*.02);
+ const o2Closure=clamp((eRate+photoO2*.09)/Math.max(o2Use,.001),0,1);
+ const targetSelf=100*(.45*G.foodSelfRatio + .27*recEff*(0.5+eff.r*.5) + .28*o2Closure*.92);
+ G.self += (targetSelf-G.self)*Math.min(1,dt*.03);
+ /* milestones + ending */
+ if(sol>=25)milestone('sol25','Survived 25 sols',8);
+ if(G.tech.length>=2)milestone('tech2','Unlocked 2 technologies',10);
+ if(G.stats.evas>=3)milestone('eva3','Completed 3 EVAs',10);
+ if(G.self>=60)milestone('self60','Reached 60% self-sufficiency',12);
+ if(sol>=sc.target)milestone('target','Reached target Sol '+sc.target,15);
+ if(G.n2<=1){endGame(false,'BUFFER GAS EXHAUSTED','Nitrogen buffer gas fell to zero and the habitat could no longer maintain pressure. Atmosphere control was lost.');return;}
+ if(sol>=sc.target && G.storm.capstoneDone && G.self>=sc.req){ endGame(true,'SELF-SUFFICIENT OUTPOST',sc.name+' reached Sol '+sol+' at '+fmt(G.self)+'% self-sufficiency with the full crew alive. The loop is closed — Mars is home.'); return; }
+ if(sol>sc.target+30){ endGame(false,'FINAL EVALUATION FAILED','The mission passed its evaluation window at Sol '+(sc.target+30)+' at only '+fmt(G.self)+'% self-sufficiency (required '+sc.req+'%). Earth recalled the program.'); return; }
+ /* history sampling */
+ chartAcc+=dt; if(chartAcc>=4){chartAcc=0;sampleHistory();}
+}
+function sampleHistory(force){ if(!G)return; const h=G.hist; h.t.push(solOf()); h.o2pp.push(clamp(G.o2/G.o2Ideal*21,0,30)); h.co2.push(G.co2); h.water.push(G.water); h.food.push(G.food); h.battery.push(G.battery); h.temp.push(G.temp); h.health.push(aliveCrew().length?aliveCrew().reduce((a,c)=>a+c.health,0)/aliveCrew().length:0); h.self.push(G.self); for(const k in h)if(h[k].length>360)h[k].shift(); }
+function onNewSol(sol){ const sc=SCEN[G.scen];
+ // daily crop pest / random events
+ if(sol>=G.nextEventSol){ G.nextEventSol=sol+3+Math.floor(rand()*5); randomEvent(); }
+ // resupply notice
+ const cyc=sol%45; if(cyc===0)log('Resupply window OPEN for 3 sols. Spend Mission Support on packages.','warn'),toast('RESUPPLY WINDOW','A cargo lander is in range for 3 sols.','warn'),sfx.alarm();
+ if(cyc===3&&sol>3)log('Resupply window closed. Next window in 42 sols.','');
+ updateObjectives();
+}
+function randomEvent(){ if(!G||G.storm.active&&rand()<.5)return; const roll=rand(); G.stats.events++;
+ if(roll<.16){ G.soiling=clamp(G.soiling+.22,0,1); log('Dust devil crossed the array. Panel soiling jumped — consider a cleaning EVA.','warn'); toast('DUST DEVIL','Solar soiling increased sharply.','warn'); }
+ else if(roll<.30){ const c=G.crew[Math.floor(rand()*G.crew.length)]; c.sick=36+rand()*30; c.stress+=12; log(c.name+' fell ill (likely recycled-air infection). A Medic and rest will speed recovery.','warn'); toast('CREW ILLNESS',c.name+' is sick. Assign a Medic.','warn'); sfx.alarm(); }
+ else if(roll<.42){ G.crop.pests=true; if(G.crop.planted){log('Aphid outbreak in the greenhouse! Growth slowed until harvested or treated by a Botanist over time.','warn'); toast('CROP PESTS','Greenhouse infested. Botanists fight it back.','warn');} else log('Pest spores detected and purged from the empty greenhouse.',''); }
+ else if(roll<.54){ const ids=Object.keys(G.comp); const c=G.comp[ids[Math.floor(rand()*ids.length)]]; c.health=clamp(c.health-18-rand()*15,0,100); log('Micrometeorite / fatigue event damaged the '+c.name+'.','warn'); toast('IMPACT DAMAGE',c.name+' lost integrity.','warn'); sfx.alarm(); }
+ else if(roll<.66){ G.leak=1; G.leakUntil=G.time+6; log('Hull micro-leak detected! Atmosphere is venting for ~6 hours until seals re-seat. An exterior repair EVA ends it now.','bad'); toast('HULL LEAK','Atmosphere venting. Watch O₂ and N₂.','bad'); sfx.bad(); }
+ else if(roll<.78){ G.support+=8; log('Earth uplink: a science package impressed mission control. +8 Support.','good'); toast('EARTH UPLINK','+8 Mission Support awarded.','good'); }
+ else if(roll<.90){ G.water+=60; log('Subsurface ice lens tapped by the drill. +60 L water.','good'); pushFloat('+60 L H₂O',.72,.55,'#67e8f9'); sfx.good(); }
+ else { const c=G.crew[Math.floor(rand()*G.crew.length)]; c.skill=clamp(c.skill+5,0,100); log(c.name+' had a breakthrough insight. Skill increased.','good'); }
+ // botanists clear pests slowly handled here daily:
+ if(G.crop.pests && roleCount('Botanist')>0 && rand()<.55){G.crop.pests=false;log('Botanist team cleared the greenhouse pests.','good');}
+ saveSoon();
+}
+function milestone(id,label,bonus){ if(!G||G.miles[id])return; G.miles[id]=true; G.support+=bonus; log('MILESTONE: '+label+' (+'+bonus+' Support).','good'); toast('MILESTONE',label+' · +'+bonus+' Support','good'); sfx.good(); updateObjectives(); }
+function onCrewDeath(c){ c.health=0; log('Commander, we lost '+c.name+'. Mission control has ordered an abort.','bad'); endGame(false,'CREW LOST — MISSION ABORTED',c.name+' died on Sol '+solOf()+'. A Mars habitat is only as strong as its weakest loop: air, water, heat, food and rest are all life support. Review the log to find the cascade that killed them.'); }
+function scoreCalc(){ if(!G)return 0; return Math.round(solOf()*10 + G.self*22 + G.stats.harvested*2 + G.tech.length*180 + G.stats.evas*60 + aliveCrew().reduce((a,c)=>a+c.health,0)); }
+function endGame(won,title,reason){ if(!G||G.ended)return; G.ended=true; G.paused=true; const sc=scoreCalc(); best.missions++; if(won){best.completed[G.scen]=true;} best.bestScore=Math.max(best.bestScore,sc); saveJSON('mh_best',best);
+ $('endKicker').textContent=won?'MISSION COMPLETE':'MISSION FAILED'; $('endTitle').textContent=title; $('endTitle').style.color=won?'#4ade80':'#f87171'; $('endReason').textContent=reason;
+ const grade=won?(sc>5200?'S':sc>4000?'A':sc>2800?'B':'C'):(solOf()>SCEN[G.scen].target*.6?'C':'D'); $('endGrade').textContent=grade;
+ const st=[['Final Sol',solOf()+' / '+SCEN[G.scen].target],['Self-sufficiency',fmt(G.self)+'% (req '+SCEN[G.scen].req+'%)'],['Crew alive',aliveCrew().length+' / '+G.crew.length],['Food harvested',fmt(G.stats.harvested)+' kg'],['Water ice-mined',fmt(G.stats.mined)+' L'],['EVAs completed',G.stats.evas],['Repairs',G.stats.repairs],['Technologies',G.tech.length+' / '+TECHS.length],['Research earned',fmt(G.stats.researchEarned)+' RP'],['O₂ produced',fmt(G.stats.o2Made)+' kg'],['Events weathered',G.stats.events],['MISSION SCORE',sc]];
+ $('endStats').innerHTML=st.map(x=>'<div class="panel2 p-2"><div class="text-slate-400">'+x[0]+'</div><div class="font-bold text-white text-sm">'+x[1]+'</div></div>').join('');
+ $('endModal').classList.remove('hidden'); won?sfx.good():sfx.bad(); try{localStorage.removeItem('mh_save')}catch(e){}
+}
+
+/* ================= ACTIONS ================= */
+function doPlant(){ if(!G||G.crop.planted)return; initAudio(); G.crop={type:$('selCrop').value,planted:true,growth:0,health:100,pests:false}; log(CROPS[G.crop.type].name+' planted in the greenhouse. Keep it lit, warm and watered.','good'); pushFloat('PLANTED',.18,.4,'#4ade80'); sfx.click(); updateCropUI(); }
+function doHarvest(){ if(!G||!G.crop.planted||G.crop.growth<100)return; const y=CROPS[G.crop.type].yield*(0.6+0.4*G.crop.health/100); G.food+=y; G.stats.harvested+=y; if(G.crop.type==='soy')G.crew.forEach(c=>c.stress=clamp(c.stress-10,0,100)); log('Harvested '+fmt(y)+' kg of '+CROPS[G.crop.type].name+'.','good'); toast('HARVEST', '+'+fmt(y)+' kg food stored.','good'); pushFloat('+'+fmt(y)+' kg FOOD',.18,.35,'#4ade80'); sfx.harvest(); milestone('harvest','First harvest brought in',10); G.crop.planted=false;G.crop.growth=0; updateCropUI(); }
+function startEVA(type){ if(!G||G.eva)return; initAudio(); const cand=aliveCrew().filter(c=>c.health>35&&c.energy>25).sort((a,b)=>(b.role==='EVA Specialist')-(a.role==='EVA Specialist')||b.health-a.health)[0]; if(!cand){toast('NO EVA CREW','No healthy, rested crew member can suit up.','bad');return;}
+ if(G.storm.active && type!=='repair'){toast('STORM LOCKDOWN','EVAs are suicidal in the dust storm — only emergency exterior repair is permitted, at high risk.','warn'); sfx.alarm(); return;}
+ G.eva={type,crew:cand,end:G.time+6}; cand.energy-=18; log(cand.name+' suited up for EVA: '+type.toUpperCase()+'.',''); sfx.click(); updateEVAUI(); }
+function completeEVA(){ const e=G.eva; G.eva=null; const c=e.crew; G.stats.evas++; const risk=G.storm.active?.35:(c.role==='EVA Specialist'?.04:.10); let injured=false;
+ if(rand()<risk){injured=true;c.health-=14+rand()*12;c.stress+=20;log(c.name+' was injured during the EVA and needs medical care.','bad');sfx.bad();}
+ if(e.type==='clean'){G.soiling=Math.max(0,G.soiling-.75);log('Solar array cleaned. Soiling now '+fmt(G.soiling*100)+'%.','good');pushFloat('PANELS CLEAN',.82,.42,'#fbbf24');}
+ if(e.type==='ice'){const amt=140+rand()*90+(c.role==='EVA Specialist'?40:0);G.water+=amt;G.stats.mined+=amt;log('Ice mining returned '+fmt(amt)+' L of water.','good');pushFloat('+'+fmt(amt)+' L ICE',.8,.6,'#67e8f9');}
+ if(e.type==='repair'){const ids=Object.keys(G.comp);const worst=ids.sort((a,b)=>G.comp[a].health-G.comp[b].health)[0];G.comp[worst].health=clamp(G.comp[worst].health+22,0,100);G.leak=0;log('Exterior work patched the '+G.comp[worst].name+' and checked hull seals.','good');}
+ if(e.type==='science'){G.support+=10;G.research+=6;G.stats.science++;log('Science expedition returned samples. +10 Support, +6 RP.','good');pushFloat('+SCIENCE',.8,.5,'#c4b5fd');}
+ if(!injured)sfx.good(); updateEVAUI(); }
+function doRepair(){ if(!G)return; const id=$('selComponent').value; const c=G.comp[id]; if(!c||c.repairUntil>0)return; if(G.spares<1){toast('NO SPARES','Order spares in a resupply window or cannibalize via exterior EVA.','bad');return;} G.spares--; c.repairUntil=G.time+6; log('Repair started on '+c.name+' (6 h, 1 spare consumed).',''); sfx.click(); }
+function buyPack(pack){ if(!G)return; if(!resupplyOpen()){toast('NO LANDER IN RANGE','Resupply windows open every 45 sols (Sol 45, 90, 135…) for 3 sols.','warn');return;} const key=pack+'@'+resupplyWindowId(); if(G.usedPacks.includes(key)){toast('ALREADY DELIVERED','That package already arrived this window.','warn');return;}
+ const cost=pack==='supplies'?10:pack==='spares'?12:15; if(G.support<cost){toast('INSUFFICIENT SUPPORT','Earn Support via science EVAs and milestones.','bad');return;}
+ G.support-=cost; G.usedPacks.push(key);
+ if(pack==='supplies'){G.food+=90;G.water+=220;G.o2+=35;log('Resupply: +90 kg food, +220 L water, +35 kg O₂ buffer.','good');}
+ if(pack==='spares'){G.spares+=6;log('Resupply: +6 spare parts delivered.','good');}
+ if(pack==='tech'){G.research+=20;G.spares+=2;log('Resupply: lab kit delivered. +20 RP, +2 spares.','good');}
+ toast('DELIVERY CONFIRMED','Cargo pod landed at the pad.','good'); sfx.good(); }
+function buyTech(id){ if(!G)return; const t=TECHS.find(x=>x.id===id); if(!t||hasTech(id)||G.research<t.cost)return; G.research-=t.cost; G.tech.push(id); if(id==='battery2'){G.batteryCap+=70;G.battery+=30;} log('Technology online: '+t.name+'. '+t.desc,'good'); toast('TECH ONLINE',t.name,'good'); sfx.tech(); buildTechList(); }
+function communalMeal(){ if(!G||G.mealCd>0||G.food<5)return; G.food-=5;G.mealCd=20;G.crew.forEach(c=>{c.stress=clamp(c.stress-18,0,100);c.hunger=clamp(c.hunger-25,0,100)}); log('Communal meal in the galley. Morale visibly lifts around the table.','good'); toast('MORALE UP','Shared meal: stress down across the crew.','good'); sfx.good(); }
+function drill(){ if(!G||G.drillCd>0)return; G.drillCd=16; G.crew.forEach(c=>{c.skill=clamp(c.skill+2,0,100);c.energy=clamp(c.energy-10,0,100);c.stress=clamp(c.stress+4,0,100)}); log('Cross-training drill complete. Every crew skill +2, at the cost of tired legs.',''); sfx.click(); }
+
+/* ================= UI BUILDERS ================= */
+function buildCompSelect(){ $('selComponent').innerHTML=COMPDEF.map(([id,n])=>'<option value="'+id+'">'+n+'</option>').join(''); }
+function buildCrewCards(){ const box=$('crewList'); box.innerHTML=''; G.crew.forEach((c,i)=>{ const d=document.createElement('div'); d.className='panel2 p-3'; d.id='crewCard'+i;
+ d.innerHTML='<div class="flex justify-between items-center"><button class="font-bold text-left crewFocus" data-i="'+i+'">'+c.name+'</button><span class="mono text-[10px] text-slate-400">SKILL <span id="cSkill'+i+'"></span></span></div>'+
+ '<div class="grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 text-[11px] mono mt-1 items-center"><span>HEALTH</span><div class="meter"><div id="cHealth'+i+'" style="background:#4ade80"></div></div><span>ENERGY</span><div class="meter"><div id="cEnergy'+i+'" style="background:#facc15"></div></div><span>STRESS</span><div class="meter"><div id="cStress'+i+'" style="background:#fb7185"></div></div><span>HUNGER</span><div class="meter"><div id="cHunger'+i+'" style="background:#fb923c"></div></div></div>'+
+ '<div class="flex gap-2 mt-2"><select id="cRole'+i+'" class="flex-1 text-sm">'+ROLES.map(r=>'<option '+(r===c.role?'selected':'')+'>'+r+'</option>').join('')+'</select><button class="btn restBtn" data-i="'+i+'">REST</button></div><div id="cStatus'+i+'" class="text-xs text-slate-400 mt-1"></div>';
+ box.appendChild(d); });
+ box.querySelectorAll('select').forEach(s=>s.addEventListener('change',e=>{const i=+e.target.id.replace('cRole','');G.crew[i].role=e.target.value;G.crew[i].forcedRest=false;log(G.crew[i].name+' reassigned as '+e.target.value+'.','');sfx.click();}));
+ box.querySelectorAll('.restBtn').forEach(b=>b.addEventListener('click',e=>{const i=+e.target.dataset.i;G.crew[i].forcedRest=!G.crew[i].forcedRest;log(G.crew[i].name+(G.crew[i].forcedRest?' is on mandatory rest.':' returned to duty.'),'');}));
+ box.querySelectorAll('.crewFocus').forEach(b=>b.addEventListener('click',e=>{const c=G.crew[+e.target.dataset.i]; selectInfo(c.name+' — '+c.role,'Health '+fmt(c.health)+'% · Energy '+fmt(c.energy)+'% · Stress '+fmt(c.stress)+'% · Hunger '+fmt(c.hunger)+'% · Skill '+fmt(c.skill)+'. Roles change system efficiency: Engineers slow wear, Botanists boost crops, Scientists earn RP/Support, Medics heal, EVA Specialists sortie safer. Tired crew auto-sleep at night.');}));
+}
+function buildCompList(){ $('componentList').innerHTML=COMPDEF.map(([id,n])=>'<div class="flex items-center gap-2"><span class="w-32 shrink-0">'+n+'</span><div class="meter flex-1"><div id="comp_'+id+'" style="background:#38bdf8"></div></div><span class="mono text-xs w-16 text-right" id="compT_'+id+'"></span></div>').join(''); }
+function buildTechList(){ $('techList').innerHTML=TECHS.map(t=>{const owned=G&&hasTech(t.id); return '<div class="panel2 p-2 flex gap-2 items-center"><div class="flex-1"><div class="font-bold text-sm">'+t.name+' <span class="mono text-violet-300 text-xs">'+t.cost+' RP</span></div><div class="text-xs text-slate-400">'+t.desc+'</div></div><button class="btn techBtn" data-tech="'+t.id+'" '+(owned?'disabled':'')+'>'+(owned?'ONLINE':'RESEARCH')+'</button></div>'}).join('');
+ $('techList').querySelectorAll('.techBtn').forEach(b=>b.addEventListener('click',()=>buyTech(b.dataset.tech))); }
+function selectInfo(title,body){ $('selectedInfo').innerHTML='<b class="text-orange-300">'+title+'</b><div class="text-slate-300 mt-1">'+body+'</div>'; G.selected=title; }
+function updateObjectives(){ if(!G)return; const sc=SCEN[G.scen]; $('objectiveText').innerHTML='Survive to <b>Sol '+sc.target+'</b>, weather the storm on Sol '+sc.stormSol+', and reach <b>'+sc.req+'% self-sufficiency</b> by Sol '+(sc.target+30)+'. Any crew death aborts the mission.';
+ const items=[['Reach Sol '+sc.target,!!G.miles.target],['Survive 25 sols',!!G.miles.sol25],['First harvest',!!G.miles.harvest],['Unlock 2 technologies',!!G.miles.tech2],['Complete 3 EVAs',!!G.miles.eva3],['60% self-sufficiency',!!G.miles.self60],['Survive capstone storm',G.storm.capstoneDone]];
+ $('objectiveList').innerHTML=items.map(x=>'<li class="'+(x[1]?'text-emerald-300':'text-slate-400')+'">'+(x[1]?'[DONE] ':'[ ] ')+x[0]+'</li>').join('');
+ $('capstoneBadge').textContent=G.storm.active?'CAPSTONE STORM IN PROGRESS — SOLAR COMPROMISED':('Capstone storm: Sol '+sc.stormSol+' · '+(G.storm.capstoneDone?'SURVIVED':'incoming'));
+}
+function updateCropUI(){ if(!G)return; if(!G.crop.planted){$('cropInfo').innerHTML='Greenhouse beds are empty. Plant a crop to begin the food + O₂ loop.';$('cropBar').style.width='0%';} else {const c=CROPS[G.crop.type]; $('cropInfo').innerHTML='<b>'+c.name+'</b> · growth '+fmt(G.crop.growth)+'% · health '+fmt(G.crop.health)+'%'+(G.crop.pests?' · <span class="text-red-300">PESTS</span>':'')+'<br><span class="text-slate-400">Needs light, water, 14–29°C and CO₂. Yield ≈ '+fmt(c.yield*(0.6+0.4*G.crop.health/100))+' kg.</span>'; $('cropBar').style.width=G.crop.growth+'%';} $('btnHarvest').disabled=!(G.crop.planted&&G.crop.growth>=100); $('btnPlant').disabled=G.crop.planted; }
+function updateEVAUI(){ if(!G)return; $('evaInfo').textContent=G.eva?('EVA in progress: '+G.eva.crew.name+' — '+G.eva.type.toUpperCase()+' · returns '+fmt(G.eva.end-G.time,1)+' h'):(resupplyOpen()?'Resupply window open — cargo can be received at the pad.':'No EVA in progress. EVAs take 6 h and need a healthy, rested crew member.'); document.querySelectorAll('.evaBtn').forEach(b=>b.disabled=!!G.eva); }
+function updateHUD(){ if(!G)return; const sc=SCEN[G.scen]; const o2pp=clamp(G.o2/G.o2Ideal*21,0,30);
+ $('hudMission').textContent=sc.name+' · SEED '+ (G.rngSeed||''); $('hudSol').textContent='Sol '+solOf()+' · '+padTime()+(G.paused?' · PAUSED':'');
+ $('rO2').textContent=fmt(G.o2)+' kg · '+fmt(o2pp,1)+' kPa'; $('bO2').style.width=clamp(G.o2/220*100,0,100)+'%'; $('bO2').style.background=o2pp<12?'#ef4444':'#38bdf8';
+ $('rCO2').textContent=fmt(G.co2)+' ppm'; $('bCO2').style.width=clamp(G.co2/5000*100,0,100)+'%'; $('bCO2').style.background=G.co2>2500?'#ef4444':G.co2>1600?'#f59e0b':'#a3e635';
+ $('rWater').textContent=fmt(G.water)+' L'; $('bWater').style.width=clamp(G.water/1400*100,0,100)+'%';
+ $('rFood').textContent=fmt(G.food)+' kg'; $('bFood').style.width=clamp(G.food/250*100,0,100)+'%';
+ $('rPower').textContent=(G.powerNet>=0?'+':'')+fmt(G.powerNet,1)+' kW'; $('rPowerSub').textContent='gen '+fmt(G.gen,1)+' · load '+fmt(G.load,1)+' kW'+(G.brownout<.98?' · BROWNOUT':'');
+ $('rBattery').textContent=fmt(G.battery)+' / '+G.batteryCap+' kWh'; $('bBattery').style.width=clamp(G.battery/G.batteryCap*100,0,100)+'%';
+ $('rTemp').textContent=fmt(G.temp,1)+' °C'; $('rTempSub').textContent='outside '+fmt(G.extTemp)+' °C';
+ $('rSpares').textContent=G.spares; $('rResearch').textContent=fmt(G.research);
+ $('rSupport').textContent=fmt(G.support); $('rResupply').textContent=resupplyOpen()?'WINDOW OPEN':'next Sol '+(Math.floor(solOf()/45)*45+45);
+ $('rSelf').textContent=fmt(G.self)+'% / '+sc.req+'%'; $('bSelf').style.width=clamp(G.self,0,100)+'%';
+ ['Electro','Scrub','Sabatier','Recycler','Lights','Heater'].forEach(k=>{const m={Electro:'sElectro',Scrub:'sScrub',Sabatier:'sSabatier',Recycler:'sRecycler',Lights:'sLights',Heater:'sHeater'}[k]; $('v'+k).textContent=$(m).value+'%';});
+ const alerts=[]; if(o2pp<13)alerts.push('LOW OXYGEN — increase electrolysis / check leaks'); if(G.co2>2400)alerts.push('HIGH CO₂ — raise scrubber + Sabatier'); if(G.water<90)alerts.push('LOW WATER — mine ice, raise recycler, cut electrolysis'); if(G.food<25)alerts.push('LOW FOOD — harvest or order supplies'); if(G.battery<8&&G.powerNet<0)alerts.push('BATTERY CRITICAL — shed loads (lights/heater)'); if(G.temp<10)alerts.push('CABIN COLD — raise heater power'); if(G.comp&&Object.values(G.comp).some(c=>c.failed))alerts.push('COMPONENT FAILURE — repair immediately');
+ if(alerts.length){$('alertBanner').classList.remove('hidden');$('alertText').textContent='ALERT: '+alerts.join(' · ');}else $('alertBanner').classList.add('hidden');
+ // crew in place
+ G.crew.forEach((c,i)=>{ const set=(id,v,col)=>{const e=$(id+i); if(e){e.style.width=clamp(v,0,100)+'%'; if(col)e.style.background=col;}}; set('cHealth',c.health,c.health<35?'#ef4444':c.health<65?'#f59e0b':'#4ade80'); set('cEnergy',c.energy); set('cStress',c.stress); set('cHunger',c.hunger); const sk=$('cSkill'+i); if(sk)sk.textContent=fmt(c.skill); const st=$('cStatus'+i); if(st)st.textContent=(c.health<=0?'DECEASED':c.sick>0?'Sick — needs rest/medic':c.forcedRest?'Mandatory rest':(hourOf()>=22||hourOf()<5.5||c.energy<8)?'Sleeping':'On duty · '+c.role)+(G.eva&&G.eva.crew===c?' · ON EVA':''); });
+ for(const id in G.comp){const c=G.comp[id]; const bar=$('comp_'+id),txt=$('compT_'+id); if(bar){bar.style.width=c.health+'%';bar.style.background=c.failed?'#ef4444':c.health<30?'#f59e0b':'#38bdf8';} if(txt)txt.textContent=c.failed?'FAILED':c.repairUntil>0?'REPAIR':fmt(c.health)+'%';}
+ document.querySelectorAll('.techBtn').forEach(b=>{const t=TECHS.find(x=>x.id===b.dataset.tech); if(t&&!hasTech(t.id))b.disabled=G.research<t.cost;});
+ $('btnMeal').disabled=G.mealCd>0||G.food<5; $('btnDrill').disabled=G.drillCd>0;
+ $('statsMini').innerHTML=[['Score',scoreCalc()],['Food harvested',fmt(G.stats.harvested)+' kg'],['Ice mined',fmt(G.stats.mined)+' L'],['EVAs / Repairs',G.stats.evas+' / '+G.stats.repairs]].map(x=>'<div class="panel2 p-2"><div class="text-slate-400">'+x[0]+'</div><div class="text-white font-bold">'+x[1]+'</div></div>').join('');
+ $('statsPanel').innerHTML=['Mission score: <b class="text-white">'+scoreCalc()+'</b>','Sols survived: '+solOf()+' / '+sc.target,'O₂ produced: '+fmt(G.stats.o2Made)+' kg','Power generated: '+fmt(G.stats.powerMade)+' kWh','Research earned: '+fmt(G.stats.researchEarned)+' RP','Food balance: +'+fmt(G.stats.harvested)+' / −'+fmt(G.stats.consumed)+' kg','Panel soiling: '+fmt(G.soiling*100)+'% · Dust opacity: '+fmt(G.dust*100)+'%','Buffer N₂: '+fmt(G.n2)+'% · H₂ stock: '+fmt(G.h2,1)+' kg · CO₂ store: '+fmt(G.co2Store,1)].map(x=>'<div>'+x+'</div>').join('');
+ $('resupplyInfo').textContent=resupplyOpen()?'Window OPEN — lander on final approach. Each package once per window.':'Next window opens Sol '+(Math.floor(solOf()/45)*45+45)+'. Earn Support via science EVAs + milestones.';
+ updateCropUI(); updateEVAUI();
+}
+function drawChart(){ const cv=$('chartCanvas'); if(!cv||!G)return; const ctx=cv.getContext('2d'); const W=cv.clientWidth||600,H=140; if(cv.width!==W)cv.width=W; ctx.clearRect(0,0,W,H); const key=$('selChart').value; const data=G.hist[{o2pp:'o2pp',co2:'co2',water:'water',food:'food',battery:'battery',temp:'temp',health:'health',self:'self'}[key]]||[]; if(data.length<2){ctx.fillStyle='#94a3b8';ctx.fillText('Collecting telemetry…',10,20);return;}
+ let min=Math.min(...data),max=Math.max(...data); if(max-min<1){max+=.5;min-=.5;} const pad=(max-min)*.15; max+=pad;min-=pad;
+ ctx.strokeStyle='#263445'; for(let i=0;i<4;i++){const y=10+i*(H-30)/3;ctx.beginPath();ctx.moveTo(34,y);ctx.lineTo(W-8,y);ctx.stroke();}
+ ctx.fillStyle='#94a3b8';ctx.font='10px IBM Plex Mono';ctx.fillText(fmt(max,1),2,14);ctx.fillText(fmt(min,1),2,H-8);
+ ctx.strokeStyle='#f06423';ctx.lineWidth=2;ctx.beginPath(); data.forEach((v,i)=>{const x=34+i/(data.length-1)*(W-46),y=8+(1-(v-min)/(max-min))*(H-26); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.lineWidth=1;
+ ctx.fillStyle='#e2e8f0';ctx.fillText('Latest: '+fmt(data[data.length-1],1)+' · '+$('selChart').selectedOptions[0].textContent,40,14);
+}
+
+/* ================= CANVAS RENDER ================= */
+const cv=$('simCanvas'),ctx=cv.getContext('2d');
+function resizeCanvas(){ const r=cv.getBoundingClientRect(); const dpr=Math.min(window.devicePixelRatio||1,2); cv.width=Math.max(320,r.width)*dpr; cv.height=430*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
+function draw(){ if(!G)return; const W=cv.clientWidth,H=430; const hr=hourOf(); const daylight=clamp(Math.sin((hr-6)/12*Math.PI),0,1);
+ // sky (solid bands, no gradients)
+ ctx.fillStyle=daylight>.25?'#3a2418':(daylight>.05?'#241a20':'#0d1420'); ctx.fillRect(0,0,W,H);
+ if(daylight<.3){ctx.fillStyle='#e2e8f0'; for(let i=0;i<50;i++){const x=(i*97)%W,y=(i*57)%150;ctx.fillRect(x,y,2,2);}}
+ // sun
+ const sx=W*(0.08+0.84*clamp((hr-6)/12,0,1)), sy=120-80*daylight; if(daylight>0){ctx.fillStyle='#ffd27a';ctx.beginPath();ctx.arc(sx,sy,20,0,7);ctx.fill();ctx.fillStyle='rgba(255,210,122,.25)';ctx.beginPath();ctx.arc(sx,sy,34,0,7);ctx.fill();}
+ // ground
+ ctx.fillStyle='#6e3520';ctx.fillRect(0,300,W,130); ctx.fillStyle='#7d4128'; for(let i=0;i<26;i++)ctx.fillRect((i*83)%W,318+(i*29)%90,26,5);
+ ctx.fillStyle='#8a4b2d';ctx.fillRect(0,296,W,6);
+ const gy=205;
+ function module(x,y,w,h,label,color,key){ ctx.fillStyle='#1c2a38';ctx.strokeStyle='#4b6a86';ctx.lineWidth=2; roundRect(x,y,w,h,12);ctx.fill();ctx.stroke(); ctx.fillStyle=color;ctx.fillRect(x+6,y+6,w-12,5); ctx.fillStyle='#dbeafe';ctx.font='bold 11px Rajdhani';ctx.fillText(label,x+9,y+24); moduleRects[key]={x,y,w,h}; }
+ function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+ module(18,gy,150,92,'GREENHOUSE','#22c55e','greenhouse');
+ // crops inside
+ const cropH=G.crop.planted? (18+G.crop.growth*.45)*(G.crop.health/100+.3):0; ctx.fillStyle=G.crop.pests?'#a16207':'#22c55e'; for(let i=0;i<7;i++){const cx=32+i*19;ctx.fillRect(cx,gy+84-cropH,7,cropH);} ctx.fillStyle=slider('sLights')>.1&&G.brownout>.3?'rgba(250,204,21,.85)':'#334155'; for(let i=0;i<4;i++)ctx.fillRect(32+i*34,gy+34,22,5);
+ module(182,gy-18,205,110,'HABITAT','#38bdf8','habitat');
+ ctx.fillStyle=G.brownout<.4?'#7f1d1d':'#fbbf24'; for(let i=0;i<4;i++)ctx.fillRect(202+i*44,gy+22,24,16);
+ ctx.fillStyle='#93c5fd';ctx.font='10px IBM Plex Mono';ctx.fillText('cabin '+fmt(G.temp,1)+'°C · CO₂ '+fmt(G.co2),196,gy+68);
+ module(402,gy,170,92,'LIFE SUPPORT','#f06423','life');
+ // bubbles when electrolysis runs
+ if(settings.particles&&slider('sElectro')>.05&&compEff('electrolyzer')>0&&Math.random()<.35)particles.push({x:430+Math.random()*40,y:gy+78,vy:-.5-Math.random()*.5,r:2+Math.random()*3,life:50,type:'bub',col:'#7dd3fc'});
+ ctx.fillStyle='#0ea5e9';const wl=clamp(G.water/1400,0,1);ctx.fillRect(505,gy+78-38*wl,48,38*wl);ctx.strokeStyle='#64748b';ctx.strokeRect(505,gy+40,48,38);ctx.fillStyle='#e2e8f0';ctx.font='9px IBM Plex Mono';ctx.fillText('H₂O '+fmt(G.water),500,gy+88);
+ module(586,gy-6,130,98,'LAB / COMMS','#a78bfa','lab');
+ // solar array
+ const ax=W-190,ay=252; moduleRects.solar={x:ax-8,y:ay-52,w:180,h:105};
+ ctx.strokeStyle='#94a3b8';ctx.beginPath();ctx.moveTo(ax+45,ay+20);ctx.lineTo(ax+45,ay+48);ctx.stroke();
+ ctx.save();ctx.translate(ax+45,ay+18);ctx.rotate(-.18+daylight*.25);ctx.fillStyle='#1d4ed8';for(let r=0;r<3;r++)for(let c=0;c<5;c++)ctx.fillRect(-70+c*29,-42+r*18,26,15);ctx.fillStyle='rgba(146,64,14,'+(G.soiling*.75)+')';ctx.fillRect(-70,-42,142,52);ctx.restore();
+ ctx.fillStyle='#fbbf24';ctx.font='bold 11px Rajdhani';ctx.fillText('SOLAR '+fmt(Math.max(G.gen-6.2,0),1)+' kW',ax-58,ay+66);
+ ctx.fillStyle='#78350f';ctx.fillRect(ax+92,ay+8,54,34);ctx.fillStyle='#fde68a';ctx.font='9px IBM Plex Mono';ctx.fillText('RTG 6.2kW',ax+94,ay+28);
+ // battery
+ ctx.strokeStyle='#94a3b8';ctx.strokeRect(24,318,110,24);ctx.fillStyle='#facc15';ctx.fillRect(26,320,106*clamp(G.battery/G.batteryCap,0,1),20);ctx.fillStyle='#fff';ctx.font='10px IBM Plex Mono';ctx.fillText('BATTERY '+fmt(G.battery/G.batteryCap*100)+'%',28,356);
+ // dust particles
+ if(settings.particles&&(G.dust>.25||G.storm.active)&&Math.random()<.8)particles.push({x:Math.random()*W,y:Math.random()*260,vy:.2,r:1+Math.random()*2,life:80,type:'dust',col:'#d6a05f',vx:1+G.dust*3});
+ // crew dots
+ const homes={Engineer:[470,gy+62],'Botanist':[90,gy+62],Scientist:[645,gy+55],Medic:[280,gy+58],'EVA Specialist':[330,gy+58],Rest:[240,gy+58]};
+ G.crew.forEach((c,i)=>{ let tgt=homes[c.role]||homes.Rest; const sleeping=(hourOf()>=22||hourOf()<5.5||c.energy<8||c.forcedRest); if(sleeping)tgt=[225+(i%3)*38,gy+60]; if(G.eva&&G.eva.crew===c)tgt=[ax+30,282];
+   c.tx=tgt[0]/W;c.ty=tgt[1]/H; c.x+=(c.tx-c.x)*.025;c.y+=(c.ty-c.y)*.025; const x=c.x*W,y=c.y*H;
+   ctx.fillStyle=c.health<=0?'#475569':(G.eva&&G.eva.crew===c?'#fbbf24':'#7dd3fc');ctx.beginPath();ctx.arc(x,y,7,0,7);ctx.fill();ctx.fillStyle='#0f172a';ctx.font='bold 8px IBM Plex Mono';ctx.fillText(c.name.split(' ')[0][0],x-2.5,y+3);
+   if(c.sick>0){ctx.fillStyle='#f87171';ctx.fillText('ILL',x-8,y-11);} });
+ // particles & floaters
+ particles=particles.filter(p=>p.life>0); for(const p of particles){p.life--;p.y+=p.vy||0;p.x+=p.vx||0;ctx.globalAlpha=clamp(p.life/50,0,1);ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill();ctx.globalAlpha=1;}
+ floaters=floaters.filter(f=>f.life>0); ctx.font='bold 13px IBM Plex Mono'; for(const f of floaters){f.life-=.016;f.y-=.35;ctx.globalAlpha=clamp(f.life,0,1);ctx.fillStyle=f.color;ctx.fillText(f.txt,f.x*W,f.y*H);ctx.globalAlpha=1;}
+ // labels
+ ctx.fillStyle='#fecaca';ctx.font='bold 12px Rajdhani'; if(G.storm.active)ctx.fillText('!! DUST STORM — SOLAR COMPROMISED !!',W/2-110,26);
+ ctx.fillStyle='#e2e8f0';ctx.fillText('Dust '+fmt(G.dust*100)+'% · Soiling '+fmt(G.soiling*100)+'% · Brownout ×'+fmt(G.brownout,2),12,22);
+}
+
+/* ================= MAIN LOOP ================= */
+function loop(ts){ rafId=requestAnimationFrame(loop); if(!G||G.paused||G.ended){draw();return;} const dtReal=Math.min((ts-lastTs)/1000,.1); lastTs=ts; if(dtReal<=0)return;
+ let simHours=dtReal*3*G.speed; // 1x = 1 sol per ~8 s
+ const steps=Math.max(1,Math.ceil(simHours/.4)); const sub=simHours/steps; for(let i=0;i<steps;i++)step(sub);
+ draw(); uiAcc+=dtReal; if(uiAcc>.25){uiAcc=0;updateHUD();drawChart();} alarmAcc+=dtReal; if(alarmAcc>7){alarmAcc=0; const o2pp=clamp(G.o2/G.o2Ideal*21,0,30); if(o2pp<13||G.co2>2600||Object.values(G.comp).some(c=>c.failed))sfx.alarm();}
+ autosaveAcc+=dtReal; if(autosaveAcc>20){autosaveAcc=0;saveGame(true);}
+}
+function startLoop(){ if(rafId)cancelAnimationFrame(rafId); lastTs=performance.now(); rafId=requestAnimationFrame(loop); }
+
+/* ================= SAVE / LOAD ================= */
+function serialize(){ const copy=JSON.parse(JSON.stringify(G)); copy.ui={sElectro:$('sElectro').value,sScrub:$('sScrub').value,sSabatier:$('sSabatier').value,sRecycler:$('sRecycler').value,sLights:$('sLights').value,sHeater:$('sHeater').value,selFoodRation:$('selFoodRation').value,selWaterRation:$('selWaterRation').value,selCrop:$('selCrop').value,selComponent:$('selComponent').value}; return copy; }
+function saveGame(silent){ if(!G||G.ended)return; try{localStorage.setItem('mh_save',JSON.stringify(serialize())); if(!silent){toast('MISSION SAVED','Progress written to local storage.','good');sfx.good();}}catch(e){if(!silent)toast('SAVE FAILED','Storage unavailable in this browser.','bad');} }
+function saveSoon(){saveGame(true)}
+function loadGame(){ const s=loadJSON('mh_save',null); if(!s)return false; G=s; G.paused=false;G.ended=false; if(G.eva&&G.eva.crew){const c=G.crew.find(x=>x.name===G.eva.crew.name); if(c)G.eva.crew=c;} buildCrewCards();buildCompList();buildTechList();buildCompSelect(); if(G.ui){for(const k in G.ui){const el=$(k); if(el)el.value=G.ui[k];}} selectedScen=G.scen; syncPauseBtn(); updateObjectives(); return true; }
+
+/* ================= TUTORIAL ================= */
+const TUT=[
+ ['Welcome, Commander','Your habitat is a closed loop. Crew breathe O₂ and exhale CO₂; electrolysis, crops and the Sabatier reactor turn waste back into air and water. Nothing is free — every system draws power.',null],
+ ['Run the loop','Use the LIFE-SUPPORT sliders on the left. Raise Electrolysis for O₂, Scrubber + Sabatier for CO₂. If POWER NET goes negative at night, batteries drain and systems brown out.','controlPanel'],
+ ['Grow food','Plant a crop in the GREENHOUSE. Botanists, light, warmth and water decide the harvest. Food you grow is a third of self-sufficiency.','cropPanel'],
+ ['Use your crew','On the right, assign roles: Engineer (repairs), Botanist (crops), Scientist (research), Medic (healing), EVA Specialist (safer sorties). Exhausted crew sleep at night automatically.','crewList'],
+ ['Go outside','EVAs clean dusty solar panels, mine ice for water, repair the hull and earn science Support. Order supply packages during resupply windows every 45 sols.','evaPanel'],
+ ['Win the long game','Spend Research Points on technology, keep components repaired, and prepare for the capstone storm on the forecast Sol. Reach the target Sol at the required self-sufficiency with everyone alive. Good luck.','objectivePanel']];
+function showTut(){ if(!G)return; const t=TUT[G.tut]; if(!t){$('tutorialCard').classList.add('hidden');return;} $('tutorialCard').classList.remove('hidden'); $('tutStep').textContent='FIELD TRAINING '+(G.tut+1)+' / '+TUT.length; $('tutTitle').textContent=t[0]; $('tutText').textContent=t[1];
+ document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight')); if(t[2]&&$(t[2])){$(t[2]).classList.add('tut-highlight'); $(t[2]).scrollIntoView({behavior:'smooth',block:'center'});} }
+
+/* ================= SCREEN FLOW ================= */
+function startMission(){ initAudio(); if(AC&&AC.state==='suspended')AC.resume(); const seed=parseInt($('seedInput').value)||2026; newGame(selectedScen,seed); G.rngSeed=seed;
+ $('titleScreen').classList.add('hidden'); $('gameScreen').classList.remove('hidden'); $('endModal').classList.add('hidden');
+ resizeCanvas(); updateHUD(); drawChart(); draw(); startLoop(); G.tut=0; showTut(); toast('MISSION STARTED',SCEN[selectedScen].name+' — Sol 1. Keep the loop closed.','good'); sfx.good(); }
+function toTitle(){ if(G)saveGame(true); G=null; if(rafId)cancelAnimationFrame(rafId); rafId=null; $('gameScreen').classList.add('hidden'); $('pauseModal').classList.add('hidden'); $('endModal').classList.add('hidden'); $('tutorialCard').classList.add('hidden'); $('titleScreen').classList.remove('hidden'); refreshTitle(); }
+function refreshTitle(){ const done=Object.keys(best.completed||{}); $('titleBest').textContent=(best.missions?('Missions flown: '+best.missions+' · Best score: '+best.bestScore+' · Commendations: '+(done.length?done.map(k=>SCEN[k].name).join(', '):'none yet')):'No missions flown yet. Earth is watching, Commander.');
+ document.querySelectorAll('.scenario-card').forEach(card=>{const b=card.querySelector('.badgeDone'); if(b)b.textContent=best.completed[card.dataset.scen]?'COMMENDATION EARNED — scenario completed':'';});
+ $('btnContinue').classList.toggle('hidden',!loadJSON('mh_save',null)); }
+
+/* ================= EVENTS WIRING ================= */
+document.querySelectorAll('.scenario-card').forEach(c=>c.addEventListener('click',()=>{initAudio();document.querySelectorAll('.scenario-card').forEach(x=>x.classList.remove('selected'));c.classList.add('selected');selectedScen=c.dataset.scen;sfx.click();}));
+$('btnStart').addEventListener('click',startMission);
+$('btnContinue').addEventListener('click',()=>{initAudio(); if(loadGame()){ $('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');resizeCanvas();updateHUD();draw();startLoop();toast('MISSION RESTORED','Saved habitat state loaded.','good'); }});
+$('btnTitleHelp').addEventListener('click',()=>{initAudio();$('helpModal').classList.remove('hidden')});
+$('btnTitleSettings').addEventListener('click',()=>$('settingsModal').classList.remove('hidden'));
+document.querySelectorAll('.closeHelp').forEach(b=>b.addEventListener('click',()=>$('helpModal').classList.add('hidden')));
+document.querySelectorAll('.closeSettings').forEach(b=>b.addEventListener('click',()=>$('settingsModal').classList.add('hidden')));
+$('btnHelp').addEventListener('click',()=>$('helpModal').classList.remove('hidden'));
+$('btnSettings').addEventListener('click',()=>$('settingsModal').classList.remove('hidden'));
+$('btnSave').addEventListener('click',()=>saveGame(false));
+$('btnMenu').addEventListener('click',()=>{if(!G)return;G.paused=true;$('pauseInfo').textContent=SCEN[G.scen].name+' · Sol '+solOf()+' · Score '+scoreCalc();$('pauseModal').classList.remove('hidden');syncPauseBtn();});
+$('btnPauseTop').addEventListener('click',togglePause);
+function togglePause(){ if(!G)return; G.paused=!G.paused; syncPauseBtn(); sfx.click(); }
+function syncPauseBtn(){ $('btnPauseTop').textContent=G&&G.paused?'RESUME':'PAUSE'; document.querySelectorAll('.spdBtn').forEach(b=>b.classList.toggle('active',G&&Number(b.dataset.speed)===G.speed)); }
+document.querySelectorAll('.spdBtn').forEach(b=>b.addEventListener('click',()=>{if(!G)return;G.speed=Number(b.dataset.speed);G.paused=false;syncPauseBtn();sfx.click();}));
+$('btnResume').addEventListener('click',()=>{$('pauseModal').classList.add('hidden');if(G)G.paused=false;syncPauseBtn();});
+$('btnPauseSave').addEventListener('click',()=>saveGame(false));
+$('btnPauseSettings').addEventListener('click',()=>$('settingsModal').classList.remove('hidden'));
+$('btnPauseRestart').addEventListener('click',()=>{$('pauseModal').classList.add('hidden');if(G)selectedScen=G.scen;startMission();});
+$('btnPauseTitle').addEventListener('click',toTitle);
+$('btnEndRestart').addEventListener('click',()=>{$('endModal').classList.add('hidden');if(G)selectedScen=G.scen;startMission();});
+$('btnEndTitle').addEventListener('click',toTitle);
+$('btnAbort').addEventListener('click',()=>{if(G)endGame(false,'MISSION ABORTED BY COMMAND','You ordered the evacuation shuttle. The habitat goes silent behind you — Mars keeps the rest.');});
+$('btnPlant').addEventListener('click',doPlant); $('btnHarvest').addEventListener('click',doHarvest);
+document.querySelectorAll('.evaBtn').forEach(b=>b.addEventListener('click',()=>startEVA(b.dataset.eva)));
+$('btnRepair').addEventListener('click',doRepair);
+document.querySelectorAll('.packBtn').forEach(b=>b.addEventListener('click',()=>buyPack(b.dataset.pack)));
+$('btnMeal').addEventListener('click',communalMeal); $('btnDrill').addEventListener('click',drill);
+$('selChart').addEventListener('change',drawChart);
+$('btnTutNext').addEventListener('click',()=>{if(!G)return;G.tut++;sfx.click(); if(G.tut>=TUT.length){$('tutorialCard').classList.add('hidden');document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight'));}else showTut();});
+$('btnTutSkip').addEventListener('click',()=>{$('tutorialCard').classList.add('hidden');document.querySelectorAll('.tut-highlight').forEach(e=>e.classList.remove('tut-highlight'));});
+/* settings */
+function syncSettingsUI(){ $('setVolume').value=settings.volume*100; $('volOut').textContent=Math.round(settings.volume*100)+'%'; $('setMute').checked=settings.muted; $('setAmbient').checked=settings.ambient; $('setParticles').checked=settings.particles; $('setAlarms').checked=settings.alarms; $('btnMute').textContent=settings.muted?'SOUND OFF':'SOUND ON'; }
+$('setVolume').addEventListener('input',e=>{settings.volume=e.target.value/100;initAudio();applyAudioSettings();syncSettingsUI();});
+$('setMute').addEventListener('change',e=>{settings.muted=e.target.checked;applyAudioSettings();syncSettingsUI();});
+$('setAmbient').addEventListener('change',e=>{settings.ambient=e.target.checked;applyAudioSettings();});
+$('setParticles').addEventListener('change',e=>{settings.particles=e.target.checked;applyAudioSettings();});
+$('setAlarms').addEventListener('change',e=>{settings.alarms=e.target.checked;applyAudioSettings();});
+$('btnMute').addEventListener('click',()=>{initAudio();settings.muted=!settings.muted;applyAudioSettings();syncSettingsUI();});
+$('btnWipe').addEventListener('click',()=>{try{localStorage.removeItem('mh_save');localStorage.removeItem('mh_best')}catch(e){} best={completed:{},bestScore:0,missions:0}; refreshTitle(); toast('DATA ERASED','Saved mission and commendations cleared.','warn');});
+/* canvas click inspect */
+cv.addEventListener('pointerdown',e=>{ if(!G)return; initAudio(); const r=cv.getBoundingClientRect(); const x=e.clientX-r.left,y=e.clientY-r.top;
+ const info={greenhouse:['Greenhouse','Crop: '+(G.crop.planted?CROPS[G.crop.type].name+' at '+fmt(G.crop.growth)+'% growth, '+fmt(G.crop.health)+'% health':'empty beds')+'. Grow lights at '+$('sLights').value+'%. Photosynthesis returns O₂ and consumes CO₂ + water.'],
+ habitat:['Habitat','Cabin '+fmt(G.temp,1)+'°C (outside '+fmt(G.extTemp)+'°C) · CO₂ '+fmt(G.co2)+' ppm · O₂ '+fmt(clamp(G.o2/G.o2Ideal*21,0,30),1)+' kPa · N₂ buffer '+fmt(G.n2)+'%. Crew sleep here at night; cold, CO₂ and hunger erode health.'],
+ life:['Life Support Bay','Electrolysis '+$('sElectro').value+'% · Scrubber '+$('sScrub').value+'% · Sabatier '+$('sSabatier').value+'% · Recycler '+$('sRecycler').value+'%. H₂ stock '+fmt(G.h2,1)+' kg, stored CO₂ '+fmt(G.co2Store,1)+' kg, wastewater '+fmt(G.waste)+' L. The Sabatier reactor turns CO₂+H₂ back into water — run it or electrolysis slowly drains your water.'],
+ lab:['Lab / Comms','Scientists here generate Research Points and Mission Support. Support buys resupply packages; RP unlocks the six technologies in the left panel.'],
+ solar:['Solar Array + RTG','Solar is generating '+fmt(Math.max(G.gen-6.2,0),1)+' kW of '+fmt(G.gen,1)+' kW total. Dust opacity '+fmt(G.dust*100)+'%, panel soiling '+fmt(G.soiling*100)+'%. Clean panels by EVA; the fission RTG always provides ~6.2 kW.']};
+ for(const k in moduleRects){const m=moduleRects[k]; if(x>=m.x&&x<=m.x+m.w&&y>=m.y&&y<=m.y+m.h){selectInfo(info[k][0],info[k][1]); if(k==='life')$('selComponent').value='electrolyzer'; if(k==='solar')$('selComponent').value='solar'; sfx.click(); return;}}
+});
+/* keyboard */
+document.addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;
+ if(e.code==='Space'){e.preventDefault(); if(G&&!$('gameScreen').classList.contains('hidden'))togglePause();}
+ else if(['1','2','3','4'].includes(e.key)&&G){G.speed=[.5,1,2,4][+e.key-1];G.paused=false;syncPauseBtn();}
+ else if(e.key==='h'||e.key==='H')$('helpModal').classList.toggle('hidden');
+ else if(e.key==='m'||e.key==='M'){initAudio();settings.muted=!settings.muted;applyAudioSettings();syncSettingsUI();}
+ else if(e.key==='s'||e.key==='S')saveGame(false);
+ else if(e.key==='Escape'){ $('helpModal').classList.add('hidden');$('settingsModal').classList.add('hidden'); if(G&&!$('gameScreen').classList.contains('hidden')){G.paused=true;$('pauseModal').classList.remove('hidden');syncPauseBtn();} }
+});
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&G&&!G.ended){G.paused=true;syncPauseBtn();saveGame(true);} });
+window.addEventListener('resize',()=>{resizeCanvas();drawChart();});
+/* init */
+syncSettingsUI(); refreshTitle(); resizeCanvas();
+</script>
+</body>
+</html>

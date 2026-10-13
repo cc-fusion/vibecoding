@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Paper Kingdom — Tactics on Folded Lands</title>
+<style>
+:root{
+  --ink:#4a3620; --paper:#e9dcb8; --paper2:#dccb9a; --blue:#3d5fa8; --red:#b8402f; --gold:#c9a227;
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{
+  font-family:Georgia,'Times New Roman',serif; color:var(--ink);
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,230,170,.25), transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(0,0,0,.35), transparent 70%),
+    linear-gradient(135deg,#6b4a2a 0%, #4a3016 50%, #2e1d0c 100%);
+  user-select:none;
+}
+#app{width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;}
+.screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;}
+.screen.on{display:flex;}
+.parch{
+  background:linear-gradient(160deg,#f0e4c0 0%,#e6d6a8 45%,#dbc890 100%);
+  border:2px solid #8a6a3a; border-radius:6px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6), inset 0 0 60px rgba(150,110,50,.25), inset 0 0 6px rgba(255,255,255,.4);
+  padding:26px 34px; position:relative; max-height:94vh; overflow-y:auto;
+}
+.parch::before{content:'';position:absolute;inset:6px;border:1px dashed rgba(100,70,30,.4);border-radius:4px;pointer-events:none;}
+h1.logo{font-size:clamp(34px,6vw,64px);letter-spacing:2px;line-height:.95;text-align:center;text-shadow:0 2px 0 rgba(255,255,255,.4),0 4px 10px rgba(90,60,20,.35);}
+h1.logo small{display:block;font-size:.28em;letter-spacing:5px;font-variant:small-caps;color:#7a5c2e;margin-top:8px;}
+.crown{font-size:40px;text-align:center;filter:drop-shadow(0 3px 2px rgba(0,0,0,.3));}
+button.pbtn{
+  font-family:inherit;font-size:17px;color:#f4e9c8;background:linear-gradient(180deg,#7a5a30,#5d4120);
+  border:1px solid #3c2a12;border-radius:5px;padding:10px 22px;cursor:pointer;letter-spacing:1px;
+  box-shadow:0 3px 0 #3c2a12, 0 6px 10px rgba(0,0,0,.35); transition:transform .08s, box-shadow .08s, filter .15s;
+  margin:5px; min-width:200px;
+}
+button.pbtn:hover{filter:brightness(1.15);}
+button.pbtn:active{transform:translateY(3px);box-shadow:0 0 0 #3c2a12,0 2px 5px rgba(0,0,0,.35);}
+button.pbtn.small{min-width:0;font-size:14px;padding:6px 14px;}
+button.pbtn.blue{background:linear-gradient(180deg,#44639f,#2e4576);border-color:#1d2c4e;box-shadow:0 3px 0 #1d2c4e,0 6px 10px rgba(0,0,0,.35);}
+button.pbtn.red{background:linear-gradient(180deg,#a8503c,#7e3425);border-color:#4e1f14;box-shadow:0 3px 0 #4e1f14,0 6px 10px rgba(0,0,0,.35);}
+button.pbtn:disabled{opacity:.45;cursor:default;filter:grayscale(.6);}
+.menucol{display:flex;flex-direction:column;align-items:center;margin-top:18px;}
+.ribbon{background:linear-gradient(180deg,#b8402f,#8e2c1e);color:#ffe9c9;padding:4px 26px;display:inline-block;
+  clip-path:polygon(0 0,100% 0,96% 50%,100% 100%,0 100%,4% 50%);font-variant:small-caps;letter-spacing:3px;font-size:15px;}
+/* battle layout */
+#battleWrap{position:absolute;inset:0;display:none;flex-direction:column;}
+#battleWrap.on{display:flex;}
+#hudTop{display:flex;align-items:center;gap:10px;padding:6px 12px;background:linear-gradient(180deg,rgba(40,25,10,.92),rgba(40,25,10,.75));
+  color:#ecd9a8;border-bottom:2px solid #1f1306;flex-wrap:wrap;z-index:5;}
+#hudTop .obj{font-size:14px;opacity:.9;}
+#hudTop .tname{font-size:17px;font-variant:small-caps;letter-spacing:1px;color:#ffd97a;}
+#hudTop .spacer{flex:1;}
+#canvasHolder{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+#gameCanvas{image-rendering:auto;box-shadow:0 18px 50px rgba(0,0,0,.65);border-radius:4px;touch-action:none;}
+#hudBottom{display:flex;gap:14px;padding:6px 12px;background:linear-gradient(0deg,rgba(40,25,10,.92),rgba(40,25,10,.78));
+  color:#ecd9a8;border-top:2px solid #1f1306;min-height:58px;align-items:center;font-size:14px;flex-wrap:wrap;z-index:5;}
+.statchip{background:rgba(0,0,0,.3);border:1px solid rgba(255,220,150,.25);border-radius:4px;padding:3px 10px;}
+#tutBanner{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:#f4e6bb;color:#4a3620;border:2px solid #8a6a3a;
+  border-radius:6px;padding:8px 18px;font-size:15px;box-shadow:0 6px 16px rgba(0,0,0,.4);z-index:6;max-width:88%;text-align:center;display:none;}
+#actionBar{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);display:none;gap:8px;z-index:6;}
+#turnSplash{position:absolute;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;z-index:7;}
+#turnSplash div{font-size:clamp(28px,5vw,52px);font-variant:small-caps;letter-spacing:6px;color:#fff;
+  text-shadow:0 3px 12px rgba(0,0,0,.8);padding:10px 50px;background:rgba(30,18,6,.72);border-top:2px solid rgba(255,255,255,.3);border-bottom:2px solid rgba(255,255,255,.3);}
+/* overlays */
+.overlay{position:absolute;inset:0;background:rgba(20,12,4,.65);display:none;align-items:center;justify-content:center;z-index:20;}
+.overlay.on{display:flex;}
+/* camp */
+#campGrid{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;max-width:1050px;}
+.campCol{min-width:280px;flex:1;}
+.campCol h3{font-variant:small-caps;letter-spacing:2px;border-bottom:1px solid #9a7840;margin-bottom:8px;padding-bottom:3px;}
+.nodeRow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.bnode{width:150px;background:rgba(255,255,255,.25);border:1px solid #9a7840;border-radius:5px;padding:7px;font-size:13px;cursor:pointer;transition:.15s;}
+.bnode:hover{background:rgba(255,255,255,.5);}
+.bnode.locked{opacity:.4;cursor:default;}
+.bnode.done{border-color:#5c8a3c;background:rgba(140,190,90,.25);}
+.bnode.next{border-color:#b8402f;box-shadow:0 0 10px rgba(184,64,47,.5);animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px rgba(184,64,47,.35);}50%{box-shadow:0 0 16px rgba(184,64,47,.75);}}
+.shopItem{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.22);border:1px solid #9a7840;border-radius:5px;padding:5px 8px;margin-bottom:5px;font-size:13px;}
+.shopItem .nm{flex:1;}
+.rosterChip{display:inline-flex;align-items:center;gap:5px;background:rgba(61,95,168,.18);border:1px solid #3d5fa8;border-radius:4px;padding:3px 8px;margin:2px;font-size:13px;}
+.rosterChip button{border:none;background:#8e2c1e;color:#fff;border-radius:3px;cursor:pointer;font-size:11px;padding:1px 5px;font-family:inherit;}
+.goldTag{color:#8a6a10;font-weight:bold;}
+/* settings */
+.setRow{display:flex;align-items:center;gap:12px;margin:10px 0;font-size:15px;}
+.setRow label{min-width:140px;}
+input[type=range]{width:160px;accent-color:#7a5a30;}
+/* help */
+#helpBody{max-width:640px;font-size:14px;line-height:1.5;}
+#helpBody h4{margin:10px 0 3px;font-variant:small-caps;letter-spacing:1px;color:#7a4a1e;}
+#helpBody td{padding:2px 8px;border-bottom:1px dotted #9a7840;}
+kbd{background:#fff6dd;border:1px solid #9a7840;border-radius:3px;padding:0 5px;font-family:inherit;font-size:12px;box-shadow:0 1px 0 #9a7840;}
+.statsTbl{margin:10px auto;font-size:15px;}
+.statsTbl td{padding:3px 14px;}
+.statsTbl td:last-child{text-align:right;font-weight:bold;}
+.fade-in{animation:fadeIn .4s ease-out;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+@media (max-width:700px){ .parch{padding:16px;} button.pbtn{min-width:160px;font-size:15px;} #hudBottom{font-size:12px;min-height:46px;} }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE -->
+  <div class="screen on" id="scrTitle">
+    <div class="parch fade-in" style="text-align:center;min-width:min(480px,92vw);">
+      <div class="crown">👑</div>
+      <h1 class="logo">PAPER<br>KINGDOM<small>✦ tactics on folded lands ✦</small></h1>
+      <div class="menucol">
+        <button class="pbtn blue" id="btnContinue">Continue Campaign</button>
+        <button class="pbtn" id="btnNew">New Campaign</button>
+        <button class="pbtn" id="btnSkirmish" style="display:none;">Endless Skirmish</button>
+        <button class="pbtn small" id="btnHelpT">How to Play</button>
+        <button class="pbtn small" id="btnSetT">Settings</button>
+      </div>
+      <p style="margin-top:14px;font-size:12px;opacity:.7;">An origami war unfolds. Click anywhere to let the music begin.</p>
+    </div>
+  </div>
+
+  <!-- CAMP -->
+  <div class="screen" id="scrCamp">
+    <div class="parch fade-in" style="width:min(1080px,96vw);">
+      <div style="text-align:center;margin-bottom:12px;">
+        <span class="ribbon">War Camp</span>
+        <div style="margin-top:6px;font-size:18px;">Treasury: <span class="goldTag" id="campGold">0</span> 🪙</div>
+      </div>
+      <div id="campGrid">
+        <div class="campCol">
+          <h3>📜 Campaign Map</h3>
+          <div class="nodeRow" id="nodeList"></div>
+          <h3 style="margin-top:10px;">🛡 Your Warband <span id="rosterCount" style="font-size:12px;"></span></h3>
+          <div id="rosterList" style="min-height:40px;"></div>
+        </div>
+        <div class="campCol">
+          <h3>⚒ Recruit Soldiers</h3>
+          <div id="recruitList"></div>
+        </div>
+        <div class="campCol">
+          <h3>✨ Royal Decrees (upgrades)</h3>
+          <div id="upgradeList"></div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:14px;">
+        <button class="pbtn red" id="btnToBattle">⚔ March to Battle</button>
+        <button class="pbtn small" id="btnHelpC">Help</button>
+        <button class="pbtn small" id="btnSetC">Settings</button>
+        <button class="pbtn small" id="btnTitleC">Title</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BATTLE -->
+  <div id="battleWrap">
+    <div id="hudTop">
+      <span class="tname" id="hudBattleName">Battle</span>
+      <span class="obj" id="hudObjective">Objective</span>
+      <span class="statchip" id="hudTurn">Turn 1</span>
+      <span class="spacer"></span>
+      <button class="pbtn small blue" id="btnEndTurn">End Turn ⏎</button>
+      <button class="pbtn small" id="btnHelpB">?</button>
+      <button class="pbtn small" id="btnPause">❚❚</button>
+    </div>
+    <div id="canvasHolder">
+      <canvas id="gameCanvas"></canvas>
+      <div id="tutBanner"></div>
+      <div id="actionBar">
+        <button class="pbtn small red" id="btnWait">Wait (W)</button>
+      </div>
+      <div id="turnSplash"><div id="turnSplashTxt"></div></div>
+    </div>
+    <div id="hudBottom">
+      <span class="statchip" id="hudUnit">Select a blue unit</span>
+      <span class="statchip" id="hudTerrain"></span>
+      <span class="spacer" style="flex:1;"></span>
+      <span class="statchip" id="hudForces"></span>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div class="overlay" id="ovPause">
+    <div class="parch" style="text-align:center;min-width:300px;">
+      <span class="ribbon">Paused</span>
+      <div class="menucol">
+        <button class="pbtn blue" id="btnResume">Resume</button>
+        <button class="pbtn small" id="btnHelpP">Help</button>
+        <button class="pbtn small" id="btnSetP">Settings</button>
+        <button class="pbtn small red" id="btnRetreat">Retreat to Camp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="overlay" id="ovSettings" style="z-index:40;">
+    <div class="parch" style="min-width:min(380px,92vw);">
+      <div style="text-align:center;"><span class="ribbon">Settings</span></div>
+      <div class="setRow"><label>Master Volume</label><input type="range" id="setVol" min="0" max="100"><span id="setVolV"></span></div>
+      <div class="setRow"><label>Music</label><input type="range" id="setMus" min="0" max="100"><span id="setMusV"></span></div>
+      <div class="setRow"><label>Sound Effects</label><input type="range" id="setSfx" min="0" max="100"><span id="setSfxV"></span></div>
+      <div class="setRow"><label>Mute All (M)</label><input type="checkbox" id="setMute"></div>
+      <div class="setRow"><label>Screen Shake</label><input type="checkbox" id="setShake"></div>
+      <div class="setRow"><label>Erase Save</label><button class="pbtn small red" id="btnWipe">Erase</button></div>
+      <div style="text-align:center;margin-top:10px;"><button class="pbtn blue" id="btnCloseSet">Done</button></div>
+    </div>
+  </div>
+
+  <!-- HELP -->
+  <div class="overlay" id="ovHelp" style="z-index:41;">
+    <div class="parch" id="helpBody">
+      <div style="text-align:center;"><span class="ribbon">Field Manual</span></div>
+      <h4>Goal</h4>
+      Lead the Azure warband through 6 battles across the folded lands and topple the Crimson King. Earn gold, recruit troops, and enact decrees between battles.
+      <h4>How a turn works</h4>
+      Click a <b style="color:#3d5fa8;">blue unit</b> → blue tiles show where it can move, red fringe shows its reach. Click a tile to move, then click a <b style="color:#b8402f;">red enemy</b> in range to strike, or press <kbd>W</kbd> / Wait. Units that acted turn grey. Press <kbd>Enter</kbd> or End Turn when done — then the Crimson host moves.
+      <h4>Terrain is everything</h4>
+      <table style="font-size:13px;">
+        <tr><td>🌲 Forest</td><td>+2 defense, costs 2 move (3 for knights)</td></tr>
+        <tr><td>⛰ Mountain</td><td>+3 defense, +1 attack, ranged +1 reach. Costs 3 move. Knights can't climb.</td></tr>
+        <tr><td>⬆ Hill</td><td>+1 defense, +1 attack, ranged +1 reach. Costs 2 move.</td></tr>
+        <tr><td>〰 River</td><td>Impassable — cross at bridges.</td></tr>
+      </table>
+      <h4>The troops</h4>
+      <table style="font-size:13px;">
+        <tr><td>⚔ Soldier</td><td>Steady line infantry. Counters at melee.</td></tr>
+        <tr><td>🏹 Archer</td><td>Strikes at range 2 (3 from high ground) but can't fight adjacent — screen them!</td></tr>
+        <tr><td>🐎 Knight</td><td>Fast and brutal, but weak in woods and blocked by peaks.</td></tr>
+        <tr><td>🔮 Mage</td><td>Fire that ignores armor, range 1–2. Fragile.</td></tr>
+        <tr><td>✚ Cleric</td><td>Click a wounded ally beside them to heal 8. Weak in a fight.</td></tr>
+      </table>
+      <h4>Combat</h4>
+      Damage = attack − defense (terrain adds defense). Defenders counter-attack if you're within their reach — archers can't counter adjacent foes, soldiers can't counter arrows. Mages ignore armor.
+      <h4>Controls</h4>
+      <kbd>Mouse / Touch</kbd> select, move, attack &nbsp; <kbd>Enter</kbd> end turn &nbsp; <kbd>W</kbd> wait &nbsp; <kbd>Tab</kbd> next unit &nbsp; <kbd>Esc</kbd> deselect / pause &nbsp; <kbd>H</kbd> help &nbsp; <kbd>M</kbd> mute
+      <div style="text-align:center;margin-top:12px;"><button class="pbtn blue" id="btnCloseHelp">Back to the Fold</button></div>
+    </div>
+  </div>
+
+  <!-- BATTLE RESULT -->
+  <div class="overlay" id="ovResult">
+    <div class="parch fade-in" style="text-align:center;min-width:min(420px,92vw);">
+      <span class="ribbon" id="resTitle">Victory</span>
+      <div id="resCrown" class="crown" style="margin-top:8px;">🏳</div>
+      <table class="statsTbl" id="resStats"></table>
+      <div class="menucol" id="resBtns"></div>
+    </div>
+  </div>
+
+  <!-- CAMPAIGN VICTORY -->
+  <div class="overlay" id="ovChampion">
+    <div class="parch fade-in" style="text-align:center;min-width:min(460px,92vw);">
+      <div class="crown">👑👑👑</div>
+      <h1 class="logo" style="font-size:40px;">THE FOLD IS YOURS<small>the crimson king is crumpled</small></h1>
+      <table class="statsTbl" id="champStats"></table>
+      <div class="menucol">
+        <button class="pbtn blue" id="btnChampSkirmish">Endless Skirmish</button>
+        <button class="pbtn" id="btnChampCamp">Return to Camp</button>
+        <button class="pbtn small red" id="btnChampNew">New Campaign</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   PAPER KINGDOM — Tactics on Folded Lands
+   ============================================================ */
+
+/* ---------- utilities ---------- */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeOut=t=>1-Math.pow(1-t,3);
+const easeIn=t=>t*t*t;
+const manh=(a,b,c,d)=>Math.abs(a-c)+Math.abs(b-d);
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+const $=id=>document.getElementById(id);
+
+/* ---------- persistence ---------- */
+const SAVEKEY='paperKingdom_v1';
+function storeOK(){try{localStorage.setItem('__pk','1');localStorage.removeItem('__pk');return true;}catch(e){return false;}}
+const CAN_STORE=storeOK();
+function defaultSave(){return{
+  gold:150, unlocked:0, cleared:[], roster:['soldier','soldier','archer'],
+  up:{atk:0,def:0,hp:0,move:0}, skirmishUnlocked:false, skirmishLvl:0,
+  stats:{kills:0,losses:0,dmg:0,heal:0,battles:0,goldEarned:0,turns:0},
+  settings:{vol:80,mus:60,sfx:90,muted:false,shake:true}, champion:false
+};}
+let SV=defaultSave();
+function saveGame(){ if(!CAN_STORE)return; try{localStorage.setItem(SAVEKEY,JSON.stringify(SV));}catch(e){} }
+function loadGame(){ if(!CAN_STORE)return false; try{const s=localStorage.getItem(SAVEKEY); if(!s)return false; const d=JSON.parse(s); SV=Object.assign(defaultSave(),d); SV.up=Object.assign({atk:0,def:0,hp:0,move:0},d.up); SV.stats=Object.assign(defaultSave().stats,d.stats); SV.settings=Object.assign(defaultSave().settings,d.settings); return true;}catch(e){return false;} }
+const hasSave=loadGame();
+
+/* ---------- audio engine (Web Audio, fully synthesized) ---------- */
+const AudioSys={
+  ac:null, master:null, musG:null, sfxG:null, noiseBuf:null, started:false,
+  beat:0, nextBeat:0, timer:null,
+  init(){
+    if(this.ac)return;
+    try{
+      this.ac=new (window.AudioContext||window.webkitAudioContext)();
+      this.master=this.ac.createGain(); this.master.connect(this.ac.destination);
+      this.musG=this.ac.createGain(); this.musG.connect(this.master);
+      this.sfxG=this.ac.createGain(); this.sfxG.connect(this.master);
+      const len=this.ac.sampleRate*1.2, buf=this.ac.createBuffer(1,len,this.ac.sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+      this.noiseBuf=buf;
+      this.applyVol();
+      this.nextBeat=this.ac.currentTime+0.2;
+      this.timer=setInterval(()=>this.schedule(),120);
+    }catch(e){ this.ac=null; }
+  },
+  resume(){ this.init(); if(this.ac&&this.ac.state==='suspended')this.ac.resume(); },
+  applyVol(){
+    if(!this.ac)return;
+    const s=SV.settings, m=s.muted?0:1;
+    this.master.gain.value=(s.vol/100)*m;
+    this.musG.gain.value=(s.mus/100)*0.5;
+    this.sfxG.gain.value=(s.sfx/100);
+  },
+  tone(freq,dur,type,vol,dest,when,slide){
+    if(!this.ac)return; when=when||this.ac.currentTime;
+    const o=this.ac.createOscillator(),g=this.ac.createGain();
+    o.type=type||'triangle'; o.frequency.setValueAtTime(freq,when);
+    if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),when+dur);
+    g.gain.setValueAtTime(0,when); g.gain.linearRampToValueAtTime(vol,when+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+    o.connect(g); g.connect(dest||this.sfxG); o.start(when); o.stop(when+dur+0.05);
+  },
+  noise(dur,vol,freq,q,dest,when){
+    if(!this.ac)return; when=when||this.ac.currentTime;
+    const src=this.ac.createBufferSource(); src.buffer=this.noiseBuf;
+    const f=this.ac.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq||1500; f.Q.value=q||1;
+    const g=this.ac.createGain(); g.gain.setValueAtTime(vol,when); g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+    src.connect(f); f.connect(g); g.connect(dest||this.sfxG); src.start(when); src.stop(when+dur+0.05);
+  },
+  sfx(name){
+    if(!this.ac||SV.settings.muted)return;
+    const t=this.ac.currentTime;
+    switch(name){
+      case 'select': this.tone(660,0.07,'square',0.12); this.tone(880,0.09,'square',0.1,null,t+0.05); break;
+      case 'ui': this.tone(520,0.06,'square',0.1); break;
+      case 'move': this.noise(0.22,0.18,900,0.8); this.noise(0.15,0.12,2400,1,null,t+0.1); break;
+      case 'sword': this.noise(0.08,0.3,3200,2); this.tone(220,0.12,'square',0.2,null,t+0.02,90); this.noise(0.18,0.2,500,1,null,t+0.03); break;
+      case 'arrow': this.noise(0.25,0.22,4200,6); this.tone(900,0.2,'sine',0.08,null,t,300); break;
+      case 'magic': for(let i=0;i<5;i++)this.tone(600+i*220,0.3,'sine',0.08,null,t+i*0.04); this.noise(0.4,0.1,3000,2,null,t+0.1); break;
+      case 'heal': this.tone(523,0.25,'sine',0.14); this.tone(659,0.3,'sine',0.14,null,t+0.1); this.tone(784,0.4,'sine',0.14,null,t+0.2); break;
+      case 'hurt': this.tone(160,0.15,'sawtooth',0.2,null,t,70); this.noise(0.12,0.2,700,1); break;
+      case 'die': this.noise(0.5,0.3,1200,0.7); this.tone(200,0.5,'sawtooth',0.14,null,t,45); break;
+      case 'coin': this.tone(1100,0.08,'square',0.12); this.tone(1500,0.18,'square',0.12,null,t+0.07); break;
+      case 'win': [523,659,784,1047].forEach((f,i)=>this.tone(f,0.5,'triangle',0.16,null,t+i*0.16)); this.tone(1318,0.9,'triangle',0.15,null,t+0.64); break;
+      case 'lose': [392,330,262,196].forEach((f,i)=>this.tone(f,0.6,'triangle',0.15,null,t+i*0.25)); break;
+      case 'turn': this.tone(330,0.2,'triangle',0.14); this.tone(440,0.3,'triangle',0.14,null,t+0.14); break;
+      case 'crumple': this.noise(0.35,0.3,1800,0.6); this.noise(0.25,0.25,800,0.8,null,t+0.1); break;
+    }
+  },
+  schedule(){ // generative lute-camp music
+    if(!this.ac)return;
+    const BPS=0.42, scale=[220,247,262,330,392,440,494,523];
+    while(this.nextBeat<this.ac.currentTime+0.4){
+      const b=this.beat, w=this.nextBeat;
+      if(!SV.settings.muted){
+        if(b%8===0) this.tone(110,BPS*7,'sine',0.14,this.musG,w);
+        if(b%8===4) this.tone(82.4,BPS*3.5,'sine',0.1,this.musG,w);
+        const inBattle=(Game.screen==='battle'&&!Game.paused);
+        const prob=inBattle?0.75:0.5;
+        if(Math.random()<prob){
+          const n=scale[Math.floor(Math.random()*scale.length)];
+          this.tone(n,BPS*1.6,'triangle',0.06,this.musG,w);
+          if(Math.random()<0.3)this.tone(n*1.5,BPS*1.2,'triangle',0.035,this.musG,w+BPS*0.5);
+        }
+        if(inBattle&&b%2===0) this.noise(0.05,0.05,5000,3,this.musG,w);
+        if(inBattle&&b%4===2) this.tone(55,0.3,'sine',0.12,this.musG,w);
+      }
+      this.beat++; this.nextBeat+=BPS;
+    }
+  }
+};
+window.addEventListener('pointerdown',()=>AudioSys.resume(),{passive:true});
+window.addEventListener('keydown',()=>AudioSys.resume());
+
+/* ---------- unit classes ---------- */
+const CLASSES={
+  soldier:{name:'Soldier',icon:'⚔',hp:22,atk:7,def:2,move:3,rmin:1,rmax:1,cost:60,desc:'Line infantry'},
+  archer:{name:'Archer',icon:'🏹',hp:15,atk:6,def:0,move:3,rmin:2,rmax:2,cost:80,desc:'Range 2, +1 on high ground'},
+  knight:{name:'Knight',icon:'🐎',hp:28,atk:9,def:3,move:5,rmin:1,rmax:1,cost:140,desc:'Fast; hates woods & peaks'},
+  mage:{name:'Mage',icon:'🔮',hp:13,atk:8,def:0,move:3,rmin:1,rmax:2,cost:130,pierce:true,desc:'Ignores armor, range 1-2'},
+  cleric:{name:'Cleric',icon:'✚',hp:16,atk:3,def:1,move:3,rmin:1,rmax:1,cost:100,heal:8,desc:'Heals allies 8'},
+  brute:{name:'Brute',icon:'🪓',hp:34,atk:10,def:2,move:3,rmin:1,rmax:1,cost:0,desc:'A towering paper ogre'},
+  king:{name:'Crimson King',icon:'👑',hp:62,atk:12,def:3,move:3,rmin:1,rmax:1,cost:0,boss:true,desc:'Slay him to win the war'}
+};
+const RECRUITABLE=['soldier','archer','knight','mage','cleric'];
+const MAX_ROSTER=8;
+
+/* ---------- battle definitions ---------- */
+const BATTLES=[
+ {name:'The Folded Fields', obj:'rout', objTxt:'Rout the Crimson scouts', enemies:['soldier','soldier','archer'], seed:11, tutorial:true, river:false},
+ {name:'Inkwood Crossing', obj:'rout', objTxt:'Defeat every enemy', enemies:['soldier','soldier','archer','soldier'], seed:23},
+ {name:'The Bridge Banner', obj:'capture', objTxt:'Seize the golden banner ⚑ (or rout the foe)', enemies:['soldier','archer','knight','soldier','archer'], seed:37},
+ {name:'Creasefall Stand', obj:'survive', turns:8, objTxt:'Survive 8 turns (or rout the foe)', enemies:['soldier','archer','soldier','mage'], reinf:['soldier','archer','knight'], seed:49},
+ {name:'The Crumpled Vale', obj:'rout', objTxt:'Defeat every enemy', enemies:['knight','soldier','archer','mage','cleric','soldier','brute'], seed:61},
+ {name:'Throne of Folds', obj:'king', objTxt:'Slay the Crimson King 👑', enemies:['king','knight','mage','archer','cleric','soldier','brute'], seed:77}
+];
+
+/* ---------- map generation ---------- */
+const GW=13, GH=9, TILE=64;
+const T={PLAIN:0,FOREST:1,MTN:2,HILL:3,RIVER:4,BRIDGE:5};
+function genMap(cfg,seedExtra){
+  const rng=mulberry32((cfg.seed||1)*977+ (seedExtra||0)*131+7);
+  const g=[]; for(let y=0;y<GH;y++){g.push([]);for(let x=0;x<GW;x++)g[y].push(T.PLAIN);}
+  // river
+  if(cfg.river!==false){
+    let col=5+Math.floor(rng()*3);
+    for(let y=0;y<GH;y++){ g[y][col]=T.RIVER; if(rng()<0.4) col=clamp(col+(rng()<0.5?-1:1),4,8); }
+    // bridges: pick 2 river tiles
+    const rivs=[]; for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(g[y][x]===T.RIVER)rivs.push([x,y]);
+    for(let b=0;b<2&&rivs.length;b++){ const i=Math.floor(rng()*rivs.length); const[rx,ry]=rivs.splice(i,1)[0]; g[ry][rx]=T.BRIDGE; }
+  }
+  // feature clusters
+  function cluster(type,n,size){
+    for(let c=0;c<n;c++){
+      let cx=1+Math.floor(rng()*(GW-2)), cy=Math.floor(rng()*GH);
+      for(let s=0;s<size;s++){
+        const x=clamp(cx+Math.floor(rng()*3)-1,0,GW-1), y=clamp(cy+Math.floor(rng()*3)-1,0,GH-1);
+        if(g[y][x]===T.PLAIN)g[y][x]=type;
+      }
+    }
+  }
+  cluster(T.FOREST,3+Math.floor(rng()*2),4);
+  cluster(T.MTN,2+Math.floor(rng()*2),3);
+  cluster(T.HILL,3,3);
+  // keep spawn columns usable
+  for(let y=0;y<GH;y++){ for(const x of [0,1,GW-1,GW-2]){ if(g[y][x]===T.RIVER||g[y][x]===T.MTN)g[y][x]=T.PLAIN; } }
+  // banner for capture battles: far side plain tile
+  let banner=null;
+  if(cfg.obj==='capture'){
+    const cands=[]; for(let y=0;y<GH;y++)for(let x=GW-4;x<GW-1;x++)if(g[y][x]===T.PLAIN||g[y][x]===T.HILL)cands.push([x,y]);
+    banner=cands.length?cands[Math.floor(rng()*cands.length)]:[GW-2,Math.floor(GH/2)];
+  }
+  return {g,banner,rng};
+}
+function terrName(t){return['Plain','Forest 🌲 (+2 def)','Mountain ⛰ (+3 def, +1 atk, reach+1)','Hill (+1 def, +1 atk, reach+1)','River 〰 (impassable)','Bridge'][t];}
+function terrDef(t){return t===T.FOREST?2:t===T.MTN?3:t===T.HILL?1:0;}
+function isHigh(t){return t===T.MTN||t===T.HILL;}
+function moveCost(t,cls){
+  if(t===T.RIVER)return 99;
+  if(t===T.MTN)return cls==='knight'?99:3;
+  if(t===T.FOREST)return cls==='knight'?3:2;
+  if(t===T.HILL)return 2;
+  return 1;
+}
+
+/* ---------- game state ---------- */
+const Game={
+  screen:'title', paused:false,
+  B:null, // battle state
+  shakeT:0, shakeMag:0,
+  particles:[], floats:[], anims:[],
+  lastT:0, cursor:{x:-1,y:-1},
+  pendingResult:null
+};
+
+function effStats(cls,team){
+  const c=CLASSES[cls], u=team===0?SV.up:null;
+  const scale=Game.B?Game.B.enemyScale:1;
+  if(team===0) return {hp:c.hp+ (u?u.hp*4:0), atk:c.atk+(u?u.atk:0), def:c.def+(u?u.def:0), move:c.move+(u?Math.min(u.move,2):0), rmin:c.rmin, rmax:c.rmax};
+  return {hp:Math.round(c.hp*scale), atk:Math.round(c.atk*scale), def:c.def, move:c.move, rmin:c.rmin, rmax:c.rmax};
+}
+let UID=1;
+function mkUnit(cls,team,x,y){
+  const s=effStats(cls,team);
+  return {id:UID++,cls,team,x,y,hp:s.hp,maxhp:s.hp,atk:s.atk,def:s.def,move:s.move,rmin:s.rmin,rmax:s.rmax,
+    acted:false,alive:true, vx:x,vy:y, scale:1, rot:0, alpha:1, bump:0};
+}
+
+/* ---------- battle setup ---------- */
+function startBattle(idx,isSkirmish){
+  UID=1;
+  const base=isSkirmish?makeSkirmishCfg():BATTLES[idx];
+  const map=genMap(base, isSkirmish?SV.skirmishLvl+100:0);
+  const B={
+    idx, isSkirmish, cfg:base, grid:map.g, banner:map.banner,
+    units:[], turn:1, phase:'player', sel:null, moveSet:null, atkSet:null, pathMap:null,
+    mode:'idle', // idle | selected | acting
+    enemyQueue:[], over:false, result:null,
+    enemyScale: isSkirmish? 1+SV.skirmishLvl*0.09 : 1+idx*0.07,
+    stats:{kills:0,losses:0,dmg:0,heal:0,turns:0},
+    tutorial: base.tutorial&&!SV.cleared.includes(0), tutStep:0,
+    reinfDone:0
+  };
+  Game.B=B; Game.particles=[]; Game.floats=[]; Game.anims=[];
+  // place player roster (left side)
+  const spawnP=[]; for(let x=0;x<3;x++)for(let y=0;y<GH;y++) if(moveCost(B.grid[y][x],'soldier')<9)spawnP.push([x,y]);
+  const rngP=mulberry32((base.seed||3)*5+1);
+  shuffleSeed(spawnP,rngP);
+  SV.roster.slice(0,MAX_ROSTER).forEach((cls,i)=>{ if(spawnP[i]){const[x,y]=spawnP[i]; B.units.push(mkUnit(cls,0,x,y));} });
+  // enemies (right side)
+  const spawnE=[]; for(let x=GW-4;x<GW;x++)for(let y=0;y<GH;y++) if(moveCost(B.grid[y][x],'soldier')<9)spawnE.push([x,y]);
+  shuffleSeed(spawnE,map.rng);
+  base.enemies.forEach((cls,i)=>{ if(spawnE[i]){const[x,y]=spawnE[i]; B.units.push(mkUnit(cls,1,x,y));} });
+  prerenderMap();
+  showScreen('battle');
+  $('hudBattleName').textContent=isSkirmish?('Skirmish '+(SV.skirmishLvl+1)):((idx+1)+'. '+base.name);
+  $('hudObjective').textContent='✦ '+base.objTxt;
+  updateHUD();
+  splash('Player Phase — Turn 1','#7fa8ff');
+  AudioSys.sfx('turn');
+  if(B.tutorial){B.tutStep=1; tut('Welcome, Commander! Click one of your BLUE paper soldiers to select it.');}
+}
+function makeSkirmishCfg(){
+  const lv=SV.skirmishLvl, rng=mulberry32(900+lv*13);
+  const pool=['soldier','soldier','archer','knight','mage','cleric','brute'];
+  const n=Math.min(9,4+Math.floor(lv/2));
+  const enemies=[]; for(let i=0;i<n;i++)enemies.push(pool[Math.floor(rng()*pool.length)]);
+  return {name:'Skirmish',obj:'rout',objTxt:'Rout the enemy warband (level '+(lv+1)+')',enemies,seed:300+lv*7};
+}
+function shuffleSeed(a,rng){for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+
+/* ---------- pathfinding ---------- */
+function unitAt(x,y){ const B=Game.B; if(!B)return null; return B.units.find(u=>u.alive&&u.x===x&&u.y===y)||null; }
+function dijkstra(u){
+  const B=Game.B, dist={}, par={}, start=u.x+','+u.y;
+  dist[start]=0; const pq=[[0,u.x,u.y]];
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]); const [d,x,y]=pq.shift();
+    if(d>dist[x+','+y])continue;
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=GW||ny>=GH)continue;
+      const occ=unitAt(nx,ny); if(occ&&occ.team!==u.team)continue; // enemies block
+      const c=d+moveCost(B.grid[ny][nx],u.cls);
+      if(c<=u.move && (dist[nx+','+ny]===undefined||c<dist[nx+','+ny])){
+        dist[nx+','+ny]=c; par[nx+','+ny]=x+','+y; pq.push([c,nx,ny]);
+      }
+    }
+  }
+  return {dist,par};
+}
+function reachableTiles(u){
+  const {dist,par}=dijkstra(u); const tiles=[];
+  for(const k in dist){ const[x,y]=k.split(',').map(Number); const occ=unitAt(x,y);
+    if(!occ||occ===u)tiles.push([x,y]); }
+  return {tiles,par,dist};
+}
+function pathTo(par,x,y,sx,sy){
+  const path=[]; let k=x+','+y;
+  while(k){ const[px,py]=k.split(',').map(Number); path.unshift([px,py]); if(px===sx&&py===sy)break; k=par[k]; }
+  return path;
+}
+function unitRange(u,tx,ty){
+  const B=Game.B, t=B.grid[ty][tx];
+  let rmax=u.rmax; if(u.rmax>=2&&isHigh(t))rmax++;
+  return {rmin:u.rmin,rmax};
+}
+function targetsFrom(u,tx,ty){
+  const B=Game.B, {rmin,rmax}=unitRange(u,tx,ty);
+  return B.units.filter(e=>e.alive&&e.team!==u.team&&manh(tx,ty,e.x,e.y)>=rmin&&manh(tx,ty,e.x,e.y)<=rmax);
+}
+function healTargetsFrom(u,tx,ty){
+  const B=Game.B; if(!CLASSES[u.cls].heal)return[];
+  return B.units.filter(a=>a.alive&&a.team===u.team&&a!==u&&a.hp<a.maxhp&&manh(tx,ty,a.x,a.y)===1);
+}
+
+/* ---------- combat ---------- */
+function calcDmg(att,def){
+  const B=Game.B, ta=B.grid[att.y][att.x], td=B.grid[def.y][def.x];
+  let atk=att.atk+(isHigh(ta)?1:0);
+  let armor=CLASSES[att.cls].pierce?0:def.def+terrDef(td);
+  return Math.max(1,atk-armor);
+}
+function canCounter(def,att){
+  if(!def.alive||def.hp<=0)return false;
+  const {rmin,rmax}=unitRange(def,def.x,def.y);
+  const d=manh(def.x,def.y,att.x,att.y);
+  return d>=rmin&&d<=rmax;
+}
+
+/* ---------- animation queue ---------- */
+function pushAnim(a){ a.t=0; Game.anims.push(a); }
+function animBusy(){ return Game.anims.length>0; }
+function animMove(u,path,after){
+  AudioSys.sfx('move');
+  pushAnim({dur:Math.max(0.12,path.length*0.1), path, u,
+    update(k){ const p=this.path, f=k*(p.length-1), i=Math.min(p.length-2,Math.floor(f)), r=f-i;
+      if(p.length===1){this.u.vx=p[0][0];this.u.vy=p[0][1];return;}
+      this.u.vx=lerp(p[i][0],p[i+1][0],r); this.u.vy=lerp(p[i][1],p[i+1][1],r);
+      if(Math.random()<0.3)spawnDust(this.u.vx,this.u.vy);
+    },
+    done(){ const last=this.path[this.path.length-1]; this.u.x=last[0]; this.u.y=last[1]; this.u.vx=last[0]; this.u.vy=last[1]; if(after)after(); }
+  });
+}
+function animAttack(att,def,isCounter,after){
+  const dmg=calcDmg(att,def);
+  pushAnim({dur:0.32,hit:false,
+    update(k){
+      const dx=def.x-att.x, dy=def.y-att.y, m=Math.max(1,Math.abs(dx)+Math.abs(dy));
+      const amt=(k<0.5?easeIn(k*2):1-easeOut((k-0.5)*2))*0.45;
+      att.vx=att.x+dx/m*amt; att.vy=att.y+dy/m*amt;
+      if(!this.hit&&k>=0.45){
+        this.hit=true;
+        applyDamage(att,def,dmg);
+      }
+    },
+    done(){
+      att.vx=att.x; att.vy=att.y;
+      if(def.hp<=0){ animDeath(def,()=>{ if(after)after(); }); }
+      else if(!isCounter&&canCounter(def,att)){ animAttack(def,att,true,after); }
+      else if(after)after();
+    }
+  });
+  const c=CLASSES[att.cls];
+  if(c.heal&&att.team===1){} // clerics attack rarely
+  if(att.cls==='archer')AudioSys.sfx('arrow');
+  else if(att.cls==='mage')AudioSys.sfx('magic');
+  else AudioSys.sfx('sword');
+}
+function applyDamage(att,def,dmg){
+  def.hp-=dmg; def.bump=1;
+  if(att.team===0)Game.B.stats.dmg+=dmg;
+  shake(4+dmg*0.4);
+  spawnBurst(def.x,def.y, def.team===1?'#d8604a':'#5a7fd0', att.cls==='mage'?'#c070e0':null);
+  addFloat(def.x,def.y,'-'+dmg, def.team===0?'#ff8866':'#ffd84a');
+  AudioSys.sfx('hurt');
+  if(def.hp<=0){ def.hp=0; }
+}
+function animDeath(u,after){
+  AudioSys.sfx('crumple');
+  if(u.team===1){Game.B.stats.kills++; SV.stats.kills++;}
+  else {Game.B.stats.losses++; SV.stats.losses++;}
+  pushAnim({dur:0.45,u,
+    update(k){ this.u.scale=1-easeIn(k)*0.9; this.u.rot=k*2.6; this.u.alpha=1-k; if(Math.random()<0.4)spawnDust(this.u.x,this.u.y); },
+    done(){ this.u.alive=false; spawnBurst(this.u.x,this.u.y,'#e9dcb8'); if(after)after(); }
+  });
+}
+function animHeal(c,target,after){
+  AudioSys.sfx('heal');
+  pushAnim({dur:0.4,hit:false,
+    update(k){ if(!this.hit&&k>0.3){ this.hit=true; const amt=CLASSES[c.cls].heal;
+      target.hp=Math.min(target.maxhp,target.hp+amt); Game.B.stats.heal+=amt; SV.stats.heal+=amt;
+      addFloat(target.x,target.y,'+'+amt,'#7fe07f'); spawnBurst(target.x,target.y,'#9fe59f','#ffffff'); } },
+    done(){ if(after)after(); }
+  });
+}
+function animSpawn(u){
+  u.scale=0; u.alpha=0;
+  pushAnim({dur:0.35,u, update(k){this.u.scale=easeOut(k);this.u.alpha=k;}, done(){this.u.scale=1;this.u.alpha=1;}});
+  spawnBurst(u.x,u.y,'#d8604a');
+}
+
+/* ---------- juice ---------- */
+function shake(m){ if(!SV.settings.shake)return; Game.shakeMag=Math.min(14,Game.shakeMag+m); Game.shakeT=0.3; }
+function spawnBurst(gx,gy,col,col2){
+  for(let i=0;i<14;i++){
+    const a=Math.random()*Math.PI*2, sp=40+Math.random()*130;
+    Game.particles.push({x:(gx+0.5)*TILE,y:(gy+0.5)*TILE,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-60,
+      life:0.5+Math.random()*0.5,max:1,color:(col2&&Math.random()<0.5)?col2:col,size:2+Math.random()*4,rot:Math.random()*6,vr:(Math.random()-0.5)*12});
+  }
+}
+function spawnDust(gx,gy){
+  Game.particles.push({x:(gx+0.5)*TILE+(Math.random()-0.5)*20,y:(gy+0.9)*TILE,vx:(Math.random()-0.5)*30,vy:-20-Math.random()*20,
+    life:0.4,max:0.4,color:'rgba(190,170,130,0.8)',size:2+Math.random()*3,rot:0,vr:4});
+}
+function addFloat(gx,gy,txt,color){
+  Game.floats.push({x:(gx+0.5)*TILE,y:gy*TILE,txt,color,life:1.1,max:1.1});
+}
+function splash(txt,color){
+  const el=$('turnSplash'),tx=$('turnSplashTxt');
+  tx.textContent=txt; tx.style.color=color||'#fff';
+  el.style.display='flex'; el.style.opacity=1;
+  clearTimeout(splash._t1); clearTimeout(splash._t2);
+  splash._t1=setTimeout(()=>{el.style.transition='opacity .4s';el.style.opacity=0;},900);
+  splash._t2=setTimeout(()=>{el.style.display='none';el.style.transition='';},1350);
+}
+function tut(msg){
+  const el=$('tutBanner');
+  if(!msg){el.style.display='none';return;}
+  el.innerHTML='📜 '+msg; el.style.display='block';
+}
+
+/* ---------- rendering ---------- */
+const canvas=$('gameCanvas'), ctx=canvas.getContext('2d');
+const RES=2;
+canvas.width=GW*TILE*RES; canvas.height=GH*TILE*RES;
+let mapCanvas=null;
+function fitCanvas(){
+  const holder=$('canvasHolder');
+  const pad=16, aw=holder.clientWidth-pad, ah=holder.clientHeight-pad;
+  const ar=GW/GH;
+  let w=aw,h=w/ar; if(h>ah){h=ah;w=h*ar;}
+  canvas.style.width=Math.max(100,w)+'px'; canvas.style.height=Math.max(70,h)+'px';
+}
+window.addEventListener('resize',fitCanvas);
+
+function prerenderMap(){
+  const B=Game.B;
+  mapCanvas=document.createElement('canvas');
+  mapCanvas.width=GW*TILE*RES; mapCanvas.height=GH*TILE*RES;
+  const c=mapCanvas.getContext('2d'); c.scale(RES,RES);
+  const rng=mulberry32((B.cfg.seed||1)*31+5);
+  // parchment base
+  const grad=c.createLinearGradient(0,0,GW*TILE,GH*TILE);
+  grad.addColorStop(0,'#eee0b8'); grad.addColorStop(0.5,'#e4d4a4'); grad.addColorStop(1,'#d7c38c');
+  c.fillStyle=grad; c.fillRect(0,0,GW*TILE,GH*TILE);
+  // blotches
+  for(let i=0;i<40;i++){
+    c.fillStyle='rgba('+(150+rng()*60)+','+(120+rng()*50)+','+(70+rng()*40)+',0.06)';
+    c.beginPath(); c.ellipse(rng()*GW*TILE,rng()*GH*TILE,20+rng()*60,14+rng()*40,rng()*3,0,7); c.fill();
+  }
+  // tiles
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const t=B.grid[y][x], px=x*TILE, py=y*TILE;
+    if(t===T.RIVER||t===T.BRIDGE){
+      c.fillStyle='#a8c8d8'; c.fillRect(px,py,TILE,TILE);
+      c.strokeStyle='rgba(90,140,170,0.8)'; c.lineWidth=1.5;
+      for(let w=0;w<3;w++){ c.beginPath();
+        c.moveTo(px+4,py+14+w*18+rng()*4);
+        c.bezierCurveTo(px+20,py+8+w*18,px+44,py+22+w*18,px+60,py+12+w*18+rng()*6); c.stroke(); }
+      if(t===T.BRIDGE){
+        c.fillStyle='#9a7446'; c.fillRect(px+4,py+14,TILE-8,TILE-28);
+        c.strokeStyle='#6e5230'; c.lineWidth=1.5;
+        for(let p=0;p<5;p++){c.beginPath();c.moveTo(px+6+p*12,py+14);c.lineTo(px+6+p*12,py+TILE-14);c.stroke();}
+        c.strokeRect(px+4,py+14,TILE-8,TILE-28);
+      }
+    } else if(t===T.HILL){
+      c.fillStyle='rgba(200,180,120,0.5)'; c.fillRect(px,py,TILE,TILE);
+      c.strokeStyle='rgba(140,110,60,0.55)'; c.lineWidth=1.4;
+      c.beginPath(); c.arc(px+TILE/2,py+TILE*0.72,TILE*0.3,Math.PI,0); c.stroke();
+      c.beginPath(); c.arc(px+TILE/2,py+TILE*0.88,TILE*0.42,Math.PI,0); c.stroke();
+    } else if(t===T.MTN){
+      c.fillStyle='rgba(185,165,120,0.6)'; c.fillRect(px,py,TILE,TILE);
+      const mx=px+TILE/2,mb=py+TILE-6,mt=py+6;
+      c.fillStyle='#cdbb8d'; c.beginPath(); c.moveTo(px+6,mb); c.lineTo(mx,mt); c.lineTo(px+TILE-6,mb); c.closePath(); c.fill();
+      c.fillStyle='rgba(120,95,55,0.45)'; c.beginPath(); c.moveTo(mx,mt); c.lineTo(px+TILE-6,mb); c.lineTo(mx,mb); c.closePath(); c.fill();
+      c.strokeStyle='#7a5f35'; c.lineWidth=1.5; c.beginPath(); c.moveTo(px+6,mb); c.lineTo(mx,mt); c.lineTo(px+TILE-6,mb); c.stroke();
+      c.strokeStyle='rgba(122,95,53,0.5)'; c.setLineDash([3,3]); c.beginPath(); c.moveTo(mx,mt); c.lineTo(mx,mb); c.stroke(); c.setLineDash([]);
+    } else if(t===T.FOREST){
+      c.fillStyle='rgba(150,170,110,0.35)'; c.fillRect(px,py,TILE,TILE);
+      const n=2+Math.floor(rng()*2);
+      for(let k=0;k<n;k++){
+        const tx=px+12+rng()*(TILE-24), ty=py+16+rng()*(TILE-26), s=9+rng()*7;
+        c.fillStyle='rgba(60,50,30,0.25)'; c.beginPath(); c.ellipse(tx,ty+s*0.95,s*0.8,s*0.28,0,0,7); c.fill();
+        c.fillStyle=k%2?'#5d7a3c':'#4e6b33';
+        c.beginPath(); c.moveTo(tx-s*0.75,ty+s*0.9); c.lineTo(tx,ty-s); c.lineTo(tx+s*0.75,ty+s*0.9); c.closePath(); c.fill();
+        c.fillStyle='rgba(255,255,255,0.14)'; c.beginPath(); c.moveTo(tx,ty-s); c.lineTo(tx+s*0.4,ty+s*0.3); c.lineTo(tx,ty+s*0.3); c.closePath(); c.fill();
+        c.strokeStyle='rgba(40,55,25,0.6)'; c.lineWidth=1; c.beginPath(); c.moveTo(tx-s*0.75,ty+s*0.9); c.lineTo(tx,ty-s); c.lineTo(tx+s*0.75,ty+s*0.9); c.stroke();
+      }
+    } else {
+      if(rng()<0.12){ // grass doodle
+        c.strokeStyle='rgba(120,140,70,0.5)'; c.lineWidth=1.2;
+        const gx2=px+10+rng()*40, gy2=py+14+rng()*40;
+        for(let b=0;b<3;b++){c.beginPath();c.moveTo(gx2+b*4,gy2+6);c.lineTo(gx2+b*4+(rng()*4-2),gy2-4);c.stroke();}
+      }
+    }
+  }
+  // faint grid + fold creases
+  c.strokeStyle='rgba(120,95,55,0.18)'; c.lineWidth=1;
+  for(let x=0;x<=GW;x++){c.beginPath();c.moveTo(x*TILE,0);c.lineTo(x*TILE,GH*TILE);c.stroke();}
+  for(let y=0;y<=GH;y++){c.beginPath();c.moveTo(0,y*TILE);c.lineTo(GW*TILE,y*TILE);c.stroke();}
+  c.strokeStyle='rgba(100,75,40,0.35)'; c.setLineDash([6,6]); c.lineWidth=1.3;
+  for(let i=0;i<5;i++){
+    c.beginPath();
+    const vert=rng()<0.5;
+    if(vert){const fx=rng()*GW*TILE;c.moveTo(fx,0);c.lineTo(fx+(rng()*80-40),GH*TILE);}
+    else{const fy=rng()*GH*TILE;c.moveTo(0,fy);c.lineTo(GW*TILE,fy+(rng()*80-40));}
+    c.stroke();
+  }
+  c.setLineDash([]);
+  // fold shading bands
+  for(let i=0;i<4;i++){
+    const fx=(i+0.5)*GW*TILE/4;
+    const g2=c.createLinearGradient(fx-50,0,fx+50,0);
+    g2.addColorStop(0,'rgba(255,255,255,0)');g2.addColorStop(0.5,'rgba(110,85,45,0.07)');g2.addColorStop(1,'rgba(255,255,255,0)');
+    c.fillStyle=g2; c.fillRect(fx-50,0,100,GH*TILE);
+  }
+}
+
+function drawUnit(c,u,t){
+  const px=(u.vx+0.5)*TILE, py=(u.vy+0.5)*TILE;
+  const boss=CLASSES[u.cls].boss, big=boss||u.cls==='brute';
+  const S=(big?1.25:1)*u.scale;
+  c.save();
+  c.translate(px,py); c.rotate(u.rot); c.scale(S,S);
+  c.globalAlpha=u.alpha*(u.acted&&u.team===0&&!animBusy()?0.55:1);
+  const bob=Math.sin(t*3+u.id)*1.5;
+  // shadow
+  c.fillStyle='rgba(60,40,15,0.3)'; c.beginPath(); c.ellipse(0,20,16,5,0,0,7); c.fill();
+  c.translate(0,bob);
+  const blue=u.team===0;
+  const body1=blue?'#44639f':'#b8402f', body2=blue?'#2e4576':'#8e2c1e';
+  // hit bump flash
+  if(u.bump>0){ c.translate((Math.random()-0.5)*4*u.bump,(Math.random()-0.5)*4*u.bump); }
+  // body: folded tent shape
+  c.fillStyle=body1; c.beginPath(); c.moveTo(-13,20); c.lineTo(0,-6); c.lineTo(13,20); c.closePath(); c.fill();
+  c.fillStyle=body2; c.beginPath(); c.moveTo(0,-6); c.lineTo(13,20); c.lineTo(0,20); c.closePath(); c.fill();
+  c.strokeStyle='rgba(30,20,8,0.6)'; c.lineWidth=1.2; c.beginPath(); c.moveTo(-13,20); c.lineTo(0,-6); c.lineTo(13,20); c.closePath(); c.stroke();
+  // crown emblem on body
+  c.fillStyle='rgba(255,240,200,0.9)';
+  c.beginPath(); c.moveTo(-4,14); c.lineTo(-4,10); c.lineTo(-2,12); c.lineTo(0,9); c.lineTo(2,12); c.lineTo(4,10); c.lineTo(4,14); c.closePath(); c.fill();
+  // head
+  c.fillStyle='#e8cfa0'; c.beginPath(); c.arc(0,-12,7,0,7); c.fill();
+  c.strokeStyle='rgba(30,20,8,0.5)'; c.stroke();
+  // helm / hat by class
+  c.fillStyle=boss?'#e0b02a':body2;
+  if(u.cls==='soldier'||u.cls==='knight'||u.cls==='brute'){ // pointed helm
+    c.beginPath(); c.moveTo(-8,-14); c.lineTo(0,-26); c.lineTo(8,-14); c.closePath(); c.fill(); c.stroke();
+  } else if(u.cls==='archer'){ c.beginPath(); c.moveTo(-8,-15); c.lineTo(4,-24); c.lineTo(8,-13); c.closePath(); c.fill(); c.stroke(); }
+  else if(u.cls==='mage'){ c.beginPath(); c.moveTo(-9,-14); c.lineTo(0,-30); c.lineTo(9,-14); c.closePath(); c.fill(); c.stroke(); }
+  else if(u.cls==='cleric'){ c.fillRect(-7,-20,14,5); c.fillStyle='#fff'; c.fillRect(-1.5,-28,3,8); c.fillRect(-4,-25.5,8,3); }
+  else if(u.cls==='king'){ // crown
+    c.fillStyle='#e0b02a'; c.beginPath(); c.moveTo(-9,-14); c.lineTo(-9,-24); c.lineTo(-4.5,-18); c.lineTo(0,-26); c.lineTo(4.5,-18); c.lineTo(9,-24); c.lineTo(9,-14); c.closePath(); c.fill(); c.stroke();
+  }
+  // weapon
+  c.strokeStyle='#7a5f35'; c.lineWidth=2;
+  if(u.cls==='soldier'||u.cls==='knight'||u.cls==='king'){ // sword
+    c.strokeStyle='#cfd4da'; c.beginPath(); c.moveTo(14,2); c.lineTo(21,-16); c.stroke();
+    c.strokeStyle='#7a5f35'; c.beginPath(); c.moveTo(12.5,-1); c.lineTo(17,0.5); c.stroke();
+  } else if(u.cls==='archer'){ // bow
+    c.strokeStyle='#8a6a3a'; c.beginPath(); c.arc(16,0,10,-1.2,1.2); c.stroke();
+    c.strokeStyle='rgba(240,230,200,0.9)'; c.lineWidth=1; c.beginPath(); c.moveTo(16+10*Math.cos(-1.2),10*Math.sin(-1.2)); c.lineTo(16+10*Math.cos(1.2),10*Math.sin(1.2)); c.stroke();
+  } else if(u.cls==='mage'){ c.beginPath(); c.moveTo(15,16); c.lineTo(15,-14); c.stroke(); c.fillStyle='#c070e0'; c.beginPath(); c.arc(15,-16,3.5,0,7); c.fill(); }
+  else if(u.cls==='cleric'){ c.beginPath(); c.moveTo(15,16); c.lineTo(15,-8); c.stroke(); c.strokeStyle='#e8e0c0'; c.beginPath(); c.moveTo(11,-8); c.lineTo(19,-8); c.stroke(); }
+  else if(u.cls==='brute'){ c.strokeStyle='#5a4a30'; c.lineWidth=3; c.beginPath(); c.moveTo(14,14); c.lineTo(20,-12); c.stroke(); c.fillStyle='#9aa0a8'; c.beginPath(); c.moveTo(16,-16);c.lineTo(26,-12);c.lineTo(20,-6);c.closePath(); c.fill(); }
+  c.globalAlpha=u.alpha;
+  // hp bar
+  if(u.alive&&u.hp<u.maxhp){
+    const w=28, frac=clamp(u.hp/u.maxhp,0,1);
+    c.fillStyle='rgba(20,12,5,0.7)'; c.fillRect(-w/2,-34,w,5);
+    c.fillStyle=frac>0.5?'#6fc050':frac>0.25?'#e0b02a':'#d05040';
+    c.fillRect(-w/2+0.5,-33.5,(w-1)*frac,4);
+  }
+  if(boss){ c.fillStyle='#e0b02a'; c.font='10px Georgia'; c.textAlign='center'; c.fillText('★',0,-38); }
+  c.restore();
+}
+
+function render(t){
+  if(Game.screen!=='battle'||!Game.B)return;
+  const B=Game.B;
+  ctx.setTransform(RES,0,0,RES,0,0);
+  // shake
+  if(Game.shakeT>0){
+    const m=Game.shakeMag*(Game.shakeT/0.3);
+    ctx.translate((Math.random()-0.5)*m,(Math.random()-0.5)*m);
+  }
+  if(mapCanvas)ctx.drawImage(mapCanvas,0,0,GW*TILE,GH*TILE);
+  else {ctx.fillStyle='#e4d4a4';ctx.fillRect(0,0,GW*TILE,GH*TILE);}
+  // banner objective
+  if(B.banner){
+    const[bx,by]=B.banner, px=bx*TILE, py=by*TILE;
+    const pulse=0.25+Math.sin(t*4)*0.1;
+    ctx.fillStyle='rgba(224,176,42,'+pulse+')'; ctx.fillRect(px,py,TILE,TILE);
+    ctx.strokeStyle='#8a6a10'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(px+32,py+54); ctx.lineTo(px+32,py+12); ctx.stroke();
+    ctx.fillStyle='#e0b02a'; ctx.beginPath(); ctx.moveTo(px+32,py+12); ctx.lineTo(px+52,py+19); ctx.lineTo(px+32,py+27); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(90,60,10,0.8)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  // highlights
+  if(B.phase==='player'&&!animBusy()){
+    if(B.mode==='selected'&&B.moveSet){
+      for(const[x,y]of B.moveSet){ ctx.fillStyle='rgba(70,110,220,0.32)'; ctx.fillRect(x*TILE+2,y*TILE+2,TILE-4,TILE-4);
+        ctx.strokeStyle='rgba(70,110,220,0.55)'; ctx.strokeRect(x*TILE+2.5,y*TILE+2.5,TILE-5,TILE-5); }
+    }
+    if(B.atkSet){
+      for(const e of B.atkSet){ const pul=0.3+Math.sin(t*6)*0.12;
+        ctx.fillStyle='rgba(216,70,50,'+pul+')'; ctx.fillRect(e.x*TILE+2,e.y*TILE+2,TILE-4,TILE-4);
+        ctx.strokeStyle='rgba(216,70,50,0.9)'; ctx.lineWidth=2; ctx.strokeRect(e.x*TILE+3,e.y*TILE+3,TILE-6,TILE-6); }
+    }
+    if(B.healSet){
+      for(const a of B.healSet){ ctx.fillStyle='rgba(110,210,110,0.35)'; ctx.fillRect(a.x*TILE+2,a.y*TILE+2,TILE-4,TILE-4);
+        ctx.strokeStyle='rgba(60,170,60,0.9)'; ctx.strokeRect(a.x*TILE+3,a.y*TILE+3,TILE-6,TILE-6); }
+    }
+    // selected marker
+    if(B.sel&&B.sel.alive){ ctx.strokeStyle='rgba(255,230,120,0.95)'; ctx.lineWidth=2.5;
+      const px=B.sel.x*TILE,py=B.sel.y*TILE, o=3+Math.sin(t*5)*1.5;
+      ctx.strokeRect(px+o,py+o,TILE-o*2,TILE-o*2); }
+    // hover cursor
+    const{x,y}=Game.cursor;
+    if(x>=0&&x<GW&&y>=0&&y<GH){ ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=2; ctx.strokeRect(x*TILE+1.5,y*TILE+1.5,TILE-3,TILE-3); }
+  }
+  // units (sort by vy)
+  const us=B.units.filter(u=>u.alive||u.alpha>0).sort((a,b)=>a.vy-b.vy);
+  for(const u of us)drawUnit(ctx,u,t);
+  // particles
+  for(const p of Game.particles){
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.globalAlpha=clamp(p.life/p.max,0,1);
+    ctx.fillStyle=p.color; ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.7); ctx.restore();
+  }
+  // floating text
+  for(const f of Game.floats){
+    const k=1-f.life/f.max;
+    ctx.save(); ctx.globalAlpha=clamp(f.life*2,0,1);
+    ctx.font='bold 17px Georgia'; ctx.textAlign='center';
+    ctx.strokeStyle='rgba(20,12,4,0.9)'; ctx.lineWidth=3;
+    ctx.strokeText(f.txt,f.x,f.y-k*28); ctx.fillStyle=f.color; ctx.fillText(f.txt,f.x,f.y-k*28);
+    ctx.restore();
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ---------- main loop ---------- */
+function frame(ts){
+  requestAnimationFrame(frame);
+  const t=ts/1000;
+  let dt=t-(Game.lastT||t); Game.lastT=t;
+  dt=clamp(dt,0,0.05);
+  if(Game.paused)dt=0;
+  // anims
+  if(dt>0&&Game.anims.length){
+    const a=Game.anims[0];
+    a.t+=dt; const k=clamp(a.t/a.dur,0,1);
+    a.update(k);
+    if(k>=1){ Game.anims.shift(); if(a.done)a.done(); if(!Game.anims.length)onAnimsDone(); }
+  }
+  // particles & floats
+  if(dt>0){
+    for(const p of Game.particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=260*dt; p.rot+=p.vr*dt; p.life-=dt; }
+    Game.particles=Game.particles.filter(p=>p.life>0);
+    for(const f of Game.floats)f.life-=dt;
+    Game.floats=Game.floats.filter(f=>f.life>0);
+    if(Game.shakeT>0)Game.shakeT-=dt; else Game.shakeMag=0;
+    if(Game.B)for(const u of Game.B.units)if(u.bump>0)u.bump=Math.max(0,u.bump-dt*5);
+    // enemy turn progression
+    if(Game.B&&Game.B.phase==='enemy'&&!animBusy()&&!Game.B.over)stepEnemy();
+  }
+  render(t);
+}
+requestAnimationFrame(frame);
+window.addEventListener('blur',()=>{ if(Game.screen==='battle'&&!Game.B?.over)pauseGame(true); });
+
+/* ---------- turn / win-lose flow ---------- */
+function onAnimsDone(){
+  const B=Game.B; if(!B||B.over)return;
+  checkEnd();
+  updateHUD();
+}
+function checkEnd(){
+  const B=Game.B; if(!B||B.over)return;
+  const alivP=B.units.filter(u=>u.alive&&u.team===0);
+  const alivE=B.units.filter(u=>u.alive&&u.team===1);
+  if(B.cfg.obj==='king'){ const king=B.units.find(u=>u.cls==='king'); if(king&&!king.alive)return endBattle(true); }
+  if(!alivE.length)return endBattle(true);
+  if(!alivP.length)return endBattle(false);
+  if(B.cfg.obj==='capture'&&B.banner){ if(alivP.some(u=>u.x===B.banner[0]&&u.y===B.banner[1]))return endBattle(true); }
+}
+function endTurn(){
+  const B=Game.B;
+  if(!B||B.phase!=='player'||animBusy()||B.over)return;
+  deselect();
+  B.phase='enemy';
+  B.enemyQueue=B.units.filter(u=>u.alive&&u.team===1).map(u=>u.id);
+  splash('Crimson Phase','#ff9478'); AudioSys.sfx('turn');
+  if(B.tutorial&&B.tutStep===4){B.tutStep=5;tut('The enemy moves… Watch the terrain: woods and peaks shield defenders. Good luck, Commander! (H for the field manual)');setTimeout(()=>{if(Game.B===B)tut(null);},6000);}
+  updateHUD();
+}
+function startPlayerTurn(){
+  const B=Game.B; if(!B||B.over)return;
+  B.turn++; B.stats.turns++;
+  // survive objective check
+  if(B.cfg.obj==='survive'&&B.turn>B.cfg.turns)return endBattle(true);
+  B.phase='player';
+  for(const u of B.units)if(u.team===0)u.acted=false;
+  splash('Player Phase — Turn '+B.turn+(B.cfg.obj==='survive'?' / '+B.cfg.turns:''),'#7fa8ff');
+  AudioSys.sfx('turn');
+  updateHUD();
+}
+function endBattle(won){
+  const B=Game.B; if(B.over)return;
+  B.over=true; B.result=won;
+  deselect(); tut(null);
+  SV.stats.turns+=B.stats.turns;
+  setTimeout(()=>showResult(won),700);
+  if(won){AudioSys.sfx('win'); confettiRain();}
+  else AudioSys.sfx('lose');
+}
+function confettiRain(){
+  for(let i=0;i<70;i++){
+    Game.particles.push({x:Math.random()*GW*TILE,y:-10-Math.random()*200,vx:(Math.random()-0.5)*40,vy:60+Math.random()*120,
+      life:2+Math.random()*2,max:4,color:['#e0b02a','#44639f','#b8402f','#e9dcb8','#6fc050'][i%5],size:3+Math.random()*5,rot:Math.random()*6,vr:(Math.random()-0.5)*10});
+  }
+}
+function showResult(won){
+  const B=Game.B;
+  const tbl=$('resStats'), btns=$('resBtns');
+  let goldGain=0;
+  if(won){
+    const surv=B.units.filter(u=>u.alive&&u.team===0).length;
+    goldGain=(B.isSkirmish?60+SV.skirmishLvl*25:80+B.idx*40)+surv*10+B.stats.kills*5;
+    SV.gold+=goldGain; SV.stats.goldEarned+=goldGain; SV.stats.battles++;
+    if(B.isSkirmish){SV.skirmishLvl++;}
+    else{
+      if(!SV.cleared.includes(B.idx))SV.cleared.push(B.idx);
+      SV.unlocked=Math.max(SV.unlocked,B.idx+1);
+      if(B.idx===BATTLES.length-1){SV.champion=true;SV.skirmishUnlocked=true;}
+    }
+    saveGame();
+  } else { saveGame(); }
+  $('resTitle').textContent=won?'Victory!':'Defeat';
+  $('resTitle').style.background=won?'linear-gradient(180deg,#5c8a3c,#426428)':'linear-gradient(180deg,#b8402f,#8e2c1e)';
+  $('resCrown').textContent=won?'🏆':'💔';
+  tbl.innerHTML=
+    '<tr><td>Turns taken</td><td>'+B.stats.turns+'</td></tr>'+
+    '<tr><td>Enemies crumpled</td><td>'+B.stats.kills+'</td></tr>'+
+    '<tr><td>Damage dealt</td><td>'+B.stats.dmg+'</td></tr>'+
+    '<tr><td>Healing done</td><td>'+B.stats.heal+'</td></tr>'+
+    '<tr><td>Warriors lost</td><td>'+B.stats.losses+'</td></tr>'+
+    (won?'<tr><td class="goldTag">Gold earned</td><td class="goldTag">+'+goldGain+' 🪙</td></tr>':'');
+  btns.innerHTML='';
+  function mkBtn(txt,cls,fn){const b=document.createElement('button');b.className='pbtn '+cls;b.textContent=txt;b.onclick=()=>{AudioSys.sfx('ui');fn();};btns.appendChild(b);}
+  if(won){
+    if(!B.isSkirmish&&B.idx===BATTLES.length-1){
+      mkBtn('All Hail the Paper Crown! 👑','blue',()=>{$('ovResult').classList.remove('on');showChampion();});
+    } else {
+      mkBtn('Return to Camp','blue',()=>{$('ovResult').classList.remove('on');showCamp();});
+      if(B.isSkirmish)mkBtn('Next Skirmish ⚔','red',()=>{$('ovResult').classList.remove('on');startBattle(0,true);});
+    }
+  } else {
+    mkBtn('Retry Battle','red',()=>{$('ovResult').classList.remove('on'); B.isSkirmish?startBattle(0,true):startBattle(B.idx,false);});
+    mkBtn('Back to Camp','',()=>{$('ovResult').classList.remove('on');showCamp();});
+  }
+  $('ovResult').classList.add('on');
+}
+function showChampion(){
+  const s=SV.stats;
+  $('champStats').innerHTML=
+    '<tr><td>Battles won</td><td>'+s.battles+'</td></tr>'+
+    '<tr><td>Total kills</td><td>'+s.kills+'</td></tr>'+
+    '<tr><td>Total damage</td><td>'+s.dmg+ (s.dmg===0?'':'')+'</td></tr>'+
+    '<tr><td>Gold amassed</td><td>'+s.goldEarned+' 🪙</td></tr>'+
+    '<tr><td>Warriors lost</td><td>'+s.losses+'</td></tr>'+
+    '<tr><td>Turns commanded</td><td>'+s.turns+'</td></tr>';
+  showScreen('camp'); renderCamp(); // underlying
+  $('ovChampion').classList.add('on');
+  saveGame();
+}
+
+/* ---------- player input in battle ---------- */
+function deselect(){
+  const B=Game.B; if(!B)return;
+  B.sel=null; B.moveSet=null; B.atkSet=null; B.healSet=null; B.pathMap=null; B.mode='idle';
+  $('actionBar').style.display='none';
+  updateHUD();
+}
+function selectUnit(u){
+  const B=Game.B;
+  B.sel=u; B.mode='selected';
+  const r=reachableTiles(u);
+  B.moveSet=r.tiles; B.pathMap=r.par;
+  B.atkSet=targetsFrom(u,u.x,u.y);
+  B.healSet=healTargetsFrom(u,u.x,u.y);
+  AudioSys.sfx('select');
+  if(B.tutorial&&B.tutStep===1){B.tutStep=2;tut('Blue tiles = where it can walk. Click a highlighted tile to march there!');}
+  updateHUD();
+}
+function enterActing(u){
+  const B=Game.B;
+  B.mode='acting'; B.moveSet=null; B.pathMap=null;
+  B.atkSet=targetsFrom(u,u.x,u.y);
+  B.healSet=healTargetsFrom(u,u.x,u.y);
+  if(!B.atkSet.length&&!B.healSet.length){ finishAction(u); return; }
+  $('actionBar').style.display='flex';
+  if(B.tutorial&&B.tutStep===3){B.tutStep=4;tut('Click a RED-marked enemy to strike it — or press Wait. Then press End Turn (⏎) when every unit has acted.');}
+  updateHUD();
+}
+function finishAction(u){
+  const B=Game.B;
+  u.acted=true; deselect();
+  checkEnd();
+  // auto end turn if all acted
+  if(!B.over&&B.phase==='player'&&!animBusy()){
+    const left=B.units.filter(x=>x.alive&&x.team===0&&!x.acted);
+    if(!left.length)setTimeout(()=>{if(Game.B===B&&B.phase==='player'&&!B.over)endTurn();},350);
+  }
+}
+function tileClick(x,y){
+  const B=Game.B;
+  if(!B||B.phase!=='player'||animBusy()||B.over||Game.paused)return;
+  const u=unitAt(x,y);
+  if(B.mode==='idle'){
+    if(u&&u.team===0&&!u.acted)selectUnit(u);
+    else if(u)showUnitInfo(u);
+    return;
+  }
+  const sel=B.sel;
+  if(B.mode==='selected'){
+    // attack directly from current position?
+    if(u&&u.team===1&&B.atkSet&&B.atkSet.includes(u)){ doAttack(sel,u); return; }
+    if(u&&u.team===0&&B.healSet&&B.healSet.includes(u)){ doHeal(sel,u); return; }
+    if(u&&u.team===0&&u!==sel&&!u.acted){ selectUnit(u); return; } // switch selection
+    if(B.moveSet&&B.moveSet.some(t=>t[0]===x&&t[1]===y)){
+      if(x===sel.x&&y===sel.y){ enterActing(sel); return; }
+      const path=pathTo(B.pathMap,x,y,sel.x,sel.y);
+      B.moveSet=null; B.atkSet=null; B.healSet=null;
+      if(B.tutorial&&B.tutStep===2){B.tutStep=3;}
+      animMove(sel,path,()=>{ if(B.cfg.obj==='capture'&&B.banner&&sel.x===B.banner[0]&&sel.y===B.banner[1]){sel.acted=true;deselect();checkEnd();} else enterActing(sel); });
+      return;
+    }
+    deselect(); return;
+  }
+  if(B.mode==='acting'){
+    if(u&&u.team===1&&B.atkSet.includes(u)){ doAttack(sel,u); return; }
+    if(u&&u.team===0&&B.healSet.includes(u)){ doHeal(sel,u); return; }
+    // clicking elsewhere = wait
+    waitAction(); return;
+  }
+}
+function doAttack(att,def){
+  const B=Game.B;
+  B.atkSet=null;B.healSet=null;B.moveSet=null;$('actionBar').style.display='none';
+  animAttack(att,def,false,()=>finishAction(att));
+}
+function doHeal(c,target){
+  const B=Game.B;
+  B.atkSet=null;B.healSet=null;B.moveSet=null;$('actionBar').style.display='none';
+  animHeal(c,target,()=>finishAction(c));
+}
+function waitAction(){
+  const B=Game.B;
+  if(B&&B.sel&&(B.mode==='acting'||B.mode==='selected')&&!animBusy()){ $('actionBar').style.display='none'; finishAction(B.sel); AudioSys.sfx('ui'); }
+}
+function cycleUnit(){
+  const B=Game.B; if(!B||B.phase!=='player'||animBusy()||B.over)return;
+  const avail=B.units.filter(u=>u.alive&&u.team===0&&!u.acted);
+  if(!avail.length)return;
+  let i=0;
+  if(B.sel){const ci=avail.indexOf(B.sel); i=(ci+1)%avail.length;}
+  deselect(); selectUnit(avail[i]);
+}
+
+/* canvas pointer */
+function canvasPos(ev){
+  const r=canvas.getBoundingClientRect();
+  const cx=(ev.clientX-r.left)/r.width*GW*TILE, cy=(ev.clientY-r.top)/r.height*GH*TILE;
+  return {x:Math.floor(cx/TILE), y:Math.floor(cy/TILE)};
+}
+canvas.addEventListener('pointermove',ev=>{ Game.cursor=canvasPos(ev); updateTerrHUD(); });
+canvas.addEventListener('pointerdown',ev=>{
+  if(ev.button===2)return;
+  const p=canvasPos(ev); Game.cursor=p;
+  if(p.x>=0&&p.x<GW&&p.y>=0&&p.y<GH)tileClick(p.x,p.y);
+});
+canvas.addEventListener('contextmenu',ev=>{ev.preventDefault(); deselect();});
+
+/* ---------- enemy AI ---------- */
+function stepEnemy(){
+  const B=Game.B;
+  if(B.phase!=='enemy'||B.over)return;
+  if(!B.enemyQueue.length){
+    // reinforcements (survive battles)
+    if(B.cfg.reinf&&B.turn<B.cfg.turns-1&&B.reinfDone<3&&B.turn%2===0){
+      B.reinfDone++;
+      const free=[]; for(let y=0;y<GH;y++){const x=GW-1; if(!unitAt(x,y)&&moveCost(B.grid[y][x],'soldier')<9)free.push([x,y]);}
+      shuffleSeed(free,mulberry32(B.turn*17+3));
+      B.cfg.reinf.forEach((cls,i)=>{ if(i<2&&free[i]){ const u=mkUnit(cls,1,free[i][0],free[i][1]); B.units.push(u); animSpawn(u); } });
+      addFloat(GW-1.5,1,'Reinforcements!','#ff9478');
+    }
+    startPlayerTurn(); return;
+  }
+  const id=B.enemyQueue.shift();
+  const u=B.units.find(x=>x.id===id);
+  if(!u||!u.alive){ return; } // next frame continues
+  planEnemy(u);
+}
+function planEnemy(u){
+  const B=Game.B;
+  const players=B.units.filter(p=>p.alive&&p.team===0);
+  if(!players.length)return;
+  const {tiles,par}=reachableTiles(u);
+  const myC=CLASSES[u.cls];
+  // cleric: heal priority
+  if(myC.heal){
+    let best=null;
+    for(const[tx,ty]of tiles){
+      for(const a of B.units.filter(a=>a.alive&&a.team===1&&a!==u&&a.hp<a.maxhp)){
+        if(manh(tx,ty,a.x,a.y)===1){
+          const score=(a.maxhp-a.hp)+(CLASSES[a.cls].boss?20:0);
+          if(!best||score>best.score)best={tx,ty,a,score};
+        }
+      }
+    }
+    if(best){
+      const path=pathTo(par,best.tx,best.ty,u.x,u.y);
+      animMove(u,path,()=>animHeal(u,best.a,null));
+      return;
+    }
+  }
+  // attack search
+  let best=null;
+  for(const[tx,ty]of tiles){
+    const t=B.grid[ty][tx];
+    let rmax=u.rmax; if(u.rmax>=2&&isHigh(t))rmax++;
+    for(const p of players){
+      const d=manh(tx,ty,p.x,p.y);
+      if(d<u.rmin||d>rmax)continue;
+      // damage estimate
+      const atkB=u.atk+(isHigh(t)?1:0);
+      const armor=myC.pierce?0:p.def+terrDef(B.grid[p.y][p.x]);
+      const dmg=Math.max(1,atkB-armor);
+      let score=Math.min(p.hp,dmg)*2+(dmg>=p.hp?60:0)+terrDef(t)*2;
+      // counter risk
+      const pr=unitRange(p,p.x,p.y);
+      if(d>=pr.rmin&&d<=pr.rmax)score-=Math.max(1,p.atk-(myC.pierce?u.def:u.def+terrDef(t)));
+      score+=(p.cls==='mage'||p.cls==='cleric'||p.cls==='archer')?6:0;
+      if(!best||score>best.score)best={tx,ty,p,score};
+    }
+  }
+  if(best){
+    const path=pathTo(par,best.tx,best.ty,u.x,u.y);
+    animMove(u,path,()=>animAttack(u,best.p,false,null));
+    return;
+  }
+  // approach nearest player
+  let target=players[0],td=1e9;
+  for(const p of players){const d=manh(u.x,u.y,p.x,p.y); if(d<td){td=d;target=p;}}
+  let bt=null,bd=1e9;
+  for(const[tx,ty]of tiles){
+    const d=manh(tx,ty,target.x,target.y)+Math.random()*0.3;
+    if(d<bd){bd=d;bt=[tx,ty];}
+  }
+  if(bt&&(bt[0]!==u.x||bt[1]!==u.y)){
+    const path=pathTo(par,bt[0],bt[1],u.x,u.y);
+    animMove(u,path,null);
+  }
+  // if no move possible: do nothing (loop continues next frame)
+}
+
+/* ---------- HUD ---------- */
+function showUnitInfo(u){
+  const c=CLASSES[u.cls];
+  const hg=isHigh(Game.B.grid[u.y][u.x]);
+  $('hudUnit').innerHTML=(u.team===0?'🔵 ':'🔴 ')+c.icon+' <b>'+c.name+'</b> — HP '+u.hp+'/'+u.maxhp+' · ATK '+(u.atk+(hg?1:0))+' · DEF '+u.def+' · MOV '+u.move+' · RNG '+u.rmin+'-'+(u.rmax+(hg&&u.rmax>=2?1:0))+' <i style="opacity:.75">'+c.desc+'</i>';
+}
+function updateTerrHUD(){
+  const B=Game.B; if(!B)return;
+  const{x,y}=Game.cursor;
+  if(x>=0&&x<GW&&y>=0&&y<GH){
+    $('hudTerrain').textContent='⬛ '+terrName(B.grid[y][x]);
+    const u=unitAt(x,y); if(u)showUnitInfo(u);
+  }
+}
+function updateHUD(){
+  const B=Game.B; if(!B)return;
+  $('hudTurn').textContent='Turn '+B.turn+(B.cfg.obj==='survive'?' / '+B.cfg.turns:'');
+  const p=B.units.filter(u=>u.alive&&u.team===0).length, e=B.units.filter(u=>u.alive&&u.team===1).length;
+  $('hudForces').textContent='🔵 '+p+'  vs  🔴 '+e;
+  if(B.sel)showUnitInfo(B.sel);
+  else if(B.phase==='player')$('hudUnit').textContent='Select a blue unit (Tab to cycle)';
+  else $('hudUnit').textContent='Crimson host is moving…';
+  $('btnEndTurn').disabled=(B.phase!=='player'||B.over);
+}
+
+/* ---------- screens ---------- */
+function showScreen(name){
+  Game.screen=name;
+  for(const id of['scrTitle','scrCamp'])$(id).classList.toggle('on', (name==='title'&&id==='scrTitle')||(name==='camp'&&id==='scrCamp'));
+  $('battleWrap').classList.toggle('on',name==='battle');
+  if(name==='battle'){fitCanvas();}
+  if(name!=='battle'){Game.paused=false;$('ovPause').classList.remove('on');}
+}
+function showTitle(){
+  showScreen('title');
+  $('btnContinue').style.display=(SV.unlocked>0||SV.cleared.length||SV.stats.battles>0)?'':'none';
+  $('btnSkirmish').style.display=SV.skirmishUnlocked?'':'none';
+}
+function showCamp(){
+  showScreen('camp');
+  renderCamp();
+  saveGame();
+}
+
+/* ---------- camp UI ---------- */
+const UPGRADES=[
+  {key:'atk',name:'Sharpened Blades',desc:'+1 attack to all troops',max:3,cost:l=>120+l*90},
+  {key:'def',name:'Waxed Paper Armor',desc:'+1 defense to all troops',max:3,cost:l=>120+l*90},
+  {key:'hp',name:'Reinforced Fibers',desc:'+4 HP to all troops',max:3,cost:l=>100+l*80},
+  {key:'move',name:'Swift Folds',desc:'+1 movement to all troops',max:2,cost:l=>180+l*140}
+];
+function renderCamp(){
+  $('campGold').textContent=SV.gold;
+  // nodes
+  const nl=$('nodeList'); nl.innerHTML='';
+  BATTLES.forEach((b,i)=>{
+    const d=document.createElement('div');
+    const done=SV.cleared.includes(i), locked=i>SV.unlocked;
+    d.className='bnode'+(done?' done':locked?' locked':i===SV.unlocked?' next':'');
+    d.innerHTML='<b>'+(i+1)+'. '+b.name+'</b><br><span style="opacity:.8">'+b.objTxt+'</span>'+(done?' ✅':locked?' 🔒':'');
+    if(!locked)d.onclick=()=>{AudioSys.sfx('ui');startBattle(i,false);};
+    nl.appendChild(d);
+  });
+  if(SV.skirmishUnlocked){
+    const d=document.createElement('div'); d.className='bnode next';
+    d.innerHTML='<b>∞ Endless Skirmish</b><br><span style="opacity:.8">Level '+(SV.skirmishLvl+1)+' — ever harder foes</span>';
+    d.onclick=()=>{AudioSys.sfx('ui');startBattle(0,true);};
+    nl.appendChild(d);
+  }
+  // roster
+  const rl=$('rosterList'); rl.innerHTML='';
+  $('rosterCount').textContent='('+SV.roster.length+'/'+MAX_ROSTER+')';
+  SV.roster.forEach((cls,i)=>{
+    const c=CLASSES[cls];
+    const chip=document.createElement('span'); chip.className='rosterChip';
+    chip.innerHTML=c.icon+' '+c.name;
+    if(SV.roster.length>1){
+      const x=document.createElement('button'); x.textContent='✕'; x.title='Dismiss (refund half)';
+      x.onclick=()=>{AudioSys.sfx('coin');SV.gold+=Math.floor(c.cost/2);SV.roster.splice(i,1);saveGame();renderCamp();};
+      chip.appendChild(x);
+    }
+    rl.appendChild(chip);
+  });
+  // recruit
+  const rec=$('recruitList'); rec.innerHTML='';
+  RECRUITABLE.forEach(cls=>{
+    const c=CLASSES[cls], s=effStats(cls,0);
+    const div=document.createElement('div'); div.className='shopItem';
+    div.innerHTML='<span style="font-size:18px;">'+c.icon+'</span><span class="nm"><b>'+c.name+'</b> <span style="opacity:.75">'+c.desc+'</span><br><small>HP '+s.hp+' · ATK '+s.atk+' · DEF '+s.def+' · MOV '+s.move+'</small></span><span class="goldTag">'+c.cost+'🪙</span>';
+    const b=document.createElement('button'); b.className='pbtn small blue'; b.textContent='Hire';
+    b.disabled=SV.gold<c.cost||SV.roster.length>=MAX_ROSTER;
+    b.onclick=()=>{SV.gold-=c.cost;SV.roster.push(cls);AudioSys.sfx('coin');saveGame();renderCamp();};
+    div.appendChild(b); rec.appendChild(div);
+  });
+  // upgrades
+  const ul=$('upgradeList'); ul.innerHTML='';
+  UPGRADES.forEach(up=>{
+    const lvl=SV.up[up.key], maxed=lvl>=up.max, cost=up.cost(lvl);
+    const div=document.createElement('div'); div.className='shopItem';
+    div.innerHTML='<span class="nm"><b>'+up.name+'</b> <span style="color:#8a6a10">'+('★'.repeat(lvl))+('☆'.repeat(up.max-lvl))+'</span><br><small>'+up.desc+'</small></span>'+(maxed?'<span style="color:#5c8a3c;font-weight:bold;">MAX</span>':'<span class="goldTag">'+cost+'🪙</span>');
+    if(!maxed){
+      const b=document.createElement('button'); b.className='pbtn small'; b.textContent='Enact';
+      b.disabled=SV.gold<cost;
+      b.onclick=()=>{SV.gold-=cost;SV.up[up.key]++;AudioSys.sfx('coin');saveGame();renderCamp();};
+      div.appendChild(b);
+    }
+    ul.appendChild(div);
+  });
+  $('btnToBattle').textContent= SV.unlocked>=BATTLES.length? '⚔ Endless Skirmish' : '⚔ March to Battle '+(SV.unlocked+1);
+}
+
+/* ---------- pause / settings / help ---------- */
+function pauseGame(on){
+  if(Game.screen!=='battle')return;
+  Game.paused=on;
+  $('ovPause').classList.toggle('on',on);
+}
+function openSettings(){
+  const s=SV.settings;
+  $('setVol').value=s.vol; $('setMus').value=s.mus; $('setSfx').value=s.sfx;
+  $('setVolV').textContent=s.vol; $('setMusV').textContent=s.mus; $('setSfxV').textContent=s.sfx;
+  $('setMute').checked=s.muted; $('setShake').checked=s.shake;
+  $('ovSettings').classList.add('on');
+}
+['setVol','setMus','setSfx'].forEach(id=>{
+  $(id).addEventListener('input',()=>{
+    SV.settings.vol=+$('setVol').value; SV.settings.mus=+$('setMus').value; SV.settings.sfx=+$('setSfx').value;
+    $('setVolV').textContent=SV.settings.vol; $('setMusV').textContent=SV.settings.mus; $('setSfxV').textContent=SV.settings.sfx;
+    AudioSys.applyVol(); saveGame();
+  });
+});
+$('setMute').addEventListener('change',()=>{SV.settings.muted=$('setMute').checked;AudioSys.applyVol();saveGame();});
+$('setShake').addEventListener('change',()=>{SV.settings.shake=$('setShake').checked;saveGame();});
+$('btnWipe').onclick=()=>{
+  if(confirm('Erase all progress?')){ SV=defaultSave(); saveGame(); AudioSys.applyVol(); $('ovSettings').classList.remove('on'); showTitle(); }
+};
+$('btnCloseSet').onclick=()=>{AudioSys.sfx('ui');$('ovSettings').classList.remove('on');};
+$('btnCloseHelp').onclick=()=>{AudioSys.sfx('ui');$('ovHelp').classList.remove('on');};
+function openHelp(){$('ovHelp').classList.add('on');}
+
+/* ---------- buttons ---------- */
+$('btnNew').onclick=()=>{
+  AudioSys.sfx('ui');
+  if(SV.stats.battles>0&&!confirm('Start a fresh campaign? (gold, roster & progress reset; settings kept)'))return;
+  const st=SV.settings; SV=defaultSave(); SV.settings=st; saveGame(); showCamp();
+};
+$('btnContinue').onclick=()=>{AudioSys.sfx('ui');showCamp();};
+$('btnSkirmish').onclick=()=>{AudioSys.sfx('ui');startBattle(0,true);};
+$('btnHelpT').onclick=()=>{AudioSys.sfx('ui');openHelp();};
+$('btnSetT').onclick=()=>{AudioSys.sfx('ui');openSettings();};
+$('btnHelpC').onclick=()=>{AudioSys.sfx('ui');openHelp();};
+$('btnSetC').onclick=()=>{AudioSys.sfx('ui');openSettings();};
+$('btnTitleC').onclick=()=>{AudioSys.sfx('ui');showTitle();};
+$('btnToBattle').onclick=()=>{AudioSys.sfx('ui'); if(SV.unlocked>=BATTLES.length)startBattle(0,true); else startBattle(SV.unlocked,false);};
+$('btnEndTurn').onclick=()=>{AudioSys.sfx('ui');endTurn();};
+$('btnWait').onclick=()=>waitAction();
+$('btnPause').onclick=()=>{AudioSys.sfx('ui');pauseGame(true);};
+$('btnResume').onclick=()=>{AudioSys.sfx('ui');pauseGame(false);};
+$('btnHelpB').onclick=()=>{AudioSys.sfx('ui');openHelp();};
+$('btnHelpP').onclick=()=>{AudioSys.sfx('ui');openHelp();};
+$('btnSetP').onclick=()=>{AudioSys.sfx('ui');openSettings();};
+$('btnRetreat').onclick=()=>{AudioSys.sfx('ui');pauseGame(false);showCamp();};
+$('btnChampSkirmish').onclick=()=>{AudioSys.sfx('ui');$('ovChampion').classList.remove('on');startBattle(0,true);};
+$('btnChampCamp').onclick=()=>{AudioSys.sfx('ui');$('ovChampion').classList.remove('on');showCamp();};
+$('btnChampNew').onclick=()=>{
+  AudioSys.sfx('ui');
+  if(!confirm('Begin a new campaign from the start?'))return;
+  const st=SV.settings,sk=SV.skirmishUnlocked; SV=defaultSave(); SV.settings=st; SV.skirmishUnlocked=sk; saveGame();
+  $('ovChampion').classList.remove('on'); showCamp();
+};
+
+/* ---------- keyboard ---------- */
+window.addEventListener('keydown',ev=>{
+  const k=ev.key;
+  if(k==='m'||k==='M'){SV.settings.muted=!SV.settings.muted;AudioSys.applyVol();saveGame();if($('ovSettings').classList.contains('on'))$('setMute').checked=SV.settings.muted;return;}
+  if(k==='h'||k==='H'){ if($('ovHelp').classList.contains('on'))$('ovHelp').classList.remove('on'); else openHelp(); return;}
+  if(k==='Escape'){
+    if($('ovHelp').classList.contains('on')){$('ovHelp').classList.remove('on');return;}
+    if($('ovSettings').classList.contains('on')){$('ovSettings').classList.remove('on');return;}
+    if(Game.screen==='battle'&&!Game.B?.over){
+      if(Game.paused){pauseGame(false);}
+      else if(Game.B&&Game.B.sel){deselect();}
+      else pauseGame(true);
+    }
+    return;
+  }
+  if(Game.screen!=='battle'||Game.paused||$('ovHelp').classList.contains('on')||$('ovSettings').classList.contains('on'))return;
+  if(k==='Enter'||k==='e'||k==='E'){ev.preventDefault();endTurn();}
+  if(k==='w'||k==='W')waitAction();
+  if(k==='Tab'){ev.preventDefault();cycleUnit();}
+});
+
+/* ---------- boot ---------- */
+AudioSys.applyVol&&AudioSys.applyVol();
+fitCanvas();
+showTitle();
+</script>
+</body>
+</html>
