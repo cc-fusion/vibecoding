@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORDERFLOW — Market Microstructure Lab</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  *{font-family:'Inter',system-ui,sans-serif}
+  .mono{font-family:'JetBrains Mono',monospace}
+  body{background:#070908;color:#e7efe9}
+  .panel{background:#0e1310;border:1px solid #1f2b23;border-radius:14px}
+  .panel2{background:#121915;border:1px solid #26382c;border-radius:12px}
+  .btn{transition:all .15s ease;cursor:pointer}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.12)}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.38;cursor:not-allowed;transform:none}
+  .selectedCard{border-color:#a3e635!important;background:#162014!important;box-shadow:0 0 0 1px #a3e635 inset}
+  .selectedDiff{background:#a3e635!important;color:#0a0f0a!important;border-color:#a3e635!important}
+  .selectedSpeed{background:#eab308!important;color:#111!important}
+  .bookbar{height:100%;position:absolute;right:0;top:0;opacity:.16}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(8px) scale(.95)}15%{opacity:1}100%{opacity:0;transform:translateY(-52px) scale(1.05)}}
+  .floatVal{animation:floatUp 1.4s ease forwards}
+  @keyframes pulseRed{0%,100%{background:#7f1d1d}50%{background:#dc2626}}
+  .haltPulse{animation:pulseRed 1s infinite}
+  @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+  .toastIn{animation:slideIn .25s ease}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+  .shake{animation:shake .45s ease}
+  input[type=range]{accent-color:#a3e635}
+  select,input{background:#0a0f0c;border:1px solid #2a3a2f;border-radius:8px;color:#e7efe9;outline:none}
+  select:focus,input:focus{border-color:#a3e635}
+  ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#2e4535;border-radius:99px}::-webkit-scrollbar-track{background:#0b100d}
+  .tapeRow{animation:slideIn .2s ease}
+  .confetti{position:absolute;width:8px;height:14px;top:-20px;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(560px) rotate(720deg);opacity:0}}
+  .tabActive{background:#a3e635!important;color:#0b100b!important}
+  .glowText{text-shadow:0 0 24px rgba(163,230,53,.35)}
+</style>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+
+<!-- ================= TITLE SCREEN ================= -->
+<div id="titleScreen" class="min-h-screen flex flex-col">
+  <header class="max-w-7xl w-full mx-auto px-4 pt-6 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-xl bg-lime-400 flex items-center justify-center text-black font-black text-xl mono">Ø</div>
+      <div><div class="font-black tracking-widest text-lg leading-none">ORDERFLOW</div><div class="text-[11px] tracking-[.25em] text-lime-300/80 mono">MARKET MICROSTRUCTURE LAB</div></div>
+    </div>
+    <div class="flex gap-2">
+      <button id="titleHelpBtn" class="btn px-4 py-2 rounded-lg border border-lime-500/40 text-lime-300 text-sm font-semibold">How to Play</button>
+      <button id="titleSettingsBtn" class="btn px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-sm font-semibold">Settings</button>
+      <button id="muteBtnTitle" class="btn px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm mono">SOUND ON</button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl w-full mx-auto px-4 pb-10 flex-1">
+    <div class="text-center mt-8 mb-8">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-lime-500/30 bg-lime-500/10 text-lime-300 text-xs mono tracking-widest">● LIVE ORDER BOOK &nbsp;•&nbsp; 58 AGENT TRADERS &nbsp;•&nbsp; FLASH-CRASH PHYSICS</div>
+      <h1 class="text-5xl md:text-7xl font-black tracking-tight mt-4">Trade the <span class="text-lime-400 glowText">machine</span><br class="hidden md:block"> behind the price.</h1>
+      <p class="text-zinc-400 max-w-2xl mx-auto mt-4 text-sm md:text-base leading-relaxed">A real limit order book populated by market makers, momentum funds, mean-reverters, noise traders, informed insiders and HFTs. A hidden fundamental value moves underneath — news shocks it, liquidity vanishes, circuit breakers trip. Your desk, your margin, your P&amp;L.</p>
+      <div id="metaBar" class="flex flex-wrap justify-center gap-2 mt-5 text-xs mono"></div>
+    </div>
+
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+      <h2 class="font-bold tracking-wide text-sm text-zinc-300">1 &nbsp;CHOOSE A TRADING DAY</h2>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="text-zinc-500 mono">DIFFICULTY</span>
+        <button data-diff="novice" class="diffBtn btn px-3 py-1.5 rounded-lg border border-white/15 font-bold">NOVICE · 3× margin</button>
+        <button data-diff="pro" class="diffBtn btn px-3 py-1.5 rounded-lg border border-white/15 font-bold">PRO · 2× margin</button>
+        <button data-diff="desk" class="diffBtn btn px-3 py-1.5 rounded-lg border border-white/15 font-bold">DESK · 1.5× · wild vol</button>
+      </div>
+    </div>
+    <div id="scenarioGrid" class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"></div>
+
+    <div class="grid md:grid-cols-3 gap-3 mt-4 text-xs">
+      <div class="panel p-4"><div class="text-lime-300 font-bold mb-1">THE BOOK IS REAL</div><p class="text-zinc-400 leading-relaxed">Every quote is an order from an agent with cash, inventory and a strategy. Cross the spread and you trade against them — price-time priority, slippage and fees included.</p></div>
+      <div class="panel p-4"><div class="text-amber-300 font-bold mb-1">LIQUIDITY CAN VANISH</div><p class="text-zinc-400 leading-relaxed">Market makers widen and pull quotes when volatility clusters. That is how a bad minute becomes a flash crash — and how circuit breakers save (or trap) you.</p></div>
+      <div class="panel p-4"><div class="text-red-300 font-bold mb-1">MARGIN IS A CLIFF</div><p class="text-zinc-400 leading-relaxed">Leverage multiplies everything. Breach maintenance margin and you get a call; breach liquidation and the desk closes you out at the worst price of the day.</p></div>
+    </div>
+
+    <div class="flex flex-wrap gap-3 mt-6 justify-center">
+      <button id="startBtn" class="btn px-8 py-4 rounded-xl bg-lime-400 text-black font-black text-base tracking-wide shadow-[0_10px_40px_rgba(163,230,53,.25)]">▶ &nbsp;OPEN THE DESK</button>
+      <button id="continueBtn" class="btn px-6 py-4 rounded-xl bg-white/5 border border-white/15 font-bold hidden">Continue Saved Desk</button>
+      <button id="resetProgressBtn" class="btn px-5 py-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-sm">Reset Campaign</button>
+    </div>
+    <p class="text-center text-[11px] text-zinc-600 mono mt-4">KEYS: SPACE pause · B buy · S sell · 1–4 speed · H help · ESC menu &nbsp;|&nbsp; Progress auto-saves locally</p>
+  </main>
+</div>
+
+<!-- ================= MAIN APP ================= -->
+<div id="app" class="hidden min-h-screen flex flex-col">
+  <!-- halt banner -->
+  <div id="haltBanner" class="hidden haltPulse text-center text-white font-black tracking-widest text-sm py-2 px-3">⛔ CIRCUIT BREAKER — TRADING HALTED <span id="haltCount" class="mono"></span> · Orders rejected until the book re-opens</div>
+  <div id="marginBanner" class="hidden bg-amber-500 text-black text-center font-bold text-xs py-1.5 px-3">⚠ MARGIN CALL — equity is below maintenance. Reduce position or add profits before forced liquidation.</div>
+
+  <header class="border-b border-[#1f2b23] bg-[#0a0e0b]/95 sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-3 py-2 flex flex-wrap items-center gap-2">
+      <button id="backTitleBtn" class="btn text-left leading-none"><div class="font-black tracking-widest">ORDERFLOW</div><div class="text-[9px] tracking-[.22em] text-lime-300/70 mono" id="scenarioNameLbl">—</div></button>
+      <div class="panel2 px-3 py-1.5 min-w-[130px]"><div class="text-[9px] text-zinc-500 mono tracking-widest">LAST · <span id="symLbl">ACME</span></div><div class="flex items-baseline gap-2"><span id="priceLbl" class="mono font-black text-xl">$100.00</span><span id="chgLbl" class="mono text-xs font-bold text-lime-400">+0.00%</span></div></div>
+      <div class="panel2 px-3 py-1.5"><div class="text-[9px] text-zinc-500 mono tracking-widest">BID / ASK · SPREAD</div><div class="mono text-sm"><span id="bidLbl" class="text-lime-400 font-bold">—</span> / <span id="askLbl" class="text-red-400 font-bold">—</span> <span id="spreadLbl" class="text-zinc-400 text-xs"></span></div></div>
+      <div class="panel2 px-3 py-1.5 hidden md:block"><div class="text-[9px] text-zinc-500 mono tracking-widest">FUNDAMENTAL (EST.)</div><div class="mono text-sm text-cyan-300" id="fvLbl">~$100.00</div></div>
+      <div class="panel2 px-3 py-1.5 hidden lg:block"><div class="text-[9px] text-zinc-500 mono tracking-widest">REALIZED VOL · REGIME</div><div class="mono text-sm"><span id="volLbl">—</span> <span id="regimeLbl" class="text-amber-300 text-xs"></span></div></div>
+      <div class="flex-1"></div>
+      <div class="panel2 px-3 py-1.5"><div class="text-[9px] text-zinc-500 mono tracking-widest">EQUITY</div><div id="equityLbl" class="mono font-black text-base">$100,000</div></div>
+      <div class="panel2 px-3 py-1.5"><div class="text-[9px] text-zinc-500 mono tracking-widest">DAY P&amp;L</div><div id="pnlLbl" class="mono font-black text-base text-lime-400">$0</div></div>
+      <div class="flex items-center gap-1">
+        <button id="pauseBtn" class="btn px-3 py-2 rounded-lg bg-yellow-400 text-black font-black text-sm">❚❚</button>
+        <div class="flex rounded-lg overflow-hidden border border-white/15">
+          <button data-speed="0.5" class="speedBtn btn px-2.5 py-2 text-xs mono font-bold bg-white/5">0.5×</button>
+          <button data-speed="1" class="speedBtn btn px-2.5 py-2 text-xs mono font-bold bg-white/5">1×</button>
+          <button data-speed="2" class="speedBtn btn px-2.5 py-2 text-xs mono font-bold bg-white/5">2×</button>
+          <button data-speed="4" class="speedBtn btn px-2.5 py-2 text-xs mono font-bold bg-white/5">4×</button>
+        </div>
+        <button id="soundBtn" class="btn px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs mono font-bold">SOUND</button>
+        <button id="helpBtn" class="btn px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-bold">?</button>
+        <button id="menuBtn" class="btn px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-bold">MENU</button>
+      </div>
+    </div>
+    <div class="max-w-[1600px] mx-auto px-3 pb-2 flex items-center gap-3 text-[11px] mono">
+      <span id="clockLbl" class="text-zinc-300 font-bold">09:30</span>
+      <div class="flex-1 h-2 rounded-full bg-white/5 overflow-hidden"><div id="dayProg" class="h-full bg-lime-400 rounded-full" style="width:0%"></div></div>
+      <span class="text-zinc-500">TARGET</span><span id="targetLbl" class="text-lime-300 font-bold"></span>
+      <div class="w-40 h-2 rounded-full bg-white/5 overflow-hidden hidden sm:block"><div id="targetProg" class="h-full bg-cyan-400 rounded-full" style="width:0%"></div></div>
+      <span id="edgeLbl" class="text-amber-300 font-bold">◆ 0 EDGE</span>
+    </div>
+  </header>
+
+  <main class="max-w-[1600px] w-full mx-auto px-3 py-3 grid gap-3 xl:grid-cols-[290px_minmax(0,1fr)_310px] flex-1">
+    <!-- LEFT: player desk -->
+    <section class="space-y-3 order-2 xl:order-1">
+      <div class="panel p-3">
+        <div class="flex items-center justify-between"><h3 class="font-black text-sm tracking-wide">YOUR DESK</h3><span id="posLbl" class="mono text-xs px-2 py-0.5 rounded bg-white/5">FLAT</span></div>
+        <div class="grid grid-cols-3 gap-2 mt-2 text-center">
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">CASH</div><div id="cashLbl" class="mono font-bold text-sm">$100k</div></div>
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">AVG ENTRY</div><div id="avgLbl" class="mono font-bold text-sm">—</div></div>
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">UNREALIZED</div><div id="unrealLbl" class="mono font-bold text-sm">$0</div></div>
+        </div>
+        <div class="mt-2">
+          <div class="flex justify-between text-[10px] mono text-zinc-500"><span>MARGIN USED</span><span id="marginTxt">0%</span></div>
+          <div class="h-2.5 rounded-full bg-white/5 overflow-hidden mt-1"><div id="marginBar" class="h-full bg-lime-400 rounded-full" style="width:0%"></div></div>
+          <div class="flex justify-between text-[10px] mono mt-1"><span class="text-zinc-600">MAINTENANCE</span><span id="liqLbl" class="text-red-300">LIQ. —</span></div>
+        </div>
+        <label class="text-[10px] mono text-zinc-500 block mt-3">QUANTITY (shares) · <span class="text-zinc-300">keys ↑/↓</span></label>
+        <div class="flex gap-1 mt-1">
+          <input id="qtyInput" type="number" value="100" min="1" step="10" class="mono w-full px-2 py-2 text-sm font-bold">
+          <button class="qtyQuick btn px-2 rounded-lg bg-white/5 border border-white/10 text-xs mono" data-q="50">50</button>
+          <button class="qtyQuick btn px-2 rounded-lg bg-white/5 border border-white/10 text-xs mono" data-q="250">250</button>
+          <button class="qtyQuick btn px-2 rounded-lg bg-white/5 border border-white/10 text-xs mono" data-q="1000">1k</button>
+        </div>
+        <div class="flex gap-1 mt-2">
+          <button id="typeMkt" class="ordType btn flex-1 py-1.5 rounded-lg bg-lime-400 text-black text-xs font-black">MARKET</button>
+          <button id="typeLmt" class="ordType btn flex-1 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-black">LIMIT</button>
+        </div>
+        <div id="limitRow" class="hidden mt-2 items-center gap-2"><span class="text-[10px] mono text-zinc-500">LIMIT $</span><input id="limitInput" type="number" step="0.05" class="mono flex-1 px-2 py-1.5 text-sm font-bold"><span class="text-[10px] text-zinc-600">click chart to set</span></div>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          <button id="buyBtn" class="btn py-3.5 rounded-xl bg-lime-500 text-black font-black">BUY <span class="mono text-xs" id="buyPxLbl"></span></button>
+          <button id="sellBtn" class="btn py-3.5 rounded-xl bg-red-500 text-white font-black">SELL <span class="mono text-xs" id="sellPxLbl"></span></button>
+        </div>
+        <button id="flattenBtn" class="btn w-full mt-2 py-2 rounded-lg bg-white/5 border border-white/15 text-xs font-bold">FLATTEN POSITION (market)</button>
+        <div class="grid grid-cols-2 gap-2 mt-2 text-[11px]">
+          <label class="panel2 p-2 block">STOP-LOSS $<input id="stopInput" type="number" step="0.5" placeholder="off" class="mono w-full mt-1 px-2 py-1 text-xs"></label>
+          <label class="panel2 p-2 block">TAKE-PROFIT $<input id="tpInput" type="number" step="0.5" placeholder="off" class="mono w-full mt-1 px-2 py-1 text-xs"></label>
+        </div>
+        <p id="deskMsg" class="text-[11px] text-zinc-400 mt-2 min-h-[16px] mono"></p>
+      </div>
+
+      <div class="panel p-3">
+        <div class="flex items-center justify-between"><h3 class="font-black text-sm">ALGO BOT <span class="text-[9px] mono text-zinc-500">BUILD YOUR EDGE</span></h3><button id="botToggle" class="btn px-3 py-1 rounded-full bg-white/5 border border-white/15 text-xs font-black">OFF</button></div>
+        <div class="space-y-2 mt-2 text-[11px]">
+          <div><div class="flex justify-between mono text-zinc-400"><span>STRATEGY</span></div>
+            <div class="flex gap-1 mt-1"><button data-botstrat="momentum" class="botStrat btn flex-1 py-1.5 rounded-lg bg-white/5 border border-white/10 font-bold">MOMENTUM</button><button data-botstrat="meanrev" class="botStrat btn flex-1 py-1.5 rounded-lg bg-white/5 border border-white/10 font-bold">MEAN-REV</button><button data-botstrat="value" class="botStrat btn flex-1 py-1.5 rounded-lg bg-white/5 border border-white/10 font-bold">VALUE vs FV</button></div></div>
+          <div><div class="flex justify-between mono text-zinc-400"><span>SIGNAL THRESHOLD</span><span id="botThrVal" class="text-lime-300">0.60%</span></div><input id="botThr" type="range" min="10" max="300" value="60" class="w-full"></div>
+          <div><div class="flex justify-between mono text-zinc-400"><span>ORDER SIZE</span><span id="botSizeVal" class="text-lime-300">120 sh</span></div><input id="botSize" type="range" min="20" max="600" step="20" value="120" class="w-full"></div>
+          <div><div class="flex justify-between mono text-zinc-400"><span>MAX POSITION</span><span id="botMaxVal" class="text-lime-300">600 sh</span></div><input id="botMax" type="range" min="100" max="3000" step="100" value="600" class="w-full"></div>
+          <p class="text-zinc-500 leading-relaxed">The bot trades <i>your</i> account on the live book. Bad parameters lose real money — tune, watch, iterate.</p>
+          <div id="botStat" class="mono text-zinc-400">bot trades: 0 · bot P&amp;L $0</div>
+        </div>
+      </div>
+
+      <div class="panel p-3">
+        <h3 class="font-black text-sm">DESK UPGRADES <span class="text-[9px] mono text-amber-300">◆ EDGE = profitable closes + milestones</span></h3>
+        <div id="upgradeList" class="space-y-2 mt-2"></div>
+      </div>
+
+      <div id="tutorialPanel" class="panel p-3 border-lime-500/40 hidden">
+        <h3 class="font-black text-sm text-lime-300">FIRST-DAY CHECKLIST</h3>
+        <ul id="tutorialList" class="text-xs space-y-1.5 mt-2 text-zinc-300"></ul>
+      </div>
+    </section>
+
+    <!-- CENTER -->
+    <section class="space-y-3 order-1 xl:order-2 min-w-0">
+      <div class="panel p-3 relative overflow-hidden" id="chartPanel">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <div class="flex rounded-lg overflow-hidden border border-white/10">
+            <button id="chartLineBtn" class="btn px-3 py-1.5 text-xs font-bold tabActive">LINE</button>
+            <button id="chartCandleBtn" class="btn px-3 py-1.5 text-xs font-bold bg-white/5">CANDLES</button>
+          </div>
+          <span class="text-[10px] mono text-zinc-500">— PRICE &nbsp;<span class="text-cyan-300">- - FUNDAMENTAL VALUE</span>&nbsp; · click chart = set limit price</span>
+          <div class="flex-1"></div>
+          <span id="tapeFlash" class="mono text-xs font-bold"></span>
+        </div>
+        <div class="relative"><canvas id="mainChart" class="w-full rounded-lg bg-[#090d0a] cursor-crosshair" height="300"></canvas><div id="floatLayer" class="absolute inset-0 pointer-events-none overflow-hidden"></div></div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-center">
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">VOLUME</div><div id="statVol" class="mono font-bold">0</div></div>
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">TRADES</div><div id="statTrades" class="mono font-bold">0</div></div>
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">BOOK IMBALANCE</div><div id="statImb" class="mono font-bold">—</div></div>
+          <div class="panel2 p-2"><div class="text-[9px] text-zinc-500 mono">YOUR WIN RATE / SHARPE</div><div id="statWin" class="mono font-bold">—</div></div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="panel p-3">
+          <div class="flex justify-between items-center"><h3 class="font-black text-sm">ORDER BOOK</h3><span class="text-[10px] mono text-zinc-500">price · size · total</span></div>
+          <div id="bookAsks" class="mono text-[11px] mt-2 space-y-[2px]"></div>
+          <div class="flex justify-between items-center border-y border-white/10 my-1.5 py-1 mono text-xs"><span class="text-zinc-500">SPREAD</span><span id="bookSpread" class="font-bold">—</span><span id="bookMid" class="text-zinc-400"></span></div>
+          <div id="bookBids" class="mono text-[11px] space-y-[2px]"></div>
+        </div>
+        <div class="panel p-3">
+          <h3 class="font-black text-sm mb-2">DEPTH <span class="text-[9px] mono text-zinc-500">CUMULATIVE SHARES</span></h3>
+          <canvas id="depthChart" class="w-full rounded-lg bg-[#090d0a]" height="150"></canvas>
+          <h3 class="font-black text-sm mt-3 mb-1">VOLATILITY &amp; SPREAD</h3>
+          <canvas id="volChart" class="w-full rounded-lg bg-[#090d0a]" height="70"></canvas>
+        </div>
+      </div>
+
+      <div class="panel p-3">
+        <div class="flex flex-wrap gap-2 items-center"><h3 class="font-black text-sm">STRESS-TEST DIRECTOR</h3><span class="text-[10px] mono text-zinc-500">inject shocks · watch the systems cascade (cooldowns apply)</span></div>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button data-shock="bullnews" class="shockBtn btn px-3 py-2 rounded-lg bg-lime-500/15 border border-lime-500/40 text-lime-300 text-xs font-bold">▲ Bull News</button>
+          <button data-shock="bearnews" class="shockBtn btn px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-bold">▼ Bear News</button>
+          <button data-shock="whalebuy" class="shockBtn btn px-3 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 text-xs font-bold">Whale Buy 4,000</button>
+          <button data-shock="whaledump" class="shockBtn btn px-3 py-2 rounded-lg bg-orange-500/15 border border-orange-500/40 text-orange-300 text-xs font-bold">Whale Dump 4,000</button>
+          <button data-shock="drain" class="shockBtn btn px-3 py-2 rounded-lg bg-purple-500/15 border border-purple-400/40 text-purple-300 text-xs font-bold">Liquidity Drain</button>
+          <button data-shock="rumor" class="shockBtn btn px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold">False Rumor</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <section class="space-y-3 order-3">
+      <div class="panel p-3">
+        <h3 class="font-black text-sm">TIME &amp; SALES</h3>
+        <div id="tape" class="mono text-[11px] mt-2 space-y-[3px] max-h-[210px] overflow-y-auto pr-1"></div>
+      </div>
+      <div class="panel p-3">
+        <h3 class="font-black text-sm">AGENT LEADERBOARD <span class="text-[9px] mono text-zinc-500">P&amp;L TODAY</span></h3>
+        <div id="leaderboard" class="mt-2 space-y-1.5 text-xs"></div>
+        <div id="stratSummary" class="grid grid-cols-3 gap-1 mt-3 text-center text-[10px] mono"></div>
+      </div>
+      <div class="panel p-3">
+        <h3 class="font-black text-sm text-amber-300">NEWS &amp; EVENTS</h3>
+        <div id="eventLog" class="mt-2 space-y-2 text-xs max-h-[260px] overflow-y-auto pr-1"></div>
+      </div>
+      <div class="panel p-3">
+        <h3 class="font-black text-sm">SESSION STATS</h3>
+        <canvas id="equityChart" class="w-full rounded-lg bg-[#090d0a] mt-2" height="90"></canvas>
+        <div class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px] mono text-zinc-400">
+          <span>Realized P&amp;L</span><span id="stReal" class="text-right text-zinc-200">$0</span>
+          <span>Fees + slippage paid</span><span id="stFees" class="text-right text-zinc-200">$0</span>
+          <span>Max drawdown</span><span id="stDD" class="text-right text-zinc-200">0%</span>
+          <span>Best / worst trade</span><span id="stBest" class="text-right text-zinc-200">—</span>
+          <span>Halts survived</span><span id="stHalts" class="text-right text-zinc-200">0</span>
+          <span>Edge earned</span><span id="stEdge" class="text-right text-amber-300">◆ 0</span>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="toasts" class="fixed bottom-4 right-4 z-50 space-y-2 w-[300px] max-w-[90vw]"></div>
+</div>
+
+<!-- ================= MODALS ================= -->
+<div id="helpModal" class="hidden fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-3">
+  <div class="panel max-w-2xl w-full max-h-[88vh] overflow-y-auto p-5">
+    <div class="flex justify-between items-center"><h2 class="font-black text-xl">How to run this desk</h2><button class="closeHelp btn px-3 py-1 rounded-lg bg-white/5 border border-white/10 font-bold">✕</button></div>
+    <div class="text-sm text-zinc-300 space-y-3 mt-3 leading-relaxed">
+      <p><b class="text-lime-300">Goal.</b> Grow your equity to the scenario target before the closing bell — without getting margin-liquidated. Each scenario changes volatility, news flow and the hidden fundamental trend.</p>
+      <p><b class="text-lime-300">The book.</b> Green bids / red asks in the centre are real resting orders from 58 agents. <b>Market</b> orders cross the spread instantly (paying spread + slippage + fees). <b>Limit</b> orders rest in the book and may earn the spread — click the chart to set a limit price.</p>
+      <p><b class="text-lime-300">Read the market.</b> Price chases a hidden <span class="text-cyan-300">fundamental value</span> (dashed line, shown as a noisy estimate). Momentum agents chase trends, mean-reverters fade extremes, informed traders already know the fundamental, HFTs pick off stale quotes. Watch depth imbalance and the tape to see who is winning.</p>
+      <p><b class="text-lime-300">Risk.</b> Your margin bar shows gross exposure ÷ equity. Past 100% of your leverage you cannot add. Below maintenance you get a margin call; below liquidation the desk force-closes you and the day is failed. Stop-loss / take-profit fields auto-flatten you.</p>
+      <p><b class="text-lime-300">Bot &amp; upgrades.</b> Build an algo (strategy, threshold, size, cap) that trades your account, and spend ◆ EDGE — earned from profitable closes and milestones — on execution speed, a sharper fundamental feed, wider margin and auto-risk shields.</p>
+      <p><b class="text-lime-300">Chaos systems.</b> Volatility clusters (calm breeds calm, shocks breed shocks), market makers withdraw in panics, and a &gt;6% move in 30 minutes trips the circuit breaker. The Stress-Test Director lets you inject news, whales and liquidity drains to learn the cascades.</p>
+      <p class="mono text-xs text-zinc-400">KEYS — SPACE pause · B/S market buy/sell · ↑/↓ quantity · 1/2/3/4 speed (0.5/1/2/4×) · H help · ESC menu · F flatten</p>
+    </div>
+    <button class="closeHelp btn w-full mt-4 py-3 rounded-xl bg-lime-400 text-black font-black">START TRADING</button>
+  </div>
+</div>
+
+<div id="pauseModal" class="hidden fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-3">
+  <div class="panel max-w-sm w-full p-5 text-center">
+    <h2 class="font-black text-2xl">PAUSED</h2><p class="text-zinc-400 text-sm mt-1" id="pauseSub">The tape is frozen.</p>
+    <div class="space-y-2 mt-4">
+      <button id="resumeBtn" class="btn w-full py-3 rounded-xl bg-lime-400 text-black font-black">RESUME</button>
+      <button id="saveBtn" class="btn w-full py-2.5 rounded-xl bg-white/5 border border-white/15 font-bold text-sm">Save Desk Snapshot</button>
+      <button id="restartBtn" class="btn w-full py-2.5 rounded-xl bg-white/5 border border-white/15 font-bold text-sm">Restart This Day</button>
+      <button id="pauseSettingsBtn" class="btn w-full py-2.5 rounded-xl bg-white/5 border border-white/15 font-bold text-sm">Settings</button>
+      <button id="quitTitleBtn" class="btn w-full py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 font-bold text-sm">Quit to Title</button>
+    </div>
+  </div>
+</div>
+
+<div id="settingsModal" class="hidden fixed inset-0 z-[80] bg-black/80 flex items-center justify-center p-3">
+  <div class="panel max-w-sm w-full p-5">
+    <div class="flex justify-between items-center"><h2 class="font-black text-xl">Settings</h2><button id="closeSettings" class="btn px-3 py-1 rounded-lg bg-white/5 border border-white/10 font-bold">✕</button></div>
+    <div class="space-y-4 mt-4 text-sm">
+      <div><div class="flex justify-between mono text-xs text-zinc-400"><span>MASTER VOLUME</span><span id="volVal">70%</span></div><input id="volSlider" type="range" min="0" max="100" value="70" class="w-full"></div>
+      <label class="flex justify-between items-center">Mute all sound <input id="muteChk" type="checkbox" class="w-5 h-5"></label>
+      <label class="flex justify-between items-center">Show true fundamental (analyst mode) <input id="trueFvChk" type="checkbox" class="w-5 h-5"></label>
+      <label class="flex justify-between items-center">Trade sound on every print <input id="tapeSndChk" type="checkbox" checked class="w-5 h-5"></label>
+      <div><div class="mono text-xs text-zinc-400 mb-1">DEFAULT CHART</div><div class="flex gap-2"><button id="setLine" class="btn flex-1 py-2 rounded-lg bg-white/5 border border-white/10 font-bold text-xs">LINE</button><button id="setCandle" class="btn flex-1 py-2 rounded-lg bg-white/5 border border-white/10 font-bold text-xs">CANDLES</button></div></div>
+      <p class="text-[11px] text-zinc-500">Settings, campaign unlocks and best scores persist in this browser.</p>
+    </div>
+  </div>
+</div>
+
+<div id="endModal" class="hidden fixed inset-0 z-[90] bg-black/85 flex items-center justify-center p-3 overflow-y-auto">
+  <div class="panel max-w-lg w-full p-6 text-center relative overflow-hidden my-6">
+    <div id="confettiLayer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+    <div id="endBadge" class="inline-block px-3 py-1 rounded-full text-xs mono font-bold border">—</div>
+    <h2 id="endTitle" class="font-black text-3xl mt-3">DAY COMPLETE</h2>
+    <p id="endSub" class="text-zinc-400 text-sm mt-1"></p>
+    <div id="endStats" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 text-left"></div>
+    <div id="endUnlock" class="text-lime-300 text-sm font-bold mt-3"></div>
+    <div class="flex flex-wrap gap-2 mt-5 justify-center">
+      <button id="endRetry" class="btn px-5 py-3 rounded-xl bg-white/5 border border-white/15 font-bold text-sm">Retry Day</button>
+      <button id="endNext" class="btn px-5 py-3 rounded-xl bg-lime-400 text-black font-black text-sm hidden">Next Scenario ▶</button>
+      <button id="endTitleBtn" class="btn px-5 py-3 rounded-xl bg-white/5 border border-white/15 font-bold text-sm">Title Screen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fmt$=v=>{const s=v<0?'-':'';return s+'$'+Math.abs(Math.round(v)).toLocaleString('en-US')};
+const fmtPx=v=>'$'+Number(v).toFixed(2);
+
+/* ---------- persistence ---------- */
+let store={get(k,d){try{const v=localStorage.getItem('orderflow_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('orderflow_'+k,JSON.stringify(v))}catch(e){}}};
+let settings=Object.assign({vol:70,muted:false,trueFv:false,tapeSnd:true,chart:'line',diff:'pro'},store.get('settings',{}));
+let campaign=Object.assign({unlocked:1,best:{},xp:0,daysWon:0},store.get('campaign',{}));
+function saveSettings(){store.set('settings',settings)} function saveCampaign(){store.set('campaign',campaign)}
+
+/* ---------- audio ---------- */
+let AC=null,master=null,ambientNodes=[];
+function ensureAudio(){ if(AC) { if(AC.state==='suspended')AC.resume(); return;} try{ AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=settings.muted?0:settings.vol/100*0.5; master.connect(AC.destination); startAmbient(); }catch(e){} }
+function startAmbient(){ if(!AC||ambientNodes.length)return; const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter(); o.type='sine';o.frequency.value=55; f.type='lowpass';f.frequency.value=220; g.gain.value=0.015; o.connect(f);f.connect(g);g.connect(master); o.start(); ambientNodes=[o,g]; }
+function tone(fr,dur,type='sine',vol=0.15,slide=0){ if(!AC||settings.muted)return; const o=AC.createOscillator(),g=AC.createGain(); o.type=type;o.frequency.value=fr; if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,fr+slide),AC.currentTime+dur); g.gain.setValueAtTime(vol,AC.currentTime); g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur); o.connect(g);g.connect(master); o.start(); o.stop(AC.currentTime+dur); }
+function sndTrade(buy){ if(settings.tapeSnd) tone(buy?720:420,0.07,'square',0.05); }
+function sndNews(){ tone(520,.12,'triangle',.12); setTimeout(()=>tone(780,.15,'triangle',.12),90); }
+function sndAlarm(){ tone(220,.4,'sawtooth',.16,-120); setTimeout(()=>tone(220,.4,'sawtooth',.16,-120),450); }
+function sndWin(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,.22,'triangle',.14),i*110)); }
+function sndLose(){ [400,340,260,180].forEach((f,i)=>setTimeout(()=>tone(f,.25,'sawtooth',.1),i*130)); }
+function sndClick(){ tone(900,.05,'square',.04); }
+
+/* ---------- seeded rng ---------- */
+let seed=12345; function srand(s){seed=s>>>0} function rnd(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296} function gauss(){let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)} function pick(a){return a[Math.floor(rnd()*a.length)]}
+
+/* ---------- scenarios ---------- */
+const SCENARIOS=[
+ {id:'calm',sym:'ACME',name:'Open Bell',sub:'Calm Bull · Tutorial Day',desc:'A gentle uptrend, deep liquidity and patient market makers. Learn the book, cross the spread, ride the fundamental.',start:100000,target:115000,ticks:300,vol:0.0035,drift:0.00045,newsEvery:55,seed:101,crashAt:-1,diff:'EASY',color:'text-lime-300'},
+ {id:'choppy',sym:'VOLT',name:'Crosscurrents',sub:'Volatile Chop',desc:'No trend, violent swings. Mean-reverters feast, momentum bleeds. Fade extremes, respect the spread, survive the noise.',start:100000,target:128000,ticks:360,vol:0.0075,drift:0,newsEvery:34,seed:202,crashAt:-1,diff:'MEDIUM',color:'text-amber-300'},
+ {id:'crash',sym:'CRSH',name:'Liquidity Mirage',sub:'Flash-Crash Crisis',desc:'Everything looks fine — until minute 90, when the makers walk away. Survive the cascade, buy the capitulation, beat the close.',start:120000,target:132000,ticks:360,vol:0.005,drift:0.0002,newsEvery:44,seed:303,crashAt:90,diff:'HARD',color:'text-red-300'},
+ {id:'squeeze',sym:'SQZ',name:'The Squeeze',sub:'Capstone · Short Interest 68%',desc:'Crowded shorts, an informed buyer who knows the takeover price, and a rumor mill on fire. Reach the target or get carried out.',start:150000,target:205000,ticks:420,vol:0.009,drift:0.0003,newsEvery:26,seed:404,crashAt:210,diff:'CAPSTONE',color:'text-cyan-300'},
+];
+const DIFFS={novice:{lev:3,volMult:0.8,fee:0.0001,label:'NOVICE'},pro:{lev:2,volMult:1,fee:0.0002,label:'PRO'},desk:{lev:1.5,volMult:1.3,fee:0.0003,label:'DESK'}};
+const UPGRADES=[
+ {id:'exec',name:'Co-located Execution',desc:'-45% slippage & fees on market orders',cost:3},
+ {id:'feed',name:'Analyst-Grade Feed',desc:'Fundamental estimate error ÷3',cost:3},
+ {id:'margin',name:'Prime Brokerage',desc:'+1.0× leverage, liquidation line lowered',cost:4},
+ {id:'shield',name:'Auto Risk Shield',desc:'Auto-flatten at -8% equity drawdown, once per day',cost:4},
+ {id:'bot2',name:'Bot Overclock',desc:'Bot may trade 2× size & reacts every minute',cost:3},
+];
+
+/* ---------- state ---------- */
+let G=null, selectedScenario=0, orderType='market', chartMode=settings.chart||'line', botStrat='momentum';
+let tutState={};
+function newPortfolio(cash){return{cash,pos:0,avg:0,realized:0,fees:0,trades:0,wins:0,closedPnls:[]}}
+function makeAgents(){
+ const defs=[['Market Maker','MM',6],['Momentum Fund','MOM',10],['Mean Reverter','MR',10],['Noise Trader','NOISE',18],['Informed Desk','INF',6],['HFT','HFT',8]];
+ let arr=[],n=0;
+ defs.forEach(([label,type,count])=>{for(let i=0;i<count;i++){arr.push({id:n++,name:label+' '+(i+1),type,cash:400000+rnd()*900000,pos:Math.round((rnd()-0.5)*300),avg:100,realized:0,trades:0,skill:0.6+rnd()*0.4,active:true,stale:0});}});
+ return arr;
+}
+function initRun(idx){
+ const sc=SCENARIOS[idx], df=DIFFS[settings.diff];
+ srand(sc.seed + idx*777);
+ G={sc,idx,tick:0,timeMin:570,price:100,fv:100,anchor:100,lastTrade:100,vol:sc.vol*df.volMult,garch:0,halted:false,haltUntil:0,lastHalt:-999,halts:0,
+   bids:[],asks:[],tape:[],agents:makeAgents(),player:newPortfolio(sc.start),startCash:sc.start,lev:df.lev,
+   hist:[],fvHist:[],volHist:[],spreadHist:[],eqHist:[],candles:[],curCandle:null,volume:0,tradeCount:0,newsTimer:sc.newsEvery,
+   paused:false,speed:1,ended:false,mmWithdrawnUntil:0,crashDone:false,edge:0,upgrades:{},shieldUsed:false,bot:{on:false,trades:0,pnl:0,cool:0,lastReal:0},
+   stats:{peakEq:sc.start,maxDD:0,best:0,worst:0},shockCool:{},estFv:100,imb:0,rngNews:0,dayHigh:100,dayLow:100,open:100};
+ G.player.cash=sc.start;
+ // seed book
+ for(let i=0;i<14;i++){ addLimit(G.agents[i%6], 'buy', 100-(i+1)*0.04, 60+Math.round(rnd()*120), 999); addLimit(G.agents[i%6], 'sell', 100+(i+1)*0.04, 60+Math.round(rnd()*120), 999); }
+ G.hist.push(100);G.fvHist.push(100);G.eqHist.push(sc.start);
+ tutState={buy:false,sell:false,limit:false,botOrUpgrade:false,shock:false};
+ $('scenarioNameLbl').textContent=sc.sym+' · '+sc.name.toUpperCase(); $('symLbl').textContent=sc.sym;
+ $('targetLbl').textContent=fmt$(sc.target)+' by close';
+ document.querySelectorAll('.speedBtn').forEach(b=>b.classList.toggle('selectedSpeed',+b.dataset.speed===1));
+ renderUpgrades(); renderTutorial(); updateBotUI(); $('eventLog').innerHTML=''; $('tape').innerHTML='';
+ logEvent('Market open — '+sc.sym+' at $100.00. Target equity '+fmt$(sc.target)+' before the closing bell.','lime');
+ if(idx===0) toast('Tutorial day: follow the green checklist on your desk.','lime');
+ if(sc.crashAt>0) logEvent('Risk desk note: intraday liquidity has looked thin all morning. Watch the makers.','amber');
+}
+function equityOf(p){return p.cash + p.pos*G.price}
+function grossOf(p){return Math.abs(p.pos)*G.price}
+
+/* ---------- order book ---------- */
+function bestBid(){return G.bids.length?G.bids[0].price:null} function bestAsk(){return G.asks.length?G.asks[0].price:null}
+function midPrice(){const b=bestBid(),a=bestAsk(); if(b!=null&&a!=null)return(b+a)/2; if(b!=null)return b; if(a!=null)return a; return G.lastTrade;}
+function addLimit(owner,side,price,qty,life=40){
+ price=Math.round(price*100)/100; if(qty<=0||price<=0)return 0;
+ let remaining=qty;
+ // cross
+ if(side==='buy'){ while(remaining>0&&G.asks.length&&G.asks[0].price<=price){ const o=G.asks[0]; const q=Math.min(remaining,o.qty); executeTrade(owner,o.owner,o.price,q); o.qty-=q; remaining-=q; if(o.qty<=0)G.asks.shift(); } }
+ else { while(remaining>0&&G.bids.length&&G.bids[0].price>=price){ const o=G.bids[0]; const q=Math.min(remaining,o.qty); executeTrade(o.owner,owner,o.price,q); o.qty-=q; remaining-=q; if(o.qty<=0)G.bids.shift(); } }
+ if(remaining>0){ const ord={owner,side,price,qty:remaining,life}; if(side==='buy'){G.bids.push(ord);G.bids.sort((x,y)=>y.price-x.price);}else{G.asks.push(ord);G.asks.sort((x,y)=>x.price-y.price);} }
+ if(G.bids.length>500)G.bids.length=500; if(G.asks.length>500)G.asks.length=500;
+ return qty-remaining;
+}
+function marketOrder(owner,side,qty,isPlayer=false,tag=''){
+ if(G.halted){ if(isPlayer)deskMsg('⛔ Trading halted — order rejected.'); return 0; }
+ let remaining=qty, filled=0;
+ const slipBase = G.upgrades.exec?0.55:1;
+ if(side==='buy'){ while(remaining>0&&G.asks.length){ const o=G.asks[0]; const q=Math.min(remaining,o.qty); executeTrade(owner,o.owner,o.price,q,isPlayer); o.qty-=q; remaining-=q; filled+=q; if(o.qty<=0)G.asks.shift(); } }
+ else { while(remaining>0&&G.bids.length){ const o=G.bids[0]; const q=Math.min(remaining,o.qty); executeTrade(o.owner,owner,o.price,q,isPlayer); o.qty-=q; remaining-=q; filled+=q; if(o.qty<=0)G.bids.shift(); } }
+ if(remaining>0){ // external liquidity with impact
+   const impact=(remaining/3000)*G.price*(0.4+G.vol*60)*slipBase;
+   const px= side==='buy'? G.lastTrade+Math.max(0.03,impact) : G.lastTrade-Math.max(0.03,impact);
+   const ext={name:'External Liquidity',type:'EXT',cash:1e12,pos:0,avg:px,realized:0,trades:0};
+   if(side==='buy')executeTrade(owner,ext,px,remaining,isPlayer); else executeTrade(ext,owner,px,remaining,isPlayer);
+   filled+=remaining;
+ }
+ return filled;
+}
+function applyFill(p,side,qty,price){
+ const delta= side==='buy'? qty:-qty;
+ if(p.pos!==0 && Math.sign(p.pos)!==Math.sign(delta)){
+   const close=Math.min(Math.abs(p.pos),qty);
+   const pnl=close*(price-p.avg)*Math.sign(p.pos);
+   p.realized+=pnl; if(p===G.player){p.closedPnls.push(pnl); if(pnl>0){p.wins++; awardEdge(1,'Profitable close +1 ◆');} p.statsRef && 0;}
+   const rem=qty-close; p.pos+= Math.sign(p.pos)*-close; if(rem>0){p.pos+=Math.sign(delta)*rem;p.avg=price;} if(p.pos===0)p.avg=0;
+ } else { const newAbs=Math.abs(p.pos)+qty; p.avg= newAbs? (p.avg*Math.abs(p.pos)+price*qty)/newAbs : price; p.pos+=delta; }
+ p.cash -= delta*price; p.trades++;
+}
+function executeTrade(buyer,seller,price,qty,isPlayer=false){
+ if(qty<=0)return;
+ applyFill(buyer,'buy',qty,price); applyFill(seller,'sell',qty,price);
+ G.lastTrade=price; G.volume+=qty; G.tradeCount++;
+ const t={tick:G.tick,price,qty,side:buyer===G.player?'YOU-BUY':(seller===G.player?'YOU-SELL':(rnd()>0.5?'BUY':'SELL')),buyer:buyer.name,seller:seller.name,playerInvolved:buyer===G.player||seller===G.player};
+ G.tape.unshift(t); if(G.tape.length>120)G.tape.pop();
+ if(t.playerInvolved){ sndTrade(buyer===G.player); floatVal((buyer===G.player?'+':'−')+qty+' @ '+fmtPx(price), buyer===G.player?'#a3e635':'#f87171'); }
+ else if(G.tick%3===0 && qty>=150) sndTrade(rnd()>0.5);
+ // candle
+ const c=G.curCandle; if(c){c.h=Math.max(c.h,price);c.l=Math.min(c.l,price);c.c=price;c.v+=qty;}
+}
+function awardEdge(n,why){ if(!G)return; G.edge+=n; if(why)toast(why,'amber'); }
+
+/* ---------- player orders ---------- */
+function playerOrder(side,type){
+ if(!G||G.ended)return; ensureAudio();
+ const qty=clamp(Math.floor(+$('qtyInput').value||0),1,100000);
+ if(G.halted){deskMsg('⛔ Circuit breaker halt — no executions.');sndAlarm();return;}
+ const projPos=G.player.pos+(side==='buy'?qty:-qty);
+ const projGross=Math.abs(projPos)*G.price, eq=equityOf(G.player);
+ if(projGross> eq*G.lev*1.02 && Math.abs(projPos)>Math.abs(G.player.pos)){ deskMsg('Rejected: exceeds '+G.lev+'× margin. Equity '+fmt$(eq)+', exposure would be '+fmt$(projGross)+'.'); tone(180,.15,'sawtooth',.1); return; }
+ const before={pos:G.player.pos,real:G.player.realized};
+ let filled=0;
+ if(type==='market'){ const slipPx=G.lastTrade; filled=marketOrder(G.player,side,qty,true); }
+ else { const px=+$('limitInput').value||G.lastTrade; filled=addLimit(G.player,side,px,qty,240); tutState.limit=true; deskMsg(filled<qty?('Limit order resting: '+(qty-filled)+' @ '+fmtPx(px)+' — watch the book.'):'Limit filled instantly @ '+fmtPx(px)); }
+ if(filled>0){
+   const fee=filled*G.lastTrade*DIFFS[settings.diff].fee*(G.upgrades.exec?0.55:1);
+   G.player.fees+=fee; G.player.cash-=fee;
+   if(side==='buy')tutState.buy=true; else tutState.sell=true;
+   deskMsg((side==='buy'?'Bought ':'Sold ')+filled+' '+G.sc.sym+' @ ~'+fmtPx(G.lastTrade)+' · fee '+fmt$(fee));
+   flashTape(side==='buy');
+ }
+ renderTutorial();
+}
+function flatten(source='manual'){
+ if(!G||G.player.pos===0)return; const side=G.player.pos>0?'sell':'buy'; marketOrder(G.player,side,Math.abs(G.player.pos),true); deskMsg('Position flattened ('+source+').'); renderTutorial();
+}
+function deskMsg(m){$('deskMsg').textContent=m}
+function flashTape(up){const el=$('tapeFlash'); el.textContent=up?'▲ EXECUTED':'▼ EXECUTED'; el.style.color=up?'#a3e635':'#f87171'; setTimeout(()=>el.textContent='',1200);}
+function floatVal(txt,color){ const d=document.createElement('div'); d.className='floatVal mono font-black text-sm absolute'; d.style.left=(30+Math.random()*55)+'%'; d.style.top='55%'; d.style.color=color; d.textContent=txt; $('floatLayer').appendChild(d); setTimeout(()=>d.remove(),1450); }
+
+/* ---------- news & shocks ---------- */
+const NEWS=[
+ {t:'Earnings beat: {s} raises guidance, buyback expanded',fv:0.018,sent:1},{t:'Analyst upgrade: "{s} is mispriced vs fundamentals"',fv:0.010,sent:1},
+ {t:'Sector tailwind: institutional inflows into {s} peers',fv:0.008,sent:1},{t:'Earnings miss: {s} cuts outlook, CFO resigns',fv:-0.020,sent:-1},
+ {t:'Regulator opens probe into {s} accounting',fv:-0.014,sent:-1},{t:'Macro shock: rates spike, growth names dumped',fv:-0.011,sent:-1},
+ {t:'Viral rumor questions {s} product safety (unconfirmed)',fv:-0.006,sent:-1,rumor:true},{t:'Takeover chatter: bidder circling {s} (unconfirmed)',fv:0.012,sent:1,rumor:true},
+];
+function fireNews(forced){
+ const n=forced||pick(NEWS); const jump=n.fv*(0.7+rnd()*0.8);
+ G.fv*= (1+jump); G.anchor*= (1+jump*(n.rumor?0.25:0.8));
+ logEvent(n.t.replace('{s}',G.sc.sym)+' → fundamental '+(jump>=0?'+':'')+(jump*100).toFixed(1)+'%', jump>=0?'lime':'red');
+ toast((jump>=0?'▲ ':'▼ ')+n.t.replace('{s}',G.sc.sym), jump>=0?'lime':'red'); sndNews();
+ if(n.rumor) setTimeout(()=>{ if(G&&!G.ended){ G.fv/=(1+jump*0.7); logEvent('Rumor walked back — fundamental partially retraces.','amber'); } }, 9000/Math.max(0.5,G.speed));
+}
+function doShock(kind){
+ if(!G||G.ended)return; ensureAudio(); const now=G.tick; if(G.shockCool[kind]&&now<G.shockCool[kind]){toast('Director tool on cooldown ('+Math.ceil(G.shockCool[kind]-now)+' min)','amber');return;}
+ G.shockCool[kind]=now+45; tutState.shock=true;
+ const whale={name:'WHALE (Director)',type:'EXT',cash:1e10,pos:0,avg:G.price,realized:0,trades:0};
+ if(kind==='bullnews')fireNews(NEWS[0]); if(kind==='bearnews')fireNews(NEWS[3]);
+ if(kind==='rumor')fireNews(NEWS[6]);
+ if(kind==='whalebuy'){marketOrder(whale,'buy',4000); logEvent('WHALE: 4,000-share market buy sweeps the ask. Watch momentum pile in.','cyan');}
+ if(kind==='whaledump'){marketOrder(whale,'sell',4000); logEvent('WHALE: 4,000-share market sell hits every bid. Makers are scrambling.','red');}
+ if(kind==='drain'){G.mmWithdrawnUntil=G.tick+35; G.bids=G.bids.filter(o=>o.owner.type!=='MM'); G.asks=G.asks.filter(o=>o.owner.type!=='MM'); logEvent('LIQUIDITY DRAIN: market makers pull quotes for ~35 min. Spreads blow out.','purple');}
+ renderTutorial();
+}
+
+/* ---------- agents ---------- */
+function retLookback(n){ if(G.hist.length<n+1)return 0; return G.hist[G.hist.length-1]/G.hist[G.hist.length-1-n]-1; }
+function agentAct(a){
+ const mid=midPrice(), fv=G.fv;
+ if(a.type==='MM'){
+   if(G.tick<G.mmWithdrawnUntil) return;
+   const volWiden=1+G.garch*40; const half=(0.04+G.vol*14)*volWiden*(2-a.skill);
+   const skew=-a.pos*0.0006;
+   if(rnd()<0.55){ addLimit(a,'buy',mid-half+skew, 40+Math.round(rnd()*90*a.skill),14); addLimit(a,'sell',mid+half+skew, 40+Math.round(rnd()*90*a.skill),14); }
+ } else if(a.type==='HFT'){
+   if(rnd()<0.5){ const edge=fv-mid; if(Math.abs(edge)>0.06) marketOrder(a, edge>0?'buy':'sell', 10+Math.round(rnd()*30));
+     else if(rnd()<0.4){ addLimit(a, rnd()>0.5?'buy':'sell', mid+(rnd()-0.5)*0.06, 15+Math.round(rnd()*25), 3); } }
+ } else if(a.type==='INF'){
+   const edge=(fv-mid)/mid; if(Math.abs(edge)>0.0015&&rnd()<0.5){ const sz=clamp(Math.round(Math.abs(edge)*90000*a.skill),10,500); marketOrder(a, edge>0?'buy':'sell', sz); }
+   else if(rnd()<0.15) addLimit(a, edge>0?'buy':'sell', mid+(edge>0?-0.03:0.03), 60, 30);
+ } else if(a.type==='MOM'){
+   const r=retLookback(8); if(Math.abs(r)>0.0012&&rnd()<0.45) marketOrder(a, r>0?'buy':'sell', 20+Math.round(Math.abs(r)*16000*a.skill));
+ } else if(a.type==='MR'){
+   const dev=(mid-fv)/fv; if(Math.abs(dev)>0.002&&rnd()<0.45) marketOrder(a, dev<0?'buy':'sell', 20+Math.round(Math.abs(dev)*12000*a.skill));
+ } else { // noise
+   if(rnd()<0.22){ if(rnd()<0.6) marketOrder(a, rnd()>0.5?'buy':'sell', 5+Math.round(rnd()*45)); else addLimit(a, rnd()>0.5?'buy':'sell', mid+(rnd()-0.5)*1.4, 10+Math.round(rnd()*40), 25); }
+ }
+ // inventory mean-reversion safety for all
+ if(Math.abs(a.pos)>2200){ marketOrder(a, a.pos>0?'sell':'buy', 150); }
+}
+
+/* ---------- bot & upgrades ---------- */
+function botAct(){
+ const b=G.bot; if(!b.on||G.halted)return; b.cool--; const interval=G.upgrades.bot2?1:2; if(b.cool>0)return;
+ const size=(+$('botSize').value)*(G.upgrades.bot2?2:1), max=+ $('botMax').value, thr=(+$('botThr').value)/10000;
+ let signal=0;
+ if(botStrat==='momentum')signal=retLookback(10);
+ else if(botStrat==='meanrev')signal=(G.fv-midPrice())/midPrice()*0.6;
+ else signal=(G.estFv-midPrice())/midPrice();
+ const p=G.player;
+ if(Math.abs(signal)>thr){
+   if(signal>0&&p.pos<max){ marketOrder(p,'buy',Math.min(size,max-p.pos),true); b.trades++; b.cool=interval; }
+   if(signal<0&&p.pos>-max){ marketOrder(p,'sell',Math.min(size,max+p.pos),true); b.trades++; b.cool=interval; }
+ }
+ if(Math.abs(p.pos)>=max&&((signal>0&&p.pos<0)||(signal<0&&p.pos>0))){ flatten('bot cap'); b.trades++; b.cool=3; }
+ b.pnl=G.player.realized-b.lastReal;
+}
+function renderUpgrades(){
+ $('upgradeList').innerHTML=UPGRADES.map(u=>{const owned=G&&G.upgrades[u.id]; return `<div class="panel2 p-2 flex items-center gap-2"><div class="flex-1"><div class="font-bold text-xs">${u.name}</div><div class="text-[10px] text-zinc-500">${u.desc}</div></div>${owned?'<span class="text-lime-300 text-xs font-black mono">OWNED</span>':`<button data-upg="${u.id}" class="btn px-2.5 py-1.5 rounded-lg bg-amber-400 text-black text-xs font-black mono">◆ ${u.cost}</button>`}</div>`}).join('');
+ document.querySelectorAll('[data-upg]').forEach(b=>b.onclick=()=>buyUpgrade(b.dataset.upg));
+}
+function buyUpgrade(id){ const u=UPGRADES.find(x=>x.id===id); if(!G||G.upgrades[id])return; if(G.edge<u.cost){toast('Need ◆'+u.cost+' EDGE — close profitable trades to earn it.','amber');return;} G.edge-=u.cost; G.upgrades[id]=true; if(id==='margin'){G.lev+=1;} tutState.botOrUpgrade=true; toast('Upgrade installed: '+u.name,'lime'); tone(660,.15,'triangle',.12); renderUpgrades(); renderTutorial(); }
+
+/* ---------- simulation tick ---------- */
+function simTick(){
+ G.tick++; G.timeMin++;
+ // fundamental: random walk + pull to anchor + scenario drift
+ const shock=gauss()*G.vol*DIFFS[settings.diff].volMult*G.price;
+ G.garch=clamp(G.garch*0.86 + Math.abs(shock)/G.price*0.35 + (rnd()<0.02?0.004:0),0,0.03); // vol clustering
+ G.fv+= G.fv*G.sc.drift + shock*0.55 + (G.anchor-G.fv)*0.006; G.fv=clamp(G.fv,20,600);
+ // scenario scripted crash
+ if(G.sc.crashAt===G.tick&&!G.crashDone){ G.crashDone=true; G.mmWithdrawnUntil=G.tick+45; G.fv*=0.965; logEvent('⚠ LIQUIDITY EVENT: makers withdraw, an informed desk is dumping into thin bids.','red'); toast('LIQUIDITY EVENT — makers gone, spreads exploding','red'); sndAlarm(); const dumper=G.agents.find(a=>a.type==='INF'); marketOrder(dumper,'sell',2600); $('chartPanel').classList.add('shake'); setTimeout(()=>$('chartPanel').classList.remove('shake'),500); }
+ // news timer
+ if(--G.newsTimer<=0){ fireNews(); G.newsTimer=Math.round(G.sc.newsEvery*(0.6+rnd()*0.9)); }
+ // candle roll every 5 ticks
+ if(G.tick%5===1){ if(G.curCandle)G.candles.push(G.curCandle); if(G.candles.length>90)G.candles.shift(); G.curCandle={o:G.lastTrade,h:G.lastTrade,l:G.lastTrade,c:G.lastTrade,v:0}; }
+ // agents
+ if(!G.halted){ const order=G.agents.slice(); for(let i=order.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[order[i],order[j]]=[order[j],order[i]];} order.forEach(a=>{ if(rnd()<0.85)agentAct(a); }); }
+ // expire
+ G.bids.forEach(o=>o.life--); G.asks.forEach(o=>o.life--); G.bids=G.bids.filter(o=>o.life>0); G.asks=G.asks.filter(o=>o.life>0);
+ // price from book
+ G.price=midPrice(); G.dayHigh=Math.max(G.dayHigh,G.lastTrade); G.dayLow=Math.min(G.dayLow,G.lastTrade);
+ // fv estimate
+ const err=(settings.trueFv?0.0008:(G.upgrades.feed?0.0025:0.008))*(1+G.garch*40); G.estFv=G.fv*(1+gauss()*err);
+ // circuit breaker: >6% in 30 ticks
+ if(!G.halted&&G.hist.length>30){ const ref=G.hist[G.hist.length-30]; const mv=G.lastTrade/ref-1; if(Math.abs(mv)>0.06&&G.tick-G.lastHalt>80){ G.halted=true; G.haltUntil=G.tick+22; G.lastHalt=G.tick; G.halts++; logEvent('⛔ CIRCUIT BREAKER: '+ (mv*100).toFixed(1)+'% move in 30 min. Trading halted 22 min.','red'); toast('CIRCUIT BREAKER TRIPPED','red'); sndAlarm(); } }
+ if(G.halted&&G.tick>=G.haltUntil){ G.halted=false; logEvent('Book re-opens after halt. Makers re-quote cautiously.','lime'); G.mmWithdrawnUntil=G.tick+4; }
+ // bot & risk
+ botAct();
+ const p=G.player, eq=equityOf(p);
+ // stops
+ if(p.pos!==0){ const sl=+$('stopInput').value, tp=+$('tpInput').value; const long=p.pos>0;
+   if(sl&&(long?G.price<=sl:G.price>=sl)){flatten('stop-loss'); logEvent('Stop-loss triggered — position flattened.','amber');}
+   else if(tp&&(long?G.price>=tp:G.price<=tp)){flatten('take-profit'); logEvent('Take-profit triggered — position flattened.','lime');} }
+ // margin interest
+ if(p.cash<0)p.cash-= Math.abs(p.cash)*0.00012;
+ // shield
+ if(G.upgrades.shield&&!G.shieldUsed&&eq<G.startCash*0.92&&p.pos!==0){ flatten('risk shield'); G.shieldUsed=true; logEvent('Auto Risk Shield flattened you at -8% drawdown.','amber'); toast('Risk Shield saved the desk','amber'); }
+ // stats
+ G.stats.peakEq=Math.max(G.stats.peakEq,eq); G.stats.maxDD=Math.max(G.stats.maxDD,(G.stats.peakEq-eq)/Math.max(1,G.stats.peakEq));
+ if(p.closedPnls.length){G.stats.best=Math.max(...p.closedPnls);G.stats.worst=Math.min(...p.closedPnls);}
+ // history
+ G.hist.push(G.lastTrade); G.fvHist.push(G.fv); G.eqHist.push(eq); G.volHist.push(G.garch*100+ (G.vol*220)); const b=bestBid(),a=bestAsk(); G.spreadHist.push(b&&a?(a-b):0);
+ if(G.hist.length>420){G.hist.shift();G.fvHist.shift();G.eqHist.shift();G.volHist.shift();G.spreadHist.shift();}
+ // book imbalance
+ const bq=G.bids.reduce((s,o)=>s+o.qty,0), aq=G.asks.reduce((s,o)=>s+o.qty,0); G.imb=(bq+aq)?(bq-aq)/(bq+aq):0;
+ // end conditions
+ const liqLine = grossOf(p)*(G.upgrades.margin?0.14:0.18);
+ if(!G.ended){
+   if(eq>=G.sc.target) return endDay(true,'Target smashed with time to spare. The desk notices.');
+   if(eq<=Math.max(3000,liqLine)&&grossOf(p)>0&&eq<G.startCash*0.45){ flatten('FORCED LIQUIDATION'); return endDay(false,'Margin liquidation. Leverage turned a drawdown into a funeral.'); }
+   if(G.tick>=G.sc.ticks){ if(grossOf(p)>0)flatten('closing bell'); const finalEq=equityOf(G.player); return endDay(finalEq>=G.sc.target, finalEq>=G.sc.target?'Closing bell — target reached.':'Closing bell — target missed. Final equity '+fmt$(finalEq)+' vs target '+fmt$(G.sc.target)+'.'); }
+ }
+}
+function endDay(won,reason){
+ G.ended=true; G.paused=true;
+ const eq=equityOf(G.player), pnl=eq-G.startCash;
+ campaign.xp+=Math.max(5,Math.round(pnl/500))+(won?50:0); if(won){campaign.daysWon++; campaign.unlocked=Math.max(campaign.unlocked,Math.min(SCENARIOS.length,G.idx+2));}
+ const key=G.sc.id; if(!campaign.best[key]||pnl>campaign.best[key])campaign.best[key]=Math.round(pnl); saveCampaign(); renderMeta();
+ $('endBadge').textContent=won?'✓ SCENARIO COMPLETE':'✕ DAY FAILED'; $('endBadge').style.color=won?'#a3e635':'#f87171'; $('endBadge').style.borderColor=won?'#a3e635':'#f87171';
+ $('endTitle').textContent=won?pick(['Target Crushed.','The Desk Applauds.','Closing Bell: You Win.']):pick(['Carried Out.','The Market Collects.','Day Over. Target Missed.']);
+ $('endSub').textContent=reason;
+ const wr=G.player.closedPnls.length?Math.round(G.player.wins/G.player.closedPnls.length*100):0;
+ const grade= won? (pnl>G.sc.target-G.startCash+15000?'S':pnl> (G.sc.target-G.startCash)*1.1?'A':'B') : (eq>G.startCash*0.8?'C':'D');
+ $('endStats').innerHTML=[['Final equity',fmt$(eq)],['Day P&L',(pnl>=0?'+':'')+fmt$(pnl)],['Grade',grade],['Trades',G.player.trades],['Win rate',wr+'%'],['Realized',fmt$(G.player.realized)],['Fees paid',fmt$(G.player.fees)],['Max drawdown',(G.stats.maxDD*100).toFixed(1)+'%'],['Halts survived',G.halts],['◆ Edge earned',G.edge],['Best trade',fmt$(G.stats.best)],['Campaign XP',campaign.xp]].map(([k,v])=>`<div class="panel2 p-2.5"><div class="text-[9px] mono text-zinc-500">${k.toUpperCase()}</div><div class="mono font-bold">${v}</div></div>`).join('');
+ $('endUnlock').textContent= won&&G.idx+1<SCENARIOS.length? 'Unlocked: '+SCENARIOS[G.idx+1].name+' — '+SCENARIOS[G.idx+1].sub : (won?'Campaign scenario cleared. Replay for a better grade / best P&L.':'Tip: cut size before news, never add into a liquidity drain.');
+ $('endNext').classList.toggle('hidden',!(won&&G.idx+1<SCENARIOS.length));
+ $('endModal').classList.remove('hidden');
+ if(won){sndWin(); confetti();} else sndLose();
+ store.set('snapshot',null);
+}
+function confetti(){ const layer=$('confettiLayer'); layer.innerHTML=''; const colors=['#a3e635','#22d3ee','#eab308','#f472b6','#fff']; for(let i=0;i<50;i++){const d=document.createElement('div');d.className='confetti';d.style.left=Math.random()*100+'%';d.style.background=colors[i%5];d.style.animationDuration=(0.9+Math.random()*1.4)+'s';d.style.animationDelay=(Math.random()*0.4)+'s';layer.appendChild(d);} setTimeout(()=>layer.innerHTML='',3000); }
+
+/* ---------- rendering ---------- */
+function logEvent(txt,color='zinc'){ const colors={lime:'border-lime-400 text-lime-100',red:'border-red-400 text-red-100',amber:'border-amber-400 text-amber-100',cyan:'border-cyan-400 text-cyan-100',purple:'border-purple-400 text-purple-100',zinc:'border-zinc-500 text-zinc-300'}; const d=document.createElement('div'); d.className='border-l-2 pl-2 py-0.5 bg-white/[.02] rounded-r '+ (colors[color]||colors.zinc); d.innerHTML=`<span class="mono text-[9px] text-zinc-500">${clockStr()} </span>${txt}`; const log=$('eventLog'); log.prepend(d); while(log.children.length>40)log.lastChild.remove(); }
+function toast(msg,color='lime'){ const c={lime:'border-lime-400',red:'border-red-400',amber:'border-amber-400'}[color]||'border-lime-400'; const d=document.createElement('div'); d.className='toastIn panel p-3 text-xs font-semibold border-l-4 '+c; d.textContent=msg; $('toasts').appendChild(d); setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},3600); }
+function clockStr(){ const m=G?G.timeMin:570; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function aggregate(sideArr,isBid){ const map=new Map(); sideArr.forEach(o=>map.set(o.price,(map.get(o.price)||0)+o.qty)); let arr=[...map.entries()].map(([price,qty])=>({price,qty})).sort((a,b)=>isBid?b.price-a.price:a.price-b.price).slice(0,9); let tot=0; arr.forEach(l=>{tot+=l.qty;l.total=tot}); return arr; }
+let uiTimer=0;
+function renderUI(now){
+ if(!G)return; if(now-uiTimer<140)return; uiTimer=now;
+ const p=G.player, eq=equityOf(p), pnl=eq-G.startCash, b=bestBid(), a=bestAsk(), mid=midPrice();
+ $('priceLbl').textContent=fmtPx(G.lastTrade); const chg=G.lastTrade/G.open-1; const chEl=$('chgLbl'); chEl.textContent=(chg>=0?'+':'')+(chg*100).toFixed(2)+'% · H '+fmtPx(G.dayHigh)+' L '+fmtPx(G.dayLow); chEl.style.color=chg>=0?'#a3e635':'#f87171';
+ $('bidLbl').textContent=b?fmtPx(b):'—'; $('askLbl').textContent=a?fmtPx(a):'—'; $('spreadLbl').textContent=(b&&a)?('· '+fmtPx(a-b).slice(1)):'· NO BOOK';
+ $('fvLbl').textContent=(settings.trueFv?'TRUE ':'~')+fmtPx(settings.trueFv?G.fv:G.estFv)+' '+(G.estFv>mid?'▲ undervalued':'▼ overvalued');
+ $('volLbl').textContent=(G.garch*100+G.vol*100).toFixed(2)+'%'; $('regimeLbl').textContent=G.tick<G.mmWithdrawnUntil?'· NO MAKERS':(G.garch>0.008?'· PANIC':G.garch>0.0035?'· CHOPPY':'· CALM');
+ $('equityLbl').textContent=fmt$(eq); const pl=$('pnlLbl'); pl.textContent=(pnl>=0?'+':'')+fmt$(pnl); pl.style.color=pnl>=0?'#a3e635':'#f87171';
+ $('clockLbl').textContent=clockStr()+(G.halted?' · HALTED':'');
+ $('dayProg').style.width=(G.tick/G.sc.ticks*100)+'%'; $('targetProg').style.width=clamp((eq-G.startCash)/Math.max(1,(G.sc.target-G.startCash))*100,0,100)+'%';
+ $('edgeLbl').textContent='◆ '+G.edge+' EDGE';
+ $('cashLbl').textContent=fmt$(p.cash); $('avgLbl').textContent=p.pos?fmtPx(p.avg):'—';
+ const un=p.pos*(G.price-p.avg); const unEl=$('unrealLbl'); unEl.textContent=(un>=0?'+':'')+fmt$(un); unEl.style.color=un>=0?'#a3e635':'#f87171';
+ const pos=$('posLbl'); pos.textContent=p.pos===0?'FLAT':(p.pos>0?'LONG ':'SHORT ')+Math.abs(p.pos)+' @ '+fmtPx(p.avg); pos.style.color=p.pos===0?'':(p.pos>0?'#a3e635':'#f87171');
+ const gross=grossOf(p), mPct=gross/Math.max(1,eq*G.lev)*100; $('marginBar').style.width=clamp(mPct,0,100)+'%'; $('marginBar').style.background=mPct>85?'#ef4444':mPct>60?'#eab308':'#a3e635'; $('marginTxt').textContent=mPct.toFixed(0)+'% of '+G.lev+'× · exposure '+fmt$(gross);
+ $('liqLbl').textContent='LIQ. ~'+fmtPx(G.price*(p.pos>0?0.82:1.18));
+ $('buyPxLbl').textContent=a?('@ '+fmtPx(a)):'';
+ $('sellPxLbl').textContent=b?('@ '+fmtPx(b)):'';
+ $('marginBanner').classList.toggle('hidden',!(p.pos!==0&&eq<gross*0.28));
+ $('haltBanner').classList.toggle('hidden',!G.halted); if(G.halted)$('haltCount').textContent='· re-opens in '+(G.haltUntil-G.tick)+' min';
+ // book
+ const asks=aggregate(G.asks,false).slice().reverse(), bids=aggregate(G.bids,true); const maxT=Math.max(1,...asks.map(x=>x.total),...bids.map(x=>x.total));
+ const row=(l,col)=>`<div class="relative flex justify-between px-1.5 py-[1px] rounded overflow-hidden"><div class="bookbar" style="width:${l.total/maxT*100}%;background:${col}"></div><span style="color:${col}" class="relative font-bold">${l.price.toFixed(2)}</span><span class="relative">${l.qty}</span><span class="relative text-zinc-500">${l.total}</span></div>`;
+ $('bookAsks').innerHTML=asks.map(l=>row(l,'#f87171')).join('')||'<div class="text-zinc-600 text-center py-2">no asks — makers gone</div>';
+ $('bookBids').innerHTML=bids.map(l=>row(l,'#a3e635')).join('')||'<div class="text-zinc-600 text-center py-2">no bids — makers gone</div>';
+ $('bookSpread').textContent=(b&&a)?((a-b).toFixed(2)+' ('+((a-b)/mid*10000).toFixed(0)+' bps)'):G.halted?'HALTED':'—'; $('bookMid').textContent='MID '+fmtPx(mid);
+ // tape
+ $('tape').innerHTML=G.tape.slice(0,26).map(t=>`<div class="tapeRow flex justify-between ${t.playerInvolved?'bg-lime-400/10 rounded px-1 font-bold':''}"><span style="color:${t.side.includes('BUY')?'#a3e635':'#f87171'}">${t.side.includes('BUY')?'▲':'▼'} ${t.price.toFixed(2)}</span><span>${t.qty}</span><span class="text-zinc-500">${t.buyer.split(' ')[0]}→${t.seller.split(' ')[0]}</span></div>`).join('');
+ // stats
+ $('statVol').textContent=G.volume.toLocaleString(); $('statTrades').textContent=G.tradeCount;
+ const imb=$('statImb'); imb.textContent=(G.imb>=0?'+':'')+(G.imb*100).toFixed(0)+'% '+(Math.abs(G.imb)>0.35?(G.imb>0?'bid-heavy':'ask-heavy'):'balanced'); imb.style.color=Math.abs(G.imb)>0.35?(G.imb>0?'#a3e635':'#f87171'):'';
+ const wr=p.closedPnls.length?Math.round(p.wins/p.closedPnls.length*100):null; const avgR=p.closedPnls.length?p.closedPnls.reduce((s,x)=>s+x,0)/p.closedPnls.length:0; $('statWin').textContent=wr===null?'—':wr+'% / '+(avgR>=0?'+':'')+fmt$(avgR)+' avg';
+ $('stReal').textContent=fmt$(p.realized); $('stFees').textContent=fmt$(p.fees); $('stDD').textContent=(G.stats.maxDD*100).toFixed(1)+'%'; $('stBest').textContent=p.closedPnls.length?fmt$(G.stats.best)+' / '+fmt$(G.stats.worst):'—'; $('stHalts').textContent=G.halts; $('stEdge').textContent='◆ '+G.edge;
+ $('botStat').textContent='bot trades: '+G.bot.trades+' · your realized since bot on: '+fmt$(p.realized-G.bot.lastReal);
+ // leaderboard
+ const ranked=G.agents.map(x=>({a:x,pnl:x.realized+x.pos*(G.price-x.avg)})).sort((x,y)=>y.pnl-x.pnl);
+ $('leaderboard').innerHTML=ranked.slice(0,7).map(({a,pnl},i)=>{const mx=Math.max(1,...ranked.map(r=>Math.abs(r.pnl)));return `<div><div class="flex justify-between"><span><span class="text-zinc-500 mono">${i+1}.</span> ${a.name} <span class="mono text-[9px] px-1 rounded bg-white/5 text-zinc-400">${a.type}</span></span><span class="mono font-bold" style="color:${pnl>=0?'#a3e635':'#f87171'}">${pnl>=0?'+':''}${fmt$(pnl)}</span></div><div class="h-1 bg-white/5 rounded mt-0.5"><div class="h-full rounded" style="width:${Math.abs(pnl)/mx*100}%;background:${pnl>=0?'#a3e635':'#ef4444'}"></div></div></div>`}).join('');
+ const agg={}; G.agents.forEach(x=>{agg[x.type]=agg[x.type]||{n:0,pnl:0};agg[x.type].n++;agg[x.type].pnl+=x.realized+x.pos*(G.price-x.avg);});
+ $('stratSummary').innerHTML=Object.entries(agg).map(([k,v])=>`<div class="panel2 p-1.5"><div class="text-zinc-500">${k} ×${v.n}</div><div class="font-bold" style="color:${v.pnl>=0?'#a3e635':'#f87171'}">${fmt$(v.pnl)}</div></div>`).join('');
+ renderUpgradesEdge();
+ drawCharts();
+}
+function renderUpgradesEdge(){ // refresh owned state cheaply when edge changes
+ const el=$('edgeLbl'); if(el&&G)el.textContent='◆ '+G.edge+' EDGE';
+}
+function fitCanvas(c){ const r=c.getBoundingClientRect(), d=window.devicePixelRatio||1; const w=Math.max(50,Math.round(r.width)),h=c.height; if(c.width!==w*d){c.width=w*d;c.style.height=h+'px';} const ctx=c.getContext('2d'); ctx.setTransform(d,0,0,d,0,0); return{ctx,w,h}; }
+function drawLine(ctx,data,w,h,color,min,max,fill){ if(data.length<2)return; ctx.beginPath(); data.forEach((v,i)=>{const x=i/(data.length-1)*w,y=h-((v-min)/(max-min||1))*(h-8)-4; i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.stroke(); if(fill){ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=fill;ctx.fill();} }
+function drawCharts(){
+ if(!G)return;
+ { const {ctx,w,h}=fitCanvas($('mainChart')); ctx.clearRect(0,0,w,h);
+   const all=[...G.hist,...G.fvHist]; let min=Math.min(...all),max=Math.max(...all); const pad=(max-min)*0.12||1; min-=pad;max+=pad;
+   ctx.strokeStyle='#1c2a20';ctx.lineWidth=1; for(let i=1;i<5;i++){ctx.beginPath();ctx.moveTo(0,h*i/5);ctx.lineTo(w,h*i/5);ctx.stroke(); ctx.fillStyle='#5b6f60';ctx.font='9px JetBrains Mono';ctx.fillText(fmtPx(max-(max-min)*i/5),4,h*i/5-2);}
+   if(chartMode==='candle'&&G.candles.length>2){ const cs=G.candles; const cw=w/cs.length; cs.forEach((c,i)=>{const x=i*cw+cw/2;const y=v=>h-((v-min)/(max-min))*(h-8)-4; ctx.strokeStyle=c.c>=c.o?'#a3e635':'#ef4444';ctx.beginPath();ctx.moveTo(x,y(c.h));ctx.lineTo(x,y(c.l));ctx.stroke();ctx.fillStyle=ctx.strokeStyle;const t=y(Math.max(c.o,c.c)),b=y(Math.min(c.o,c.c));ctx.fillRect(x-cw*0.3,t,cw*0.6,Math.max(1,b-t));}); drawLine(ctx,G.hist.slice(-cs.length*5),w,h,'rgba(255,255,255,.25)',min,max); }
+   else { drawLine(ctx,G.hist,w,h,'#e7efe9',min,max,'rgba(163,230,53,.06)'); }
+   ctx.setLineDash([5,4]); drawLine(ctx,settings.trueFv?G.fvHist:G.fvHist,w,h,'#22d3ee',min,max); ctx.setLineDash([]);
+   // your avg entry
+   if(G.player.pos){ const y=h-((G.player.avg-min)/(max-min))*(h-8)-4; ctx.strokeStyle='#eab308';ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();ctx.setLineDash([]); ctx.fillStyle='#eab308';ctx.font='9px JetBrains Mono';ctx.fillText('YOUR AVG',6,y-3); }
+ }
+ { const {ctx,w,h}=fitCanvas($('depthChart')); ctx.clearRect(0,0,w,h); const bids=aggregate(G.bids,true),asks=aggregate(G.asks,false); const mid=midPrice(); const maxT=Math.max(1,...bids.map(x=>x.total),...asks.map(x=>x.total)); const range=Math.max(1.5,mid*0.02);
+   const plot=(arr,col,flip)=>{ if(!arr.length)return; ctx.beginPath(); arr.forEach((l,i)=>{const x=flip? (0.5-(mid-l.price)/range*0.5)*w : (0.5+(l.price-mid)/range*0.5)*w; const y=h-(l.total/maxT)*(h-10)-4; i?ctx.lineTo(x,y):ctx.moveTo(x,h); if(i===0)ctx.lineTo(x,y); }); ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.stroke(); };
+   plot(bids,'#a3e635',true); plot(asks,'#f87171',false); ctx.strokeStyle='#3a4a3e';ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.stroke(); ctx.fillStyle='#7d8f82';ctx.font='9px JetBrains Mono';ctx.fillText('BIDS',8,12);ctx.fillText('ASKS',w-36,12);
+ }
+ { const {ctx,w,h}=fitCanvas($('volChart')); ctx.clearRect(0,0,w,h); const vd=G.volHist,sd=G.spreadHist; if(vd.length>1){ const mx=Math.max(...vd,0.01); drawLine(ctx,vd,w,h,'#eab308',0,mx); const ms=Math.max(...sd,0.01); drawLine(ctx,sd.map(v=>v/ms*mx*0.7),w,h,'#f472b6',0,mx);} }
+ { const {ctx,w,h}=fitCanvas($('equityChart')); ctx.clearRect(0,0,w,h); const d=G.eqHist; if(d.length>1){ let min=Math.min(...d,G.startCash),max=Math.max(...d,G.startCash); const pd=(max-min)*0.1||1; drawLine(ctx,d,w,h, equityOf(G.player)>=G.startCash?'#a3e635':'#f87171',min-pd,max+pd,'rgba(163,230,53,.05)'); const y=h-((G.sc.target-(min-pd))/((max+pd)-(min-pd)))*(h-8)-4; ctx.strokeStyle='#22d3ee';ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();ctx.setLineDash([]);} }
+}
+
+/* ---------- tutorial ---------- */
+const TUT=[['buy','Place a BUY (market or limit)'],['sell','Place a SELL — try shorting or closing'],['limit','Rest a LIMIT order in the book'],['botOrUpgrade','Enable the bot or buy an upgrade'],['shock','Fire a Stress-Test shock and watch the cascade']];
+function renderTutorial(){ if(!G)return; const show=G.idx===0; $('tutorialPanel').classList.toggle('hidden',!show); if(!show)return; $('tutorialList').innerHTML=TUT.map(([k,t])=>`<li class="flex gap-2"><span>${tutState[k]?'☑':'☐'}</span><span class="${tutState[k]?'line-through text-zinc-500':''}">${t}</span></li>`).join(''); if(Object.values(tutState).every(Boolean)&&!tutState.done){tutState.done=true; awardEdge(2,'Checklist complete +2 ◆'); toast('Checklist complete — you run this book now.','lime');} }
+function updateBotUI(){ $('botToggle').textContent=G&&G.bot.on?'ON':'OFF'; $('botToggle').style.background=G&&G.bot.on?'#a3e635':''; $('botToggle').style.color=G&&G.bot.on?'#000':''; document.querySelectorAll('.botStrat').forEach(b=>{b.style.background=b.dataset.botstrat===botStrat?'#a3e635':'';b.style.color=b.dataset.botstrat===botStrat?'#000':'';}); }
+
+/* ---------- title / meta ---------- */
+function renderMeta(){ $('metaBar').innerHTML=`<span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10">CAMPAIGN XP <b class="text-amber-300">${campaign.xp}</b></span><span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10">DAYS WON <b class="text-lime-300">${campaign.daysWon}</b></span><span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10">UNLOCKED <b>${campaign.unlocked}/${SCENARIOS.length}</b></span>`+(Object.keys(campaign.best).length?`<span class="px-3 py-1.5 rounded-full bg-white/5 border border-white/10">BEST P&amp;L <b class="text-cyan-300">${fmt$(Math.max(...Object.values(campaign.best)))}</b></span>`:''); }
+function renderScenarios(){
+ $('scenarioGrid').innerHTML=SCENARIOS.map((s,i)=>{const locked=i>=campaign.unlocked; const best=campaign.best[s.id]; return `<button data-sc="${i}" ${locked?'disabled':''} class="scCard btn text-left panel p-4 ${i===selectedScenario?'selectedCard':''} ${locked?'opacity-45':''}">
+  <div class="flex justify-between items-start"><span class="mono font-black text-2xl">${s.sym}</span><span class="text-[10px] mono font-bold ${s.color} border border-current rounded-full px-2 py-0.5">${locked?'🔒 LOCKED':s.diff}</span></div>
+  <div class="font-black mt-1">${s.name}</div><div class="text-[11px] text-zinc-500 mono">${s.sub}</div>
+  <p class="text-xs text-zinc-400 mt-2 leading-relaxed min-h-[48px]">${s.desc}</p>
+  <div class="flex justify-between text-[11px] mono mt-2 border-t border-white/5 pt-2"><span>START ${fmt$(s.start)}</span><span class="text-lime-300">TARGET ${fmt$(s.target)}</span></div>
+  ${best!==undefined?`<div class="text-[11px] mono mt-1 ${best>=0?'text-cyan-300':'text-red-300'}">BEST P&amp;L ${best>=0?'+':''}${fmt$(best)}</div>`:''}</button>`}).join('');
+ document.querySelectorAll('.scCard').forEach(c=>c.onclick=()=>{selectedScenario=+c.dataset.sc; sndClick(); renderScenarios();});
+ document.querySelectorAll('.diffBtn').forEach(b=>b.classList.toggle('selectedDiff',b.dataset.diff===settings.diff));
+}
+function showTitle(){ $('app').classList.add('hidden'); $('titleScreen').classList.remove('hidden'); $('pauseModal').classList.add('hidden'); $('endModal').classList.add('hidden'); if(G)G.paused=true; renderMeta(); renderScenarios(); const snap=store.get('snapshot',null); $('continueBtn').classList.toggle('hidden',!snap); window.scrollTo(0,0); }
+function startGame(idx){
+ ensureAudio(); selectedScenario=idx;
+ $('titleScreen').classList.add('hidden'); $('endModal').classList.add('hidden'); $('app').classList.remove('hidden');
+ initRun(idx); G.paused=false; setSpeed(1);
+ $('limitInput').value=G.price.toFixed(2);
+ if(idx===0&&!store.get('seenHelp',false)){ $('helpModal').classList.remove('hidden'); G.paused=true; store.set('seenHelp',true); }
+ window.scrollTo(0,0);
+}
+
+/* ---------- speed / pause ---------- */
+function setSpeed(s){ if(!G)return; G.speed=s; document.querySelectorAll('.speedBtn').forEach(b=>b.classList.toggle('selectedSpeed',+b.dataset.speed===s)); }
+function setPaused(p){ if(!G)return; G.paused=p; $('pauseBtn').textContent=p?'▶':'❚❚'; $('pauseBtn').style.background=p?'#a3e635':'#facc15'; if(!p)$('pauseModal').classList.add('hidden'); }
+
+/* ---------- events ---------- */
+document.querySelectorAll('.diffBtn').forEach(b=>b.onclick=()=>{settings.diff=b.dataset.diff;saveSettings();sndClick();renderScenarios();});
+$('startBtn').onclick=()=>{ensureAudio();sndClick();startGame(selectedScenario);};
+$('continueBtn').onclick=()=>{ const snap=store.get('snapshot',null); if(!snap)return; startGame(snap.idx); G.tick=snap.tick;G.timeMin=snap.timeMin;G.price=snap.price;G.lastTrade=snap.price;G.fv=snap.fv;G.anchor=snap.fv; G.player.cash=snap.cash;G.player.pos=snap.pos;G.player.avg=snap.avg;G.player.realized=snap.realized;G.edge=snap.edge||0;G.upgrades=snap.upgrades||{};if(snap.lev)G.lev=snap.lev; renderUpgrades(); logEvent('Saved desk restored at '+clockStr()+'.','cyan'); };
+$('resetProgressBtn').onclick=()=>{ campaign={unlocked:1,best:{},xp:0,daysWon:0}; saveCampaign(); store.set('snapshot',null); renderMeta(); renderScenarios(); toast('Campaign reset.','amber'); };
+$('titleHelpBtn').onclick=()=>$('helpModal').classList.remove('hidden');
+$('titleSettingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+$('helpBtn').onclick=()=>{ if(G)G.paused=true; $('helpModal').classList.remove('hidden'); };
+document.querySelectorAll('.closeHelp').forEach(b=>b.onclick=()=>{ $('helpModal').classList.add('hidden'); if(G&&!G.ended&&$('app').classList.contains('hidden')===false)setPaused(false); });
+$('pauseSettingsBtn').onclick=()=>$('settingsModal').classList.remove('hidden');
+$('closeSettings').onclick=()=>$('settingsModal').classList.add('hidden');
+$('menuBtn').onclick=()=>{ if(!G)return; setPaused(true); $('pauseModal').classList.remove('hidden'); };
+$('pauseBtn').onclick=()=>{ if(!G)return; const p=!G.paused; setPaused(p); if(p)$('pauseModal').classList.remove('hidden'); };
+$('resumeBtn').onclick=()=>setPaused(false);
+$('backTitleBtn').onclick=()=>showTitle();
+$('quitTitleBtn').onclick=()=>showTitle();
+$('restartBtn').onclick=()=>{ $('pauseModal').classList.add('hidden'); startGame(G?G.idx:selectedScenario); };
+$('saveBtn').onclick=()=>{ if(!G)return; store.set('snapshot',{idx:G.idx,tick:G.tick,timeMin:G.timeMin,price:G.price,fv:G.fv,cash:G.player.cash,pos:G.player.pos,avg:G.player.avg,realized:G.player.realized,edge:G.edge,upgrades:G.upgrades,lev:G.lev}); toast('Desk snapshot saved — Continue from title.','lime'); };
+$('endRetry').onclick=()=>startGame(G.idx);
+$('endTitleBtn').onclick=()=>showTitle();
+$('endNext').onclick=()=>startGame(Math.min(SCENARIOS.length-1,G.idx+1));
+document.querySelectorAll('.speedBtn').forEach(b=>b.onclick=()=>{setSpeed(+b.dataset.speed);sndClick();});
+$('buyBtn').onclick=()=>playerOrder('buy',orderType);
+$('sellBtn').onclick=()=>playerOrder('sell',orderType);
+$('flattenBtn').onclick=()=>{flatten('manual');};
+$('typeMkt').onclick=()=>setOrderType('market'); $('typeLmt').onclick=()=>setOrderType('limit');
+function setOrderType(t){ orderType=t; $('typeMkt').style.background=t==='market'?'#a3e635':''; $('typeMkt').style.color=t==='market'?'#000':''; $('typeLmt').style.background=t==='limit'?'#a3e635':''; $('typeLmt').style.color=t==='limit'?'#000':''; $('limitRow').classList.toggle('hidden',t!=='limit'); $('limitRow').classList.toggle('flex',t==='limit'); if(t==='limit'&&G)$('limitInput').value=G.price.toFixed(2); }
+document.querySelectorAll('.qtyQuick').forEach(b=>b.onclick=()=>{$('qtyInput').value=b.dataset.q;});
+document.querySelectorAll('.shockBtn').forEach(b=>b.onclick=()=>doShock(b.dataset.shock));
+$('botToggle').onclick=()=>{ if(!G)return; G.bot.on=!G.bot.on; G.bot.lastReal=G.player.realized; tutState.botOrUpgrade=true; updateBotUI(); renderTutorial(); toast('Algo bot '+(G.bot.on?'ON — it trades your account live.':'OFF'),G.bot.on?'lime':'amber'); };
+document.querySelectorAll('.botStrat').forEach(b=>b.onclick=()=>{botStrat=b.dataset.botstrat;updateBotUI();});
+$('botThr').oninput=e=>$('botThrVal').textContent=(e.target.value/100).toFixed(2)+'%';
+$('botSize').oninput=e=>$('botSizeVal').textContent=e.target.value+' sh';
+$('botMax').oninput=e=>$('botMaxVal').textContent=e.target.value+' sh';
+$('chartLineBtn').onclick=()=>setChart('line'); $('chartCandleBtn').onclick=()=>setChart('candle');
+function setChart(m){ chartMode=m; settings.chart=m; saveSettings(); $('chartLineBtn').classList.toggle('tabActive',m==='line'); $('chartCandleBtn').classList.toggle('tabActive',m==='candle'); $('setLine').style.background=m==='line'?'#a3e635':''; $('setCandle').style.background=m==='candle'?'#a3e635':''; }
+$('setLine').onclick=()=>setChart('line'); $('setCandle').onclick=()=>setChart('candle');
+$('mainChart').addEventListener('click',e=>{ if(!G)return; const c=$('mainChart'),r=c.getBoundingClientRect(); const all=[...G.hist,...G.fvHist]; let min=Math.min(...all),max=Math.max(...all); const pad=(max-min)*0.12||1; min-=pad;max+=pad; const y=(e.clientY-r.top)/r.height; const px=max-y*(max-min); $('limitInput').value=px.toFixed(2); if(orderType!=='limit')setOrderType('limit'); deskMsg('Limit price set from chart: '+fmtPx(px)); });
+/* sound / settings */
+function syncSoundBtns(){ const t=settings.muted?'MUTED':'SOUND ON'; $('muteBtnTitle').textContent=t; $('soundBtn').textContent=settings.muted?'MUTED':'SOUND'; $('soundBtn').style.color=settings.muted?'#f87171':''; if(master)master.gain.value=settings.muted?0:settings.vol/100*0.5; }
+$('muteBtnTitle').onclick=()=>{ensureAudio();settings.muted=!settings.muted;$('muteChk').checked=settings.muted;saveSettings();syncSoundBtns();};
+$('soundBtn').onclick=()=>{ensureAudio();settings.muted=!settings.muted;$('muteChk').checked=settings.muted;saveSettings();syncSoundBtns();};
+$('volSlider').oninput=e=>{settings.vol=+e.target.value;$('volVal').textContent=settings.vol+'%';ensureAudio();saveSettings();syncSoundBtns();};
+$('muteChk').onchange=e=>{settings.muted=e.target.checked;saveSettings();syncSoundBtns();};
+$('trueFvChk').onchange=e=>{settings.trueFv=e.target.checked;saveSettings();};
+$('tapeSndChk').onchange=e=>{settings.tapeSnd=e.target.checked;saveSettings();};
+document.addEventListener('keydown',e=>{
+ if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+ if(e.code==='Space'){ e.preventDefault(); if(G&&!$('app').classList.contains('hidden')){ const p=!G.paused; setPaused(p); if(p)$('pauseModal').classList.remove('hidden'); } }
+ else if(e.key==='b'||e.key==='B')playerOrder('buy',orderType);
+ else if(e.key==='s'||e.key==='S')playerOrder('sell',orderType);
+ else if(e.key==='f'||e.key==='F')flatten('hotkey');
+ else if(e.key==='h'||e.key==='H')$('helpModal').classList.remove('hidden');
+ else if(e.key==='Escape'){ $('helpModal').classList.add('hidden'); $('settingsModal').classList.add('hidden'); if(G&&!$('app').classList.contains('hidden')&&!G.ended){setPaused(true);$('pauseModal').classList.remove('hidden');} }
+ else if(e.key==='ArrowUp'){e.preventDefault();$('qtyInput').value=(+$('qtyInput').value||0)+10;}
+ else if(e.key==='ArrowDown'){e.preventDefault();$('qtyInput').value=Math.max(1,(+$('qtyInput').value||0)-10);}
+ else if(['1','2','3','4'].includes(e.key))setSpeed([0.5,1,2,4][+e.key-1]);
+});
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&G&&!G.ended&&!$('app').classList.contains('hidden')){ setPaused(true); toast('Auto-paused (tab hidden).','amber'); } });
+
+/* ---------- main loop ---------- */
+let lastT=performance.now(), acc=0;
+function loop(now){
+ requestAnimationFrame(loop);
+ const dt=Math.min(0.1,(now-lastT)/1000); lastT=now;
+ if(G&&!G.paused&&!G.ended&&!$('app').classList.contains('hidden')){
+   acc+=dt*G.speed;
+   const step=0.24; let n=0;
+   while(acc>=step&&n<12){ simTick(); acc-=step; n++; if(G.ended)break; }
+   renderUI(now);
+ } else if(G&&!$('app').classList.contains('hidden')){ renderUI(now); }
+}
+requestAnimationFrame(loop);
+
+/* ---------- init ---------- */
+(function init(){
+ $('volSlider').value=settings.vol; $('volVal').textContent=settings.vol+'%'; $('muteChk').checked=settings.muted; $('trueFvChk').checked=settings.trueFv; $('tapeSndChk').checked=settings.tapeSnd;
+ if(!DIFFS[settings.diff])settings.diff='pro';
+ setChart(chartMode); setOrderType('market'); syncSoundBtns(); renderMeta(); renderScenarios();
+ const snap=store.get('snapshot',null); $('continueBtn').classList.toggle('hidden',!snap);
+ document.body.addEventListener('pointerdown',()=>ensureAudio(),{once:true});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+export function mountGame(root: HTMLElement): () => void;

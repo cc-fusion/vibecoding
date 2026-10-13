@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Swarm Intelligence Lab — Boids, Predators & the Sheepdog Trial</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  html,body{height:100%;background:#050914}
+  body{font-family:Inter,system-ui,sans-serif}
+  .font-display{font-family:"Space Grotesk",Inter,sans-serif}
+  .font-mono2{font-family:"JetBrains Mono",monospace}
+  .glass{background:linear-gradient(160deg,rgba(17,25,45,.88),rgba(8,13,26,.92));border:1px solid rgba(148,184,255,.14);box-shadow:0 18px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);backdrop-filter:blur(14px)}
+  .glass-soft{background:rgba(13,20,38,.72);border:1px solid rgba(148,184,255,.12);backdrop-filter:blur(10px)}
+  .btn-primary{background:linear-gradient(135deg,#22d3ee,#34d399 55%,#a3e635);color:#04121a;font-weight:800;box-shadow:0 10px 30px rgba(45,212,191,.35);transition:.2s}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 16px 36px rgba(45,212,191,.45)}
+  .btn-primary:active{transform:translateY(0)}
+  .btn-ghost{border:1px solid rgba(148,184,255,.22);background:rgba(255,255,255,.04);transition:.18s}
+  .btn-ghost:hover{background:rgba(255,255,255,.09);border-color:rgba(148,184,255,.45)}
+  .tool-btn{border:1px solid rgba(148,184,255,.14);background:rgba(255,255,255,.035);transition:.15s;text-align:left}
+  .tool-btn:hover{background:rgba(255,255,255,.08)}
+  .tool-btn.active{background:linear-gradient(135deg,rgba(34,211,238,.24),rgba(52,211,153,.20));border-color:rgba(52,211,153,.7);box-shadow:0 0 0 1px rgba(52,211,153,.35),0 8px 22px rgba(16,185,129,.18)}
+  .seg-btn{transition:.15s;border:1px solid transparent}
+  .seg-btn.active{background:linear-gradient(135deg,#164e63,#065f46);border-color:rgba(103,232,249,.55);color:#ecfeff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+  .diff-pill{transition:.15s;border:1px solid rgba(148,184,255,.18)}
+  .diff-pill.active{background:linear-gradient(135deg,rgba(34,211,238,.28),rgba(167,139,250,.25));border-color:rgba(103,232,249,.7);color:white}
+  .scenario-card{transition:.2s;cursor:pointer;border:1px solid rgba(148,184,255,.13);background:linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.02))}
+  .scenario-card:hover{transform:translateY(-2px);border-color:rgba(103,232,249,.45)}
+  .scenario-card.selected{border-color:#34d399;box-shadow:0 0 0 1px rgba(52,211,153,.55),0 16px 34px rgba(0,0,0,.35)}
+  .scenario-card.locked{opacity:.48;cursor:not-allowed;filter:saturate(.5)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:99px;background:linear-gradient(90deg,#155e75,#0f766e);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#ecfeff;border:3px solid #14b8a6;box-shadow:0 2px 10px rgba(20,184,166,.6);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#ecfeff;border:3px solid #14b8a6;cursor:pointer}
+  .scroll-thin::-webkit-scrollbar{width:6px;height:6px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:rgba(103,232,249,.25);border-radius:99px}
+  .scroll-thin::-webkit-scrollbar-track{background:transparent}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes toastIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
+  @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}100%{box-shadow:0 0 0 14px rgba(52,211,153,0)}}
+  @keyframes shimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+  .anim-fadeUp{animation:fadeUp .55s cubic-bezier(.2,.8,.2,1) both}
+  .anim-floaty{animation:floaty 6s ease-in-out infinite}
+  .toast{animation:toastIn .3s ease both}
+  .tour-glow{box-shadow:0 0 0 2px #34d399,0 0 34px rgba(52,211,153,.55)!important;border-color:#34d399!important;animation:pulseRing 1s ease-out infinite}
+  .meter{height:8px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+  .meter>div{height:100%;border-radius:99px;transition:width .35s cubic-bezier(.2,.8,.2,1)}
+  .log-item{border-left:3px solid rgba(103,232,249,.5)}
+  .log-warn{border-left-color:#f59e0b}.log-bad{border-left-color:#f43f5e}.log-good{border-left-color:#34d399}
+  .modal-bg{background:rgba(2,6,17,.72);backdrop-filter:blur(8px)}
+  .kbd{font-family:"JetBrains Mono",monospace;font-size:10px;padding:2px 5px;border-radius:5px;border:1px solid rgba(255,255,255,.22);border-bottom-width:2px;background:rgba(255,255,255,.07);color:#cffafe}
+  .hero-grad{background:linear-gradient(100deg,#67e8f9,#34d399,#a3e635,#fbbf24,#67e8f9);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 7s ease infinite}
+  canvas{display:block}
+  .chip{border:1px solid rgba(148,184,255,.16);background:rgba(255,255,255,.045)}
+  select{background:#0b1428;color:#e2e8f0;border:1px solid rgba(148,184,255,.25);border-radius:10px;padding:8px 10px}
+</style>
+</head>
+<body class="text-slate-100 overflow-x-hidden selection:bg-emerald-400/40">
+
+<!-- ======================= TITLE SCREEN ======================= -->
+<section id="titleScreen" class="relative min-h-screen overflow-hidden">
+  <canvas id="titleCanvas" class="absolute inset-0 w-full h-full opacity-70"></canvas>
+  <div class="absolute inset-0 pointer-events-none" style="background:radial-gradient(900px 500px at 18% 8%,rgba(34,211,238,.20),transparent 60%),radial-gradient(800px 520px at 88% 22%,rgba(167,139,250,.18),transparent 60%),radial-gradient(700px 600px at 50% 110%,rgba(52,211,153,.16),transparent 60%),linear-gradient(180deg,rgba(5,9,20,.25),rgba(5,9,20,.88))"></div>
+
+  <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 min-h-screen flex flex-col">
+    <header class="flex items-center justify-between gap-3 anim-fadeUp">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl grid place-items-center bg-gradient-to-br from-cyan-400 via-emerald-400 to-lime-300 shadow-lg shadow-emerald-500/30 anim-floaty">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#04202a" stroke-width="2.2" stroke-linecap="round"><circle cx="6" cy="7" r="2.2" fill="#04202a"/><circle cx="17" cy="5" r="1.7" fill="#04202a"/><circle cx="19" cy="14" r="2.4" fill="#04202a"/><circle cx="10" cy="17" r="1.8" fill="#04202a"/><path d="M8 8.5 15.5 6.3M8.2 15.2 16.8 14M11 15.5 17.8 7.2"/></svg>
+        </div>
+        <div>
+          <div class="font-display font-700 font-bold tracking-wide text-sm sm:text-base">SWARM INTELLIGENCE LAB</div>
+          <div class="text-[11px] text-cyan-200/70 font-mono2">BOIDS · PSO · HERDING · v2.4</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btnSoundTitle" class="btn-ghost rounded-xl px-3 py-2 text-sm" title="Sound on/off">Sound: <span id="soundTitleState" class="font-bold text-emerald-300">ON</span></button>
+        <button id="btnHelpTitle" class="btn-ghost rounded-xl px-3 py-2 text-sm">Help</button>
+        <button id="btnSettingsTitle" class="btn-ghost rounded-xl px-3 py-2 text-sm">Settings</button>
+      </div>
+    </header>
+
+    <div class="grid lg:grid-cols-[1.02fr_.98fr] gap-6 lg:gap-10 items-start mt-7 lg:mt-10 flex-1">
+      <div class="anim-fadeUp" style="animation-delay:.08s">
+        <div class="inline-flex items-center gap-2 chip rounded-full px-3 py-1.5 text-xs text-cyan-100/90">
+          <span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span> A living laboratory of collective behaviour — no single ant gives the orders.
+        </div>
+        <h1 class="font-display font-bold leading-[.92] mt-5 text-5xl sm:text-6xl xl:text-7xl">Conduct the<br><span class="hero-grad">murmuration.</span></h1>
+        <p class="text-slate-300/90 text-base sm:text-lg leading-relaxed mt-5 max-w-xl">Tune three simple rules — <b class="text-cyan-200">separation, alignment, cohesion</b> — and watch order emerge, collapse under hawks and gusts, heal at roosts, hunt peaks with particle swarms, and finally herd sheep with a dog you steer yourself.</p>
+
+        <div class="mt-6">
+          <div class="text-[11px] tracking-[.22em] text-slate-400 font-bold mb-2">DIFFICULTY</div>
+          <div id="diffPills" class="flex flex-wrap gap-2">
+            <button data-diff="relaxed" class="diff-pill rounded-xl px-4 py-2.5 text-sm text-slate-300">Relaxed <span class="block text-[11px] opacity-70 font-normal">Gentler hawks · +50% time</span></button>
+            <button data-diff="standard" class="diff-pill active rounded-xl px-4 py-2.5 text-sm text-slate-300">Standard <span class="block text-[11px] opacity-70 font-normal">The intended lab conditions</span></button>
+            <button data-diff="expert" class="diff-pill rounded-xl px-4 py-2.5 text-sm text-slate-300">Expert <span class="block text-[11px] opacity-70 font-normal">Fast hawks · harsh wind · 1.5× score</span></button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3 mt-7">
+          <button id="btnStart" class="btn-primary rounded-2xl px-7 py-4 text-base">▶&nbsp; Enter the Lab</button>
+          <button id="btnContinue" class="btn-ghost rounded-2xl px-5 py-4 text-sm hidden">Continue campaign →</button>
+          <button id="btnSandboxTitle" class="btn-ghost rounded-2xl px-5 py-4 text-sm">Free Sandbox</button>
+          <button id="btnTourTitle" class="btn-ghost rounded-2xl px-5 py-4 text-sm">Guided Tour</button>
+        </div>
+
+        <div id="titleStats" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-7 max-w-xl"></div>
+
+        <div class="grid sm:grid-cols-2 gap-2.5 mt-5 max-w-xl text-[13px]">
+          <div class="glass-soft rounded-xl p-3"><b class="text-cyan-200">1 · Flocking engine</b><br><span class="text-slate-400">Weights reshape the whole flock instantly — order is measured live.</span></div>
+          <div class="glass-soft rounded-xl p-3"><b class="text-rose-200">2 · Predators &amp; energy</b><br><span class="text-slate-400">Hawks scatter flocks; tired agents slow, feed and roost to recover.</span></div>
+          <div class="glass-soft rounded-xl p-3"><b class="text-amber-200">3 · Wind &amp; terrain</b><br><span class="text-slate-400">Gusts and rocks bend flow, split schools and ruin synchrony.</span></div>
+          <div class="glass-soft rounded-xl p-3"><b class="text-emerald-200">4 · Goals &amp; optimisation</b><br><span class="text-slate-400">Food, rally flags, PSO peaks and a sheep pen pull the swarm.</span></div>
+        </div>
+      </div>
+
+      <div class="glass rounded-3xl p-4 sm:p-5 anim-fadeUp" style="animation-delay:.16s">
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <div class="text-[11px] tracking-[.22em] text-cyan-300/80 font-bold">CAMPAIGN · 5 EXPERIMENTS</div>
+            <h2 class="font-display text-2xl font-bold mt-1">Choose an experiment</h2>
+          </div>
+          <div class="text-right">
+            <div class="text-[11px] text-slate-400">CAMPAIGN PROGRESS</div>
+            <div id="campaignPct" class="font-mono2 font-bold text-emerald-300">0%</div>
+          </div>
+        </div>
+        <div class="meter mt-3"><div id="campaignBar" style="width:0%;background:linear-gradient(90deg,#22d3ee,#34d399,#a3e635)"></div></div>
+        <div id="scenarioGrid" class="grid sm:grid-cols-2 gap-3 mt-4"></div>
+        <div class="mt-4 rounded-2xl border border-amber-300/25 bg-amber-400/10 p-3.5 text-sm flex gap-3">
+          <svg class="shrink-0 mt-0.5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M12 3l2.5 5.6L20.5 9l-4.4 4 1.2 6L12 16l-5.3 3 1.2-6L3.5 9l6-.4z"/></svg>
+          <p class="text-amber-100/90"><b>Capstone — The Sheepdog Trial:</b> you are the dog. Herd 12 sheep into the pen before the clock dies. Every flocking rule you learned becomes your opponent.</p>
+        </div>
+        <p class="text-xs text-slate-400 mt-3">Tip: click a card to select it, then <b class="text-slate-200">Enter the Lab</b>. Double-click a card to launch instantly. Progress, stars and settings save automatically.</p>
+      </div>
+    </div>
+    <footer class="text-[11px] text-slate-500 py-3 flex flex-wrap gap-x-4 gap-y-1"><span>Keyboard: <span class="kbd">Space</span> pause · <span class="kbd">1–6</span> tools · <span class="kbd">WASD</span> dog / nudge · <span class="kbd">B</span> bark · <span class="kbd">H</span> help</span><span>Mouse &amp; touch fully supported.</span></footer>
+  </div>
+</section>
+
+<!-- ======================= SIM SCREEN ======================= -->
+<section id="simScreen" class="hidden min-h-screen flex flex-col" style="background:radial-gradient(1000px 500px at 20% -5%,rgba(34,211,238,.10),transparent 55%),radial-gradient(900px 500px at 95% 0%,rgba(167,139,250,.09),transparent 55%),#050914">
+  <!-- HUD -->
+  <header class="sticky top-0 z-30 glass border-x-0 border-t-0 px-3 sm:px-4 py-2.5">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center gap-2">
+      <button id="btnExitTitle" class="btn-ghost rounded-xl px-3 py-2 text-sm" title="Back to title">← Title</button>
+      <div class="min-w-[150px]">
+        <div id="hudScenario" class="font-display font-bold leading-tight text-sm sm:text-base">Murmuration Meadow</div>
+        <div id="hudModeLine" class="text-[11px] text-cyan-200/70 font-mono2">STANDARD · SEED 1337</div>
+      </div>
+      <div class="flex items-center gap-2 ml-1">
+        <div class="chip rounded-xl px-3 py-1.5 text-center"><div class="text-[9px] tracking-widest text-slate-400">TIME</div><div id="hudTime" class="font-mono2 font-bold text-sm leading-none">02:30</div></div>
+        <div class="chip rounded-xl px-3 py-1.5 text-center"><div class="text-[9px] tracking-widest text-slate-400">SCORE</div><div id="hudScore" class="font-mono2 font-bold text-sm leading-none text-emerald-300">0</div></div>
+        <div class="chip rounded-xl px-3 py-1.5 text-center hidden sm:block"><div class="text-[9px] tracking-widest text-slate-400">RESEARCH</div><div id="hudResearch" class="font-mono2 font-bold text-sm leading-none text-violet-300">0</div></div>
+        <div class="chip rounded-xl px-3 py-1.5 text-center hidden md:block"><div class="text-[9px] tracking-widest text-slate-400">ORDER φ</div><div id="hudOrderChip" class="font-mono2 font-bold text-sm leading-none text-cyan-300">0.00</div></div>
+      </div>
+      <div class="flex items-center gap-1.5 ml-auto">
+        <div class="flex rounded-xl overflow-hidden border border-cyan-200/20" role="group" aria-label="Simulation speed">
+          <button data-speed="0.5" class="seg-btn speed-btn px-2.5 py-2 text-xs font-mono2">0.5×</button>
+          <button data-speed="1" class="seg-btn speed-btn active px-2.5 py-2 text-xs font-mono2">1×</button>
+          <button data-speed="2" class="seg-btn speed-btn px-2.5 py-2 text-xs font-mono2">2×</button>
+          <button data-speed="4" class="seg-btn speed-btn px-2.5 py-2 text-xs font-mono2">4×</button>
+        </div>
+        <button id="btnPauseTop" class="btn-primary rounded-xl px-3.5 py-2 text-sm">Pause</button>
+        <button id="btnRestartTop" class="btn-ghost rounded-xl px-3 py-2 text-sm" title="Restart scenario">Restart</button>
+        <button id="btnSoundTop" class="btn-ghost rounded-xl px-3 py-2 text-sm" title="Mute / unmute">Sound</button>
+        <button id="btnHelpTop" class="btn-ghost rounded-xl px-3 py-2 text-sm">Help</button>
+        <button id="btnSettingsTop" class="btn-ghost rounded-xl px-3 py-2 text-sm">⚙</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 w-full max-w-[1600px] mx-auto p-3 grid gap-3 lg:grid-cols-[288px_minmax(0,1fr)_300px] items-start">
+    <!-- LEFT: CONTROLS -->
+    <aside id="leftPanel" class="glass rounded-3xl p-4 space-y-5 order-2 lg:order-1">
+      <div>
+        <div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80 mb-2">TOOLS <span class="text-slate-500 normal-case tracking-normal font-medium">— click, drag, play god gently</span></div>
+        <div id="toolGrid" class="grid grid-cols-2 gap-2">
+          <button class="tool-btn active rounded-xl p-2.5" data-tool="inspect"><span class="text-sm font-semibold block">◎ Inspect</span><span class="text-[11px] text-slate-400">Select an agent <span class="kbd">1</span></span></button>
+          <button class="tool-btn rounded-xl p-2.5" data-tool="food"><span class="text-sm font-semibold block text-lime-200">✦ Food Bloom</span><span class="text-[11px] text-slate-400">Feed the swarm <span class="kbd">2</span></span></button>
+          <button class="tool-btn rounded-xl p-2.5" data-tool="obstacle"><span class="text-sm font-semibold block text-slate-200">⬢ Rock</span><span class="text-[11px] text-slate-400">Block flow <span class="kbd">3</span></span></button>
+          <button class="tool-btn rounded-xl p-2.5" data-tool="roost"><span class="text-sm font-semibold block text-cyan-200">⌂ Roost</span><span class="text-[11px] text-slate-400">Rest + energy <span class="kbd">4</span></span></button>
+          <button class="tool-btn rounded-xl p-2.5" data-tool="wind"><span class="text-sm font-semibold block text-sky-200">➤ Wind</span><span class="text-[11px] text-slate-400">Drag = gust vector <span class="kbd">5</span></span></button>
+          <button class="tool-btn rounded-xl p-2.5" data-tool="erase"><span class="text-sm font-semibold block text-rose-200">⌫ Erase</span><span class="text-[11px] text-slate-400">Remove things <span class="kbd">6</span></span></button>
+        </div>
+        <button id="btnBark" class="btn-primary w-full rounded-xl py-2.5 mt-2 hidden">BARK! <span class="font-normal text-xs">(B — sheep scatter from the dog)</span></button>
+      </div>
+
+      <div>
+        <div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80 mb-2">FLOCK FORCES — <span class="text-emerald-300">LIVE</span></div>
+        <div class="space-y-3 text-[13px]">
+          <label class="block">Separation <span id="valSep" class="float-right font-mono2 text-cyan-200">1.20</span><input id="rngSep" type="range" min="0" max="3" step="0.05" value="1.2"><span class="text-[11px] text-slate-500">Personal space. Too high = shattering.</span></label>
+          <label class="block">Alignment <span id="valAli" class="float-right font-mono2 text-cyan-200">1.10</span><input id="rngAli" type="range" min="0" max="3" step="0.05" value="1.1"><span class="text-[11px] text-slate-500">Match neighbours' heading. Drives order φ.</span></label>
+          <label class="block">Cohesion <span id="valCoh" class="float-right font-mono2 text-cyan-200">0.85</span><input id="rngCoh" type="range" min="0" max="3" step="0.05" value="0.85"><span class="text-[11px] text-slate-500">Stay with the group. Too high = collapse ball.</span></label>
+          <label class="block">Perception radius <span id="valPer" class="float-right font-mono2 text-cyan-200">46</span><input id="rngPer" type="range" min="18" max="110" step="1" value="46"></label>
+          <label class="block">Max speed <span id="valSpd" class="float-right font-mono2 text-cyan-200">118</span><input id="rngSpd" type="range" min="40" max="240" step="2" value="118"></label>
+          <label class="block">Turbulence <span id="valTurb" class="float-right font-mono2 text-cyan-200">0.35</span><input id="rngTurb" type="range" min="0" max="2" step="0.05" value="0.35"><span class="text-[11px] text-slate-500">Individual wander &amp; noise. Bees love it.</span></label>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80 mb-2">POPULATION</div>
+        <div class="grid grid-cols-3 gap-2">
+          <button data-add="starling" class="btn-ghost rounded-xl px-2 py-2 text-xs">+10<br><b class="text-violet-200">Starlings</b></button>
+          <button data-add="fish" class="btn-ghost rounded-xl px-2 py-2 text-xs">+10<br><b class="text-teal-200">Koi School</b></button>
+          <button data-add="bee" class="btn-ghost rounded-xl px-2 py-2 text-xs">+10<br><b class="text-amber-200">Honeybees</b></button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <button id="btnRemove10" class="btn-ghost rounded-xl px-2 py-2 text-xs">Cull 10 random</button>
+          <button id="btnScatter" class="btn-ghost rounded-xl px-2 py-2 text-xs">Scatter flock!</button>
+        </div>
+        <label class="flex items-center gap-2 mt-3 text-[13px] text-slate-300"><input id="chkTrails" type="checkbox" checked class="accent-emerald-400 w-4 h-4"> Motion trails</label>
+      </div>
+
+      <div>
+        <div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80 mb-2">ENVIRONMENT</div>
+        <label class="block text-[13px]">Wind direction <span id="valWindDir" class="float-right font-mono2 text-sky-200">20°</span><input id="rngWindDir" type="range" min="0" max="359" step="1" value="20"></label>
+        <label class="block text-[13px] mt-3">Wind strength <span id="valWindStr" class="float-right font-mono2 text-sky-200">14</span><input id="rngWindStr" type="range" min="0" max="60" step="1" value="14"></label>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          <button id="btnGust" class="btn-ghost rounded-xl px-2 py-2 text-xs">Trigger Gust</button>
+          <button id="btnHawk" class="btn-ghost rounded-xl px-2 py-2 text-xs text-rose-200">Release Hawk</button>
+          <button id="btnRally" class="btn-ghost rounded-xl px-2 py-2 text-xs text-emerald-200">Rally Flag: OFF</button>
+          <button id="btnClearObs" class="btn-ghost rounded-xl px-2 py-2 text-xs">Clear Rocks</button>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-2">Wind bends flight paths; gusts wreck synchrony but can carry a tired flock home. Hawks cost 40 score and cause beautiful panic.</p>
+      </div>
+    </aside>
+
+    <!-- CENTER: WORLD -->
+    <section class="order-1 lg:order-2 min-w-0">
+      <div id="canvasWrap" class="relative rounded-3xl overflow-hidden border border-cyan-200/15 shadow-2xl shadow-black/50" style="height:min(72vh,760px);min-height:430px;background:#071022">
+        <canvas id="world" class="absolute inset-0 w-full h-full touch-none cursor-crosshair"></canvas>
+        <div id="dangerVignette" class="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-300" style="background:radial-gradient(ellipse at center,transparent 52%,rgba(244,63,94,.38) 100%)"></div>
+        <div class="absolute top-3 left-3 flex flex-wrap gap-2 pointer-events-none">
+          <span id="bannerMode" class="glass-soft rounded-full px-3 py-1.5 text-xs font-semibold">Murmuration Meadow</span>
+          <span id="bannerEvent" class="glass-soft rounded-full px-3 py-1.5 text-xs text-amber-200 hidden">Event incoming…</span>
+        </div>
+        <div class="absolute top-3 right-3 glass-soft rounded-2xl px-3 py-2 pointer-events-none text-right">
+          <div class="text-[9px] tracking-widest text-slate-400">WIND</div>
+          <div class="flex items-center gap-2 justify-end"><span id="windArrow" class="inline-block text-sky-300 text-lg leading-none">➤</span><span id="windText" class="font-mono2 text-xs">14 · 20°</span></div>
+        </div>
+        <div id="rallyHint" class="absolute bottom-3 left-3 glass-soft rounded-full px-3 py-1.5 text-xs pointer-events-none">Tool: Inspect — click any agent to follow it.</div>
+        <button id="btnBarkFloat" class="btn-primary absolute bottom-3 right-3 rounded-full px-5 py-3 text-sm hidden">BARK (B)</button>
+      </div>
+      <div class="glass rounded-2xl mt-3 px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-slate-300">
+        <span><b class="text-slate-100">How to play:</b> drag sliders and watch the flock answer. Place food where agents starve; drop rocks to split a school; survive the hawks.</span>
+        <span class="text-slate-500">Keys: <span class="kbd">Space</span> pause · <span class="kbd">1–6</span> tools · <span class="kbd">WASD</span> dog · <span class="kbd">B</span> bark · <span class="kbd">Esc</span> menu</span>
+      </div>
+      <div id="tourBox" class="hidden mt-3 rounded-2xl border border-emerald-300/40 bg-emerald-400/10 p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-emerald-400 text-emerald-950 font-bold grid place-items-center shrink-0" id="tourStepNum">1</div>
+          <div class="flex-1"><div id="tourTitle" class="font-bold">Welcome</div><p id="tourText" class="text-sm text-slate-300 mt-0.5"></p></div>
+          <button id="btnTourSkip" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">Skip</button>
+          <button id="btnTourNext" class="btn-primary rounded-lg px-4 py-1.5 text-xs">Next →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: METRICS -->
+    <aside class="glass rounded-3xl p-4 space-y-4 order-3">
+      <div id="objectiveCard" class="rounded-2xl border border-emerald-300/25 bg-emerald-400/[.07] p-3.5">
+        <div class="text-[10px] tracking-[.2em] font-bold text-emerald-300">OBJECTIVE</div>
+        <div id="objectiveTitle" class="font-display font-bold mt-1">Hold the murmuration</div>
+        <p id="objectiveDesc" class="text-[12.5px] text-slate-300 mt-1 leading-snug">Keep order φ ≥ 0.80 for 12 s total.</p>
+        <div class="meter mt-2.5"><div id="objectiveBar" style="width:0%;background:linear-gradient(90deg,#34d399,#a3e635)"></div></div>
+        <div id="objectiveText" class="font-mono2 text-[11px] text-emerald-200 mt-1.5">0.0 / 12 s</div>
+      </div>
+
+      <div>
+        <div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80 mb-2">LIVE METRICS</div>
+        <div class="space-y-2.5 text-[13px]">
+          <div>Order parameter φ <span id="mOrder" class="float-right font-mono2 text-cyan-200">0.00</span><div class="meter mt-1"><div id="mOrderBar" style="width:0%;background:linear-gradient(90deg,#0891b2,#22d3ee,#a5f3fc)"></div></div><div class="text-[11px] text-slate-500">1.0 = every agent flying as one. Hawks &amp; gusts tear it down.</div></div>
+          <div>Mean energy <span id="mEnergy" class="float-right font-mono2 text-amber-200">80</span><div class="meter mt-1"><div id="mEnergyBar" style="width:80%;background:linear-gradient(90deg,#b45309,#fbbf24,#fde68a)"></div></div></div>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="chip rounded-xl py-2"><div class="text-[9px] tracking-widest text-slate-400">AGENTS</div><div id="mPop" class="font-mono2 font-bold">0</div></div>
+            <div class="chip rounded-xl py-2"><div class="text-[9px] tracking-widest text-slate-400">NEAREST-N</div><div id="mNN" class="font-mono2 font-bold">0</div></div>
+            <div class="chip rounded-xl py-2"><div class="text-[9px] tracking-widest text-slate-400">EATEN</div><div id="mEaten" class="font-mono2 font-bold">0</div></div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <div class="flex justify-between text-[11px] text-slate-400"><span><span class="text-cyan-300">—</span> Order φ</span><span><span class="text-amber-300">—</span> Energy</span><span id="chartNote">last 60 s</span></div>
+          <canvas id="chartMain" width="268" height="74" class="w-full rounded-xl border border-white/10 bg-black/25 mt-1"></canvas>
+          <canvas id="chartPop" width="268" height="52" class="w-full rounded-xl border border-white/10 bg-black/25 mt-2"></canvas>
+          <div class="text-[11px] text-slate-500 flex justify-between"><span>Population / best fitness</span><span id="mBestFit" class="font-mono2 text-emerald-300"></span></div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-black/20 p-3">
+        <div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80">INSPECTOR</div>
+        <div id="inspBody" class="text-[12.5px] text-slate-300 mt-1.5 leading-relaxed">Click any agent with the Inspect tool. You'll see its species, energy, speed, neighbours and mood — then watch its ring in the world.</div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between"><div class="text-[11px] tracking-[.2em] font-bold text-cyan-300/80">EVENT LOG</div><button id="btnClearLog" class="text-[11px] text-slate-400 hover:text-slate-200">clear</button></div>
+        <div id="eventLog" class="scroll-thin space-y-1.5 mt-2 max-h-[190px] overflow-y-auto pr-1 text-[12px]"></div>
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-black/20 p-3 text-[11.5px] text-slate-400 leading-relaxed">
+        <b class="text-slate-200">Legend:</b> <span class="text-violet-300">▲ starling</span> · <span class="text-teal-300">▲ koi</span> · <span class="text-amber-300">● bee</span> · <span class="text-rose-300">▼ hawk</span> · <span class="text-lime-300">✦ food</span> · <span class="text-cyan-300">⌂ roost</span> · <span class="text-slate-300">⬢ rock</span>
+      </div>
+    </aside>
+  </main>
+</section>
+
+<!-- ======================= MODALS ======================= -->
+<div id="helpModal" class="hidden fixed inset-0 z-50 modal-bg grid place-items-center p-4">
+  <div class="glass rounded-3xl max-w-2xl w-full max-h-[88vh] overflow-y-auto scroll-thin p-6">
+    <div class="flex items-start justify-between"><h3 class="font-display text-2xl font-bold">How the Lab works</h3><button data-close="helpModal" class="btn-ghost rounded-lg px-3 py-1.5">✕</button></div>
+    <div class="space-y-4 text-sm text-slate-300 mt-4 leading-relaxed">
+      <p><b class="text-white">The 60-second version:</b> press <b>Enter the Lab</b>, then drag <b>Alignment</b> up and watch scattered dots snap into a single flowing ribbon — that's emergence. Then hit <b>Release Hawk</b> and watch it shatter. Your job in every experiment: keep the swarm coherent, fed and alive.</p>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div class="rounded-xl bg-white/5 p-3"><b class="text-cyan-200">Flocking ⇄ Everything</b><br>Separation / alignment / cohesion shape order φ. High φ scores points in Exp. 1, keeps fish safe in packs, and makes sheep predictable for your dog.</div>
+        <div class="rounded-xl bg-white/5 p-3"><b class="text-amber-200">Energy ⇄ Speed ⇄ Food</b><br>Flying burns energy; slow, tired agents can't flee or feed. Food blooms and roosts refill them. Starving swarms dissolve.</div>
+        <div class="rounded-xl bg-white/5 p-3"><b class="text-rose-200">Predators ⇄ Order</b><br>Hawks chase the nearest agent. Fleeing breaks alignment — but tight, fast flocks out-turn a hawk. Every catch costs population and score.</div>
+        <div class="rounded-xl bg-white/5 p-3"><b class="text-sky-200">Wind &amp; rocks ⇄ Flow</b><br>Wind pushes light bees hardest, starlings least. Rocks split schools (nearest-neighbour distance spikes) — sometimes that's exactly what a dog needs.</div>
+      </div>
+      <p><b class="text-white">Experiments:</b> ① Hold φ ≥ 0.80 for 12 s. ② Eat 35 food before time runs out. ③ Survive 120 s of hawks with ≥ 25 alive. ④ PSO: particles remember personal bests and follow the global best across a hidden landscape — find fitness 92+. ⑤ <b>Capstone:</b> steer the dog (mouse or WASD, <span class="kbd">B</span> to bark) and pen 12 sheep.</p>
+      <p><b class="text-white">Tools:</b> Inspect (follow one agent), Food, Rock, Roost, Wind (drag on the world to aim a gust), Erase. Sliders act instantly — experiment mid-crisis. Speed controls (0.5×–4×) sit top-right; <span class="kbd">Space</span> pauses.</p>
+      <p class="text-slate-400">Research points from every run raise your Lab Level and persist between visits, along with campaign stars, unlocked experiments and your audio/ graphics settings.</p>
+    </div>
+    <div class="flex gap-2 mt-5"><button id="btnStartTour2" class="btn-primary rounded-xl px-5 py-2.5 text-sm">Start guided tour</button><button data-close="helpModal" class="btn-ghost rounded-xl px-5 py-2.5 text-sm">Close</button></div>
+  </div>
+</div>
+
+<div id="settingsModal" class="hidden fixed inset-0 z-50 modal-bg grid place-items-center p-4">
+  <div class="glass rounded-3xl max-w-md w-full p-6">
+    <div class="flex items-start justify-between"><h3 class="font-display text-2xl font-bold">Settings</h3><button data-close="settingsModal" class="btn-ghost rounded-lg px-3 py-1.5">✕</button></div>
+    <div class="space-y-4 mt-5 text-sm">
+      <label class="block">Master volume <span id="setVolVal" class="float-right font-mono2 text-cyan-200">70%</span><input id="setVolume" type="range" min="0" max="100" step="1" value="70"></label>
+      <label class="flex items-center gap-2"><input id="setMute" type="checkbox" class="accent-rose-400 w-4 h-4"> Mute all audio</label>
+      <label class="flex items-center gap-2"><input id="setTrails" type="checkbox" checked class="accent-emerald-400 w-4 h-4"> Motion trails</label>
+      <label class="flex items-center gap-2"><input id="setParticles" type="checkbox" checked class="accent-emerald-400 w-4 h-4"> Particles &amp; screen feedback</label>
+      <label class="block">Default difficulty <select id="setDifficulty" class="w-full mt-1"><option value="relaxed">Relaxed</option><option value="standard" selected>Standard</option><option value="expert">Expert</option></select></label>
+      <div class="rounded-xl bg-white/5 p-3 text-slate-400 text-[13px]">Audio is 100% synthesised in your browser: wind noise follows the gusts, bees hum, hawks screech, sheep complain. No files, ever.</div>
+      <button id="btnResetProgress" class="w-full rounded-xl border border-rose-400/40 bg-rose-500/10 text-rose-200 py-2.5 hover:bg-rose-500/20 transition">Reset campaign progress &amp; research</button>
+    </div>
+    <button data-close="settingsModal" class="btn-primary w-full rounded-xl py-2.5 mt-5 text-sm">Done</button>
+  </div>
+</div>
+
+<div id="pauseModal" class="hidden fixed inset-0 z-50 modal-bg grid place-items-center p-4">
+  <div class="glass rounded-3xl max-w-sm w-full p-6 text-center">
+    <div class="text-[11px] tracking-[.25em] text-cyan-300 font-bold">SIMULATION PAUSED</div>
+    <h3 class="font-display text-3xl font-bold mt-2">Frozen mid-flap</h3>
+    <p class="text-sm text-slate-400 mt-2">The swarm holds its breath. Adjust sliders — they'll apply the instant you resume.</p>
+    <div class="grid gap-2 mt-5">
+      <button id="btnResume" class="btn-primary rounded-xl py-3">Resume</button>
+      <button id="btnPauseRestart" class="btn-ghost rounded-xl py-2.5 text-sm">Restart experiment</button>
+      <button id="btnPauseSettings" class="btn-ghost rounded-xl py-2.5 text-sm">Settings</button>
+      <button id="btnQuitTitle" class="btn-ghost rounded-xl py-2.5 text-sm">Save &amp; quit to title</button>
+    </div>
+  </div>
+</div>
+
+<div id="endModal" class="hidden fixed inset-0 z-50 modal-bg grid place-items-center p-4">
+  <div class="glass rounded-3xl max-w-lg w-full p-6 sm:p-7 text-center relative overflow-hidden">
+    <div id="endGlow" class="absolute inset-x-0 top-0 h-1.5" style="background:linear-gradient(90deg,#22d3ee,#34d399,#a3e635)"></div>
+    <div id="endStars" class="text-3xl tracking-[.3em] text-amber-300 font-display"></div>
+    <h3 id="endTitle" class="font-display text-3xl sm:text-4xl font-bold mt-2">Experiment Complete</h3>
+    <p id="endSubtitle" class="text-slate-300 text-sm mt-2"></p>
+    <div id="endStats" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5 text-left"></div>
+    <div id="endResearch" class="mt-4 rounded-xl bg-violet-400/10 border border-violet-300/25 text-violet-200 text-sm py-2.5 px-3"></div>
+    <div class="flex flex-wrap justify-center gap-2 mt-5">
+      <button id="btnEndNext" class="btn-primary rounded-xl px-5 py-2.5 text-sm">Next experiment →</button>
+      <button id="btnEndReplay" class="btn-ghost rounded-xl px-5 py-2.5 text-sm">Replay</button>
+      <button id="btnEndSandbox" class="btn-ghost rounded-xl px-5 py-2.5 text-sm">Sandbox</button>
+      <button id="btnEndTitle" class="btn-ghost rounded-xl px-5 py-2.5 text-sm">Title</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts" class="fixed bottom-4 right-4 z-[60] space-y-2 w-[300px] max-w-[calc(100vw-2rem)] pointer-events-none"></div>
+
+<script>
+'use strict';
+/* ============================================================
+   SWARM INTELLIGENCE LAB — boids · predators · wind · PSO · herding
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const $$=(sel,root=document)=>Array.from(root.querySelectorAll(sel));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const TAU=Math.PI*2;
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let rng=mulberry32(1337);
+const rand=(a=1,b)=> b===undefined? rng()*a : a+rng()*(b-a);
+
+/* ---------------- persistence ---------------- */
+const SAVE_KEY='swarmLabSaveV1';
+const defaultSave=()=>({stars:{},best:{},unlocked:0,totalResearch:0,achievements:[],lastScenario:'murmuration',settings:{volume:.7,mute:false,trails:true,particles:true,difficulty:'standard'},seenTour:false});
+let save=defaultSave();
+try{const raw=localStorage.getItem(SAVE_KEY); if(raw){const p=JSON.parse(raw); save=Object.assign(defaultSave(),p); save.settings=Object.assign(defaultSave().settings,p.settings||{});}}catch(e){}
+function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(save));}catch(e){}}
+let settings=save.settings;
+
+/* ---------------- audio (all synthesized) ---------------- */
+const AudioSys={
+  ctx:null,master:null,ambientGain:null,started:false,
+  init(){ if(this.ctx) { if(this.ctx.state==='suspended') this.ctx.resume(); return; }
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+      this.ctx=new AC(); this.master=this.ctx.createGain(); this.master.gain.value=settings.mute?0:settings.volume; this.master.connect(this.ctx.destination);
+      const len=2*this.ctx.sampleRate, buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+      const src=this.ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+      const filt=this.ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=320;
+      this.ambientGain=this.ctx.createGain(); this.ambientGain.gain.value=0.0;
+      src.connect(filt); filt.connect(this.ambientGain); this.ambientGain.connect(this.master); src.start();
+      this.started=true;
+    }catch(e){}
+  },
+  apply(){ if(this.master) this.master.gain.setTargetAtTime(settings.mute?0:settings.volume,this.ctx.currentTime,.05); },
+  setWind(v){ if(this.ambientGain&&this.ctx) this.ambientGain.gain.setTargetAtTime(clamp(.012+v*.0016,0,.11),this.ctx.currentTime,.4); },
+  tone(f0,f1,dur,type='sine',vol=.15,when=0){ if(!this.ctx||settings.mute) return; const t=this.ctx.currentTime+when; const o=this.ctx.createOscillator(),g=this.ctx.createGain(); o.type=type; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur); o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+.02); },
+  click(){this.tone(720,520,.06,'triangle',.08)},
+  pop(){this.tone(500+Math.random()*260,980,.09,'sine',.12)},
+  chirp(){this.tone(1400+Math.random()*700,1900,.07,'sine',.05)},
+  screech(){this.tone(1500,260,.5,'sawtooth',.10); this.tone(2300,400,.35,'square',.04,.05)},
+  bark(){this.tone(210,70,.13,'square',.20); this.tone(150,60,.10,'square',.14,.09)},
+  baa(){this.tone(320+Math.random()*80,240,.16,'triangle',.06)},
+  success(){[523,659,784,1047].forEach((f,i)=>this.tone(f,f,.22,'triangle',.13,i*.11))},
+  fail(){[392,330,262,196].forEach((f,i)=>this.tone(f,f*.9,.25,'triangle',.11,i*.13))}
+};
+document.addEventListener('pointerdown',()=>AudioSys.init(),{once:false});
+
+/* ---------------- definitions ---------------- */
+const DIFFS={
+  relaxed:{label:'Relaxed',hawkSpeed:.78,energyDrain:.6,timeMult:1.5,gust:.6,scoreMult:.8,orderNeed:.76},
+  standard:{label:'Standard',hawkSpeed:1,energyDrain:1,timeMult:1,gust:1,scoreMult:1,orderNeed:.80},
+  expert:{label:'Expert',hawkSpeed:1.28,energyDrain:1.4,timeMult:.82,gust:1.6,scoreMult:1.5,orderNeed:.84}
+};
+const SPECIES={
+  starling:{name:'Starling',color:'#c4b5fd',edge:'#7c3aed',size:4.6,speedMul:1.08,windMul:.55,sep:1,ali:1.25,coh:1,turn:5.2},
+  fish:{name:'Koi Schooler',color:'#5eead4',edge:'#0d9488',size:4.2,speedMul:.92,windMul:.8,sep:.8,ali:1.15,coh:1.3,turn:6.4},
+  bee:{name:'Honeybee',color:'#fcd34d',edge:'#b45309',size:3.6,speedMul:.8,windMul:1.5,sep:1.1,ali:.55,coh:.8,turn:9,wander:2.6},
+  sheep:{name:'Sheep',color:'#f8fafc',edge:'#94a3b8',size:6.4,speedMul:.62,windMul:.3,sep:1.15,ali:.9,coh:1.15,turn:3.4},
+  particle:{name:'PSO Particle',color:'#7dd3fc',edge:'#0284c7',size:3.4,speedMul:1,windMul:0,sep:0,ali:0,coh:0,turn:99}
+};
+const SCENARIOS=[
+ {id:'murmuration',num:'01',name:'Murmuration Meadow',tag:'SYNCHRONISE',desc:'Hold order φ high while gusts try to tear the ribbon apart.',objective:'Keep order φ at or above the threshold for 12 s total.',time:150,par:900,color:'#a78bfa'},
+ {id:'forage',num:'02',name:'Foraging Frenzy',tag:'FEED THE SWARM',desc:'Food blooms fade fast. Hungry agents slow down — route the swarm, rest at roosts.',objective:'Eat 35 food blooms before the clock runs out.',time:150,par:1100,color:'#a3e635'},
+ {id:'evasion',num:'03',name:'Predator Evasion',tag:'SURVIVE THE HAWKS',desc:'Two hawks, one flock. Tight fast schools out-turn them; scattered stragglers die.',objective:'Survive 120 s with at least 25 agents alive.',time:150,par:1200,color:'#fb7185'},
+ {id:'pso',num:'04',name:'Peak Finder · PSO',tag:'OPTIMISE',desc:'Each particle remembers its best find and trusts the swarm\'s. Discover the hidden summit.',objective:'Reach landscape fitness 92+ (watch the gold glow).',time:180,par:1300,color:'#38bdf8'},
+ {id:'sheepdog',num:'05',name:'The Sheepdog Trial',tag:'★ CAPSTONE',desc:'You are the dog. Mouse or WASD to move, B to bark. Sheep flock, flee and exploit rocks.',objective:'Herd 12 sheep into the amber pen and hold them 2 s.',time:150,par:1600,color:'#fbbf24'}
+];
+const SANDBOX={id:'sandbox',num:'∞',name:'Free Sandbox',tag:'NO CLOCK · NO MERCY',desc:'Every tool, every species, no fail state except extinction (fixable).',objective:'Experiment freely. Milestones still pay research.',time:0,par:99999,color:'#34d399'};
+let selectedScenarioId='murmuration', selectedDifficulty=settings.difficulty||'standard';
+
+/* ---------------- state ---------------- */
+let S=null, W=900, H=560, titleBoids=[], mouse={x:450,y:280,down:false,in:false};
+let currentTool='inspect', tourStep=-1, rafId=null, lastTs=0, hudTimer=0, sampleTimer=0, chartFlip=false;
+function newParams(){return {sep:1.2,ali:1.1,coh:.85,per:46,spd:118,turb:.35}}
+function freshState(scId){
+  const sc=SCENARIOS.find(s=>s.id===scId)||SANDBOX;
+  const diff=DIFFS[selectedDifficulty];
+  return {scenarioId:scId,sc,diff,diffKey:selectedDifficulty,params:newParams(),time:0,elapsed:0,timeLeft:sc.time? sc.time*diff.timeMult:0,speed:1,paused:false,ended:false,
+    boids:[],predators:[],foods:[],obstacles:[],roosts:[],particles:[],floats:[],streaks:[],
+    wind:{dir:20*Math.PI/180,str:14,gustT:0,gustStr:0},score:0,research:0,foodEaten:0,catches:0,evasions:0,syncTime:0,penTime:0,pennedNow:0,
+    order:0,avgEnergy:0,nn:0,bestFit:0,gBest:{x:0,y:0,v:-1},peaks:[],pen:null,dog:null,rally:null,rallyT:0,nextEvent:16,hawkCD:0,barkCD:0,
+    histOrder:[],histEnergy:[],histPop:[],selected:null,shake:0,eventFx:null,eventFxT:0,warned30:false,baaT:0};
+}
+
+/* ---------------- helpers: DOM feedback ---------------- */
+function toast(title,sub='',color='#34d399'){ const el=document.createElement('div'); el.className='toast glass rounded-2xl px-4 py-3 pointer-events-auto'; el.style.borderColor=color; el.innerHTML=`<div class="font-bold text-sm" style="color:${color}">${title}</div>${sub?`<div class="text-xs text-slate-300 mt-0.5">${sub}</div>`:''}`; $('toasts').appendChild(el); setTimeout(()=>{el.style.transition='all .4s';el.style.opacity='0';el.style.transform='translateX(20px)'; setTimeout(()=>el.remove(),420)},3600); }
+function logEvent(msg,type='info'){ const log=$('eventLog'); if(!log) return; const el=document.createElement('div'); el.className='log-item '+({info:'',warn:'log-warn',bad:'log-bad',good:'log-good'}[type]||'')+' rounded-r-lg bg-white/[.04] px-2.5 py-1.5'; el.innerHTML=`<span class="font-mono2 text-[10px] text-slate-500">${S?fmtTime(S.elapsed):'00:00'}</span> ${msg}`; log.prepend(el); while(log.children.length>34) log.lastChild.remove(); }
+function fmtTime(s){s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function achievement(id,title,sub){ if(save.achievements.includes(id)) return; save.achievements.push(id); persist(); toast('Achievement — '+title,sub,'#fbbf24'); AudioSys.tone(880,1320,.18,'triangle',.12); }
+function addFloat(x,y,text,color='#a3e635'){ if(!S) return; S.floats.push({x,y,text,color,life:1}); }
+function burst(x,y,color,n=12,spd=130){ if(!S||!settings.particles) return; for(let i=0;i<n;i++){const a=rand(TAU),s=rand(.25,1)*spd; S.particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(.35,.8),max:.8,color,size:rand(1.2,3.2)});} }
+
+/* ---------------- title screen ---------------- */
+function renderTitle(){
+  const grid=$('scenarioGrid'); grid.innerHTML='';
+  SCENARIOS.forEach((sc,i)=>{
+    const locked=i>save.unlocked, stars=save.stars[sc.id]||0, best=save.best[sc.id]||0;
+    const card=document.createElement('div');
+    card.className='scenario-card rounded-2xl p-3.5 '+(locked?'locked':'')+(selectedScenarioId===sc.id?' selected':'');
+    card.innerHTML=`<div class="flex items-center justify-between"><span class="font-mono2 text-[11px] font-bold" style="color:${sc.color}">${sc.num} · ${sc.tag}</span><span class="text-amber-300 text-sm tracking-widest">${'★'.repeat(stars)}<span class="text-slate-600">${'★'.repeat(3-stars)}</span></span></div>
+      <div class="font-display font-bold mt-1.5">${locked?'🔒 ':''}${sc.name}</div><p class="text-[12px] text-slate-400 leading-snug mt-1">${sc.desc}</p>
+      <div class="flex justify-between mt-2 text-[11px] font-mono2 text-slate-500"><span>${sc.time}s limit</span><span>${best?('BEST '+best):'not cleared'}</span></div>`;
+    card.title=locked?'Clear the previous experiment to unlock':'Click to select · double-click to launch';
+    card.addEventListener('click',()=>{ AudioSys.init(); AudioSys.click(); if(locked){toast('Locked','Clear the previous experiment to unlock this one.','#f59e0b');return;} selectedScenarioId=sc.id; renderTitle(); });
+    card.addEventListener('dblclick',()=>{ if(!locked){ selectedScenarioId=sc.id; startScenario(sc.id); }});
+    grid.appendChild(card);
+  });
+  const done=SCENARIOS.filter(s=>save.stars[s.id]).length;
+  $('campaignPct').textContent=Math.round(done/SCENARIOS.length*100)+'% · Lab Lv '+labLevel();
+  $('campaignBar').style.width=(done/SCENARIOS.length*100)+'%';
+  $('btnContinue').classList.toggle('hidden',done===0&&save.totalResearch===0);
+  const stats=[['Lab Level',labLevel()],['Total Research',save.totalResearch],['Experiments cleared',done+' / 5'],['Achievements',save.achievements.length+' / 6']];
+  $('titleStats').innerHTML=stats.map(([k,v])=>`<div class="glass-soft rounded-xl px-3 py-2.5"><div class="text-[9px] tracking-widest text-slate-400">${k.toUpperCase()}</div><div class="font-mono2 font-bold text-lg leading-tight">${v}</div></div>`).join('');
+  $$('#diffPills .diff-pill').forEach(p=>p.classList.toggle('active',p.dataset.diff===selectedDifficulty));
+  $('soundTitleState').textContent=settings.mute?'OFF':'ON';
+}
+function labLevel(){return Math.floor(Math.sqrt(save.totalResearch/90))+1}
+
+/* ---------------- world construction ---------------- */
+function landscapeVal(nx,ny){ if(!S||!S.peaks.length) return 0; let v=6; for(const p of S.peaks){const dx=nx-p.x,dy=ny-p.y; v+=p.h*Math.exp(-(dx*dx+dy*dy)/(2*p.r*p.r));} return clamp(v,0,100); }
+let landscapeCanvas=null;
+function buildLandscape(){ landscapeCanvas=document.createElement('canvas'); const lw=180,lh=Math.max(80,Math.round(180*H/W)); landscapeCanvas.width=lw; landscapeCanvas.height=lh; const c=landscapeCanvas.getContext('2d'); const img=c.createImageData(lw,lh);
+  for(let y=0;y<lh;y++)for(let x=0;x<lw;x++){const v=landscapeVal(x/lw,y/lh)/100; const idx=(y*lw+x)*4; const t=v; img.data[idx]=Math.round(10+ t*t*255); img.data[idx+1]=Math.round(18+Math.pow(t,1.4)*190); img.data[idx+2]=Math.round(48+(1-t)*90+t*30); img.data[idx+3]=255;}
+  c.putImageData(img,0,0);
+}
+function spawnBoid(species,x,y){ const sp=SPECIES[species]; const a=rand(TAU), spd=rand(50,90)*sp.speedMul;
+  const b={species,x:x??rand(60,W-60),y:y??rand(60,H-60),vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,energy:rand(68,96),phase:rand(TAU),trail:[],starveT:0,resting:false,
+    pBestX:0,pBestY:0,pBestV:-1}; b.pBestX=b.x;b.pBestY=b.y; if(species==='particle'){b.pBestV=landscapeVal(b.x/W,b.y/H);} S.boids.push(b); return b; }
+function spawnPredator(x,y){ S.predators.push({x:x??rand(W),y:y??(rand()<.5? -20:H+20),vx:0,vy:0,stamina:1,cool:rand(1,2.5),state:'hunt',turn:2.6,phase:rand(TAU)}); logEvent('A hawk enters the arena. The flock feels it before it sees it.','warn'); }
+function spawnFood(x,y,n=1,type){ for(let i=0;i<n;i++) S.foods.push({x:clamp((x??rand(50,W-50))+rand(-26,26),20,W-20),y:clamp((y??rand(50,H-50))+rand(-26,26),20,H-20),amt:1,phase:rand(TAU),type:type||(S.scenarioId==='forage'?'bloom':'seed')}); }
+function addObstacle(x,y){ const pts=[]; const n=8; for(let i=0;i<n;i++){const a=i/n*TAU; pts.push({a,r:rand(.72,1.12)});} S.obstacles.push({x,y,r:rand(19,32),pts}); }
+function setupWorld(){
+  rng=mulberry32(1000+SCENARIOS.findIndex(s=>s.id===S.scenarioId)*777+(S.scenarioId==='sandbox'?42:0));
+  const id=S.scenarioId;
+  for(let i=0;i<46;i++) S.streaks.push({x:rand(W),y:rand(H),l:rand(8,26),s:rand(.6,1.4)});
+  if(id==='murmuration'){ for(let i=0;i<70;i++) spawnBoid('starling'); S.roosts.push({x:W*.16,y:H*.2,r:44},{x:W*.85,y:H*.78,r:44}); for(let i=0;i<5;i++) addObstacle(rand(W),rand(H)); for(let i=0;i<6;i++) spawnFood(); }
+  else if(id==='forage'){ for(let i=0;i<28;i++) spawnBoid('starling'); for(let i=0;i<20;i++) spawnBoid('fish'); for(let i=0;i<14;i++) spawnBoid('bee'); S.roosts.push({x:W*.5,y:H*.16,r:48}); for(let i=0;i<7;i++) addObstacle(rand(W),rand(H)); for(let i=0;i<14;i++) spawnFood(); }
+  else if(id==='evasion'){ for(let i=0;i<44;i++) spawnBoid('starling'); for(let i=0;i<22;i++) spawnBoid('fish'); S.roosts.push({x:W*.14,y:H*.8,r:46}); for(let i=0;i<6;i++) addObstacle(rand(W),rand(H)); for(let i=0;i<8;i++) spawnFood(); spawnPredator(W*.9,40); setTimeout(()=>{ if(S&&!S.ended&&S.scenarioId==='evasion') spawnPredator(40,H*.9); },9000); }
+  else if(id==='pso'){ S.peaks=[{x:.5+rand(-.06,.06),y:.42+rand(-.06,.06),h:0,r:.16},{x:.18,y:.7,h:64,r:.13},{x:.82,y:.74,h:74,r:.12},{x:.24,y:.18,h:56,r:.11}];
+      const gx=.74+rand(-.05,.05), gy=.3+rand(-.05,.05); S.peaks[0]={x:gx,y:gy,h:100,r:.085}; S.gBest={x:0,y:0,v:-1}; buildLandscape();
+      for(let i=0;i<42;i++) spawnBoid('particle'); for(let i=0;i<4;i++) addObstacle(rand(W),rand(H)); }
+  else if(id==='sheepdog'){ for(let i=0;i<16;i++) spawnBoid('sheep',rand(W*.08,W*.42),rand(H*.25,H*.75)); S.dog={x:W*.1,y:H*.5,vx:0,vy:0,face:0}; S.pen={x:W-168,y:H/2-92,w:132,h:184}; for(let i=0;i<5;i++) addObstacle(rand(W*.3,W*.7),rand(H*.15,H*.85)); S.roosts.push({x:W*.08,y:H*.1,r:36}); }
+  else { for(let i=0;i<52;i++) spawnBoid('starling'); for(let i=0;i<12;i++) spawnBoid('bee'); S.roosts.push({x:W*.18,y:H*.22,r:46}); for(let i=0;i<6;i++) addObstacle(rand(W),rand(H)); for(let i=0;i<10;i++) spawnFood(); }
+  if(id==='pso'){ S.boids.forEach(b=>{b.pBestV=landscapeVal(b.x/W,b.y/H); if(b.pBestV>S.gBest.v) S.gBest={x:b.x,y:b.y,v:b.pBestV};}); }
+}
+
+/* ---------------- start / end ---------------- */
+function startScenario(scId,withTour=false){
+  AudioSys.init();
+  selectedScenarioId=scId; save.lastScenario=scId; persist();
+  S=freshState(scId);
+  $('titleScreen').classList.add('hidden'); $('simScreen').classList.remove('hidden'); $('endModal').classList.add('hidden'); $('pauseModal').classList.add('hidden');
+  resizeCanvas(); setupWorld();
+  $('hudScenario').textContent=S.sc.name; $('bannerMode').textContent=S.sc.num+' · '+S.sc.name;
+  $('hudModeLine').textContent=S.diff.label.toUpperCase()+' · '+S.sc.tag;
+  $('objectiveTitle').textContent=S.sc.name; $('objectiveDesc').textContent=S.sc.objective;
+  $('btnBark').classList.toggle('hidden',scId!=='sheepdog'); $('btnBarkFloat').classList.toggle('hidden',scId!=='sheepdog');
+  $('eventLog').innerHTML='';
+  applyParamsToUI(); setSpeed(1); setTool('inspect'); updateSoundButtons();
+  logEvent(`Experiment started: <b>${S.sc.name}</b> (${S.diff.label}).`,'good');
+  if(scId==='sheepdog') logEvent('You are the dog. Move with mouse / WASD. Bark with <span class="kbd">B</span>. Sheep fear you — use it, don\'t chase singles.','warn');
+  if(scId==='pso') logEvent('Particles glow gold near high fitness. The summit is hidden — trust personal + global memory.','good');
+  if(scId==='evasion') logEvent('Survive. Keep the school tight with cohesion + alignment.','warn');
+  toast(S.sc.name,S.sc.objective,S.sc.color);
+  if(withTour||!save.seenTour) startTour(); else $('tourBox').classList.add('hidden');
+  window.scrollTo({top:0});
+}
+function objectiveProgress(){
+  if(!S) return {pct:0,text:'—'};
+  const id=S.scenarioId, need=S.diff.orderNeed;
+  if(id==='murmuration') return {pct:S.syncTime/12,text:`${S.syncTime.toFixed(1)} / 12 s at φ ≥ ${need.toFixed(2)} · now φ ${S.order.toFixed(2)}`};
+  if(id==='forage') return {pct:S.foodEaten/35,text:`${S.foodEaten} / 35 blooms eaten · mean energy ${Math.round(S.avgEnergy)}`};
+  if(id==='evasion') return {pct:S.elapsed/120,text:`Survived ${fmtTime(S.elapsed)} / 02:00 · ${S.boids.length} alive (need ≥ 25)`};
+  if(id==='pso') return {pct:S.bestFit/92,text:`Best fitness ${S.bestFit.toFixed(1)} / 92 · global best glows gold`};
+  if(id==='sheepdog') return {pct:S.pennedNow/12,text:`${S.pennedNow} / 12 sheep in pen${S.pennedNow>=12?` · holding ${S.penTime.toFixed(1)} / 2 s`:''}`};
+  return {pct:Math.min(1,S.score/1500),text:`Sandbox score ${Math.floor(S.score)} · milestones every 500`};
+}
+function endScenario(win,reason){
+  if(!S||S.ended) return; S.ended=true; S.paused=true;
+  const id=S.scenarioId;
+  let stars=0;
+  if(win&&id!=='sandbox'){ stars=1; if(S.score>=S.sc.par) stars++; if((S.timeLeft>S.sc.time*S.diff.timeMult*.22)||(id==='evasion'&&S.boids.length>=45)||(id==='sheepdog'&&S.timeLeft>35)) stars++;
+    const idx=SCENARIOS.findIndex(s=>s.id===id); save.unlocked=Math.max(save.unlocked,Math.min(SCENARIOS.length-1,idx+1)); save.stars[id]=Math.max(save.stars[id]||0,stars); }
+  const earned=win? Math.floor(S.score/12)+50 : Math.floor(S.score/25);
+  save.totalResearch+=earned; if(id!=='sandbox') save.best[id]=Math.max(save.best[id]||0,Math.floor(S.score)); persist();
+  win?AudioSys.success():AudioSys.fail();
+  $('endStars').textContent=id==='sandbox'?'':('★'.repeat(stars)+'☆'.repeat(3-stars));
+  $('endTitle').textContent=win?(id==='sandbox'?'Session banked':'Experiment Complete'):(id==='sheepdog'?'The flock escapes':'Experiment Failed');
+  $('endSubtitle').textContent=reason;
+  $('endGlow').style.background=win?'linear-gradient(90deg,#22d3ee,#34d399,#a3e635)':'linear-gradient(90deg,#f43f5e,#f59e0b)';
+  const stats=[['Score',Math.floor(S.score)],['Time',fmtTime(S.elapsed)],['Peak order φ',(S.peakOrder||0).toFixed(2)],['Food eaten',S.foodEaten],['Hawk catches',S.catches],['Agents left',S.boids.length],['Best fitness',S.scenarioId==='pso'?S.bestFit.toFixed(1):'—'],['Sheep penned',S.scenarioId==='sheepdog'?S.pennedNow:'—'],['Difficulty',S.diff.label]];
+  $('endStats').innerHTML=stats.map(([k,v])=>`<div class="rounded-xl bg-white/5 px-3 py-2.5"><div class="text-[9px] tracking-widest text-slate-400">${k.toUpperCase()}</div><div class="font-mono2 font-bold">${v}</div></div>`).join('');
+  $('endResearch').textContent=`+${earned} research banked · Lab Level ${labLevel()} · Total research ${save.totalResearch}`;
+  const idx=SCENARIOS.findIndex(s=>s.id===id);
+  $('btnEndNext').style.display=(win&&idx>=0&&idx<SCENARIOS.length-1)?'':'none';
+  $('btnEndNext').onclick=()=>{ $('endModal').classList.add('hidden'); startScenario(SCENARIOS[idx+1].id); };
+  setTimeout(()=>$('endModal').classList.remove('hidden'),650);
+  renderTitle();
+}
+function checkEnd(){
+  const id=S.scenarioId; if(id==='sandbox'){ if(S.boids.length===0&&!S.ended){ logEvent('Extinction! Add more agents from Population controls.','bad'); spawnBoid('starling'); } return; }
+  if(id==='murmuration'&&S.syncTime>=12) return endScenario(true,`Synchrony held — peak order φ ${(S.peakOrder||0).toFixed(2)}. The ribbon flew as one animal.`);
+  if(id==='forage'&&S.foodEaten>=35) return endScenario(true,'35 blooms harvested. The swarm eats, therefore it flies.');
+  if(id==='evasion'&&S.elapsed>=120) return endScenario(true,`Two minutes under the hawks, ${S.boids.length} agents still flying. Cohesion is armour.`);
+  if(id==='pso'&&S.bestFit>=92) return endScenario(true,`Summit found at fitness ${S.bestFit.toFixed(1)}. No particle knew the map — the swarm did.`);
+  if(id==='sheepdog'&&S.penTime>=2) return endScenario(true,'Twelve sheep, penned and held. Somewhere, a border collie is nodding slowly.');
+  if(S.boids.length<(id==='sheepdog'?1:10)) return endScenario(false,id==='sheepdog'?'Every sheep left the arena.':'The swarm fell below viable numbers. Protect stragglers and keep energy up.');
+  if(id==='evasion'&&S.boids.length<25) return endScenario(false,`Only ${S.boids.length} agents remain — below the 25 needed. Tighten cohesion before releasing hawks.`);
+  if(S.timeLeft<=0) return endScenario(false,'The clock ran out. '+(id==='murmuration'?'Raise alignment, cut turbulence, and use calm air after gusts.':id==='forage'?'Place food ahead of the flock and keep a roost nearby.':id==='pso'?'Particles may be stuck on a local peak — scatter them or raise turbulence early.':'Work the flock\'s edge, bark sparingly, and never chase a single sheep.'));
+}
+
+/* ---------------- simulation step ---------------- */
+function stepSim(dt){
+  S.elapsed+=dt; S.time+=dt; if(S.scenarioId!=='sandbox'&&S.timeLeft>0) S.timeLeft-=dt;
+  if(S.hawkCD>0)S.hawkCD-=dt; if(S.barkCD>0)S.barkCD-=dt; if(S.rallyT>0){S.rallyT-=dt; if(S.rallyT<=0)S.rally=null;}
+  /* wind gusts & random events */
+  if(S.wind.gustT>0){S.wind.gustT-=dt; S.wind.gustStr*=Math.pow(.25,dt);} else S.wind.gustStr*=Math.pow(.05,dt);
+  S.nextEvent-=dt;
+  if(S.nextEvent<=0){ S.nextEvent=rand(22,38);
+    const ev=['gust','bloom','calm','swoop'][Math.floor(rand(4))];
+    if(ev==='gust'){S.wind.gustT=rand(5,9); S.wind.gustStr=rand(28,48)*S.diff.gust; logEvent('<b>Weather front:</b> a gust front rolls through. Order will suffer — light agents most.','warn'); $('bannerEvent').textContent='⚠ GUST FRONT'; $('bannerEvent').classList.remove('hidden'); setTimeout(()=>$('bannerEvent').classList.add('hidden'),4200); AudioSys.tone(180,90,1.2,'sine',.06);}
+    else if(ev==='bloom'){ const x=rand(80,W-80),y=rand(80,H-80); spawnFood(x,y,8); logEvent('<b>Food bloom</b> erupts — watch hungry agents peel off to feed.','good'); burst(x,y,'#a3e635',16,110); }
+    else if(ev==='calm'){ S.eventFx='calm'; S.eventFxT=8; logEvent('<b>Calm air:</b> turbulence fades for 8 s. A gift for synchrony.','good'); }
+    else if(ev==='swoop'&&S.scenarioId!=='pso'&&S.scenarioId!=='sheepdog'){ if(S.predators.length<3) spawnPredator(); else if(S.predators[0]){S.predators[0].stamina=1;} logEvent('<b>Hawk swoop:</b> predator pressure spikes.','bad'); AudioSys.screech(); }
+    else { spawnFood(rand(W),rand(H),5); logEvent('<b>Drift seeds</b> scatter across the arena.','good'); }
+  }
+  if(S.eventFxT>0){S.eventFxT-=dt; if(S.eventFxT<=0)S.eventFx=null;}
+  /* occasional ambience */
+  if(S.scenarioId==='sheepdog'){ S.baaT-=dt; if(S.baaT<-rand(4,9)){S.baaT=0; if(Math.random()<.6)AudioSys.baa();} }
+
+  const P=S.params, windAng=S.wind.dir, windMag=S.wind.str+S.wind.gustStr;
+  const wvx=Math.cos(windAng)*windMag, wvy=Math.sin(windAng)*windMag;
+  const isPSO=S.scenarioId==='pso', isSheep=S.scenarioId==='sheepdog';
+
+  /* dog control */
+  if(isSheep&&S.dog){ const d=S.dog; let tx=null,ty=null;
+    if(mouse.in){tx=mouse.x;ty=mouse.y;}
+    const kb=keyState; let kx=(kb['d']||kb['arrowright']?1:0)-(kb['a']||kb['arrowleft']?1:0), ky=(kb['s']||kb['arrowdown']?1:0)-(kb['w']||kb['arrowup']?1:0);
+    if(kx||ky){tx=d.x+kx*120;ty=d.y+ky*120;}
+    if(tx!==null){ const dx=tx-d.x,dy=ty-d.y,dist=Math.hypot(dx,dy); const sp=clamp(dist*4.2,0,265); const desX=dist>4?dx/dist*sp:0, desY=dist>4?dy/dist*sp:0; d.vx=lerp(d.vx,desX,1-Math.pow(.0001,dt)); d.vy=lerp(d.vy,desY,1-Math.pow(.0001,dt)); }
+    else { d.vx*=Math.pow(.02,dt); d.vy*=Math.pow(.02,dt); }
+    d.x=clamp(d.x+d.vx*dt,16,W-16); d.y=clamp(d.y+d.vy*dt,16,H-16); if(Math.abs(d.vx)+Math.abs(d.vy)>8)d.face=Math.atan2(d.vy,d.vx);
+    for(const o of S.obstacles){ const dx=d.x-o.x,dy=d.y-o.y,dd=Math.hypot(dx,dy),min=o.r+13; if(dd<min&&dd>0){d.x=o.x+dx/dd*min; d.y=o.y+dy/dd*min;} }
+  }
+
+  /* --- agents --- */
+  const n=S.boids.length;
+  for(let i=0;i<n;i++){ const b=S.boids[i], sp=SPECIES[b.species];
+    if(isPSO&&b.species==='particle'){
+      const fv=landscapeVal(b.x/W,b.y/H); if(fv>b.pBestV){b.pBestV=fv;b.pBestX=b.x;b.pBestY=b.y; if(fv>S.gBest.v){ const gain=fv-S.gBest.v; S.gBest={x:b.x,y:b.y,v:fv}; S.score+=gain*9*S.diff.scoreMult; addFloat(b.x,b.y-12,fv.toFixed(0),'#fbbf24'); if(gain>2){logEvent(`New global best <b>${fv.toFixed(1)}</b> — the swarm pivots toward it.`,'good'); AudioSys.pop();} }}
+      const w=.62,c1=1.45,c2=1.65,r1=Math.random(),r2=Math.random();
+      b.vx=w*b.vx+c1*r1*(b.pBestX-b.x)*.9+c2*r2*(S.gBest.x-b.x)*.9 + (Math.random()-.5)*P.turb*22;
+      b.vy=w*b.vy+c1*r1*(b.pBestY-b.y)*.9+c2*r2*(S.gBest.y-b.y)*.9 + (Math.random()-.5)*P.turb*22;
+      const s=Math.hypot(b.vx,b.vy),max=190; if(s>max){b.vx*=max/s;b.vy*=max/s;}
+      b.x+=b.vx*dt; b.y+=b.vy*dt;
+      if(b.x<14){b.x=14;b.vx=Math.abs(b.vx)} if(b.x>W-14){b.x=W-14;b.vx=-Math.abs(b.vx)} if(b.y<14){b.y=14;b.vy=Math.abs(b.vy)} if(b.y>H-14){b.y=H-14;b.vy=-Math.abs(b.vy)}
+      b.energy=100;
+    } else {
+      /* neighbours */
+      let cnt=0,sx=0,sy=0,ax=0,ay=0,cx=0,cy=0,nearest=1e9;
+      const per=isSheep?P.per*1.25:P.per;
+      for(let j=0;j<n;j++){ if(j===i) continue; const o=S.boids[j]; const dx=b.x-o.x,dy=b.y-o.y; const d2=dx*dx+dy*dy; if(d2<per*per){ const d=Math.sqrt(d2)||.001; if(d<nearest)nearest=d; cnt++; ax+=o.vx; ay+=o.vy; cx+=o.x; cy+=o.y; const sepR=per*.52; if(d<sepR){ sx+=dx/d*(sepR-d)/sepR; sy+=dy/d*(sepR-d)/sepR; } } }
+      let fx=0,fy=0;
+      const energyFactor=.45+.55*(b.energy/100), maxSp=P.spd*sp.speedMul*energyFactor*(isSheep&&S.eventFx==='rain'?.8:1);
+      if(cnt>0){
+        fx+=sx*P.sep*sp.sep*260; fy+=sy*P.sep*sp.sep*260;
+        const avx=ax/cnt,avy=ay/cnt,as=Math.hypot(avx,avy)||1; fx+=(avx/as*maxSp-b.vx)*P.ali*sp.ali*1.9; fy+=(avy/as*maxSp-b.vy)*P.ali*sp.ali*1.9;
+        const ccx=cx/cnt-b.x,ccy=cy/cnt-b.y,cd=Math.hypot(ccx,ccy)||1; fx+=ccx/cd*P.coh*sp.coh*62; fy+=ccy/cd*P.coh*sp.coh*62;
+        b.neighbours=cnt; b.nnDist=nearest===1e9?0:nearest;
+      } else { b.neighbours=0; b.nnDist=0; }
+      /* wander */
+      const turb=(sp.wander||1)*P.turb*(S.eventFx==='calm'?.25:1);
+      fx+=Math.cos(S.time*1.7+b.phase)*turb*36; fy+=Math.sin(S.time*1.4+b.phase*1.7)*turb*36;
+      /* wind */
+      fx+=wvx*sp.windMul*1.4; fy+=wvy*sp.windMul*1.4;
+      /* predators flee */
+      let fleeing=false;
+      for(const pr of S.predators){ const dx=b.x-pr.x,dy=b.y-pr.y,d=Math.hypot(dx,dy); if(d<130&&d>0){ const st=(130-d)/130; fx+=dx/d*st*st*620; fy+=dy/d*st*st*620; fx+=(-dy/d)*st*170*Math.sin(b.phase); fy+=(dx/d)*st*170*Math.sin(b.phase); fleeing=true; } }
+      if(fleeing&&b.species!=='sheep') S.evasionTick=(S.evasionTick||0)+dt*.02;
+      /* dog flee (sheep) */
+      if(b.species==='sheep'&&S.dog){ const dx=b.x-S.dog.x,dy=b.y-S.dog.y,d=Math.hypot(dx,dy); const R=S.barkCD>4.4?185:128; if(d<R&&d>0){ const st=(R-d)/R; fx+=dx/d*st*st*760; fy+=dy/d*st*st*760; } if(S.pen){ /* gentle dislike of pen walls unless inside */ } }
+      /* food seek when hungry */
+      b.resting=false;
+      if(b.species!=='sheep'){
+        let bestF=null,bd=1e9; for(const f of S.foods){ const dx=f.x-b.x,dy=f.y-b.y,d=dx*dx+dy*dy; if(d<bd){bd=d;bestF=f;} }
+        const hunger=1-b.energy/100;
+        if(bestF&&bd<200*200){ const d=Math.sqrt(bd)||1, wgt=26+hunger*120; fx+=(bestF.x-b.x)/d*wgt; fy+=(bestF.y-b.y)/d*wgt;
+          if(d<15){ bestF.amt=0; b.energy=clamp(b.energy+26,0,100); S.foodEaten++; S.score+=15*S.diff.scoreMult; addFloat(b.x,b.y-10,'+15','#a3e635'); burst(b.x,b.y,'#a3e635',7,80); AudioSys.pop(); if(S.foodEaten===10)achievement('forager','First Harvest','The swarm has eaten 10 blooms in one run.'); if(S.foodEaten>=50)achievement('feast','Full Bellies','50 blooms eaten in a single experiment.'); } }
+        /* roost rest */
+        if(b.energy<42) for(const r of S.roosts){ const dx=r.x-b.x,dy=r.y-b.y,d=Math.hypot(dx,dy); if(d>r.r){ fx+=dx/(d||1)*44; fy+=dy/(d||1)*44; } else { b.resting=true; } }
+        if(b.resting){ b.energy=clamp(b.energy+15*dt,0,100); fx-=b.vx*2.2; fy-=b.vy*2.2; }
+      }
+      /* rally flag */
+      if(S.rally&&b.species!=='sheep'){ const dx=S.rally.x-b.x,dy=S.rally.y-b.y,d=Math.hypot(dx,dy)||1; if(d>26){fx+=dx/d*72; fy+=dy/d*72;} }
+      /* obstacles */
+      for(const o of S.obstacles){ const dx=b.x-o.x,dy=b.y-o.y,d=Math.hypot(dx,dy),min=o.r+26; if(d<min&&d>0){ const st=(min-d)/min; fx+=dx/d*st*430; fy+=dy/d*st*430; } }
+      /* pen attraction is zero: sheep enter only when herded */
+      /* integrate w/ turn limit */
+      b.vx+=fx*dt; b.vy+=fy*dt;
+      let s=Math.hypot(b.vx,b.vy)||.001; const minSp=maxSp*.34;
+      if(s>maxSp){b.vx*=maxSp/s;b.vy*=maxSp/s;s=maxSp;} if(s<minSp){b.vx*=minSp/s;b.vy*=minSp/s;}
+      b.x+=b.vx*dt; b.y+=b.vy*dt;
+      const m=22; if(b.x<m){b.x=m;b.vx=Math.abs(b.vx)*1.1} if(b.x>W-m){b.x=W-m;b.vx=-Math.abs(b.vx)*1.1} if(b.y<m){b.y=m;b.vy=Math.abs(b.vy)*1.1} if(b.y>H-m){b.y=H-m;b.vy=-Math.abs(b.vy)*1.1}
+      /* energy */
+      if(!b.resting) b.energy=clamp(b.energy-(0.55+ (s/maxSp)*1.5)*S.diff.energyDrain*dt*2.2,4,100);
+      if(b.energy<=5){b.starveT+=dt; } else b.starveT=0;
+    }
+    /* trail */
+    if(settings.trails){ b.trail.push({x:b.x,y:b.y}); if(b.trail.length>9)b.trail.shift(); } else if(b.trail.length)b.trail.length=0;
+  }
+  S.foods=S.foods.filter(f=>f.amt>0);
+  if(S.scenarioId==='forage'&&S.foods.length<10&&Math.random()<dt*.9) spawnFood();
+  if(S.scenarioId==='murmuration'&&S.foods.length<4&&Math.random()<dt*.4) spawnFood();
+  S.evasions+= (S.evasionTick||0); S.evasionTick=0;
+
+  /* --- predators --- */
+  for(const pr of S.predators){
+    pr.cool-=dt; let tgt=null,bd=1e18;
+    for(const b of S.boids){ if(b.species==='particle'||b.species==='sheep')continue; const dx=b.x-pr.x,dy=b.y-pr.y,d=dx*dx+dy*dy; if(d<bd){bd=d;tgt=b;} }
+    if(tgt){ const dx=tgt.x-pr.x,dy=tgt.y-pr.y,d=Math.hypot(dx,dy)||1;
+      const burstSpeed=196*S.diff.hawkSpeed*(pr.stamina>.15?1:.55);
+      pr.vx=lerp(pr.vx,dx/d*burstSpeed,1-Math.pow(.02,dt)); pr.vy=lerp(pr.vy,dy/d*burstSpeed,1-Math.pow(.02,dt));
+      pr.stamina=clamp(pr.stamina-dt*.16,0,1); if(pr.stamina<=0&&pr.cool<=0){pr.cool=2.2;}
+      if(d<13){ const idx=S.boids.indexOf(tgt); if(idx>=0){ S.boids.splice(idx,1); S.catches++; S.score=Math.max(0,S.score-60); S.shake=settings.particles?9:0; burst(tgt.x,tgt.y,'#fb7185',20,170); addFloat(tgt.x,tgt.y,'CAUGHT','#fb7185'); logEvent('A hawk takes an agent. Scatter is death; a tight school turns faster than a hawk.','bad'); AudioSys.screech(); if(S.selected===tgt)S.selected=null; } }
+    } else { pr.vx+=Math.cos(S.time*.6+pr.phase)*20*dt; pr.vy+=Math.sin(S.time*.5+pr.phase)*20*dt; const s=Math.hypot(pr.vx,pr.vy); if(s>90){pr.vx*=90/s;pr.vy*=90/s;} pr.stamina=clamp(pr.stamina+dt*.25,0,1); }
+    pr.x+=pr.vx*dt; pr.y+=pr.vy*dt;
+    if(pr.cool>0) pr.stamina=clamp(pr.stamina+dt*.4,0,1);
+    pr.x=clamp(pr.x,-30,W+30); pr.y=clamp(pr.y,-30,H+30);
+  }
+  S.predators=S.predators.filter(p=>!(p.x<=-30||p.x>=W+30||p.y<=-30||p.y>=H+30)||S.boids.length>0);
+
+  /* pen counting */
+  if(isSheep&&S.pen){ let c=0; for(const b of S.boids) if(b.species==='sheep'&&b.x>S.pen.x&&b.x<S.pen.x+S.pen.w&&b.y>S.pen.y&&b.y<S.pen.y+S.pen.h) c++;
+    if(c>S.pennedNow&&c>0){ for(let k=S.pennedNow;k<c;k++){ S.score+=100*S.diff.scoreMult; } if(c>S.pennedNow) { addFloat(S.pen.x+S.pen.w/2,S.pen.y+24,c+' in pen','#fbbf24'); AudioSys.chirp(); } }
+    S.pennedNow=c; if(c>=12)S.penTime+=dt; else S.penTime=Math.max(0,S.penTime-dt*2);
+  }
+
+  /* metrics */
+  if(n>0){ let ux=0,uy=0,en=0,nns=0,nnc=0; for(const b of S.boids){ const s=Math.hypot(b.vx,b.vy)||1; ux+=b.vx/s; uy+=b.vy/s; en+=b.energy; if(b.nnDist){nns+=b.nnDist;nnc++;} }
+    S.order=Math.hypot(ux/n,uy/n); S.avgEnergy=en/n; S.nn=nnc?nns/nnc:0;
+  } else { S.order=0; S.avgEnergy=0; S.nn=0; }
+  S.peakOrder=Math.max(S.peakOrder||0,S.order);
+  if(isPSO){ S.bestFit=S.gBest.v<0?0:S.gBest.v; }
+  if(S.scenarioId==='murmuration'){ if(S.order>=S.diff.orderNeed){ S.syncTime+=dt; S.score+=dt*22*S.diff.scoreMult; if(S.order>.9)achievement('sync','One Animal','Order φ above 0.90 — a true murmuration.'); } else S.syncTime=Math.max(0,S.syncTime-dt*.35); }
+  if(S.scenarioId==='evasion') S.score+=dt*7*S.diff.scoreMult*(S.order);
+  if(S.scenarioId==='sheepdog') S.score+=dt*2;
+  S.research=Math.floor(S.score/12);
+
+  /* particles / floats / streaks */
+  for(let i=S.particles.length-1;i>=0;i--){const p=S.particles[i]; p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=Math.pow(.1,dt); p.vy*=Math.pow(.1,dt); if(p.life<=0)S.particles.splice(i,1);}
+  for(let i=S.floats.length-1;i>=0;i--){const f=S.floats[i]; f.life-=dt*.75; f.y-=26*dt; if(f.life<=0)S.floats.splice(i,1);}
+  const wx=Math.cos(windAng)*(windMag), wy=Math.sin(windAng)*(windMag);
+  for(const st of S.streaks){ st.x+=wx*st.s*dt*1.6+8*dt; st.y+=wy*st.s*dt*1.6; if(st.x<-30)st.x=W+20; if(st.x>W+30)st.x=-20; if(st.y<-30)st.y=H+20; if(st.y>H+30)st.y=-20; }
+  if(S.shake>0)S.shake*=Math.pow(.001,dt);
+
+  /* sampling for charts */
+  sampleTimer+=dt; if(sampleTimer>.25){ sampleTimer=0; S.histOrder.push(S.order); S.histEnergy.push(S.avgEnergy); S.histPop.push(isPSO?S.bestFit:S.boids.length); if(S.histOrder.length>240){S.histOrder.shift();S.histEnergy.shift();S.histPop.shift();} drawCharts(); }
+  if(!S.warned30&&S.timeLeft>0&&S.timeLeft<30&&S.scenarioId!=='sandbox'){S.warned30=true; logEvent('<b>30 seconds left.</b> Commit to the objective now.','warn'); toast('30 seconds left','Commit to the objective now.','#f59e0b');}
+  checkEnd();
+}
+
+/* ---------------- rendering ---------------- */
+const world=$('world'), wctx=world.getContext('2d');
+const titleC=$('titleCanvas'), tctx=titleC.getContext('2d');
+function bgFor(id){ switch(id){case 'forage':return ['#0a1f14','#07130c'];case 'evasion':return ['#131826','#090d18'];case 'pso':return ['#0a1226','#060a18'];case 'sheepdog':return ['#0d2113','#08160d'];default:return ['#0d1531','#070d20'];} }
+function drawBoidShape(b,t){
+  const sp=SPECIES[b.species], ang=Math.atan2(b.vy,b.vx);
+  wctx.save(); wctx.translate(b.x,b.y); wctx.rotate(ang);
+  const flap=Math.sin(t*16+b.phase)*.35;
+  if(b.species==='bee'){ wctx.fillStyle=sp.color; wctx.beginPath(); wctx.ellipse(0,0,5.4,3.6,0,0,TAU); wctx.fill(); wctx.fillStyle='rgba(20,16,4,.75)'; wctx.fillRect(-1.4,-3.4,2,6.8); wctx.fillStyle='rgba(255,255,255,.65)'; wctx.beginPath(); wctx.ellipse(-.5,-4.6-flap*2,3,1.7,-.5,0,TAU); wctx.fill(); }
+  else if(b.species==='sheep'){ wctx.fillStyle=sp.color; wctx.beginPath(); wctx.arc(0,0,6.6,0,TAU); wctx.fill(); wctx.fillStyle='#e2e8f0'; wctx.beginPath(); wctx.arc(-2,-3,3.4,0,TAU); wctx.arc(3,-2.6,3,0,TAU); wctx.fill(); wctx.fillStyle='#1e293b'; wctx.beginPath(); wctx.arc(6.4,0,2.4,0,TAU); wctx.fill(); }
+  else if(b.species==='particle'){ const f=clamp(landscapeVal(b.x/W,b.y/H)/100,0,1); const col=f>.8?'#fbbf24':f>.55?'#7dd3fc':'#38bdf8'; wctx.shadowColor=col; wctx.shadowBlur=6+f*12; wctx.fillStyle=col; wctx.beginPath(); wctx.arc(0,0,2.6+f*1.8,0,TAU); wctx.fill(); wctx.shadowBlur=0; }
+  else { wctx.fillStyle=sp.color; wctx.strokeStyle=sp.edge; wctx.lineWidth=1;
+    wctx.beginPath(); wctx.moveTo(sp.size+2.6,0); wctx.lineTo(-sp.size,-sp.size*.78-flap*2); wctx.lineTo(-sp.size*.35,0); wctx.lineTo(-sp.size,sp.size*.78+flap*2); wctx.closePath(); wctx.fill(); wctx.stroke(); }
+  wctx.restore();
+  if(b.energy<26&&b.species!=='particle'&&b.species!=='sheep'){ wctx.fillStyle='rgba(251,191,36,.9)'; wctx.beginPath(); wctx.arc(b.x,b.y-11,1.8,0,TAU); wctx.fill(); }
+}
+function render(){
+  if(!S) return; const t=S.time;
+  wctx.save();
+  if(S.shake>0) wctx.translate(rand(-S.shake,S.shake),rand(-S.shake,S.shake));
+  const [g0,g1]=bgFor(S.scenarioId); const gr=wctx.createLinearGradient(0,0,0,H); gr.addColorStop(0,g0); gr.addColorStop(1,g1); wctx.fillStyle=gr; wctx.fillRect(-20,-20,W+40,H+40);
+  if(S.scenarioId==='pso'&&landscapeCanvas){ wctx.globalAlpha=.92; wctx.drawImage(landscapeCanvas,-10,-10,W+20,H+20); wctx.globalAlpha=1;
+    wctx.strokeStyle='rgba(251,191,36,.85)'; wctx.setLineDash([5,5]); wctx.beginPath(); wctx.arc(S.peaks[0].x*W,S.peaks[0].y*H,15+Math.sin(t*3)*3,0,TAU); wctx.stroke(); wctx.setLineDash([]); }
+  /* grid */
+  wctx.strokeStyle='rgba(148,184,255,.055)'; wctx.lineWidth=1; wctx.beginPath(); for(let x=0;x<=W;x+=48){wctx.moveTo(x,0);wctx.lineTo(x,H);} for(let y=0;y<=H;y+=48){wctx.moveTo(0,y);wctx.lineTo(W,y);} wctx.stroke();
+  /* wind streaks */
+  const windAng=S.wind.dir, windMag=S.wind.str+S.wind.gustStr;
+  wctx.strokeStyle=`rgba(125,211,252,${clamp(.05+windMag*.006,0,.3)})`; wctx.lineWidth=1.4; wctx.beginPath();
+  for(const st of S.streaks){ const dx=Math.cos(windAng)*st.l*(0.5+windMag*.04), dy=Math.sin(windAng)*st.l*(0.5+windMag*.04); wctx.moveTo(st.x,st.y); wctx.lineTo(st.x+dx,st.y+dy); } wctx.stroke();
+  /* roosts */
+  for(const r of S.roosts){ wctx.fillStyle='rgba(34,211,238,.10)'; wctx.beginPath(); wctx.arc(r.x,r.y,r.r,0,TAU); wctx.fill(); wctx.strokeStyle='rgba(34,211,238,.4)'; wctx.setLineDash([4,5]); wctx.stroke(); wctx.setLineDash([]);
+    wctx.fillStyle='#164e63'; wctx.fillRect(r.x-2.4,r.y-2,4.8,15); wctx.fillStyle='rgba(52,211,153,.85)'; wctx.beginPath(); wctx.arc(r.x,r.y-8,11,0,TAU); wctx.arc(r.x-9,r.y-3,7.5,0,TAU); wctx.arc(r.x+9,r.y-3,7.5,0,TAU); wctx.fill(); wctx.fillStyle='#a5f3fc'; wctx.font='bold 9px Inter'; wctx.textAlign='center'; wctx.fillText('ROOST',r.x,r.y+r.r-5); }
+  /* pen */
+  if(S.pen){ const p=S.pen; wctx.fillStyle=S.pennedNow>=12?'rgba(251,191,36,.20)':'rgba(251,191,36,.09)'; wctx.fillRect(p.x,p.y,p.w,p.h); wctx.strokeStyle='#fbbf24'; wctx.lineWidth=2.4; wctx.setLineDash([9,6]); wctx.strokeRect(p.x,p.y,p.w,p.h); wctx.setLineDash([]); wctx.fillStyle='#fde68a'; wctx.font='bold 11px Inter'; wctx.textAlign='center'; wctx.fillText(`PEN · ${S.pennedNow}/12`,p.x+p.w/2,p.y-8); }
+  /* rally */
+  if(S.rally){ wctx.strokeStyle='#34d399'; wctx.fillStyle='#34d399'; wctx.beginPath(); wctx.arc(S.rally.x,S.rally.y,9+Math.sin(t*5)*2,0,TAU); wctx.stroke(); wctx.fillRect(S.rally.x-1,S.rally.y-20,2,20); wctx.beginPath(); wctx.moveTo(S.rally.x+1,S.rally.y-20); wctx.lineTo(S.rally.x+13,S.rally.y-15.5); wctx.lineTo(S.rally.x+1,S.rally.y-11); wctx.fill(); }
+  /* food */
+  for(const f of S.foods){ const pu=1+Math.sin(t*3.4+f.phase)*.22; const grd=wctx.createRadialGradient(f.x,f.y,0,f.x,f.y,13*pu); grd.addColorStop(0,'rgba(190,242,100,.95)'); grd.addColorStop(.45,'rgba(101,163,13,.55)'); grd.addColorStop(1,'rgba(101,163,13,0)'); wctx.fillStyle=grd; wctx.beginPath(); wctx.arc(f.x,f.y,13*pu,0,TAU); wctx.fill(); wctx.fillStyle='#d9f99d'; wctx.beginPath(); wctx.arc(f.x,f.y,2.6,0,TAU); wctx.fill(); }
+  /* obstacles */
+  for(const o of S.obstacles){ wctx.fillStyle='#26314a'; wctx.strokeStyle='rgba(148,184,255,.35)'; wctx.beginPath(); o.pts.forEach((p,i)=>{const px=o.x+Math.cos(p.a)*o.r*p.r, py=o.y+Math.sin(p.a)*o.r*p.r; i?wctx.lineTo(px,py):wctx.moveTo(px,py);}); wctx.closePath(); wctx.fill(); wctx.stroke(); wctx.fillStyle='rgba(255,255,255,.08)'; wctx.beginPath(); wctx.arc(o.x-o.r*.25,o.y-o.r*.3,o.r*.32,0,TAU); wctx.fill(); }
+  /* trails */
+  if(settings.trails){ for(const b of S.boids){ if(b.trail.length<3)continue; wctx.strokeStyle=SPECIES[b.species].color+'33'; wctx.lineWidth=1.2; wctx.beginPath(); wctx.moveTo(b.trail[0].x,b.trail[0].y); for(const p of b.trail) wctx.lineTo(p.x,p.y); wctx.stroke(); } }
+  /* PSO best markers */
+  if(S.scenarioId==='pso'){ wctx.strokeStyle='rgba(251,191,36,.8)'; wctx.beginPath(); wctx.arc(S.gBest.x,S.gBest.y,10+Math.sin(t*4)*2.4,0,TAU); wctx.stroke(); }
+  /* agents */
+  for(const b of S.boids) drawBoidShape(b,t);
+  /* dog */
+  if(S.dog){ const d=S.dog; wctx.save(); wctx.translate(d.x,d.y); wctx.rotate(d.face||0); wctx.fillStyle='#b45309'; wctx.beginPath(); wctx.ellipse(0,0,10.5,6.4,0,0,TAU); wctx.fill(); wctx.fillStyle='#92400e'; wctx.beginPath(); wctx.arc(8.6,0,4.6,0,TAU); wctx.fill(); wctx.fillStyle='#451a03'; wctx.beginPath(); wctx.moveTo(6,-4.4); wctx.lineTo(3.4,-8.6); wctx.lineTo(8.8,-6.4); wctx.fill(); wctx.strokeStyle='#d97706'; wctx.lineWidth=2.4; wctx.beginPath(); wctx.moveTo(-9.6,0); wctx.quadraticCurveTo(-15,-5,-17,-1-Math.sin(t*9)*2); wctx.stroke(); wctx.restore();
+    wctx.strokeStyle=S.barkCD>0?'rgba(251,191,36,.25)':'rgba(251,191,36,.0)'; wctx.beginPath(); wctx.arc(d.x,d.y,26+Math.sin(t*6)*3,0,TAU); wctx.stroke(); }
+  /* predators */
+  for(const pr of S.predators){ const ang=Math.atan2(pr.vy,pr.vx), flap=Math.sin(t*13+pr.phase)*5; wctx.save(); wctx.translate(pr.x,pr.y); wctx.rotate(ang);
+    wctx.fillStyle='#881337'; wctx.strokeStyle='#fb7185'; wctx.lineWidth=1.4; wctx.beginPath(); wctx.moveTo(13,0); wctx.lineTo(-6,-4); wctx.lineTo(-11,-13-flap); wctx.lineTo(-2,-1.5); wctx.lineTo(-11,13+flap); wctx.lineTo(-6,4); wctx.closePath(); wctx.fill(); wctx.stroke();
+    wctx.fillStyle='#fbbf24'; wctx.beginPath(); wctx.moveTo(13,0); wctx.lineTo(18,-1.8); wctx.lineTo(18,1.8); wctx.fill(); wctx.restore();
+    if(pr.stamina<.3){ wctx.fillStyle='rgba(251,113,133,.85)'; wctx.font='bold 9px Inter'; wctx.textAlign='center'; wctx.fillText('WINDED',pr.x,pr.y-20); } }
+  /* selected ring */
+  if(S.selected&&S.boids.includes(S.selected)){ const b=S.selected; wctx.strokeStyle='#f0abfc'; wctx.lineWidth=1.8; wctx.beginPath(); wctx.arc(b.x,b.y,13+Math.sin(t*6)*2,0,TAU); wctx.stroke(); wctx.fillStyle='#f0abfc'; wctx.font='bold 9px Inter'; wctx.textAlign='center'; wctx.fillText(SPECIES[b.species].name.toUpperCase(),b.x,b.y-19); }
+  /* particles & floats */
+  for(const p of S.particles){ wctx.globalAlpha=clamp(p.life/p.max,0,1); wctx.fillStyle=p.color; wctx.beginPath(); wctx.arc(p.x,p.y,p.size,0,TAU); wctx.fill(); } wctx.globalAlpha=1;
+  wctx.font='bold 12px "Space Grotesk"'; wctx.textAlign='center';
+  for(const f of S.floats){ wctx.globalAlpha=clamp(f.life,0,1); wctx.fillStyle=f.color; wctx.fillText(f.text,f.x,f.y); } wctx.globalAlpha=1;
+  wctx.restore();
+  /* calm / rain tint */
+  if(S.eventFx==='calm'){ wctx.fillStyle='rgba(52,211,153,.045)'; wctx.fillRect(0,0,W,H); }
+  /* danger vignette via DOM */
+  let danger=0; for(const pr of S.predators){ let md=1e9; for(const b of S.boids){const d=Math.hypot(b.x-pr.x,b.y-pr.y); if(d<md)md=d;} danger=Math.max(danger,clamp(1-md/170,0,1)); }
+  $('dangerVignette').style.opacity=(danger*.85).toFixed(2);
+}
+
+/* charts */
+function drawLine(cv,data,color,maxV,fill){ const c=cv.getContext('2d'); const w=cv.width,h=cv.height; c.clearRect(0,0,w,h); if(data.length<2)return; c.beginPath(); data.forEach((v,i)=>{const x=i/(239)*w, y=h-4-clamp(v/maxV,0,1)*(h-10); i?c.lineTo(x,y):c.moveTo(x,y);}); c.strokeStyle=color; c.lineWidth=1.8; c.stroke(); if(fill){c.lineTo((data.length-1)/239*w,h);c.lineTo(0,h);c.closePath();c.fillStyle=fill;c.fill();} }
+function drawCharts(){ if(!S)return; drawLine($('chartMain'),S.histOrder,'#22d3ee',1); const c=$('chartMain').getContext('2d'); const data=S.histEnergy; if(data.length>1){c.beginPath(); data.forEach((v,i)=>{const x=i/239*c.canvas.width,y=c.canvas.height-4-clamp(v/100,0,1)*(c.canvas.height-10); i?c.lineTo(x,y):c.moveTo(x,y);}); c.strokeStyle='#fbbf24'; c.lineWidth=1.4; c.stroke(); }
+  const isPSO=S.scenarioId==='pso'; drawLine($('chartPop'),S.histPop,'#34d399',isPSO?100:Math.max(30,...S.histPop)*1.15,'rgba(52,211,153,.13)'); $('mBestFit').textContent=isPSO?('best '+S.bestFit.toFixed(1)):''; }
+
+/* ---------------- HUD ---------------- */
+function updateHUD(){
+  if(!S)return; const timed=S.scenarioId!=='sandbox';
+  $('hudTime').textContent=timed?fmtTime(S.timeLeft):fmtTime(S.elapsed);
+  $('hudTime').style.color=(timed&&S.timeLeft<30)?'#fb7185':'';
+  $('hudScore').textContent=Math.floor(S.score); $('hudResearch').textContent=save.totalResearch+S.research; $('hudOrderChip').textContent=S.order.toFixed(2);
+  const op=objectiveProgress(); $('objectiveBar').style.width=(clamp(op.pct,0,1)*100)+'%'; $('objectiveText').textContent=op.text;
+  $('mOrder').textContent=S.order.toFixed(2); $('mOrderBar').style.width=(S.order*100)+'%';
+  $('mEnergy').textContent=Math.round(S.avgEnergy); $('mEnergyBar').style.width=S.avgEnergy+'%';
+  $('mPop').textContent=S.boids.length; $('mNN').textContent=S.nn?S.nn.toFixed(0)+'px':'—'; $('mEaten').textContent=S.foodEaten;
+  const wa=$('windArrow'); wa.style.transform=`rotate(${S.wind.dir*180/Math.PI}deg)`; $('windText').textContent=`${Math.round(S.wind.str+S.wind.gustStr)} · ${Math.round((S.wind.dir*180/Math.PI+360)%360)}°`;
+  $('bannerEvent').textContent=S.wind.gustT>0?'⚠ GUST FRONT — hold on':$('bannerEvent').textContent;
+  AudioSys.setWind(S.wind.str+S.wind.gustStr);
+  if(S.selected&&S.boids.includes(S.selected)){ const b=S.selected; const s=Math.hypot(b.vx,b.vy);
+    $('inspBody').innerHTML=`<b class="text-fuchsia-200">${SPECIES[b.species].name}</b> · energy <b class="${b.energy<26?'text-rose-300':'text-amber-200'}">${Math.round(b.energy)}%</b><br>Speed ${s.toFixed(0)} px/s · neighbours ${b.neighbours||0} · nearest ${(b.nnDist||0).toFixed(0)}px<br>State: ${b.resting?'<span class="text-cyan-200">resting at roost</span>':b.energy<30?'<span class="text-rose-300">exhausted — needs food</span>':'cruising with the swarm'}<br><span class="text-slate-500">Its pink ring is live in the world. Change a slider and watch it react.</span>`;
+  }
+}
+
+/* ---------------- input: canvas tools ---------------- */
+let dragWindStart=null, lastPlace={x:-99,y:-99};
+function canvasPos(e){ const r=world.getBoundingClientRect(); return {x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height)}; }
+world.addEventListener('pointerenter',e=>{mouse.in=true;});
+world.addEventListener('pointerleave',()=>{mouse.in=false;mouse.down=false;});
+world.addEventListener('pointermove',e=>{ const p=canvasPos(e); mouse.x=p.x; mouse.y=p.y;
+  if(mouse.down&&S&&!S.ended){ if(currentTool==='wind'&&dragWindStart){ const dx=p.x-dragWindStart.x, dy=p.y-dragWindStart.y; const d=Math.hypot(dx,dy); if(d>8){ S.wind.dir=Math.atan2(dy,dx); S.wind.str=clamp(d*.45,4,60); syncWindUI(); } }
+    else if((currentTool==='food'||currentTool==='obstacle')&&Math.hypot(p.x-lastPlace.x,p.y-lastPlace.y)>34){ placeAt(p); } }
+});
+world.addEventListener('pointerdown',e=>{ AudioSys.init(); if(!S)return; const p=canvasPos(e); mouse.x=p.x;mouse.y=p.y;mouse.down=true; world.setPointerCapture(e.pointerId);
+  if(currentTool==='wind'){dragWindStart=p; return;} placeAt(p); });
+world.addEventListener('pointerup',()=>{mouse.down=false;dragWindStart=null;});
+function placeAt(p){ if(!S||S.ended)return; lastPlace=p;
+  if(currentTool==='food'){ spawnFood(p.x,p.y,3); burst(p.x,p.y,'#a3e635',8,70); AudioSys.pop(); addFloat(p.x,p.y-8,'food','#a3e635'); }
+  else if(currentTool==='obstacle'){ addObstacle(p.x,p.y); burst(p.x,p.y,'#94a3b8',8,60); AudioSys.click(); logEvent('Rock placed. Watch the school split — nearest-neighbour distance will spike.'); }
+  else if(currentTool==='roost'){ S.roosts.push({x:p.x,y:p.y,r:44}); if(S.roosts.length>5)S.roosts.shift(); burst(p.x,p.y,'#22d3ee',12,80); AudioSys.chirp(); logEvent('Roost planted. Tired agents (energy &lt; 42) will home to it and recover.','good'); }
+  else if(currentTool==='erase'){ let bi=-1,bd=30; S.obstacles.forEach((o,i)=>{const d=Math.hypot(o.x-p.x,o.y-p.y); if(d<bd+o.r){bd=d;bi=i;}}); if(bi>=0){S.obstacles.splice(bi,1); AudioSys.click(); return;}
+    S.foods=S.foods.filter(f=>Math.hypot(f.x-p.x,f.y-p.y)>22); let bb=null; for(const b of S.boids){ if(Math.hypot(b.x-p.x,b.y-p.y)<18){bb=b;break;} } if(bb){S.boids.splice(S.boids.indexOf(bb),1); burst(p.x,p.y,'#fb7185',10,90); if(S.selected===bb)S.selected=null;} }
+  else if(currentTool==='inspect'){ let bb=null,bd=34; for(const b of S.boids){const d=Math.hypot(b.x-p.x,b.y-p.y); if(d<bd){bd=d;bb=b;}} S.selected=bb; if(bb){AudioSys.chirp();} else $('inspBody').textContent='No agent there. Click directly on a moving shape.'; }
+  if(S.rallyMode){ S.rally={x:p.x,y:p.y}; S.rallyT=14; S.rallyMode=false; $('btnRally').textContent='Rally Flag: OFF'; logEvent('Rally flag planted for 14 s — the swarm bends toward it.','good'); }
+}
+
+/* ---------------- controls binding ---------------- */
+function setTool(t){ currentTool=t; $$('#toolGrid .tool-btn').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));
+  const hints={inspect:'Tool: Inspect — click any agent to follow it.',food:'Tool: Food — click / drag to scatter blooms.',obstacle:'Tool: Rock — click / drag to build a reef.',roost:'Tool: Roost — tired agents rest here.',wind:'Tool: Wind — drag on the world to aim a gust.',erase:'Tool: Erase — click rocks, food or agents to remove.'};
+  $('rallyHint').textContent=hints[t]; }
+$$('#toolGrid .tool-btn').forEach(b=>b.addEventListener('click',()=>{AudioSys.click(); setTool(b.dataset.tool);}));
+function bindSlider(id,valId,key,fmt=v=>(+v).toFixed(2),after){ const el=$(id); el.addEventListener('input',()=>{ if(!S)return; S.params[key]=parseFloat(el.value); $(valId).textContent=fmt(el.value); if(after)after(); }); }
+function applyParamsToUI(){ if(!S)return; const P=S.params; $('rngSep').value=P.sep;$('valSep').textContent=P.sep.toFixed(2); $('rngAli').value=P.ali;$('valAli').textContent=P.ali.toFixed(2); $('rngCoh').value=P.coh;$('valCoh').textContent=P.coh.toFixed(2); $('rngPer').value=P.per;$('valPer').textContent=P.per; $('rngSpd').value=P.spd;$('valSpd').textContent=P.spd; $('rngTurb').value=P.turb;$('valTurb').textContent=P.turb.toFixed(2); syncWindUI(); $('chkTrails').checked=settings.trails; }
+function syncWindUI(){ if(!S)return; $('rngWindDir').value=Math.round((S.wind.dir*180/Math.PI+360)%360); $('valWindDir').textContent=Math.round((S.wind.dir*180/Math.PI+360)%360)+'°'; $('rngWindStr').value=Math.round(S.wind.str); $('valWindStr').textContent=Math.round(S.wind.str); }
+bindSlider('rngSep','valSep','sep'); bindSlider('rngAli','valAli','ali'); bindSlider('rngCoh','valCoh','coh');
+bindSlider('rngPer','valPer','per',v=>Math.round(v)); bindSlider('rngSpd','valSpd','spd',v=>Math.round(v)); bindSlider('rngTurb','valTurb','turb');
+$('rngWindDir').addEventListener('input',e=>{ if(S){S.wind.dir=parseFloat(e.target.value)*Math.PI/180; $('valWindDir').textContent=e.target.value+'°';}});
+$('rngWindStr').addEventListener('input',e=>{ if(S){S.wind.str=parseFloat(e.target.value); $('valWindStr').textContent=e.target.value;}});
+$$('[data-add]').forEach(b=>b.addEventListener('click',()=>{ if(!S||S.ended)return; AudioSys.pop(); const sp=b.dataset.add; for(let i=0;i<10;i++) spawnBoid(sp,mouse.in?mouse.x+rand(-40,40):undefined,mouse.in?mouse.y+rand(-40,40):undefined); logEvent(`10 ${SPECIES[sp].name}s join the arena.`,'good'); if(S.boids.length>190){S.boids.splice(0,S.boids.length-190); logEvent('Population capped at 190 for performance — oldest agents retired.','warn');} }));
+$('btnRemove10').addEventListener('click',()=>{ if(!S)return; for(let i=0;i<10&&S.boids.length>1;i++) S.boids.splice(Math.floor(Math.random()*S.boids.length),1); AudioSys.click(); logEvent('10 agents culled. Watch order and NN distance react.','warn'); });
+$('btnScatter').addEventListener('click',()=>{ if(!S)return; for(const b of S.boids){const a=rand(TAU); b.vx+=Math.cos(a)*220; b.vy+=Math.sin(a)*220; burst(b.x,b.y,'#f0abfc',2,60);} S.score=Math.max(0,S.score-25); logEvent('SCATTER! Chaos injected (−25 score). Rebuild order with alignment.','warn'); AudioSys.tone(300,900,.25,'sawtooth',.07); });
+$('btnGust').addEventListener('click',()=>{ if(!S)return; S.wind.gustT=7; S.wind.gustStr=42*S.diff.gust; logEvent('Manual gust triggered. Bees suffer most; starlings shrug.','warn'); AudioSys.tone(160,80,1,'sine',.08); });
+$('btnHawk').addEventListener('click',()=>{ if(!S||S.ended)return; if(S.hawkCD>0){toast('Hawk recharging',Math.ceil(S.hawkCD)+'s until the next release.','#f59e0b');return;} if(S.score<40){toast('Not enough score','Hawks cost 40 score — earn some first.','#f59e0b');return;} S.score-=40; S.hawkCD=14; spawnPredator(); AudioSys.screech(); });
+$('btnRally').addEventListener('click',e=>{ if(!S)return; S.rallyMode=!S.rallyMode; e.currentTarget.textContent='Rally Flag: '+(S.rallyMode?'CLICK WORLD…':'OFF'); if(S.rallyMode) toast('Rally mode','Click anywhere in the world to plant the flag.','#34d399'); });
+$('btnClearObs').addEventListener('click',()=>{ if(!S)return; S.obstacles=[]; AudioSys.click(); logEvent('All rocks cleared. Flow smooths out.'); });
+$('chkTrails').addEventListener('change',e=>{ settings.trails=e.target.checked; save.settings=settings; persist(); if($('setTrails'))$('setTrails').checked=settings.trails; });
+function doBark(){ if(!S||S.scenarioId!=='sheepdog'||S.barkCD>0)return; S.barkCD=5; AudioSys.bark(); const d=S.dog; burst(d.x,d.y,'#fbbf24',14,150); addFloat(d.x,d.y-20,'BARK!','#fbbf24'); for(const b of S.boids){ const dx=b.x-d.x,dy=b.y-d.y,dd=Math.hypot(dx,dy); if(dd<185&&dd>0){ b.vx+=dx/dd*200; b.vy+=dy/dd*200; } } if(S.shake<3)S.shake=2.5; }
+$('btnBark').addEventListener('click',doBark); $('btnBarkFloat').addEventListener('click',doBark);
+$('btnClearLog').addEventListener('click',()=>{$('eventLog').innerHTML='';});
+
+/* speed / pause */
+function setSpeed(v){ if(!S)return; S.speed=v; $$('.speed-btn').forEach(b=>b.classList.toggle('active',parseFloat(b.dataset.speed)===v)); }
+$$('.speed-btn').forEach(b=>b.addEventListener('click',()=>{AudioSys.click(); setSpeed(parseFloat(b.dataset.speed));}));
+function setPaused(p){ if(!S||S.ended)return; S.paused=p; $('btnPauseTop').textContent=p?'Resume':'Pause'; if(p)$('pauseModal').classList.remove('hidden'); else $('pauseModal').classList.add('hidden'); }
+$('btnPauseTop').addEventListener('click',()=>setPaused(!S.paused));
+$('btnResume').addEventListener('click',()=>setPaused(false));
+$('btnRestartTop').addEventListener('click',()=>{ if(S) startScenario(S.scenarioId); });
+$('btnPauseRestart').addEventListener('click',()=>{ $('pauseModal').classList.add('hidden'); if(S) startScenario(S.scenarioId); });
+$('btnQuitTitle').addEventListener('click',goTitle);
+$('btnExitTitle').addEventListener('click',goTitle);
+function goTitle(){ if(S&&!S.ended&&!S.banked&&S.score>50){ const banked=Math.floor(S.score/25); save.totalResearch+=banked; S.banked=true; if(banked>0) setTimeout(()=>toast('Session banked','+'+banked+' research from the unfinished run was saved.','#a78bfa'),80); } if(S){S.paused=true;} $('simScreen').classList.add('hidden'); $('pauseModal').classList.add('hidden'); $('endModal').classList.add('hidden'); $('titleScreen').classList.remove('hidden'); resizeTitle(); renderTitle(); persist(); }
+
+/* sound buttons */
+function updateSoundButtons(){ $('soundTitleState').textContent=settings.mute?'OFF':'ON'; $('btnSoundTop').textContent=settings.mute?'Muted':'Sound'; $('btnSoundTop').style.color=settings.mute?'#fb7185':''; }
+function toggleMute(){ settings.mute=!settings.mute; save.settings=settings; persist(); AudioSys.init(); AudioSys.apply(); updateSoundButtons(); toast(settings.mute?'Audio muted':'Audio on',settings.mute?'The lab falls silent.':'Wind, hums and screeches return.','#38bdf8'); }
+$('btnSoundTitle').addEventListener('click',toggleMute); $('btnSoundTop').addEventListener('click',toggleMute);
+
+/* modals */
+function openModal(id){ $(id).classList.remove('hidden'); }
+function closeModal(id){ $(id).classList.add('hidden'); }
+$$('[data-close]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.close)));
+$('btnHelpTitle').addEventListener('click',()=>openModal('helpModal')); $('btnHelpTop').addEventListener('click',()=>openModal('helpModal'));
+$('btnSettingsTitle').addEventListener('click',()=>openModal('settingsModal')); $('btnSettingsTop').addEventListener('click',()=>openModal('settingsModal')); $('btnPauseSettings').addEventListener('click',()=>openModal('settingsModal'));
+$('setVolume').addEventListener('input',e=>{ settings.volume=e.target.value/100; $('setVolVal').textContent=e.target.value+'%'; save.settings=settings; persist(); AudioSys.init(); AudioSys.apply(); });
+$('setMute').addEventListener('change',e=>{ settings.mute=e.target.checked; save.settings=settings; persist(); AudioSys.apply(); updateSoundButtons(); });
+$('setTrails').addEventListener('change',e=>{ settings.trails=e.target.checked; save.settings=settings; persist(); $('chkTrails').checked=settings.trails; });
+$('setParticles').addEventListener('change',e=>{ settings.particles=e.target.checked; save.settings=settings; persist(); });
+$('setDifficulty').addEventListener('change',e=>{ settings.difficulty=e.target.value; selectedDifficulty=e.target.value; save.settings=settings; persist(); renderTitle(); toast('Default difficulty: '+DIFFS[selectedDifficulty].label,'Applies to the next experiment.','#38bdf8'); });
+$('btnResetProgress').addEventListener('click',()=>{ const keep=settings; save=defaultSave(); save.settings=keep; settings=keep; persist(); renderTitle(); toast('Progress reset','Campaign, stars and research wiped. The swarm forgets nothing else.','#fb7185'); });
+function syncSettingsUI(){ $('setVolume').value=Math.round(settings.volume*100); $('setVolVal').textContent=Math.round(settings.volume*100)+'%'; $('setMute').checked=settings.mute; $('setTrails').checked=settings.trails; $('setParticles').checked=settings.particles; $('setDifficulty').value=settings.difficulty; }
+
+/* end modal buttons */
+$('btnEndReplay').addEventListener('click',()=>{ $('endModal').classList.add('hidden'); if(S)startScenario(S.scenarioId); });
+$('btnEndTitle').addEventListener('click',()=>{ $('endModal').classList.add('hidden'); goTitle(); });
+$('btnEndSandbox').addEventListener('click',()=>{ $('endModal').classList.add('hidden'); startScenario('sandbox'); });
+
+/* title buttons */
+$$('#diffPills .diff-pill').forEach(p=>p.addEventListener('click',()=>{ selectedDifficulty=p.dataset.diff; settings.difficulty=selectedDifficulty; save.settings=settings; persist(); AudioSys.click(); renderTitle(); }));
+$('btnStart').addEventListener('click',()=>startScenario(selectedScenarioId));
+$('btnSandboxTitle').addEventListener('click',()=>startScenario('sandbox'));
+$('btnContinue').addEventListener('click',()=>{ const next=SCENARIOS[Math.min(save.unlocked,SCENARIOS.length-1)]; startScenario(save.stars[next.id]? (SCENARIOS.find(s=>!save.stars[s.id])||next).id : next.id); });
+$('btnTourTitle').addEventListener('click',()=>startScenario(selectedScenarioId,true));
+$('btnStartTour2').addEventListener('click',()=>{ closeModal('helpModal'); if($('simScreen').classList.contains('hidden')) startScenario(selectedScenarioId,true); else startTour(); });
+
+/* ---------------- tour ---------------- */
+const TOUR=[
+ ['Welcome to the Lab','These dots are autonomous agents. Nobody leads them — order emerges from three rules you control. Press Next and I\'ll point at the levers.',null],
+ ['The world','Click any agent to inspect it. Drag with Food, Rock, Roost and Wind tools to reshape its world mid-flight.','canvasWrap'],
+ ['Flock forces','Drag ALIGNMENT up now. Watch φ (order) climb in the right panel as the swarm becomes one animal. Then try SEPARATION at max and watch it shatter.','leftPanel'],
+ ['Live metrics','This is your instrument panel: order φ, mean energy, nearest-neighbour distance, and 60-second trend charts. Every slider moves these needles.','objectiveCard'],
+ ['Environment & chaos','Wind bends flight. Gusts wreck synchrony. The Hawk button buys beautiful panic for 40 score. Use them when an experiment feels too safe.',null],
+ ['Your objective','Each experiment has one clear goal, up top-right. Finish the campaign to unlock the Sheepdog Trial — where YOU are the predator-shaped problem. Good luck, conductor.',null]
+];
+function startTour(){ tourStep=0; save.seenTour=true; persist(); showTourStep(); }
+function showTourStep(){ const box=$('tourBox'); if(tourStep<0||tourStep>=TOUR.length){ box.classList.add('hidden'); $$('.tour-glow').forEach(e=>e.classList.remove('tour-glow')); tourStep=-1; return; }
+  box.classList.remove('hidden'); const [title,text,target]=TOUR[tourStep]; $('tourStepNum').textContent=tourStep+1; $('tourTitle').textContent=title; $('tourText').textContent=text;
+  $('btnTourNext').textContent=tourStep===TOUR.length-1?'Finish':'Next →';
+  $$('.tour-glow').forEach(e=>e.classList.remove('tour-glow')); if(target&&$(target))$(target).classList.add('tour-glow'); }
+$('btnTourNext').addEventListener('click',()=>{ AudioSys.click(); tourStep++; if(tourStep>=TOUR.length){ toast('Tour complete','The swarm is yours. First goal: hold φ ≥ '+ (S?S.diff.orderNeed.toFixed(2):'0.80') +'.','#34d399'); } showTourStep(); });
+$('btnTourSkip').addEventListener('click',()=>{ tourStep=TOUR.length; showTourStep(); });
+
+/* ---------------- keyboard ---------------- */
+const keyState={};
+window.addEventListener('keydown',e=>{
+  const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='select'||tag==='textarea')return;
+  keyState[e.key.toLowerCase()]=true;
+  if($('simScreen').classList.contains('hidden'))return;
+  if(e.key===' '){ e.preventDefault(); if(S&&!S.ended) setPaused(!S.paused); }
+  else if(e.key==='Escape'){ if(S&&!S.ended) setPaused(true); }
+  else if(e.key>='1'&&e.key<='6'){ setTool(['inspect','food','obstacle','roost','wind','erase'][+e.key-1]); }
+  else if(e.key.toLowerCase()==='b'){ doBark(); }
+  else if(e.key.toLowerCase()==='h'){ openModal('helpModal'); }
+  else if(e.key.toLowerCase()==='g'){ $('btnGust').click(); }
+});
+window.addEventListener('keyup',e=>{ keyState[e.key.toLowerCase()]=false; });
+
+/* ---------------- sizing ---------------- */
+function resizeCanvas(){ const wrap=$('canvasWrap'); if(!wrap||!S&&$('simScreen').classList.contains('hidden')){} const r=wrap.getBoundingClientRect(); const dpr=Math.min(2,window.devicePixelRatio||1);
+  W=Math.max(320,r.width); H=Math.max(300,r.height); world.width=W*dpr; world.height=H*dpr; wctx.setTransform(dpr,0,0,dpr,0,0);
+  if(S){ for(const b of S.boids){b.x=clamp(b.x,10,W-10);b.y=clamp(b.y,10,H-10);} if(S.scenarioId==='pso')buildLandscape(); } }
+function resizeTitle(){ const dpr=Math.min(2,window.devicePixelRatio||1); titleC.width=innerWidth*dpr; titleC.height=innerHeight*dpr; tctx.setTransform(dpr,0,0,dpr,0,0); }
+window.addEventListener('resize',()=>{ resizeTitle(); if(!$('simScreen').classList.contains('hidden')) resizeCanvas(); });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&S&&!S.paused&&!S.ended&&!$('simScreen').classList.contains('hidden')){ setPaused(true); logEvent('Tab hidden — auto-paused to keep the simulation honest.','warn'); } });
+
+/* ---------------- title background boids ---------------- */
+function initTitleBoids(){ titleBoids=[]; for(let i=0;i<44;i++) titleBoids.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:Math.random()*60-30,vy:Math.random()*60-30,ph:Math.random()*TAU}); }
+function stepTitle(dt){ const w=innerWidth,h=innerHeight; for(const b of titleBoids){ let ax=0,ay=0,cx=0,cy=0,c=0; for(const o of titleBoids){const dx=o.x-b.x,dy=o.y-b.y,d=dx*dx+dy*dy; if(d<120*120&&o!==b){ax+=o.vx;ay+=o.vy;cx+=o.x;cy+=o.y;c++;}}
+    if(c){ b.vx+=((ax/c-b.vx)*.6+(cx/c-b.x)*.012)*dt*3; b.vy+=((ay/c-b.vy)*.6+(cy/c-b.y)*.012)*dt*3; }
+    const s=Math.hypot(b.vx,b.vy)||1, sp=clamp(s,26,74); b.vx*=sp/s;b.vy*=sp/s; b.x+=b.vx*dt; b.y+=b.vy*dt;
+    if(b.x<-20)b.x=w+20; if(b.x>w+20)b.x=-20; if(b.y<-20)b.y=h+20; if(b.y>h+20)b.y=-20; }
+  tctx.clearRect(0,0,w,h);
+  for(const b of titleBoids){ const a=Math.atan2(b.vy,b.vx); tctx.save(); tctx.translate(b.x,b.y); tctx.rotate(a); tctx.fillStyle='rgba(165,243,252,.75)'; tctx.beginPath(); tctx.moveTo(7,0); tctx.lineTo(-5,-3.4); tctx.lineTo(-2.4,0); tctx.lineTo(-5,3.4); tctx.fill(); tctx.restore(); } }
+
+/* ---------------- main loop ---------------- */
+function loop(ts){ rafId=requestAnimationFrame(loop); const dtReal=Math.min(.05,(ts-lastTs)/1000||.016); lastTs=ts;
+  if(!$('titleScreen').classList.contains('hidden')){ stepTitle(dtReal); return; }
+  if(!S) return;
+  if(!S.paused&&!S.ended){ let remaining=dtReal*S.speed; let guard=0; while(remaining>0.0001&&guard<8){ const step=Math.min(remaining,.033); stepSim(step); remaining-=step; guard++; if(S.ended)break; } }
+  render();
+  hudTimer+=dtReal; if(hudTimer>.12){ hudTimer=0; updateHUD(); }
+}
+
+/* ---------------- init ---------------- */
+syncSettingsUI(); updateSoundButtons(); renderTitle(); initTitleBoids(); resizeTitle();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

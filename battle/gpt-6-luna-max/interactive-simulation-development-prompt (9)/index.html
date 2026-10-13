@@ -1,0 +1,2318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1416">
+  <title>PHASE / SPACE - Molecular Dynamics Lab</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #0b1416;
+      --ink-soft: #101c1d;
+      --panel: #122020;
+      --panel-deep: #0d191a;
+      --line: rgba(180, 211, 196, .13);
+      --line-strong: rgba(180, 211, 196, .23);
+      --text: #e8efe5;
+      --muted: #8da29a;
+      --faint: #60736d;
+      --mint: #9ee6c9;
+      --lime: #d4ed88;
+      --orange: #f0a574;
+      --blue: #85c8e8;
+      --red: #f07e75;
+      --serif: Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--ink); color: var(--text); font-family: var(--sans); }
+    body { overflow-x: hidden; }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+    [hidden], .hidden { display: none !important; }
+    .eyebrow { color: var(--mint); font-size: 10px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+    .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-variant-numeric: tabular-nums; }
+    .button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 38px; padding: 0 14px; border: 1px solid var(--line-strong); background: transparent; color: var(--text); cursor: pointer; transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease; }
+    .button:hover { background: rgba(212, 237, 136, .08); border-color: rgba(212, 237, 136, .52); }
+    .button:active { transform: translateY(1px); }
+    .button.primary { color: #12201c; background: var(--lime); border-color: var(--lime); font-weight: 750; }
+    .button.primary:hover { background: #e3f6a9; border-color: #e3f6a9; }
+    .button.quiet { border-color: transparent; color: var(--muted); }
+    .button.quiet:hover { color: var(--text); border-color: var(--line); background: rgba(255,255,255,.035); }
+    .button.small { min-height: 31px; padding: 0 10px; font-size: 11px; }
+    .button.square { width: 36px; min-width: 36px; padding: 0; }
+    .button[disabled] { opacity: .38; cursor: not-allowed; }
+
+    /* Landing screen: the live molecular field is one full-bleed visual plane. */
+    #titleScreen { position: fixed; inset: 0; min-height: 100vh; overflow-y: auto; background: var(--ink); }
+    #ambientCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .title-shade { position: fixed; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(7,17,18,.94) 0%, rgba(7,17,18,.76) 42%, rgba(7,17,18,.24) 100%), linear-gradient(0deg, rgba(7,17,18,.92) 0%, transparent 49%, rgba(7,17,18,.35) 100%); }
+    .title-inner { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; padding: 25px clamp(22px, 5.5vw, 86px) 30px; }
+    .title-nav { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; color: var(--text); text-decoration: none; font-size: 13px; font-weight: 800; letter-spacing: .13em; white-space: nowrap; }
+    .brand-mark { position: relative; width: 24px; height: 24px; border: 1px solid rgba(158,230,201,.68); border-radius: 50%; transform: rotate(-32deg); }
+    .brand-mark:before, .brand-mark:after { content: ""; position: absolute; inset: 5px -4px; border: 1px solid var(--mint); border-radius: 50%; }
+    .brand-mark:after { inset: 9px; background: var(--lime); border: 0; box-shadow: 0 0 14px rgba(212,237,136,.8); }
+    .nav-actions { display: flex; align-items: center; gap: 7px; }
+    .title-nav .button { color: rgba(232,239,229,.78); }
+    .hero-copy { margin-top: clamp(54px, 10vh, 112px); max-width: 730px; animation: rise-in .8s cubic-bezier(.2,.7,.2,1) both; }
+    .hero-copy .eyebrow { margin-bottom: 22px; }
+    .hero-title { margin: 0; color: #f0f3e9; font-family: var(--serif); font-size: clamp(58px, 8.1vw, 116px); font-weight: 400; letter-spacing: -.075em; line-height: .83; }
+    .hero-title span { display: block; color: var(--lime); font-style: italic; letter-spacing: -.07em; }
+    .hero-description { max-width: 430px; margin: 26px 0 0; color: #b6c5bb; font-size: 15px; line-height: 1.7; }
+    .hero-note { display: inline-flex; align-items: center; gap: 9px; margin-top: 22px; color: var(--mint); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+    .signal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 10px rgba(212,237,136,.85); animation: pulse 2s ease infinite; }
+    .launch-console { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 35px; margin-top: auto; padding-top: 34px; animation: rise-in .9s .12s cubic-bezier(.2,.7,.2,1) both; }
+    .scenario-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+    .scenario-heading span:last-child { color: var(--faint); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+    .scenario-picker { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); max-width: 850px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); }
+    .scenario-option { position: relative; min-height: 99px; padding: 16px 18px 14px 0; border: 0; border-right: 1px solid var(--line); background: transparent; text-align: left; cursor: pointer; transition: color .2s ease, padding .2s ease; }
+    .scenario-option:not(:first-child) { padding-left: 18px; }
+    .scenario-option:last-child { border-right: 0; }
+    .scenario-option:before { content: ""; position: absolute; inset: auto 18px -1px 0; height: 2px; background: transparent; transition: background .2s ease; }
+    .scenario-option.selected:before { background: var(--lime); }
+    .scenario-option:hover .scenario-name, .scenario-option.selected .scenario-name { color: var(--lime); }
+    .scenario-number { display: block; color: var(--faint); font-family: var(--serif); font-size: 13px; font-style: italic; }
+    .scenario-name { display: block; margin-top: 4px; font-family: var(--serif); font-size: 19px; transition: color .2s ease; }
+    .scenario-description { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .launch-actions { min-width: 222px; padding-bottom: 4px; }
+    .difficulty-row { display: flex; align-items: center; gap: 3px; margin-bottom: 15px; }
+    .difficulty-label { margin-right: 8px; color: var(--muted); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+    .difficulty-button { padding: 7px 10px; border: 1px solid transparent; background: none; color: var(--muted); font-size: 10px; cursor: pointer; }
+    .difficulty-button.selected { border-color: var(--line-strong); color: var(--text); background: rgba(255,255,255,.035); }
+    .start-button { width: 100%; min-height: 48px; justify-content: space-between; padding: 0 16px; text-align: left; font-size: 12px; letter-spacing: .015em; }
+    .start-button .arrow { font-size: 19px; font-weight: 400; transition: transform .2s; }
+    .start-button:hover .arrow { transform: translateX(4px); }
+    .saved-run-link { display: block; width: 100%; margin-top: 8px; color: var(--muted); font-size: 10px; text-align: center; }
+    .saved-run-link:hover { color: var(--lime); }
+    .title-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding-top: 13px; border-top: 1px solid rgba(180,211,196,.1); color: var(--faint); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .title-footer span:last-child { text-align: right; }
+
+    /* Workbench */
+    #labScreen { min-height: 100vh; background: radial-gradient(ellipse at 60% 0%, rgba(33,72,65,.18), transparent 50%), var(--ink); }
+    .lab-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 64px; padding: 0 25px; border-bottom: 1px solid var(--line); background: rgba(10,20,21,.88); }
+    .lab-brand-wrap { display: flex; align-items: center; gap: 20px; min-width: 210px; }
+    .lab-breadcrumb { padding-left: 18px; border-left: 1px solid var(--line); color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .run-readout { display: flex; align-items: center; gap: 13px; color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .run-readout strong { color: var(--text); font-size: 11px; font-weight: 600; }
+    .header-actions { display: flex; align-items: center; gap: 4px; }
+    .header-actions .button { min-height: 34px; font-size: 10px; }
+    .speed-select { height: 32px; padding: 0 25px 0 9px; border: 1px solid var(--line-strong); border-radius: 0; background: var(--panel-deep); color: var(--text); font-size: 10px; cursor: pointer; }
+    .lab-content { display: grid; grid-template-columns: minmax(0, 1fr) 326px; gap: 13px; min-height: calc(100vh - 64px); padding: 13px; }
+    .visual-column { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; }
+    .world-stage { position: relative; flex: 1 1 auto; min-height: 355px; overflow: hidden; border: 1px solid var(--line); background: #091416; }
+    #worldCanvas { display: block; width: 100%; height: 100%; min-height: 355px; touch-action: none; cursor: crosshair; }
+    .stage-topline { position: absolute; top: 15px; left: 17px; right: 17px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; pointer-events: none; }
+    .stage-ident { display: flex; flex-direction: column; gap: 6px; }
+    .stage-ident .eyebrow { color: rgba(158,230,201,.8); font-size: 9px; }
+    .stage-name { font-family: var(--serif); font-size: 20px; color: #ecf2e9; }
+    .stage-tools { display: flex; gap: 4px; pointer-events: auto; }
+    .view-button { min-height: 28px; padding: 0 9px; border: 1px solid rgba(180,211,196,.18); background: rgba(9,20,22,.7); color: #8fa49b; font-size: 9px; cursor: pointer; transition: .2s; }
+    .view-button.active { color: var(--lime); border-color: rgba(212,237,136,.45); background: rgba(212,237,136,.08); }
+    .stage-footer { position: absolute; right: 17px; bottom: 13px; left: 17px; display: flex; align-items: end; justify-content: space-between; gap: 14px; color: rgba(197,214,201,.64); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; pointer-events: none; }
+    .stage-footer .tool-hint { color: var(--mint); text-align: right; }
+    .stage-status { position: absolute; top: 54px; right: 17px; color: rgba(197,214,201,.58); font-size: 9px; text-align: right; pointer-events: none; }
+    .analysis-strip { display: grid; grid-template-columns: minmax(0, 1.38fr) minmax(255px, .85fr); gap: 12px; min-height: 193px; }
+    .analysis-panel { min-width: 0; padding: 12px 14px 10px; border: 1px solid var(--line); background: rgba(16,28,29,.74); }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 25px; }
+    .panel-title { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .chart-tabs { display: flex; align-items: center; gap: 2px; }
+    .chart-tab { padding: 5px 7px; border: 0; background: transparent; color: var(--faint); font-size: 9px; cursor: pointer; }
+    .chart-tab.selected { color: var(--lime); }
+    #trendCanvas, #rdfCanvas { display: block; width: 100%; height: 128px; }
+    .chart-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--faint); font-size: 9px; }
+    .legend-line { display: inline-block; width: 13px; height: 2px; margin-right: 5px; vertical-align: middle; background: var(--mint); }
+    .legend-line.second { margin-left: 9px; background: var(--orange); }
+    .rdf-subtitle { color: var(--faint); font-size: 9px; }
+    .rdf-select { max-width: 115px; height: 25px; padding: 0 18px 0 6px; border: 1px solid var(--line); border-radius: 0; background: var(--panel-deep); color: var(--muted); font-size: 9px; }
+    .rdf-select:disabled { opacity: .55; }
+    .rdf-summary { display: flex; align-items: baseline; gap: 14px; margin-top: 1px; color: var(--faint); font-size: 9px; }
+    .rdf-summary strong { color: var(--text); font-size: 12px; font-weight: 500; }
+
+    .control-rail { display: flex; flex-direction: column; gap: 11px; min-width: 0; max-height: calc(100vh - 90px); overflow-y: auto; padding: 0 2px 12px 0; scrollbar-color: #2e4945 transparent; scrollbar-width: thin; }
+    .rail-section { padding: 14px 15px; border: 1px solid var(--line); background: rgba(16,28,29,.72); }
+    .rail-section:first-child { background: linear-gradient(145deg, rgba(32,59,52,.64), rgba(16,28,29,.84)); }
+    .rail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; }
+    .rail-title { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    .objective-title { margin: 0; font-family: var(--serif); font-size: 22px; font-weight: 400; line-height: 1.15; }
+    .objective-copy { margin: 7px 0 12px; color: #9caea4; font-size: 10px; line-height: 1.55; }
+    .progress-line { height: 2px; overflow: hidden; background: rgba(180,211,196,.14); }
+    .progress-line span { display: block; width: 0; height: 100%; background: var(--lime); transition: width .25s linear; }
+    .objective-progress { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--muted); font-size: 9px; }
+    .objective-progress strong { color: var(--lime); font-weight: 600; }
+    .objective-readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 13px; border-top: 1px solid var(--line); }
+    .objective-readout { padding-top: 10px; }
+    .objective-readout + .objective-readout { padding-left: 9px; border-left: 1px solid var(--line); }
+    .objective-readout span { display: block; color: var(--faint); font-size: 8px; letter-spacing: .11em; text-transform: uppercase; }
+    .objective-readout strong { display: block; margin-top: 3px; color: var(--text); font-family: var(--serif); font-size: 18px; font-weight: 400; }
+    .ensemble-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 0 0 14px; }
+    .ensemble-button { min-height: 32px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; transition: .2s; }
+    .ensemble-button.selected { border-color: rgba(158,230,201,.45); background: rgba(158,230,201,.08); color: var(--mint); }
+    .control-row { margin-top: 13px; }
+    .control-label { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 10px; }
+    .control-label strong { color: var(--text); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; font-weight: 500; }
+    .control-note { margin-top: 5px; color: var(--faint); font-size: 9px; line-height: 1.45; }
+    input[type="range"] { display: block; width: 100%; height: 16px; margin: 7px 0 0; accent-color: var(--lime); cursor: pointer; }
+    input[type="range"]:disabled { opacity: .35; cursor: not-allowed; }
+    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .tool-button { justify-content: flex-start; min-height: 35px; padding: 0 10px; font-size: 9px; }
+    .tool-symbol { width: 17px; color: var(--lime); font-family: var(--serif); font-size: 15px; text-align: center; }
+    .tool-button.active { border-color: rgba(212,237,136,.5); background: rgba(212,237,136,.075); color: var(--lime); }
+    .log-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .log-item { display: grid; grid-template-columns: 38px 1fr; gap: 8px; color: #9aac9f; font-size: 9px; line-height: 1.45; }
+    .log-item time { color: var(--faint); font-family: "SFMono-Regular", Consolas, monospace; }
+    .log-item.warn { color: #e8bd8d; }
+    .log-item.good { color: var(--mint); }
+    .log-empty { color: var(--faint); font-size: 9px; }
+    .rail-quicklinks { display: flex; align-items: center; justify-content: space-between; gap: 5px; border: 1px solid var(--line); padding: 7px 9px; background: rgba(16,28,29,.5); }
+    .rail-quicklinks .button { min-height: 25px; padding: 0 4px; font-size: 9px; }
+    .lock-copy { color: var(--faint); font-size: 9px; }
+    .locked-tool { opacity: .46; }
+    .rail-section.compact { padding-top: 11px; padding-bottom: 11px; }
+
+    /* Dialogs are shared by title, pause, help, settings, and results. */
+    #modalLayer { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(3,9,10,.74); backdrop-filter: blur(8px); animation: fade-in .18s ease both; }
+    .modal-window { width: min(550px, 100%); max-height: min(88vh, 760px); overflow-y: auto; border: 1px solid var(--line-strong); background: #101c1d; box-shadow: 0 26px 90px rgba(0,0,0,.38); animation: rise-in .26s ease both; }
+    .modal-window.wide { width: min(820px, 100%); }
+    .modal-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 22px 24px 16px; border-bottom: 1px solid var(--line); }
+    .modal-top .eyebrow { margin-bottom: 8px; }
+    .modal-title { margin: 0; font-family: var(--serif); font-size: 29px; font-weight: 400; letter-spacing: -.03em; }
+    .modal-body { padding: 19px 24px 23px; color: #b1c0b6; font-size: 12px; line-height: 1.65; }
+    .modal-body p { margin: 0 0 13px; }
+    .modal-body p:last-child { margin-bottom: 0; }
+    .modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 24px; border-top: 1px solid var(--line); }
+    .modal-footer .button { min-height: 36px; }
+    .lesson-list { display: grid; gap: 13px; margin: 0; padding: 0; list-style: none; }
+    .lesson-list li { display: grid; grid-template-columns: 26px 1fr; gap: 11px; }
+    .lesson-num { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid rgba(158,230,201,.42); border-radius: 50%; color: var(--mint); font-family: var(--serif); font-size: 12px; }
+    .lesson-list strong { display: block; color: var(--text); font-size: 11px; font-weight: 600; }
+    .lesson-list span:last-child { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .settings-line { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+    .settings-line:last-child { border-bottom: 0; }
+    .settings-line strong { display: block; color: var(--text); font-size: 11px; font-weight: 600; }
+    .settings-line small { display: block; margin-top: 3px; color: var(--faint); font-size: 9px; }
+    .settings-line input[type="range"] { width: 170px; }
+    .toggle { position: relative; width: 38px; height: 21px; border: 1px solid var(--line-strong); background: #172526; cursor: pointer; }
+    .toggle:after { content: ""; position: absolute; top: 3px; left: 3px; width: 13px; height: 13px; background: #72867e; transition: transform .2s, background .2s; }
+    .toggle.on { border-color: rgba(212,237,136,.6); background: rgba(212,237,136,.12); }
+    .toggle.on:after { transform: translateX(17px); background: var(--lime); }
+    .tech-list { display: grid; gap: 9px; }
+    .tech-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .tech-row:last-child { border-bottom: 0; }
+    .tech-row strong { display: block; color: var(--text); font-size: 12px; font-weight: 600; }
+    .tech-row small { display: block; max-width: 390px; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .tech-cost { color: var(--lime); font-size: 9px; white-space: nowrap; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 13px 0 20px; background: var(--line); border: 1px solid var(--line); }
+    .stats-cell { padding: 12px; background: #101c1d; }
+    .stats-cell span { display: block; color: var(--faint); font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+    .stats-cell strong { display: block; margin-top: 6px; color: var(--text); font-family: var(--serif); font-size: 23px; font-weight: 400; }
+    .stats-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .stats-table td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+    .stats-table td:first-child { color: var(--muted); }
+    .stats-table td:last-child { color: var(--text); font-family: "SFMono-Regular", Consolas, monospace; text-align: right; }
+    .result-mark { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--lime); }
+    .result-mark.failure { color: var(--orange); }
+    .result-mark .result-symbol { font-family: var(--serif); font-size: 36px; line-height: 1; }
+    .result-mark p { margin: 0; color: var(--muted); font-size: 11px; }
+    .modal-note { color: var(--faint); font-size: 9px; }
+    .data-table-wrap { max-height: 240px; overflow: auto; }
+    .campaign-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .campaign-row:last-child { border-bottom: 0; }
+    .campaign-row strong { color: var(--text); font-weight: 500; }
+    .campaign-row .best { color: var(--lime); font-family: monospace; }
+    #toastHost { position: fixed; z-index: 35; top: 78px; right: 18px; display: flex; flex-direction: column; gap: 7px; width: min(320px, calc(100vw - 36px)); pointer-events: none; }
+    .toast { padding: 11px 13px; border-left: 2px solid var(--mint); background: #172526; color: var(--text); font-size: 10px; line-height: 1.45; box-shadow: 0 10px 25px rgba(0,0,0,.22); animation: toast-in .25s ease both; }
+    .toast.warn { border-color: var(--orange); }
+    .toast.good { border-color: var(--lime); }
+    .toast.removing { animation: toast-out .2s ease both; }
+    .muted-badge { color: var(--faint); }
+    .hint-key { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 4px; border: 1px solid var(--line-strong); color: var(--muted); font-family: monospace; font-size: 9px; }
+    .empty-state { padding: 14px 0; color: var(--faint); font-size: 10px; }
+
+    @keyframes pulse { 50% { opacity: .5; box-shadow: 0 0 2px rgba(212,237,136,.5); } }
+    @keyframes rise-in { from { opacity: 0; transform: translateY(13px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes toast-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toast-out { to { opacity: 0; transform: translateX(12px); } }
+
+    @media (max-width: 1080px) {
+      .lab-content { grid-template-columns: minmax(0, 1fr) 300px; }
+      .analysis-strip { grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr); }
+      .lab-breadcrumb { display: none; }
+      .lab-brand-wrap { min-width: 0; }
+    }
+    @media (max-width: 820px) {
+      .launch-console { grid-template-columns: 1fr; gap: 17px; }
+      .launch-actions { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px; }
+      .difficulty-row { margin: 0; align-self: center; }
+      .start-button { width: 235px; }
+      .saved-run-link { grid-column: 2; margin-top: -7px; }
+      .lab-content { grid-template-columns: 1fr; min-height: auto; }
+      .world-stage { min-height: 55vw; max-height: 65vh; }
+      #worldCanvas { min-height: 55vw; }
+      .control-rail { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); max-height: none; overflow: visible; }
+      .control-rail > .rail-section:first-child { grid-column: 1 / -1; }
+      .control-rail > .rail-quicklinks { grid-column: 1 / -1; }
+      .run-readout { display: none; }
+    }
+    @media (max-width: 560px) {
+      .title-inner { padding: 18px 19px 22px; }
+      .title-nav .button.small { min-height: 30px; padding: 0 8px; font-size: 9px; }
+      .hero-copy { margin-top: 7vh; }
+      .hero-title { font-size: clamp(57px, 16vw, 82px); }
+      .hero-description { max-width: 330px; font-size: 13px; }
+      .launch-console { padding-top: 22px; }
+      .scenario-picker { grid-template-columns: 1fr; border-bottom: 0; }
+      .scenario-option, .scenario-option:not(:first-child) { display: grid; grid-template-columns: 30px 1fr; min-height: 55px; padding: 8px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .scenario-option:before { right: 0; }
+      .scenario-number { grid-row: 1 / span 2; align-self: center; }
+      .scenario-name { margin-top: 0; font-size: 17px; }
+      .scenario-description { margin-top: 2px; }
+      .launch-actions { grid-template-columns: 1fr; }
+      .start-button { width: 100%; }
+      .saved-run-link { grid-column: 1; margin-top: -5px; }
+      .title-footer { font-size: 8px; }
+      .lab-header { min-height: 57px; padding: 0 11px; gap: 7px; }
+      .brand { font-size: 10px; gap: 7px; }
+      .brand-mark { width: 19px; height: 19px; }
+      .brand-mark:before { inset: 4px -3px; }
+      .brand-mark:after { inset: 7px; }
+      .header-actions { gap: 1px; }
+      .header-actions .button { min-height: 30px; padding: 0 7px; font-size: 9px; }
+      .header-actions .button.quiet { min-width: 29px; }
+      .speed-select { height: 29px; padding-left: 5px; padding-right: 17px; font-size: 9px; }
+      .lab-content { gap: 10px; padding: 8px; }
+      .world-stage { min-height: 67vw; }
+      #worldCanvas { min-height: 67vw; }
+      .stage-topline { top: 10px; left: 10px; right: 10px; }
+      .stage-name { font-size: 17px; }
+      .stage-ident .eyebrow { font-size: 8px; }
+      .stage-tools { flex-wrap: wrap; justify-content: end; max-width: 180px; }
+      .view-button { min-height: 24px; padding: 0 6px; font-size: 8px; }
+      .stage-status { top: 54px; right: 10px; font-size: 8px; }
+      .stage-footer { right: 10px; bottom: 9px; left: 10px; font-size: 7px; }
+      .analysis-strip { grid-template-columns: 1fr; }
+      .analysis-panel { padding: 10px 11px; }
+      #trendCanvas, #rdfCanvas { height: 115px; }
+      .control-rail { grid-template-columns: 1fr; gap: 8px; }
+      .control-rail > .rail-section:first-child, .control-rail > .rail-quicklinks { grid-column: auto; }
+      .rail-section { padding: 12px; }
+      .modal-window { max-height: 92vh; }
+      .modal-top { padding: 17px 17px 13px; }
+      .modal-body { padding: 15px 17px 18px; }
+      .modal-footer { padding: 11px 17px; }
+      .modal-title { font-size: 25px; }
+      .stats-grid { grid-template-columns: repeat(2,1fr); }
+      .settings-line input[type="range"] { width: 125px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *:before, *:after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <section id="titleScreen" class="screen" aria-label="PHASE / SPACE title screen">
+    <canvas id="ambientCanvas" aria-hidden="true"></canvas>
+    <div class="title-shade" aria-hidden="true"></div>
+    <div class="title-inner">
+      <nav class="title-nav" aria-label="Main navigation">
+        <a class="brand" href="#" data-action="title" aria-label="PHASE / SPACE home"><span class="brand-mark" aria-hidden="true"></span><span>PHASE / SPACE</span></a>
+        <div class="nav-actions">
+          <button class="button quiet small" data-action="campaign">Lab record</button>
+          <button class="button quiet small" data-action="help">Field guide</button>
+          <button class="button quiet small square" data-action="settings" aria-label="Settings" title="Settings">SET</button>
+        </div>
+      </nav>
+      <div class="hero-copy">
+        <div class="eyebrow">Molecular dynamics laboratory / 2D Lennard-Jones matter</div>
+        <h1 class="hero-title">PHASE <span>/ SPACE</span></h1>
+        <p class="hero-description">A particle-level laboratory for the invisible rules behind matter. Compress a vapor, grow a crystal, and measure the structure that emerges.</p>
+        <div class="hero-note"><span class="signal-dot"></span> Live molecular field / periodic boundary conditions</div>
+      </div>
+      <div class="launch-console">
+        <div class="scenario-select-wrap">
+          <div class="scenario-heading"><span class="eyebrow">Choose a protocol</span><span id="titleProgress">0 / 3 studies logged</span></div>
+          <div class="scenario-picker" role="group" aria-label="Experiment scenario">
+            <button class="scenario-option selected" data-scenario="equilibrium" aria-pressed="true">
+              <span class="scenario-number">01</span><span class="scenario-name">Equilibrium scan</span><span class="scenario-description">Bring a dilute sample into the liquid window.</span>
+            </button>
+            <button class="scenario-option" data-scenario="crystal" aria-pressed="false">
+              <span class="scenario-number">02</span><span class="scenario-name">Crystal growth</span><span class="scenario-description">Quench a dense melt and measure local order.</span>
+            </button>
+            <button class="scenario-option" data-scenario="interface" aria-pressed="false">
+              <span class="scenario-number">03</span><span class="scenario-name">Surface tension</span><span class="scenario-description">Hold a liquid-vapor interface and record its signal.</span>
+            </button>
+          </div>
+        </div>
+        <div class="launch-actions">
+          <div class="difficulty-row" role="group" aria-label="Protocol difficulty">
+            <span class="difficulty-label">Tolerance</span>
+            <button class="difficulty-button selected" data-difficulty="guided" aria-pressed="true">GUIDED</button>
+            <button class="difficulty-button" data-difficulty="standard" aria-pressed="false">STANDARD</button>
+            <button class="difficulty-button" data-difficulty="expert" aria-pressed="false">EXPERT</button>
+          </div>
+          <button class="button primary start-button" data-action="start"><span>Initialize experiment</span><span class="arrow" aria-hidden="true">-></span></button>
+          <button id="loadRunButton" class="saved-run-link hidden" data-action="load-run">Load saved bench</button>
+        </div>
+      </div>
+      <footer class="title-footer"><span>Classical particles / reduced LJ units / no external assets</span><span>Systems emerge from pair forces</span></footer>
+    </div>
+  </section>
+
+  <section id="labScreen" class="screen hidden" aria-label="Molecular dynamics workbench">
+    <header class="lab-header">
+      <div class="lab-brand-wrap">
+        <button class="brand" data-action="title" aria-label="Return to title"><span class="brand-mark" aria-hidden="true"></span><span>PHASE / SPACE</span></button>
+        <span class="lab-breadcrumb">Molecular dynamics lab</span>
+      </div>
+      <div class="run-readout"><span id="headerScenario">EQUILIBRIUM SCAN</span><span>/</span><strong id="headerTime" class="mono">t 0.00</strong><span id="headerStatus">LIVE</span></div>
+      <div class="header-actions">
+        <button id="pauseButton" class="button small" data-action="pause" title="Pause (Space)">Pause</button>
+        <select id="speedSelect" class="speed-select" aria-label="Simulation speed" title="Simulation speed">
+          <option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option>
+        </select>
+        <button id="muteButton" class="button quiet small square" data-action="mute" aria-label="Toggle audio" title="Toggle audio">SND</button>
+        <button class="button quiet small square" data-action="stats" aria-label="Statistics" title="Run statistics">DATA</button>
+        <button class="button quiet small square" data-action="help" aria-label="Help" title="Help">?</button>
+        <button class="button quiet small square" data-action="settings" aria-label="Settings" title="Settings">SET</button>
+      </div>
+    </header>
+
+    <div class="lab-content">
+      <main class="visual-column">
+        <section class="world-stage" aria-label="Live particle simulation">
+          <canvas id="worldCanvas" aria-label="Molecular simulation; click a particle to inspect or use the thermal brush"></canvas>
+          <div class="stage-topline">
+            <div class="stage-ident"><span class="eyebrow">Periodic box / reduced units</span><span id="stageName" class="stage-name">Equilibrium scan</span></div>
+            <div class="stage-tools" role="group" aria-label="Visualization overlays">
+              <button class="view-button" data-action="overlay-bonds" aria-pressed="false">Bonds</button>
+              <button class="view-button" data-action="overlay-velocity" aria-pressed="false">Velocity</button>
+              <button class="view-button" data-action="overlay-order" aria-pressed="false">Order</button>
+              <button id="densityViewButton" class="view-button locked-tool" data-action="overlay-density" aria-pressed="false" title="Unlock the density field in Research">Field</button>
+            </div>
+          </div>
+          <div id="stageStatus" class="stage-status">N = 196 / A-A Lennard-Jones</div>
+          <div class="stage-footer"><span id="stageLegend">A atoms / thermal motion</span><span id="toolHint" class="tool-hint">Click a particle to inspect</span></div>
+        </section>
+
+        <section class="analysis-strip" aria-label="Live analysis">
+          <div class="analysis-panel">
+            <div class="panel-head"><span id="trendTitle" class="panel-title">Thermodynamic trace</span><div class="chart-tabs" role="tablist" aria-label="Chart metric">
+              <button class="chart-tab selected" data-chart="thermo" role="tab" aria-selected="true">T / P</button>
+              <button class="chart-tab" data-chart="energy" role="tab" aria-selected="false">Energy</button>
+              <button class="chart-tab" data-chart="msd" role="tab" aria-selected="false">MSD</button>
+            </div></div>
+            <canvas id="trendCanvas" aria-label="Live simulation history chart"></canvas>
+            <div class="chart-foot"><span id="trendLegend"><i class="legend-line"></i>Temperature <i class="legend-line second"></i>Pressure</span><span id="chartRange" class="mono">last 0 tau</span></div>
+          </div>
+          <div class="analysis-panel">
+            <div class="panel-head"><span class="panel-title">Pair structure / RDF</span><select id="rdfSelect" class="rdf-select" aria-label="RDF species pair"><option value="all">all pairs</option><option value="rdfAA" disabled>A-A</option><option value="rdfAB" disabled>A-B</option><option value="rdfBB" disabled>B-B</option></select></div>
+            <canvas id="rdfCanvas" aria-label="Radial distribution function chart"></canvas>
+            <div class="rdf-summary"><span>First shell <strong id="rdfPeak">--</strong></span><span>Diffusion <strong id="diffusionValue">--</strong></span></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="control-rail" aria-label="Simulation controls">
+        <section class="rail-section">
+          <div class="rail-head"><span class="rail-title">Protocol objective</span><span id="difficultyBadge" class="eyebrow">GUIDED</span></div>
+          <h2 id="objectiveTitle" class="objective-title">Find the liquid window</h2>
+          <p id="objectiveCopy" class="objective-copy">Compress the dilute sample, then hold a stable fluid phase.</p>
+          <div class="progress-line"><span id="objectiveBar"></span></div>
+          <div class="objective-progress"><span id="objectiveCondition">Waiting for a stable state</span><strong id="objectiveHold">0.0 / 3.0 tau</strong></div>
+          <div class="objective-readouts">
+            <div class="objective-readout"><span>Temperature</span><strong id="metricTemp">0.00</strong></div>
+            <div class="objective-readout"><span>Pressure</span><strong id="metricPressure">0.00</strong></div>
+            <div class="objective-readout"><span>Local order</span><strong id="metricOrder">0.00</strong></div>
+          </div>
+        </section>
+
+        <section class="rail-section">
+          <div class="rail-head"><span class="rail-title">Ensemble</span><span id="ensembleNote" class="lock-copy">T controlled</span></div>
+          <div class="ensemble-row" role="group" aria-label="Simulation ensemble">
+            <button class="ensemble-button" data-ensemble="NVE" aria-pressed="false">NVE</button>
+            <button class="ensemble-button selected" data-ensemble="NVT" aria-pressed="true">NVT</button>
+            <button class="ensemble-button" data-ensemble="NPT" aria-pressed="false">NPT</button>
+          </div>
+          <div class="control-row">
+            <label class="control-label" for="temperatureInput"><span>Thermostat setpoint</span><strong id="temperatureOutput">1.00 T*</strong></label>
+            <input id="temperatureInput" type="range" min="0.25" max="2.2" step="0.01" value="1.00" aria-describedby="tempNote">
+            <div id="tempNote" class="control-note">Berendsen coupling changes kinetic energy toward the target.</div>
+          </div>
+          <div class="control-row">
+            <label class="control-label" for="densityInput"><span>Volume / target density</span><strong id="densityOutput">0.00 rho</strong></label>
+            <input id="densityInput" type="range" min="0.22" max="1.08" step="0.01" value="0.32" aria-describedby="densityNote">
+            <div id="densityNote" class="control-note">Release the slider to compress or expand the periodic box.</div>
+          </div>
+          <div class="control-row">
+            <label class="control-label" for="pressureInput"><span>Barostat pressure</span><strong id="pressureOutput">1.00 P*</strong></label>
+            <input id="pressureInput" type="range" min="-1.0" max="6.0" step="0.05" value="1.00" aria-describedby="pressureNote">
+            <div id="pressureNote" class="control-note">NPT changes the box area to follow this pressure.</div>
+          </div>
+        </section>
+
+        <section class="rail-section">
+          <div class="rail-head"><span class="rail-title">Interventions</span><span class="lock-copy">mouse + touch</span></div>
+          <div class="tool-grid">
+            <button class="button tool-button" data-action="cool-pulse"><span class="tool-symbol">-</span>Quench pulse</button>
+            <button class="button tool-button" data-action="heat-pulse"><span class="tool-symbol">+</span>Heat pulse</button>
+            <button id="seedButton" class="button tool-button" data-action="seed"><span class="tool-symbol">*</span>Seed lattice</button>
+            <button id="brushButton" class="button tool-button" data-action="brush"><span class="tool-symbol">o</span>Thermal brush</button>
+            <button id="soluteButton" class="button tool-button locked-tool" data-action="solute" title="Unlock Binary Tracer in Research"><span class="tool-symbol">B</span>Add tracer</button>
+            <button class="button tool-button" data-action="reset-msd"><span class="tool-symbol">0</span>Reset MSD origin</button>
+          </div>
+          <p id="selectedInfo" class="control-note" style="margin-top:10px">Inspect: click an atom. Thermal brush: click or drag in the sample.</p>
+        </section>
+
+        <section class="rail-section compact">
+          <div class="rail-head"><span class="rail-title">Event log</span><button class="button quiet small" data-action="clear-log">Clear</button></div>
+          <ul id="eventLog" class="log-list"><li class="log-empty">System initialized. Awaiting first measurement.</li></ul>
+        </section>
+
+        <div class="rail-quicklinks">
+          <button class="button quiet" data-action="research">Research <span id="researchCount" class="mono">0 RP</span></button>
+          <button class="button quiet" data-action="stats">Run data</button>
+          <button class="button quiet" data-action="save">Save</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <div id="modalLayer" class="hidden" role="presentation">
+    <section id="modalWindow" class="modal-window" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div id="modalContent"></div>
+    </section>
+  </div>
+  <div id="toastHost" aria-live="polite" aria-atomic="false"></div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+      const STORAGE_KEY = 'phase-space-lab-v1';
+      const SAVE_KEY = 'phase-space-bench-v1';
+      const BASE_DT = 0.004;
+      const CUTOFF = 2.5;
+      const MIN_SAFE = 0.52;
+
+      const scenarios = {
+        equilibrium: {
+          id: 'equilibrium', number: '01', name: 'Equilibrium scan', short: 'LIQUID WINDOW',
+          title: 'Find the liquid window',
+          description: 'Compress the dilute sample into the target density band. Hold a warm, disordered fluid without freezing it.',
+          init: 'gas', count: 196, density: 0.31, temperature: 1.45, targetT: 0.95, aspect: 1.34, binary: 0.00,
+          objectiveHint: 'Tune volume and temperature until density, kinetic energy, and local structure all sit inside the fluid window.'
+        },
+        crystal: {
+          id: 'crystal', number: '02', name: 'Crystal growth', short: 'SUPERCOOLED MELT',
+          title: 'Grow a crystal front',
+          description: 'Cool a dense melt until local six-fold order propagates through the periodic sample.',
+          init: 'melt', count: 196, density: 0.88, temperature: 1.23, targetT: 1.15, aspect: 1.34, binary: 0.00,
+          objectiveHint: 'Lower the thermostat setpoint. A seed lattice can start a nucleus; keep the sample dense as order spreads.'
+        },
+        interface: {
+          id: 'interface', number: '03', name: 'Surface tension', short: 'COEXISTENCE SLAB',
+          title: 'Hold the liquid-vapor interface',
+          description: 'Stabilize a two-phase slab and read its density contrast and pressure anisotropy.',
+          init: 'slab', count: 240, density: 0.42, temperature: 0.72, targetT: 0.72, aspect: 1.65, binary: 0.16,
+          objectiveHint: 'Keep the vapor gap distinct from the dense slab. The tension estimate comes from the live pressure tensor.'
+        }
+      };
+
+      const difficulties = {
+        guided: { label: 'GUIDED', hold: 3.5, deadline: 105 },
+        standard: { label: 'STANDARD', hold: 6.5, deadline: 115 },
+        expert: { label: 'EXPERT', hold: 10.5, deadline: 130 }
+      };
+
+      const objectiveRules = {
+        equilibrium: {
+          guided: { rho: [0.52, 0.94], temp: [0.62, 1.20], orderMax: 0.67 },
+          standard: { rho: [0.60, 0.86], temp: [0.70, 1.04], orderMax: 0.56 },
+          expert: { rho: [0.65, 0.81], temp: [0.76, 0.96], orderMax: 0.48 }
+        },
+        crystal: {
+          guided: { rhoMin: 0.72, tempMax: 0.79, orderMin: 0.53 },
+          standard: { rhoMin: 0.76, tempMax: 0.66, orderMin: 0.63 },
+          expert: { rhoMin: 0.80, tempMax: 0.56, orderMin: 0.73 }
+        },
+        interface: {
+          guided: { temp: [0.48, 1.00], contrastMin: 0.18 },
+          standard: { temp: [0.54, 0.88], contrastMin: 0.31 },
+          expert: { temp: [0.56, 0.76], contrastMin: 0.43 }
+        }
+      };
+
+      const techCatalog = [
+        { id: 'spectroscopy', name: 'Pair spectroscopy', cost: 1, description: 'Split g(r) into A-A, A-B, and B-B partial pair correlations.' },
+        { id: 'adaptive', name: 'Adaptive integrator', cost: 2, description: 'Automatically subdivide high-force Verlet steps to protect energy stability.' },
+        { id: 'densityField', name: 'Density field', cost: 2, description: 'Unlock a live coarse-grained density overlay on the molecular view.' },
+        { id: 'tracer', name: 'Binary tracer', cost: 2, description: 'Add a controlled B-species tracer pulse to any bulk experiment.' },
+        { id: 'barostat', name: 'Calibrated barostat', cost: 3, description: 'Increase isotropic NPT volume-feedback responsiveness for difficult pressure targets.' }
+      ];
+
+      const defaultMeta = {
+        version: 1,
+        settings: { volume: 0.45, muted: false, reducedMotion: false },
+        research: 0,
+        tech: {},
+        wins: {},
+        best: {},
+        totalRuns: 0,
+        totalTime: 0,
+        lastScenario: 'equilibrium',
+        lastDifficulty: 'guided',
+        tutorialDone: false
+      };
+
+      function safeLoadMeta() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return structuredClone(defaultMeta);
+          const parsed = JSON.parse(raw);
+          return {
+            ...structuredClone(defaultMeta), ...parsed,
+            settings: { ...defaultMeta.settings, ...(parsed.settings || {}) },
+            tech: parsed.tech && typeof parsed.tech === 'object' ? parsed.tech : {},
+            wins: parsed.wins && typeof parsed.wins === 'object' ? parsed.wins : {},
+            best: parsed.best && typeof parsed.best === 'object' ? parsed.best : {}
+          };
+        } catch (error) {
+          return structuredClone(defaultMeta);
+        }
+      }
+
+      let meta = safeLoadMeta();
+      let memorySave = null;
+      let memoryMeta = meta;
+      let selectedScenario = scenarios[meta.lastScenario] ? meta.lastScenario : 'equilibrium';
+      let selectedDifficulty = difficulties[meta.lastDifficulty] ? meta.lastDifficulty : 'guided';
+      let screen = 'title';
+      let sim = null;
+      let modalKind = null;
+      let tutorialStep = 0;
+      let chartMode = 'thermo';
+      let rdfMode = 'all';
+      let audio = null;
+      let ambientNodes = [];
+      let lastFrame = 0;
+      let accumulator = 0;
+      let uiAccumulator = 0;
+      let chartAccumulator = 0;
+      let reducedMotion = !!meta.settings.reducedMotion;
+      let saveExists = false;
+      let worldRect = null;
+
+      class SynthAudio {
+        constructor() {
+          this.ctx = null;
+          this.master = null;
+          this.ambientGain = null;
+          this.oscA = null;
+          this.oscB = null;
+          this.muted = !!meta.settings.muted;
+        this.volume = clamp(Number.isFinite(Number(meta.settings.volume)) ? Number(meta.settings.volume) : 0.45, 0, 1);
+        }
+        ensure() {
+          if (this.ctx) {
+            if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+            return;
+          }
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return;
+          try {
+            this.ctx = new AudioContextClass();
+            this.master = this.ctx.createGain();
+            this.master.gain.value = this.muted ? 0 : this.volume;
+            this.master.connect(this.ctx.destination);
+            this.ambientGain = this.ctx.createGain();
+            this.ambientGain.gain.value = 0.012;
+            this.ambientGain.connect(this.master);
+            this.oscA = this.ctx.createOscillator();
+            this.oscA.type = 'sine';
+            this.oscA.frequency.value = 47;
+            this.oscA.connect(this.ambientGain);
+            this.oscA.start();
+            this.oscB = this.ctx.createOscillator();
+            this.oscB.type = 'triangle';
+            this.oscB.frequency.value = 72;
+            const secondGain = this.ctx.createGain();
+            secondGain.gain.value = 0.28;
+            this.oscB.connect(secondGain);
+            secondGain.connect(this.ambientGain);
+            this.oscB.start();
+            if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+          } catch (error) {
+            this.ctx = null;
+          }
+        }
+        setVolume(value) {
+          this.volume = clamp(Number(value) || 0, 0, 1);
+          if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.06);
+        }
+        setMuted(value) {
+          this.muted = !!value;
+          if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.05);
+        }
+        react(temp, pressure) {
+          if (!this.ctx || !this.oscA || !this.ambientGain) return;
+          const now = this.ctx.currentTime;
+          const t = Number.isFinite(temp) ? temp : 1;
+          const p = Number.isFinite(pressure) ? pressure : 0;
+          this.oscA.frequency.setTargetAtTime(42 + clamp(t, 0, 5) * 7, now, 0.18);
+          this.oscB.frequency.setTargetAtTime(66 + clamp(p, -2, 8) * 1.25, now, 0.22);
+          this.ambientGain.gain.setTargetAtTime(0.009 + clamp(Math.abs(p), 0, 6) * 0.0013, now, 0.25);
+        }
+        tone(freq, duration, wave = 'sine', level = 0.08) {
+          if (this.muted) return;
+          this.ensure();
+          if (!this.ctx || !this.master) return;
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = wave;
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, level), now + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+          osc.connect(gain);
+          gain.connect(this.master);
+          osc.start(now);
+          osc.stop(now + duration + 0.025);
+          osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch (error) {} };
+        }
+        play(kind) {
+          if (kind === 'select') this.tone(520, .09, 'sine', .035);
+          else if (kind === 'pulse') { this.tone(230, .12, 'triangle', .055); this.tone(350, .16, 'sine', .035); }
+          else if (kind === 'cool') { this.tone(390, .15, 'sine', .04); this.tone(260, .22, 'sine', .05); }
+          else if (kind === 'crystal') { this.tone(660, .22, 'sine', .045); this.tone(990, .35, 'sine', .035); }
+          else if (kind === 'warning') this.tone(170, .24, 'triangle', .07);
+          else if (kind === 'success') { this.tone(523, .2, 'sine', .06); this.tone(659, .22, 'sine', .06); this.tone(784, .34, 'sine', .055); }
+          else if (kind === 'failure') { this.tone(280, .22, 'triangle', .06); this.tone(190, .36, 'triangle', .05); }
+        }
+      }
+
+      function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+      function mod(value, length) { return ((value % length) + length) % length; }
+      function minImage(value, length) { return value - Math.round(value / length) * length; }
+      function fmt(value, digits = 2) { return Number.isFinite(value) ? value.toFixed(digits) : '--'; }
+      function persistMeta() {
+        memoryMeta = meta;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(meta)); } catch (error) {}
+        updatePersistentUI();
+      }
+      function safeReadSave() {
+        try {
+          const raw = localStorage.getItem(SAVE_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (error) {}
+        return memorySave;
+      }
+      function persistSave(data) {
+        memorySave = data;
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); saveExists = true; return true; }
+        catch (error) { saveExists = !!memorySave; return false; }
+      }
+      function deleteSave() {
+        memorySave = null;
+        try { localStorage.removeItem(SAVE_KEY); } catch (error) {}
+        saveExists = false;
+        updatePersistentUI();
+      }
+
+      function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function() {
+          a |= 0;
+          a = a + 0x6D2B79F5 | 0;
+          let t = Math.imul(a ^ a >>> 15, 1 | a);
+          t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+          return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+      }
+      function makeNormal(random) {
+        let spare = null;
+        return () => {
+          if (spare !== null) { const value = spare; spare = null; return value; }
+          let u = 0, v = 0;
+          while (u === 0) u = random();
+          while (v === 0) v = random();
+          const mag = Math.sqrt(-2 * Math.log(u));
+          spare = mag * Math.sin(2 * Math.PI * v);
+          return mag * Math.cos(2 * Math.PI * v);
+        };
+      }
+
+      function showScreen(target) {
+        screen = target;
+        $('#titleScreen').classList.toggle('hidden', target !== 'title');
+        $('#labScreen').classList.toggle('hidden', target !== 'lab');
+        if (target === 'title') closeModal();
+        updatePersistentUI();
+      }
+
+      function updatePersistentUI() {
+        const completedScenarios = Object.keys(meta.best || {}).filter(id => scenarios[id]).length;
+        $('#titleProgress').textContent = `${completedScenarios} / 3 studies logged`;
+        saveExists = !!safeReadSave();
+        $('#loadRunButton').classList.toggle('hidden', !saveExists);
+        $('#researchCount').textContent = `${Math.floor(meta.research || 0)} RP`;
+        $('#muteButton').textContent = meta.settings.muted ? 'MUT' : 'SND';
+        $('#muteButton').setAttribute('aria-label', meta.settings.muted ? 'Unmute audio' : 'Mute audio');
+      }
+
+      function updateTitleSelection() {
+        $$('[data-scenario]').forEach(button => {
+          const active = button.dataset.scenario === selectedScenario;
+          button.classList.toggle('selected', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        $$('[data-difficulty]').forEach(button => {
+          const active = button.dataset.difficulty === selectedDifficulty;
+          button.classList.toggle('selected', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+      }
+
+      function taskRules(scenarioId, difficultyId) { return objectiveRules[scenarioId][difficultyId]; }
+
+      function createPositions(scenario, state, random) {
+        const n = state.n, positions = [];
+        if (scenario.init === 'slab') {
+          const localDensity = 0.72;
+          const slabWidth = n / (localDensity * state.ly);
+          const rows = Math.max(6, Math.round(state.ly / 1.24));
+          const cols = Math.ceil(n / rows);
+          const dx = slabWidth / cols;
+          const dy = state.ly / rows;
+          const left = (state.lx - slabWidth) / 2;
+          for (let i = 0; i < n; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const x = left + (col + .5) * dx + (random() - .5) * .028;
+            const y = mod((row + .5) * dy + (col % 2) * dy * .5 + (random() - .5) * .028, state.ly);
+            positions.push([x, y]);
+          }
+        } else if (scenario.init === 'melt') {
+          const cols = Math.ceil(Math.sqrt(n * state.lx / state.ly));
+          const rows = Math.ceil(n / cols);
+          const dx = state.lx / cols, dy = state.ly / rows;
+          for (let i = 0; i < n; i++) {
+            const col = i % cols, row = Math.floor(i / cols);
+            positions.push([mod((col + .5) * dx + (random() - .5) * dx * .30, state.lx), mod((row + .5) * dy + (random() - .5) * dy * .30, state.ly)]);
+          }
+        } else {
+          const minDistance2 = .78 * .78;
+          for (let i = 0; i < n; i++) {
+            let best = null, bestDistance = -1;
+            for (let attempt = 0; attempt < 900; attempt++) {
+              const x = random() * state.lx, y = random() * state.ly;
+              let nearest = Infinity;
+              for (let j = 0; j < positions.length; j++) {
+                const dx = minImage(x - positions[j][0], state.lx);
+                const dy = minImage(y - positions[j][1], state.ly);
+                const d2 = dx * dx + dy * dy;
+                if (d2 < nearest) nearest = d2;
+              }
+              if (nearest >= minDistance2) { best = [x, y]; break; }
+              if (nearest > bestDistance) { bestDistance = nearest; best = [x, y]; }
+            }
+            positions.push(best || [random() * state.lx, random() * state.ly]);
+          }
+        }
+        return positions;
+      }
+
+      function initializeRun(scenarioId, difficultyId, seedOffset = 0) {
+        const scenario = scenarios[scenarioId];
+        const difficulty = difficulties[difficultyId];
+        const seed = 240519 + Object.keys(scenarios).indexOf(scenarioId) * 113 + Object.keys(difficulties).indexOf(difficultyId) * 1901 + seedOffset;
+        const random = mulberry32(seed);
+        const gaussian = makeNormal(random);
+        const n = scenario.count;
+        const area = n / scenario.density;
+        const lx = Math.sqrt(area * scenario.aspect);
+        const ly = area / lx;
+        const state = {
+          scenarioId, difficultyId, seed, n, x: new Float64Array(n), y: new Float64Array(n),
+          ux: new Float64Array(n), uy: new Float64Array(n), originX: new Float64Array(n), originY: new Float64Array(n),
+          vx: new Float64Array(n), vy: new Float64Array(n), fx: new Float64Array(n), fy: new Float64Array(n),
+          species: new Uint8Array(n), pinned: new Uint8Array(n), q6: new Float32Array(n), neighborCount: new Uint8Array(n),
+          lx, ly, time: 0, targetT: scenario.targetT, targetP: 1, ensemble: 'NVT', speed: 1,
+          history: [], events: [], effects: [], simAccumulator: 0, sampleAccumulator: 0, nextSample: .3,
+          hold: 0, objectiveClock: 0, failed: false, completed: false, paused: false, objectiveState: 'waiting',
+          temperature: scenario.temperature, pressure: 0, pxx: 0, pyy: 0, potential: 0, kinetic: 0, order: 0,
+          rdf: new Float32Array(48), rdfAA: new Float32Array(48), rdfAB: new Float32Array(48), rdfBB: new Float32Array(48), rdfMax: 4.8,
+          densityProfile: new Float32Array(24), densityContrast: 0, surfaceTension: 0, msd: 0, diffusion: 0,
+          virialX: 0, virialY: 0, maxForce: 0, numericalAlerts: 0, thermalAlarm: 0, lastLogTime: -10,
+          hasLoggedNucleation: false, hasLoggedPressure: false, completionAward: 0, selectedParticle: -1,
+          toolMode: 'inspect', overlays: { bonds: false, velocity: false, order: false, density: false },
+          adaptive: !!meta.tech.adaptive, analysis: null, currentObjectiveGood: false, lastAnalysisTime: 0,
+          barostatGain: meta.tech.barostat ? .042 : .027, initialEnergy: 0, startWallTime: performance.now()
+        };
+        const positions = createPositions(scenario, state, random);
+        const impurityCount = Math.round(n * scenario.binary);
+        const speciesIndices = Array.from({ length: n }, (_, i) => i);
+        for (let i = speciesIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(random() * (i + 1));
+          [speciesIndices[i], speciesIndices[j]] = [speciesIndices[j], speciesIndices[i]];
+        }
+        for (let i = 0; i < n; i++) {
+          state.x[i] = positions[i][0]; state.y[i] = positions[i][1];
+          state.ux[i] = positions[i][0]; state.uy[i] = positions[i][1];
+          state.originX[i] = positions[i][0]; state.originY[i] = positions[i][1];
+          state.species[i] = speciesIndices.indexOf(i) < impurityCount ? 1 : 0;
+          const mass = state.species[i] ? .82 : 1;
+          state.vx[i] = gaussian() * Math.sqrt(scenario.temperature / mass);
+          state.vy[i] = gaussian() * Math.sqrt(scenario.temperature / mass);
+        }
+        removeMomentumAndSetTemperature(state, scenario.temperature);
+        computeForces(state);
+        state.analysis = analyzeState(state);
+        state.temperature = state.analysis.temperature;
+        state.pressure = state.analysis.pressure;
+        state.order = state.analysis.order;
+        state.surfaceTension = state.analysis.surfaceTension;
+        state.densityContrast = state.analysis.densityContrast;
+        state.msd = 0;
+        state.diffusion = 0;
+        state.initialEnergy = state.analysis.totalEnergy;
+        state.history.push(makeHistoryPoint(state));
+        const expectedHold = difficulty.hold;
+        const shortName = scenario.name;
+        state.events.unshift({ time: 0, text: `${shortName} initialized with ${n} atoms. Seed ${seed}.`, kind: 'good' });
+        if (scenario.init === 'slab') state.events.unshift({ time: 0, text: 'Liquid slab prepared; two periodic interfaces are present.', kind: 'good' });
+        state._requiredHold = expectedHold;
+        return state;
+      }
+
+      function removeMomentumAndSetTemperature(state, target) {
+        let px = 0, py = 0, massTotal = 0;
+        for (let i = 0; i < state.n; i++) {
+          const mass = state.species[i] ? .82 : 1;
+          px += mass * state.vx[i]; py += mass * state.vy[i]; massTotal += mass;
+        }
+        const cx = px / Math.max(massTotal, 1), cy = py / Math.max(massTotal, 1);
+        let kinetic = 0;
+        for (let i = 0; i < state.n; i++) {
+          const mass = state.species[i] ? .82 : 1;
+          state.vx[i] -= cx; state.vy[i] -= cy;
+          kinetic += .5 * mass * (state.vx[i] * state.vx[i] + state.vy[i] * state.vy[i]);
+        }
+        const temp = kinetic / Math.max(1, state.n - 1);
+        const scale = Math.sqrt(Math.max(.01, target) / Math.max(.00001, temp));
+        for (let i = 0; i < state.n; i++) { state.vx[i] *= scale; state.vy[i] *= scale; }
+      }
+
+      function pairParameters(typeA, typeB) {
+        const sigmaA = typeA ? .88 : 1;
+        const sigmaB = typeB ? .88 : 1;
+        const epsilonA = typeA ? .68 : 1;
+        const epsilonB = typeB ? .68 : 1;
+        return { sigma: (sigmaA + sigmaB) * .5, epsilon: Math.sqrt(epsilonA * epsilonB) };
+      }
+
+      function computeForces(state) {
+        const { n, lx, ly } = state;
+        state.fx.fill(0); state.fy.fill(0);
+        const nx = Math.max(3, Math.floor(lx / CUTOFF));
+        const ny = Math.max(3, Math.floor(ly / CUTOFF));
+        const cells = Array.from({ length: nx * ny }, () => []);
+        const px = new Float64Array(n), py = new Float64Array(n);
+        for (let i = 0; i < n; i++) {
+          px[i] = mod(state.x[i], lx); py[i] = mod(state.y[i], ly);
+          const cx = Math.min(nx - 1, Math.floor(px[i] / lx * nx));
+          const cy = Math.min(ny - 1, Math.floor(py[i] / ly * ny));
+          cells[cy * nx + cx].push(i);
+        }
+        let potential = 0, virialX = 0, virialY = 0, maxForce = 0;
+        const cut2 = CUTOFF * CUTOFF;
+        const cutoffCache = [
+          pairParameters(0, 0), pairParameters(0, 1), pairParameters(1, 1)
+        ].map(params => {
+          const sr = params.sigma / CUTOFF;
+          const sr6 = Math.pow(sr, 6);
+          const uCut = 4 * params.epsilon * (sr6 * sr6 - sr6);
+          const fCut = 24 * params.epsilon / CUTOFF * (2 * sr6 * sr6 - sr6);
+          return { ...params, uCut, fCut };
+        });
+        for (let i = 0; i < n; i++) {
+          const cx = Math.min(nx - 1, Math.floor(px[i] / lx * nx));
+          const cy = Math.min(ny - 1, Math.floor(py[i] / ly * ny));
+          for (let oy = -1; oy <= 1; oy++) {
+            const by = (cy + oy + ny) % ny;
+            for (let ox = -1; ox <= 1; ox++) {
+              const bx = (cx + ox + nx) % nx;
+              const cell = cells[by * nx + bx];
+              for (let k = 0; k < cell.length; k++) {
+                const j = cell[k];
+                if (j <= i) continue;
+                let dx = minImage(px[i] - px[j], lx);
+                let dy = minImage(py[i] - py[j], ly);
+                let r2 = dx * dx + dy * dy;
+                if (r2 >= cut2) continue;
+                r2 = Math.max(r2, MIN_SAFE * MIN_SAFE);
+                const r = Math.sqrt(r2);
+                const typeI = state.species[i], typeJ = state.species[j];
+                const index = typeI === typeJ ? (typeI ? 2 : 0) : 1;
+                const pair = cutoffCache[index];
+                const sr = pair.sigma / r;
+                const sr6 = Math.pow(sr, 6);
+                let radialForce = 24 * pair.epsilon / r * (2 * sr6 * sr6 - sr6) - pair.fCut;
+                radialForce = clamp(radialForce, -100, 100);
+                const scale = radialForce / r;
+                const fx = scale * dx, fy = scale * dy;
+                state.fx[i] += fx; state.fy[i] += fy;
+                state.fx[j] -= fx; state.fy[j] -= fy;
+                const u = 4 * pair.epsilon * (sr6 * sr6 - sr6) - pair.uCut + (r - CUTOFF) * pair.fCut;
+                potential += u;
+                virialX += dx * fx;
+                virialY += dy * fy;
+                maxForce = Math.max(maxForce, Math.sqrt(fx * fx + fy * fy));
+              }
+            }
+          }
+        }
+        for (let i = 0; i < n; i++) {
+          if (state.pinned[i]) { state.fx[i] = 0; state.fy[i] = 0; }
+        }
+        state.potential = potential;
+        state.virialX = virialX;
+        state.virialY = virialY;
+        state.maxForce = maxForce;
+      }
+
+      function kineticAndPressure(state) {
+        let kinetic = 0, kx = 0, ky = 0, free = 0;
+        for (let i = 0; i < state.n; i++) {
+          if (state.pinned[i]) continue;
+          const mass = state.species[i] ? .82 : 1;
+          const vx2 = mass * state.vx[i] * state.vx[i];
+          const vy2 = mass * state.vy[i] * state.vy[i];
+          kx += vx2; ky += vy2;
+          kinetic += .5 * (vx2 + vy2);
+          free++;
+        }
+        const area = Math.max(1, state.lx * state.ly);
+        const temperature = kinetic / Math.max(1, free - 1);
+        const pxx = (kx + state.virialX) / area;
+        const pyy = (ky + state.virialY) / area;
+        return { kinetic, kx, ky, temperature, pxx, pyy, pressure: (pxx + pyy) * .5, free };
+      }
+
+      function applyThermostat(state, dt) {
+        if (state.ensemble === 'NVE') return;
+        const thermo = kineticAndPressure(state);
+        if (!Number.isFinite(thermo.temperature) || thermo.temperature < 1e-8) return;
+        const tau = .72;
+        const factor2 = 1 + dt / tau * (state.targetT / thermo.temperature - 1);
+        const scale = Math.sqrt(clamp(factor2, .88, 1.12));
+        for (let i = 0; i < state.n; i++) {
+          if (state.pinned[i]) continue;
+          state.vx[i] *= scale; state.vy[i] *= scale;
+        }
+      }
+
+      function scalePeriodicBox(state, scale) {
+        const newLx = clamp(state.lx * scale, 8.2, 54);
+        const newLy = clamp(state.ly * scale, 8.2, 54);
+        const sx = newLx / state.lx, sy = newLy / state.ly;
+        for (let i = 0; i < state.n; i++) {
+          state.x[i] = mod(state.x[i] * sx, newLx);
+          state.y[i] = mod(state.y[i] * sy, newLy);
+          state.ux[i] *= sx; state.uy[i] *= sy;
+        }
+        state.lx = newLx; state.ly = newLy;
+      }
+
+      function applyBarostat(state, dt) {
+        if (state.ensemble !== 'NPT') return false;
+        const thermo = kineticAndPressure(state);
+        if (!Number.isFinite(thermo.pressure)) return false;
+        const delta = (thermo.pressure - state.targetP) * state.barostatGain * dt;
+        const scale = Math.exp(clamp(delta, -.0025, .0025));
+        if (Math.abs(scale - 1) < 1e-9) return false;
+        scalePeriodicBox(state, scale);
+        computeForces(state);
+        return true;
+      }
+
+      function physicsStep(state, dt) {
+        if (state.adaptive && state.maxForce > 28) {
+          const subdivisions = clamp(Math.ceil(Math.sqrt(state.maxForce / 28)), 2, 4);
+          for (let i = 0; i < subdivisions; i++) physicsSubstep(state, dt / subdivisions);
+        } else {
+          physicsSubstep(state, dt);
+        }
+        state.time += dt;
+        state.sampleAccumulator += dt;
+        const current = kineticAndPressure(state);
+        state.temperature = current.temperature;
+        state.pressure = current.pressure;
+        if (!Number.isFinite(state.temperature) || !Number.isFinite(state.pressure)) {
+          finishRun(false, 'Numerical instability: the thermodynamic state diverged.');
+          return;
+        }
+        state.thermalAlarm = state.temperature > 4.0 ? state.thermalAlarm + dt : Math.max(0, state.thermalAlarm - dt * 2);
+        if (state.temperature > 8 || state.thermalAlarm > 1.7) {
+          finishRun(false, 'Thermal runaway: the sample exceeded the safe integration envelope.');
+          return;
+        }
+        for (let i = state.effects.length - 1; i >= 0; i--) {
+          state.effects[i].life -= dt;
+          if (state.effects[i].life <= 0) state.effects.splice(i, 1);
+        }
+        if (state.sampleAccumulator >= .34 && !state.completed && !state.failed) {
+          const elapsed = state.sampleAccumulator;
+          state.sampleAccumulator = 0;
+          analyzeAndRecord(state, elapsed);
+        }
+      }
+
+      function physicsSubstep(state, dt) {
+        for (let i = 0; i < state.n; i++) {
+          if (state.pinned[i]) continue;
+          const mass = state.species[i] ? .82 : 1;
+          state.vx[i] += .5 * state.fx[i] / mass * dt;
+          state.vy[i] += .5 * state.fy[i] / mass * dt;
+          const dx = state.vx[i] * dt, dy = state.vy[i] * dt;
+          state.ux[i] += dx; state.uy[i] += dy;
+          state.x[i] = mod(state.x[i] + dx, state.lx);
+          state.y[i] = mod(state.y[i] + dy, state.ly);
+        }
+        computeForces(state);
+        for (let i = 0; i < state.n; i++) {
+          if (state.pinned[i]) continue;
+          const mass = state.species[i] ? .82 : 1;
+          state.vx[i] += .5 * state.fx[i] / mass * dt;
+          state.vy[i] += .5 * state.fy[i] / mass * dt;
+        }
+        applyThermostat(state, dt);
+        applyBarostat(state, dt);
+      }
+
+      function analyzeState(state) {
+        const bins = 48;
+        const rdf = new Float32Array(bins), rdfAA = new Float32Array(bins), rdfAB = new Float32Array(bins), rdfBB = new Float32Array(bins);
+        const maxR = Math.min(4.8, Math.min(state.lx, state.ly) * .49);
+        const dr = maxR / bins;
+        const qx = new Float64Array(state.n), qy = new Float64Array(state.n), qcount = new Uint16Array(state.n);
+        const neighbors = new Uint8Array(state.n);
+        let virialXX = 0, virialYY = 0;
+        for (let i = 0; i < state.n; i++) {
+          const xi = mod(state.x[i], state.lx), yi = mod(state.y[i], state.ly);
+          for (let j = i + 1; j < state.n; j++) {
+            const dx = minImage(xi - mod(state.x[j], state.lx), state.lx);
+            const dy = minImage(yi - mod(state.y[j], state.ly), state.ly);
+            const r2 = dx * dx + dy * dy;
+            const r = Math.sqrt(r2);
+            if (r < maxR) {
+              const b = Math.min(bins - 1, Math.floor(r / dr));
+              rdf[b]++;
+              if (state.species[i] === 0 && state.species[j] === 0) rdfAA[b]++;
+              else if (state.species[i] === 1 && state.species[j] === 1) rdfBB[b]++;
+              else rdfAB[b]++;
+            }
+            if (r < 1.55 && r > .01) {
+              const theta = Math.atan2(dy, dx) * 6;
+              const c = Math.cos(theta), s = Math.sin(theta);
+              qx[i] += c; qy[i] += s; qcount[i]++;
+              qx[j] += c; qy[j] += s; qcount[j]++;
+              neighbors[i]++; neighbors[j]++;
+            }
+            if (r < CUTOFF && r > .01) {
+              const typeI = state.species[i], typeJ = state.species[j];
+              const pair = pairParameters(typeI, typeJ);
+              const sr = pair.sigma / r, sr6 = Math.pow(sr, 6);
+              const srCut = pair.sigma / CUTOFF, src6 = Math.pow(srCut, 6);
+              const fc = 24 * pair.epsilon / CUTOFF * (2 * src6 * src6 - src6);
+              const radial = clamp(24 * pair.epsilon / r * (2 * sr6 * sr6 - sr6) - fc, -100, 100);
+              const factor = radial / r;
+              virialXX += dx * dx * factor;
+              virialYY += dy * dy * factor;
+            }
+          }
+        }
+        let order = 0;
+        for (let i = 0; i < state.n; i++) {
+          const count = qcount[i];
+          state.q6[i] = count ? Math.sqrt(qx[i] * qx[i] + qy[i] * qy[i]) / count : 0;
+          state.neighborCount[i] = Math.min(255, neighbors[i]);
+          order += state.q6[i];
+        }
+        order /= Math.max(1, state.n);
+        const rho = state.n / Math.max(1, state.lx * state.ly);
+        let atomsA = 0;
+        for (let i = 0; i < state.n; i++) if (state.species[i] === 0) atomsA++;
+        const atomsB = state.n - atomsA;
+        const area = Math.max(1, state.lx * state.ly);
+        const normalizeRdf = (histogram, pairCount) => {
+          for (let b = 0; b < bins; b++) {
+            const lo = b * dr, hi = (b + 1) * dr;
+            const expected = Math.max(1e-8, pairCount * Math.PI * (hi * hi - lo * lo) / area);
+            histogram[b] = histogram[b] / expected;
+          }
+        };
+        normalizeRdf(rdf, state.n * (state.n - 1) * .5);
+        normalizeRdf(rdfAA, atomsA * (atomsA - 1) * .5);
+        normalizeRdf(rdfAB, atomsA * atomsB);
+        normalizeRdf(rdfBB, atomsB * (atomsB - 1) * .5);
+        const profileBins = state.densityProfile.length;
+        state.densityProfile.fill(0);
+        for (let i = 0; i < state.n; i++) {
+          const b = Math.min(profileBins - 1, Math.floor(mod(state.x[i], state.lx) / state.lx * profileBins));
+          state.densityProfile[b]++;
+        }
+        let minDensity = Infinity, maxDensity = -Infinity;
+        for (let b = 0; b < profileBins; b++) {
+          const density = state.densityProfile[b] / Math.max(1e-8, state.lx / profileBins * state.ly);
+          state.densityProfile[b] = density;
+          minDensity = Math.min(minDensity, density); maxDensity = Math.max(maxDensity, density);
+        }
+        const contrast = (maxDensity - minDensity) / Math.max(.06, maxDensity);
+        const thermo = kineticAndPressure(state);
+        const pxx = (thermo.kx + virialXX) / area;
+        const pyy = (thermo.ky + virialYY) / area;
+        const gamma = Math.abs(state.lx * .5 * (pxx - pyy));
+        let msd = 0;
+        for (let i = 0; i < state.n; i++) {
+          const dx = state.ux[i] - state.originX[i];
+          const dy = state.uy[i] - state.originY[i];
+          msd += dx * dx + dy * dy;
+        }
+        msd /= Math.max(1, state.n);
+        const potentialPer = state.potential / Math.max(1, state.n);
+        return {
+          temperature: thermo.temperature, pressure: thermo.pressure, pxx, pyy,
+          kinetic: thermo.kinetic, potential: potentialPer, totalEnergy: (thermo.kinetic + state.potential) / Math.max(1, state.n),
+          order, rho, rdf, rdfAA, rdfAB, rdfBB, maxR, densityContrast: contrast,
+          surfaceTension: gamma, msd, diffusion: estimateDiffusion(state.history, state.time, msd)
+        };
+      }
+
+      function estimateDiffusion(history, time, currentMsd) {
+        const points = history.filter(p => p.time > Math.max(0, time - 14)).slice(-35);
+        if (points.length < 5 || time < 3) return 0;
+        const values = points.concat([{ time, msd: currentMsd }]);
+        const n = values.length;
+        let sx = 0, sy = 0, sxx = 0, sxy = 0;
+        for (const p of values) { sx += p.time; sy += p.msd; sxx += p.time * p.time; sxy += p.time * p.msd; }
+        const denominator = n * sxx - sx * sx;
+        if (Math.abs(denominator) < 1e-9) return 0;
+        return Math.max(0, (n * sxy - sx * sy) / denominator / 4);
+      }
+
+      function makeHistoryPoint(state) {
+        return {
+          time: state.time, temperature: state.temperature, pressure: state.pressure,
+          potential: state.analysis ? state.analysis.potential : state.potential / state.n,
+          energy: state.analysis ? state.analysis.totalEnergy : (state.kinetic + state.potential) / state.n,
+          msd: state.msd || 0, order: state.order || 0, density: state.n / (state.lx * state.ly)
+        };
+      }
+
+      function analyzeAndRecord(state, elapsed) {
+        const a = analyzeState(state);
+        state.analysis = a;
+        state.temperature = a.temperature; state.pressure = a.pressure; state.pxx = a.pxx; state.pyy = a.pyy;
+        state.order = a.order; state.msd = a.msd; state.diffusion = a.diffusion;
+        state.densityContrast = a.densityContrast; state.surfaceTension = a.surfaceTension;
+        state.rdf = a.rdf; state.rdfAA = a.rdfAA; state.rdfAB = a.rdfAB; state.rdfBB = a.rdfBB; state.rdfMax = a.maxR;
+        const point = makeHistoryPoint(state);
+        state.history.push(point);
+        if (state.history.length > 220) state.history.shift();
+        updateObjective(state, elapsed);
+        detectSystemEvents(state);
+        audio?.react(state.temperature, state.pressure);
+      }
+
+      function objectiveSatisfied(state) {
+        const a = state.analysis;
+        if (!a) return false;
+        const r = taskRules(state.scenarioId, state.difficultyId);
+        if (state.scenarioId === 'equilibrium') {
+          return a.rho >= r.rho[0] && a.rho <= r.rho[1] && a.temperature >= r.temp[0] && a.temperature <= r.temp[1] && a.order <= r.orderMax;
+        }
+        if (state.scenarioId === 'crystal') {
+          return a.rho >= r.rhoMin && a.temperature <= r.tempMax && a.order >= r.orderMin;
+        }
+        return a.temperature >= r.temp[0] && a.temperature <= r.temp[1] && a.densityContrast >= r.contrastMin && a.surfaceTension >= .01;
+      }
+
+      function objectiveConditionText(state) {
+        const r = taskRules(state.scenarioId, state.difficultyId);
+        if (state.scenarioId === 'equilibrium') {
+          return `rho ${r.rho[0].toFixed(2)}-${r.rho[1].toFixed(2)} / T ${r.temp[0].toFixed(2)}-${r.temp[1].toFixed(2)} / q6 <= ${r.orderMax.toFixed(2)}`;
+        }
+        if (state.scenarioId === 'crystal') return `T <= ${r.tempMax.toFixed(2)} / q6 >= ${r.orderMin.toFixed(2)} / rho >= ${r.rhoMin.toFixed(2)}`;
+        return `T ${r.temp[0].toFixed(2)}-${r.temp[1].toFixed(2)} / contrast >= ${r.contrastMin.toFixed(2)} / tension signal present`;
+      }
+
+      function updateObjective(state, elapsed) {
+        const good = objectiveSatisfied(state);
+        state.currentObjectiveGood = good;
+        state.objectiveClock += elapsed;
+        if (good) state.hold += elapsed;
+        else state.hold = 0;
+        if (state.scenarioId === 'crystal' && state.order > .30 && !state.hasLoggedNucleation) {
+          state.hasLoggedNucleation = true;
+          addEvent('Local six-fold order is organizing; a crystal nucleus is visible.', 'good');
+          audio?.play('crystal');
+        }
+        if (state.hold >= state._requiredHold) {
+          finishRun(true, 'The measurement stayed inside tolerance for the required hold time.');
+          return;
+        }
+        const deadline = difficulties[state.difficultyId].deadline;
+        if (state.time >= deadline) finishRun(false, 'Protocol window expired before the target state was held long enough.');
+      }
+
+      function detectSystemEvents(state) {
+        if (!state.hasLoggedPressure && Math.abs(state.pressure) > 5) {
+          state.hasLoggedPressure = true;
+          addEvent(state.pressure > 0 ? 'Strong compression: repulsive virial pressure is rising.' : 'Tensile pressure detected; a low-density void may open.', 'warn');
+          audio?.play('warning');
+        }
+        if (state.temperature > 3 && state.lastLogTime < state.time - 8) {
+          state.lastLogTime = state.time;
+          addEvent('High kinetic temperature. Lower the setpoint or use a quench pulse.', 'warn');
+        }
+      }
+
+      function addEvent(text, kind = 'normal') {
+        if (!sim) return;
+        sim.events.unshift({ time: sim.time, text, kind });
+        if (sim.events.length > 7) sim.events.length = 7;
+        updateEventLog();
+      }
+
+      function updateEventLog() {
+        const list = $('#eventLog');
+        if (!sim || sim.events.length === 0) {
+          list.innerHTML = '<li class="log-empty">System initialized. Awaiting first measurement.</li>';
+          return;
+        }
+        list.innerHTML = sim.events.slice(0, 4).map(event => `<li class="log-item ${event.kind}"><time>${fmt(event.time, 1)}</time><span>${escapeHTML(event.text)}</span></li>`).join('');
+      }
+      function escapeHTML(text) {
+        return String(text).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+      }
+
+      function startRun(scenarioId = selectedScenario, difficultyId = selectedDifficulty, loaded = false) {
+        audio ||= new SynthAudio();
+        audio.ensure();
+        audio.play('select');
+        let restored = null;
+        if (loaded) restored = safeReadSave();
+        if (restored && restored.state && scenarios[restored.state.scenarioId]) {
+          sim = restoreSnapshot(restored.state);
+          selectedScenario = sim.scenarioId;
+          selectedDifficulty = sim.difficultyId;
+          sim.paused = false;
+          sim.completed = false;
+          sim.failed = false;
+          sim.startWallTime = performance.now();
+          addEvent('Saved bench loaded. Dynamics resumed from the stored snapshot.', 'good');
+          notify('Saved bench restored.', 'good');
+        } else {
+          sim = initializeRun(scenarioId, difficultyId);
+          meta.totalRuns++;
+          meta.lastScenario = scenarioId;
+          meta.lastDifficulty = difficultyId;
+          persistMeta();
+          audio.play('select');
+          if (scenarioId === 'equilibrium') addEvent('Dilute vapor initialized. Increase density to enter the liquid basin.', 'good');
+          else if (scenarioId === 'crystal') addEvent('Dense melt initialized. Lower the thermostat to trigger ordering.', 'good');
+          else addEvent('Liquid slab initialized. Two interfaces span the periodic box.', 'good');
+        }
+        accumulator = 0;
+        screen = 'lab';
+        $('#titleScreen').classList.add('hidden');
+        $('#labScreen').classList.remove('hidden');
+        closeModal();
+        resetWorkbenchUI();
+        updateHUD(true);
+        if (!meta.tutorialDone && !loaded) {
+          tutorialStep = 0;
+          openModal('tutorial');
+        }
+      }
+
+      function restoreSnapshot(snapshot) {
+        const state = initializeRun(snapshot.scenarioId, snapshot.difficultyId, snapshot.seed - (240519 + Object.keys(scenarios).indexOf(snapshot.scenarioId) * 113 + Object.keys(difficulties).indexOf(snapshot.difficultyId) * 1901));
+        const arrays = ['x','y','ux','uy','originX','originY','vx','vy','species','pinned'];
+        for (const key of arrays) {
+          if (Array.isArray(snapshot[key]) && snapshot[key].length === state.n) state[key].set(snapshot[key]);
+        }
+        state.lx = clamp(Number(snapshot.lx) || state.lx, 8.2, 54);
+        state.ly = clamp(Number(snapshot.ly) || state.ly, 8.2, 54);
+        state.time = Math.max(0, Number(snapshot.time) || 0);
+        state.targetT = clamp(Number(snapshot.targetT) || state.targetT, .25, 2.2);
+        state.targetP = clamp(Number(snapshot.targetP) || 1, -1, 6);
+        state.ensemble = ['NVE','NVT','NPT'].includes(snapshot.ensemble) ? snapshot.ensemble : 'NVT';
+        state.speed = [0.5,1,2,4].includes(Number(snapshot.speed)) ? Number(snapshot.speed) : 1;
+        state.hold = clamp(Number(snapshot.hold) || 0, 0, state._requiredHold);
+        state.events = Array.isArray(snapshot.events) ? snapshot.events.slice(0, 7) : state.events;
+        state.adaptive = !!meta.tech.adaptive;
+        state.barostatGain = meta.tech.barostat ? .042 : .027;
+        state.overlays = snapshot.overlays && typeof snapshot.overlays === 'object' ? { ...state.overlays, ...snapshot.overlays } : state.overlays;
+        state.toolMode = snapshot.toolMode === 'heat' ? 'heat' : 'inspect';
+        computeForces(state);
+        state.analysis = analyzeState(state);
+        state.temperature = state.analysis.temperature; state.pressure = state.analysis.pressure; state.order = state.analysis.order;
+        state.msd = state.analysis.msd; state.diffusion = state.analysis.diffusion; state.densityContrast = state.analysis.densityContrast;
+        state.history = Array.isArray(snapshot.history) ? snapshot.history.slice(-220) : [makeHistoryPoint(state)];
+        return state;
+      }
+
+      function serializeRun() {
+        if (!sim) return null;
+        const arrays = ['x','y','ux','uy','originX','originY','vx','vy','species','pinned'];
+        const snapshot = {
+          scenarioId: sim.scenarioId, difficultyId: sim.difficultyId, seed: sim.seed, lx: sim.lx, ly: sim.ly,
+          time: sim.time, targetT: sim.targetT, targetP: sim.targetP, ensemble: sim.ensemble, speed: sim.speed,
+          hold: sim.hold, events: sim.events, overlays: sim.overlays, toolMode: sim.toolMode, history: sim.history,
+          savedAt: Date.now()
+        };
+        for (const key of arrays) snapshot[key] = Array.from(sim[key]);
+        return { state: snapshot };
+      }
+
+      function saveRun() {
+        if (!sim) { notify('Start an experiment before saving a bench.', 'warn'); return; }
+        const ok = persistSave(serializeRun());
+        if (ok) {
+          addEvent('Bench snapshot saved to local storage.', 'good');
+          notify('Bench saved. It can be restored from the title screen.', 'good');
+        } else notify('Browser storage is unavailable; this save lasts only for this page session.', 'warn');
+        audio?.play('select');
+      }
+
+      function resetWorkbenchUI() {
+        const name = scenarios[sim.scenarioId].name;
+        $('#headerScenario').textContent = `${sim.scenarioId.toUpperCase()} / ${sim.difficultyId.toUpperCase()}`;
+        $('#stageName').textContent = name;
+        $('#difficultyBadge').textContent = difficulties[sim.difficultyId].label;
+        $('#objectiveTitle').textContent = scenarios[sim.scenarioId].title;
+        $('#objectiveCopy').textContent = scenarios[sim.scenarioId].objectiveHint;
+        $('#speedSelect').value = String(sim.speed);
+        $('#temperatureInput').value = String(sim.targetT);
+        $('#pressureInput').value = String(sim.targetP);
+        $('#densityInput').value = String(sim.n / (sim.lx * sim.ly));
+        $('#ensembleNote').textContent = sim.ensemble === 'NVE' ? 'energy conserved' : sim.ensemble === 'NPT' ? 'T + P controlled' : 'T controlled';
+        $$('.ensemble-button').forEach(button => {
+          const active = button.dataset.ensemble === sim.ensemble;
+          button.classList.toggle('selected', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        $('#selectedInfo').textContent = 'Inspect: click an atom. Thermal brush: click or drag in the sample.';
+        updateOverlayButtons();
+        updateEventLog();
+        updateResearchControls();
+        updateCharts();
+      }
+
+      function updateOverlayButtons() {
+        if (!sim) return;
+        for (const [name, enabled] of Object.entries(sim.overlays)) {
+          const button = $(`[data-action="overlay-${name}"]`);
+          if (button) {
+            button.classList.toggle('active', !!enabled);
+            button.setAttribute('aria-pressed', String(!!enabled));
+          }
+        }
+        $('#brushButton').classList.toggle('active', sim.toolMode === 'heat');
+        $('#toolHint').textContent = sim.toolMode === 'heat' ? 'Thermal brush / click or drag to inject energy' : 'Click a particle to inspect';
+        const densityUnlocked = !!meta.tech.densityField;
+        $('#densityViewButton').classList.toggle('locked-tool', !densityUnlocked);
+        $('#densityViewButton').title = densityUnlocked ? 'Toggle the coarse-grained density field' : 'Unlock the density field in Research';
+        $('#soluteButton').classList.toggle('locked-tool', !meta.tech.tracer);
+        $('#soluteButton').title = meta.tech.tracer ? 'Convert a small group of atoms to species B' : 'Unlock Binary Tracer in Research';
+        $('#seedButton').disabled = sim.scenarioId !== 'crystal';
+      }
+
+      function updateResearchControls() {
+        $('#researchCount').textContent = `${Math.floor(meta.research || 0)} RP`;
+        if (sim) {
+          sim.adaptive = !!meta.tech.adaptive;
+          sim.barostatGain = meta.tech.barostat ? .042 : .027;
+        }
+        updateOverlayButtons();
+        const rdfSelect = $('#rdfSelect');
+        rdfSelect.disabled = !meta.tech.spectroscopy;
+        if (!meta.tech.spectroscopy) rdfMode = 'all';
+        const hasTracer = !!(sim && countSpecies(sim).b);
+        for (const option of $$('option', rdfSelect)) {
+          if (option.value === 'rdfAB' || option.value === 'rdfBB') option.disabled = !meta.tech.spectroscopy || !hasTracer;
+          else if (option.value === 'rdfAA') option.disabled = !meta.tech.spectroscopy;
+        }
+        if (rdfSelect.selectedOptions[0]?.disabled) rdfMode = 'all';
+        rdfSelect.value = rdfMode;
+      }
+
+      function setEnsemble(name) {
+        if (!sim || !['NVE','NVT','NPT'].includes(name)) return;
+        if (sim.ensemble === name) return;
+        sim.ensemble = name;
+        $$('.ensemble-button').forEach(button => {
+          const active = button.dataset.ensemble === name;
+          button.classList.toggle('selected', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+        $('#ensembleNote').textContent = name === 'NVE' ? 'energy conserved' : name === 'NPT' ? 'T + P controlled' : 'T controlled';
+        $('#temperatureInput').disabled = name === 'NVE';
+        $('#pressureInput').disabled = name !== 'NPT';
+        $('#densityInput').disabled = name === 'NPT';
+        addEvent(name === 'NVE' ? 'Switched to NVE: thermostat and barostat are disengaged.' : name === 'NPT' ? 'Switched to NPT: temperature and isotropic pressure coupling active.' : 'Switched to NVT: thermostat active at the setpoint.', 'normal');
+        audio?.play('select');
+      }
+
+      function setDensity(target) {
+        if (!sim) return;
+        const safeTarget = clamp(Number(target), .22, 1.08);
+        const current = sim.n / (sim.lx * sim.ly);
+        const scale = Math.sqrt(current / safeTarget);
+        if (!Number.isFinite(scale) || scale < .2 || scale > 5) return;
+        scalePeriodicBox(sim, scale);
+        computeForces(sim);
+        sim.analysis = analyzeState(sim);
+        sim.temperature = sim.analysis.temperature;
+        sim.pressure = sim.analysis.pressure;
+        sim.order = sim.analysis.order;
+        sim.densityContrast = sim.analysis.densityContrast;
+        sim.surfaceTension = sim.analysis.surfaceTension;
+        sim.msd = sim.analysis.msd;
+        sim.diffusion = sim.analysis.diffusion;
+        sim.rdf = sim.analysis.rdf; sim.rdfAA = sim.analysis.rdfAA; sim.rdfAB = sim.analysis.rdfAB; sim.rdfBB = sim.analysis.rdfBB;
+        $('#densityInput').value = String(target);
+        addEvent(`Volume changed: target density ${safeTarget.toFixed(2)}. Virial pressure is responding.`, 'warn');
+        spawnEffect(sim.lx * .5, sim.ly * .5, 'compress');
+        audio?.play('pulse');
+      }
+
+      function pulseTemperature(direction) {
+        if (!sim) return;
+        const factor = direction < 0 ? .78 : 1.22;
+        for (let i = 0; i < sim.n; i++) {
+          if (sim.pinned[i]) continue;
+          sim.vx[i] *= factor; sim.vy[i] *= factor;
+        }
+        const name = direction < 0 ? 'Quench pulse applied: kinetic energy reduced by 39%.' : 'Heat pulse applied: kinetic energy raised by 49%.';
+        addEvent(name, direction < 0 ? 'good' : 'warn');
+        spawnEffect(sim.lx * .5, sim.ly * .5, direction < 0 ? 'cool' : 'heat');
+        audio?.play(direction < 0 ? 'cool' : 'pulse');
+      }
+
+      function spawnEffect(x, y, kind) {
+        if (!sim) return;
+        const count = reducedMotion ? 8 : 20;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = .45 + Math.random() * 1.6;
+          sim.effects.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .45 + Math.random() * .55, max: 1, kind });
+        }
+      }
+
+      function seedLattice() {
+        if (!sim || sim.scenarioId !== 'crystal') { notify('The lattice seeder is calibrated for Crystal Growth.', 'warn'); return; }
+        const cx = sim.lx * .5, cy = sim.ly * .5;
+        const points = [[0,0]];
+        for (let k = 0; k < 6; k++) {
+          const a = k * Math.PI / 3;
+          points.push([Math.cos(a) * 1.05, Math.sin(a) * 1.05]);
+        }
+        const chosen = [];
+        for (let p = 0; p < points.length; p++) {
+          let best = -1, bestD = Infinity;
+          for (let i = 0; i < sim.n; i++) {
+            if (chosen.includes(i)) continue;
+            const dx = minImage(sim.x[i] - (cx + points[p][0]), sim.lx);
+            const dy = minImage(sim.y[i] - (cy + points[p][1]), sim.ly);
+            const d = dx * dx + dy * dy;
+            if (d < bestD) { bestD = d; best = i; }
+          }
+          if (best >= 0) chosen.push(best);
+        }
+        for (let p = 0; p < chosen.length; p++) {
+          const i = chosen[p];
+          sim.x[i] = mod(cx + points[p][0], sim.lx); sim.y[i] = mod(cy + points[p][1], sim.ly);
+          sim.ux[i] = sim.x[i]; sim.uy[i] = sim.y[i]; sim.pinned[i] = 1;
+          sim.vx[i] = 0; sim.vy[i] = 0;
+        }
+        computeForces(sim);
+        addEvent('Seven-site hexagonal seed pinned. Mobile neighbors can now order around it.', 'good');
+        notify('Lattice seed placed. It remains fixed as a nucleation template.', 'good');
+        spawnEffect(cx, cy, 'crystal');
+        audio?.play('crystal');
+      }
+
+      function addTracer() {
+        if (!sim || !meta.tech.tracer) { openModal('research'); return; }
+        const desired = Math.min(Math.round(sim.n * .08), sim.n - 1);
+        let added = 0;
+        for (let i = 0; i < sim.n && added < desired; i++) {
+          if (sim.species[i] === 0 && !sim.pinned[i]) { sim.species[i] = 1; added++; }
+        }
+        computeForces(sim);
+        updateResearchControls();
+        addEvent(`${added} atoms converted to the light B tracer; A-B interactions now alter local transport.`, 'good');
+        notify('Binary tracer injected. A-B and B-B pair forces are active.', 'good');
+        audio?.play('pulse');
+      }
+
+      function brushAt(worldX, worldY) {
+        if (!sim) return;
+        let count = 0;
+        for (let i = 0; i < sim.n; i++) {
+          if (sim.pinned[i]) continue;
+          const dx = minImage(sim.x[i] - worldX, sim.lx);
+          const dy = minImage(sim.y[i] - worldY, sim.ly);
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 3.5 * 3.5) {
+            const d = Math.sqrt(d2) + .15;
+            const impulse = .52 * Math.max(.15, 1 - d / 3.5);
+            sim.vx[i] += dx / d * impulse + (Math.random() - .5) * impulse * .28;
+            sim.vy[i] += dy / d * impulse + (Math.random() - .5) * impulse * .28;
+            count++;
+          }
+        }
+        spawnEffect(worldX, worldY, 'heat');
+        sim.brushCount = (sim.brushCount || 0) + count;
+      }
+
+      function addParticleTracer() { addTracer(); }
+
+      function finishRun(success, reason) {
+        if (!sim || sim.completed || sim.failed) return;
+        sim.completed = !!success;
+        sim.failed = !success;
+        sim.paused = true;
+        sim.endReason = reason;
+        sim.endTime = sim.time;
+        if (success) {
+          const recordKey = `${sim.scenarioId}:${sim.difficultyId}`;
+          const firstWin = !meta.wins[recordKey];
+          meta.wins[recordKey] = true;
+          const oldBest = meta.best[sim.scenarioId];
+          const record = { time: sim.time, order: sim.order, temperature: sim.temperature, density: sim.n / (sim.lx * sim.ly), difficulty: sim.difficultyId, date: Date.now() };
+          const rank = { guided: 0, standard: 1, expert: 2 };
+          if (!oldBest || rank[sim.difficultyId] > rank[oldBest.difficulty] || (rank[sim.difficultyId] === rank[oldBest.difficulty] && sim.time < oldBest.time)) meta.best[sim.scenarioId] = record;
+          const award = firstWin ? (sim.difficultyId === 'expert' ? 2 : sim.difficultyId === 'standard' ? 1 : 1) : 0;
+          meta.research = (meta.research || 0) + award;
+          sim.completionAward = award;
+          meta.totalTime += sim.time;
+          persistMeta();
+          audio?.play('success');
+          addEvent(`Protocol complete. ${award ? `+${award} research point${award === 1 ? '' : 's'} earned.` : 'Best record updated.'}`, 'good');
+        } else {
+          audio?.play('failure');
+          addEvent(reason, 'warn');
+        }
+        updateHUD(true);
+        openModal(success ? 'success' : 'failure');
+      }
+
+      function togglePause() {
+        if (!sim || sim.completed || sim.failed) return;
+        if (sim.paused) {
+          sim.paused = false;
+          closeModal();
+          updateHUD(true);
+        } else {
+          sim.paused = true;
+          openModal('pause');
+        }
+      }
+
+      function openModal(kind) {
+        modalKind = kind;
+        const layer = $('#modalLayer');
+        const windowEl = $('#modalWindow');
+        windowEl.classList.toggle('wide', ['stats','research','campaign'].includes(kind));
+        layer.classList.remove('hidden');
+        layer.setAttribute('aria-label', `${kind} dialog`);
+        renderModal(kind);
+        const focus = $('#modalContent button, #modalContent input', windowEl);
+        if (focus) setTimeout(() => focus.focus({ preventScroll: true }), 0);
+      }
+      function closeModal() {
+        modalKind = null;
+        $('#modalLayer').classList.add('hidden');
+      }
+
+      function modalHeader(eyebrow, title) {
+        return `<div class="modal-top"><div><div class="eyebrow">${eyebrow}</div><h2 id="modalTitle" class="modal-title">${title}</h2></div><button class="button quiet small square" data-action="modal-close" aria-label="Close dialog">X</button></div>`;
+      }
+
+      function renderModal(kind) {
+        const content = $('#modalContent');
+        if (kind === 'tutorial') {
+          const steps = [
+            ['Start with a state, not a score.', 'The canvas is a periodic 2D sample. Every atom moves under a shifted-force Lennard-Jones potential; color B atoms are a lighter tracer.'],
+            ['Choose the ensemble.', 'NVE conserves energy. NVT couples kinetic temperature to your setpoint. NPT also changes box area to follow target pressure. Manual density changes apply an immediate volume move.'],
+            ['Perturb, then measure.', 'Use the quench and heat pulses, seed a crystal, or paint a local thermal impulse. The objective needs a continuous hold; traces, g(r), local q6, MSD, and the event log show why it passes or slips.']
+          ];
+          const step = steps[tutorialStep];
+          content.innerHTML = `${modalHeader(`FIELD GUIDE / ${String(tutorialStep + 1).padStart(2,'0')} OF 03`, 'Your first measurement')}<div class="modal-body"><ul class="lesson-list"><li><span class="lesson-num">${tutorialStep + 1}</span><div><strong>${step[0]}</strong><span>${step[1]}</span></div></li></ul><p class="modal-note" style="margin-top:16px">Keyboard: Space pause / resume, 1-4 set speed, B bonds, V velocity, O order, H heat pulse, C quench, ? help.</p></div><div class="modal-footer"><button class="button quiet small" data-action="tutorial-skip">Skip guide</button><div style="display:flex;gap:7px"><button class="button small ${tutorialStep === 0 ? 'hidden' : ''}" data-action="tutorial-back">Back</button><button class="button primary small" data-action="tutorial-next">${tutorialStep === 2 ? 'Start measuring' : 'Next'}</button></div></div>`;
+        } else if (kind === 'help') {
+          content.innerHTML = `${modalHeader('REFERENCE / INTERACTIVE SYSTEMS', 'How the laboratory works')}<div class="modal-body"><ul class="lesson-list">
+            <li><span class="lesson-num">01</span><div><strong>Pair forces create phase behavior</strong><span>Particles interact through a 12-6 Lennard-Jones potential, truncated with a force shift at 2.5 sigma. Attraction binds the liquid; short-range repulsion resists compression. Periodic boundaries remove walls.</span></div></li>
+            <li><span class="lesson-num">02</span><div><strong>Ensembles change what is conserved</strong><span>NVE leaves energy alone. NVT uses a weak-coupling thermostat. NPT couples temperature and pressure to an isotropic Berendsen barostat; pressure changes the box size.</span></div></li>
+            <li><span class="lesson-num">03</span><div><strong>Read the live observables</strong><span>Temperature is kinetic energy per degree of freedom. Pressure includes the virial. Local q6 estimates six-fold bond order. g(r) reveals coordination shells, MSD tracks unwrapped travel, and diffusion is its long-time slope divided by four.</span></div></li>
+            <li><span class="lesson-num">04</span><div><strong>Use an intervention, then wait</strong><span>Changing volume is a real affine compression/expansion. Pulses alter velocities. The thermal brush injects local momentum. Success requires staying inside a protocol tolerance for its full hold time.</span></div></li>
+          </ul><p style="margin-top:17px"><span class="hint-key">Space</span> pause <span class="hint-key">1-4</span> speed <span class="hint-key">B</span> bonds <span class="hint-key">V</span> velocity <span class="hint-key">O</span> order <span class="hint-key">H</span> heat <span class="hint-key">C</span> quench <span class="hint-key">?</span> help</p></div><div class="modal-footer"><span class="modal-note">Reduced LJ units / 2D / fixed atom count</span><button class="button primary small" data-action="modal-close">Return to experiment</button></div>`;
+        } else if (kind === 'settings') {
+          const settings = meta.settings;
+          content.innerHTML = `${modalHeader('PREFERENCES / DEVICE', 'Settings')}<div class="modal-body">
+            <div class="settings-line"><div><strong>Audio volume</strong><small>Synthesized lab ambience and reactive cues</small></div><div style="display:flex;align-items:center;gap:8px"><input id="modalVolume" type="range" min="0" max="1" step="0.01" value="${Number(settings.volume).toFixed(2)}" aria-label="Audio volume"><span id="modalVolumeValue" class="mono">${Math.round(settings.volume * 100)}%</span></div></div>
+            <div class="settings-line"><div><strong>Mute all audio</strong><small>Volume is preserved when muted</small></div><button class="toggle ${settings.muted ? 'on' : ''}" data-action="toggle-mute" aria-pressed="${settings.muted}" aria-label="Mute audio"></button></div>
+            <div class="settings-line"><div><strong>Reduced motion</strong><small>Shorter pulses and fewer visual particles</small></div><button class="toggle ${settings.reducedMotion ? 'on' : ''}" data-action="toggle-motion" aria-pressed="${settings.reducedMotion}" aria-label="Toggle reduced motion"></button></div>
+            <div class="settings-line"><div><strong>Simulation protocol</strong><small>${sim ? `${scenarios[sim.scenarioId].name} / ${difficulties[sim.difficultyId].label}` : 'Choose a scenario and tolerance on the title screen'}</small></div><button class="button small" data-action="scenario-menu">Change</button></div>
+            <p class="modal-note" style="margin-top:14px">Preferences, research and experiment records are saved locally when browser storage is available.</p>
+          </div><div class="modal-footer"><span class="modal-note">Audio starts after a user gesture.</span><button class="button primary small" data-action="modal-close">Close</button></div>`;
+        } else if (kind === 'pause') {
+          content.innerHTML = `${modalHeader('SIMULATION PAUSED', 'Take a moment')}<div class="modal-body"><p>The simulation clock is stopped. The particle state and measurement history are held exactly where you left them.</p><div class="stats-grid"><div class="stats-cell"><span>Temperature</span><strong>${fmt(sim?.temperature)}</strong></div><div class="stats-cell"><span>Pressure</span><strong>${fmt(sim?.pressure)}</strong></div><div class="stats-cell"><span>Local order</span><strong>${fmt(sim?.order)}</strong></div><div class="stats-cell"><span>Hold</span><strong>${fmt(sim?.hold,1)} tau</strong></div></div></div><div class="modal-footer"><button class="button quiet small" data-action="return-title">Return to title</button><div style="display:flex;gap:7px"><button class="button small" data-action="save">Save bench</button><button class="button primary small" data-action="resume">Resume</button></div></div>`;
+        } else if (kind === 'research') {
+          const techRows = techCatalog.map(tech => {
+            const unlocked = !!meta.tech[tech.id];
+            const canBuy = meta.research >= tech.cost && !unlocked;
+            return `<div class="tech-row"><div><strong>${tech.name} ${unlocked ? '<span style="color:var(--lime)">/ INSTALLED</span>' : ''}</strong><small>${tech.description}</small></div>${unlocked ? '<span class="tech-cost">ACTIVE</span>' : `<button class="button small ${canBuy ? 'primary' : ''}" data-action="buy-tech" data-tech="${tech.id}" ${canBuy ? '' : 'disabled'}>${tech.cost} RP / unlock</button>`}</div>`;
+          }).join('');
+          content.innerHTML = `${modalHeader('RESEARCH TREE / PERSISTENT UNLOCKS', 'Instrument development')}<div class="modal-body"><p>Complete a protocol for research points. First clears reward 1 RP; an Expert clear rewards 2. Installed instruments carry into every future bench.</p><div class="campaign-row"><span>Available research</span><strong class="best">${Math.floor(meta.research)} RP</strong></div><div class="tech-list">${techRows}</div><p class="modal-note" style="margin-top:12px">Research affects measurement or integration directly. No upgrade changes the underlying pair potential.</p></div><div class="modal-footer"><span class="modal-note">${Object.values(meta.tech).filter(Boolean).length} instruments installed</span><button class="button primary small" data-action="modal-close">Back to bench</button></div>`;
+        } else if (kind === 'stats') {
+          const a = sim?.analysis;
+          const density = sim ? sim.n / (sim.lx * sim.ly) : 0;
+          const pairCounts = sim ? countSpecies(sim) : { a:0, b:0 };
+          const rows = sim ? [
+            ['Scenario', scenarios[sim.scenarioId].name], ['Tolerance', difficulties[sim.difficultyId].label], ['Ensemble', sim.ensemble],
+            ['Particles / A : B', `${sim.n} / ${pairCounts.a} : ${pairCounts.b}`], ['Simulation time', `${fmt(sim.time,2)} tau`],
+            ['Box dimensions', `${fmt(sim.lx,2)} x ${fmt(sim.ly,2)}`], ['Number density', `${fmt(density,3)} rho`],
+            ['Temperature setpoint', `${fmt(sim.targetT,2)} T*`], ['Pressure tensor Pxx / Pyy', `${fmt(sim.pxx,3)} / ${fmt(sim.pyy,3)} P*`],
+            ['Potential energy / atom', `${fmt(a?.potential,3)} epsilon`], ['Total energy / atom', `${fmt(a?.totalEnergy,3)} epsilon`],
+            ['Local six-fold order q6', fmt(sim.order,3)], ['Surface tension estimate', `${fmt(sim.surfaceTension,3)} epsilon / sigma`],
+            ['MSD / diffusion', `${fmt(sim.msd,3)} / ${fmt(sim.diffusion,4)}`], ['Max pair force', `${fmt(sim.maxForce,2)} epsilon / sigma`]
+          ] : [];
+          content.innerHTML = `${modalHeader('RUN REPORT / LIVE SAMPLE', 'Measurement record')}<div class="modal-body"><div class="stats-grid"><div class="stats-cell"><span>Temperature</span><strong>${fmt(sim?.temperature)}</strong></div><div class="stats-cell"><span>Pressure</span><strong>${fmt(sim?.pressure)}</strong></div><div class="stats-cell"><span>Order q6</span><strong>${fmt(sim?.order)}</strong></div><div class="stats-cell"><span>Diffusion</span><strong>${fmt(sim?.diffusion,3)}</strong></div></div><div class="data-table-wrap"><table class="stats-table"><tbody>${rows.map(row => `<tr><td>${escapeHTML(row[0])}</td><td>${escapeHTML(row[1])}</td></tr>`).join('')}</tbody></table></div><p class="modal-note" style="margin-top:12px">${sim ? `${sim.history.length} time samples / fixed time step ${BASE_DT} tau / seeded run ${sim.seed}` : 'No active run.'}</p></div><div class="modal-footer"><button class="button quiet small" data-action="export-csv">Export CSV</button><div style="display:flex;gap:7px"><button class="button small" data-action="campaign">Lab record</button><button class="button primary small" data-action="modal-close">Close</button></div></div>`;
+        } else if (kind === 'campaign') {
+          const rows = Object.values(scenarios).map(scenario => {
+            const best = meta.best[scenario.id];
+            return `<div class="campaign-row"><span><strong>${scenario.number} / ${scenario.name}</strong><br><span style="font-size:9px;color:var(--faint)">${best ? `Best ${best.difficulty} / q6 ${fmt(best.order)}` : 'Not yet recorded'}</span></span><span class="best">${best ? `${fmt(best.time,1)} tau` : '--'}</span></div>`;
+          }).join('');
+          content.innerHTML = `${modalHeader('CAMPAIGN / PERSISTENT RECORD', 'Laboratory notebook')}<div class="modal-body"><div class="stats-grid"><div class="stats-cell"><span>Studies complete</span><strong>${Object.keys(meta.best).filter(id => scenarios[id]).length}/3</strong></div><div class="stats-cell"><span>Protocols run</span><strong>${meta.totalRuns}</strong></div><div class="stats-cell"><span>Research</span><strong>${Math.floor(meta.research)} RP</strong></div><div class="stats-cell"><span>Time observed</span><strong>${fmt(meta.totalTime,0)} tau</strong></div></div>${rows}<p class="modal-note" style="margin-top:13px">A best entry stores the strongest cleared tolerance and its measured state. Progress is local to this browser.</p></div><div class="modal-footer"><button class="button quiet small" data-action="reset-records">Reset notebook</button><button class="button primary small" data-action="modal-close">Close</button></div>`;
+        } else if (kind === 'success' || kind === 'failure') {
+          const success = kind === 'success';
+          const state = sim;
+          content.innerHTML = `${modalHeader(success ? 'PROTOCOL VERIFIED / TARGET HELD' : 'PROTOCOL FAILED / SAMPLE OUT OF TOLERANCE', success ? 'A stable measurement.' : 'The window was missed.')}<div class="modal-body"><div class="result-mark ${success ? '' : 'failure'}"><span class="result-symbol">${success ? 'O' : '!'}</span><p>${escapeHTML(state.endReason || '')}${success && state.completionAward ? `<br><strong style="color:var(--lime)">+${state.completionAward} research point${state.completionAward === 1 ? '' : 's'}</strong>` : ''}</p></div><div class="stats-grid"><div class="stats-cell"><span>Time</span><strong>${fmt(state.endTime || state.time,1)} tau</strong></div><div class="stats-cell"><span>Temperature</span><strong>${fmt(state.temperature)}</strong></div><div class="stats-cell"><span>Pressure</span><strong>${fmt(state.pressure)}</strong></div><div class="stats-cell"><span>Order q6</span><strong>${fmt(state.order)}</strong></div></div><table class="stats-table"><tbody><tr><td>Density</td><td>${fmt(state.n / (state.lx * state.ly),3)} rho</td></tr><tr><td>Surface tension / diffusion</td><td>${fmt(state.surfaceTension,3)} / ${fmt(state.diffusion,4)}</td></tr><tr><td>Hold achieved</td><td>${fmt(state.hold,1)} / ${fmt(state._requiredHold,1)} tau</td></tr></tbody></table></div><div class="modal-footer"><button class="button quiet small" data-action="return-title">Title screen</button><div style="display:flex;gap:7px"><button class="button small" data-action="stats">Full report</button><button class="button primary small" data-action="retry">${success ? 'Run protocol again' : 'Restart protocol'}</button></div></div>`;
+        } else {
+          content.innerHTML = `${modalHeader('PHASE / SPACE', 'Dialog')}<div class="modal-body"><p>Choose an action.</p></div><div class="modal-footer"><button class="button primary small" data-action="modal-close">Close</button></div>`;
+        }
+      }
+
+      function countSpecies(state) {
+        let b = 0;
+        for (let i = 0; i < state.n; i++) if (state.species[i]) b++;
+        return { a: state.n - b, b };
+      }
+
+      function updateHUD(force = false) {
+        if (!sim) return;
+        const a = sim.analysis || {};
+        const density = sim.n / (sim.lx * sim.ly);
+        $('#headerTime').textContent = `t ${fmt(sim.time, 2)}`;
+        $('#headerStatus').textContent = sim.completed ? 'COMPLETE' : sim.failed ? 'FAILED' : sim.paused ? 'PAUSED' : 'LIVE';
+        $('#pauseButton').textContent = sim.paused ? 'Resume' : 'Pause';
+        $('#metricTemp').textContent = fmt(sim.temperature);
+        $('#metricPressure').textContent = fmt(sim.pressure);
+        $('#metricOrder').textContent = fmt(sim.order);
+        $('#temperatureOutput').textContent = `${fmt(sim.targetT)} T*`;
+        $('#pressureOutput').textContent = `${fmt(sim.targetP)} P*`;
+        $('#densityOutput').textContent = `${fmt(density, 2)} rho`;
+        $('#densityInput').disabled = sim.ensemble === 'NPT';
+        $('#temperatureInput').disabled = sim.ensemble === 'NVE';
+        $('#pressureInput').disabled = sim.ensemble !== 'NPT';
+        $('#ensembleNote').textContent = sim.ensemble === 'NVE' ? 'energy conserved' : sim.ensemble === 'NPT' ? 'T + P controlled' : 'T controlled';
+        $('#stageStatus').textContent = `N = ${sim.n} / rho ${fmt(density,2)} / ${countSpecies(sim).b ? 'A-B mixture' : 'A-A Lennard-Jones'}`;
+        $('#stageLegend').textContent = countSpecies(sim).b ? 'A atoms / B tracer / thermal motion' : 'A atoms / thermal motion';
+        $('#objectiveCondition').textContent = objectiveSatisfied(sim) ? 'Inside tolerance / keep holding' : objectiveConditionText(sim);
+        $('#objectiveCondition').style.color = objectiveSatisfied(sim) ? 'var(--mint)' : '';
+        $('#objectiveHold').textContent = `${fmt(sim.hold,1)} / ${fmt(sim._requiredHold,1)} tau`;
+        $('#objectiveBar').style.width = `${clamp(sim.hold / Math.max(.1, sim._requiredHold) * 100, 0, 100)}%`;
+        $('#rdfPeak').textContent = fmt(firstRdfPeak(sim), 2);
+        $('#diffusionValue').textContent = fmt(sim.diffusion, 3);
+        $('#chartRange').textContent = sim.history.length > 1 ? `last ${fmt(sim.history[sim.history.length - 1].time - sim.history[0].time,0)} tau` : 'collecting';
+        if (sim.selectedParticle >= 0 && sim.selectedParticle < sim.n) {
+          const i = sim.selectedParticle;
+          const mass = sim.species[i] ? .82 : 1;
+          const speed = Math.sqrt(sim.vx[i] * sim.vx[i] + sim.vy[i] * sim.vy[i]);
+          $('#selectedInfo').textContent = `Atom ${i + 1} / species ${sim.species[i] ? 'B tracer' : 'A'} / speed ${fmt(speed,2)} / q6 ${fmt(sim.q6[i],2)} / mass ${fmt(mass,2)}`;
+        }
+        if (!force) return;
+      }
+
+      function firstRdfPeak(state) {
+        if (!state.rdf) return 0;
+        let best = 0, bestValue = -Infinity;
+        for (let i = 2; i < Math.min(16, state.rdf.length); i++) {
+          if (state.rdf[i] > bestValue) { bestValue = state.rdf[i]; best = i; }
+        }
+        return state.rdfMax * (best + .5) / state.rdf.length;
+      }
+
+      function notify(text, kind = 'normal') {
+        const host = $('#toastHost');
+        const toast = document.createElement('div');
+        toast.className = `toast ${kind}`;
+        toast.textContent = text;
+        host.appendChild(toast);
+        const ttl = reducedMotion ? 1800 : 3100;
+        window.setTimeout(() => {
+          toast.classList.add('removing');
+          window.setTimeout(() => toast.remove(), 220);
+        }, ttl);
+      }
+
+      function setOverlay(name) {
+        if (!sim || !(name in sim.overlays)) return;
+        if (name === 'density' && !meta.tech.densityField) { notify('Research the Density Field instrument to enable this overlay.', 'warn'); return; }
+        sim.overlays[name] = !sim.overlays[name];
+        updateOverlayButtons();
+        audio?.play('select');
+      }
+
+      function changeSpeed(value) {
+        if (!sim) return;
+        const speed = Number(value);
+        if (![.5,1,2,4].includes(speed)) return;
+        sim.speed = speed;
+        $('#speedSelect').value = String(speed);
+        notify(`Simulation speed set to ${speed}x.`, 'normal');
+      }
+
+      function buyTech(id) {
+        const tech = techCatalog.find(entry => entry.id === id);
+        if (!tech || meta.tech[id] || meta.research < tech.cost) return;
+        meta.research -= tech.cost;
+        meta.tech[id] = true;
+        persistMeta();
+        updateResearchControls();
+        updateCharts();
+        audio?.play('crystal');
+        addEvent(`${tech.name} instrument installed for future and active runs.`, 'good');
+        notify(`${tech.name} installed.`, 'good');
+        openModal('research');
+      }
+
+      function returnToTitle() {
+        if (sim && !sim.completed && !sim.failed) {
+          // Keep the explicit snapshot distinct from the permanent campaign record.
+          persistSave(serializeRun());
+        }
+        sim = null;
+        accumulator = 0;
+        showScreen('title');
+        updateTitleSelection();
+      }
+
+      function exportCSV() {
+        if (!sim || !sim.history.length) { notify('No samples to export.', 'warn'); return; }
+        const header = 'time,temperature,pressure,potential_per_atom,total_energy_per_atom,msd,order,density';
+        const rows = sim.history.map(point => [point.time, point.temperature, point.pressure, point.potential, point.energy, point.msd, point.order, point.density].map(value => Number(value).toFixed(6)).join(','));
+        const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = `phase-space-${sim.scenarioId}-${sim.difficultyId}.csv`;
+        document.body.appendChild(anchor); anchor.click(); anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function resetNotebook() {
+        if (!window.confirm('Reset all local research, records, and settings? This cannot be undone.')) return;
+        meta = structuredClone(defaultMeta);
+        persistMeta();
+        deleteSave();
+        updateTitleSelection();
+        if (modalKind === 'campaign') openModal('campaign');
+        else if (modalKind === 'research') openModal('research');
+        notify('Local notebook reset.', 'warn');
+      }
+
+      function handleAction(action, element) {
+        if (action === 'start') startRun(selectedScenario, selectedDifficulty);
+        else if (action === 'load-run') startRun(selectedScenario, selectedDifficulty, true);
+        else if (action === 'title') returnToTitle();
+        else if (action === 'help') openModal('help');
+        else if (action === 'settings') openModal('settings');
+        else if (action === 'campaign') openModal('campaign');
+        else if (action === 'stats') openModal('stats');
+        else if (action === 'research') openModal('research');
+        else if (action === 'pause') togglePause();
+        else if (action === 'resume') { if (sim) sim.paused = false; closeModal(); updateHUD(true); }
+        else if (action === 'modal-close') {
+          if (modalKind === 'tutorial') { meta.tutorialDone = true; persistMeta(); }
+          closeModal();
+        }
+        else if (action === 'tutorial-next') {
+          if (tutorialStep < 2) { tutorialStep++; renderModal('tutorial'); }
+          else { meta.tutorialDone = true; persistMeta(); closeModal(); notify('Guide complete. The sample is live.', 'good'); }
+        }
+        else if (action === 'tutorial-back') { tutorialStep = Math.max(0, tutorialStep - 1); renderModal('tutorial'); }
+        else if (action === 'tutorial-skip') { meta.tutorialDone = true; persistMeta(); closeModal(); }
+        else if (action === 'cool-pulse') pulseTemperature(-1);
+        else if (action === 'heat-pulse') pulseTemperature(1);
+        else if (action === 'seed') seedLattice();
+        else if (action === 'brush') {
+          if (!sim) return;
+          sim.toolMode = sim.toolMode === 'heat' ? 'inspect' : 'heat';
+          updateOverlayButtons();
+          notify(sim.toolMode === 'heat' ? 'Thermal brush armed. Touch or drag across the sample.' : 'Inspection mode restored.');
+        }
+        else if (action === 'solute') addParticleTracer();
+        else if (action === 'reset-msd') {
+          if (!sim) return;
+          sim.originX.set(sim.ux); sim.originY.set(sim.uy); sim.history = [];
+          sim.msd = 0; sim.diffusion = 0;
+          addEvent('MSD reference positions reset to the current configuration.', 'normal');
+          notify('Transport measurement origin reset.');
+        }
+        else if (action.startsWith('overlay-')) setOverlay(action.slice(8));
+        else if (action === 'save') saveRun();
+        else if (action === 'mute') {
+          meta.settings.muted = !meta.settings.muted;
+          audio ||= new SynthAudio(); audio.ensure(); audio.setMuted(meta.settings.muted);
+          persistMeta();
+          if (!meta.settings.muted) audio.play('select');
+        }
+        else if (action === 'toggle-mute') {
+          meta.settings.muted = !meta.settings.muted;
+          audio ||= new SynthAudio(); audio.ensure(); audio.setMuted(meta.settings.muted);
+          persistMeta(); openModal('settings');
+        }
+        else if (action === 'toggle-motion') {
+          meta.settings.reducedMotion = !meta.settings.reducedMotion;
+          reducedMotion = meta.settings.reducedMotion;
+          persistMeta(); openModal('settings');
+        }
+        else if (action === 'scenario-menu') {
+          if (sim && !sim.completed && !sim.failed && !sim.paused) sim.paused = true;
+          returnToTitle();
+        }
+        else if (action === 'buy-tech') buyTech(element.dataset.tech);
+        else if (action === 'retry') startRun(sim.scenarioId, sim.difficultyId);
+        else if (action === 'return-title') returnToTitle();
+        else if (action === 'export-csv') exportCSV();
+        else if (action === 'reset-records') resetNotebook();
+        else if (action === 'clear-log') {
+          if (sim) { sim.events = []; updateEventLog(); }
+        }
+      }
+
+      document.addEventListener('click', event => {
+        const actionElement = event.target.closest('[data-action]');
+        if (actionElement) { handleAction(actionElement.dataset.action, actionElement); return; }
+        const scenarioButton = event.target.closest('[data-scenario]');
+        if (scenarioButton) {
+          selectedScenario = scenarioButton.dataset.scenario;
+          meta.lastScenario = selectedScenario;
+          updateTitleSelection(); persistMeta(); audio?.play('select');
+          return;
+        }
+        const difficultyButton = event.target.closest('[data-difficulty]');
+        if (difficultyButton) {
+          selectedDifficulty = difficultyButton.dataset.difficulty;
+          meta.lastDifficulty = selectedDifficulty;
+          updateTitleSelection(); persistMeta(); audio?.play('select');
+          return;
+        }
+        const ensembleButton = event.target.closest('[data-ensemble]');
+        if (ensembleButton) { setEnsemble(ensembleButton.dataset.ensemble); return; }
+        const chartButton = event.target.closest('[data-chart]');
+        if (chartButton) {
+          chartMode = chartButton.dataset.chart;
+          $$('.chart-tab').forEach(button => {
+            const active = button.dataset.chart === chartMode;
+            button.classList.toggle('selected', active); button.setAttribute('aria-selected', String(active));
+          });
+          updateCharts();
+          return;
+        }
+        if (event.target === $('#modalLayer')) {
+          if (modalKind === 'tutorial') { meta.tutorialDone = true; persistMeta(); }
+          closeModal();
+        }
+      });
+
+      document.addEventListener('input', event => {
+        if (event.target.id === 'temperatureInput' && sim) {
+          sim.targetT = clamp(Number(event.target.value), .25, 2.2);
+          $('#temperatureOutput').textContent = `${fmt(sim.targetT)} T*`;
+        } else if (event.target.id === 'densityInput') {
+          $('#densityOutput').textContent = `${fmt(Number(event.target.value),2)} rho target`;
+        } else if (event.target.id === 'pressureInput' && sim) {
+          sim.targetP = clamp(Number(event.target.value), -1, 6);
+          $('#pressureOutput').textContent = `${fmt(sim.targetP)} P*`;
+        } else if (event.target.id === 'modalVolume') {
+          meta.settings.volume = clamp(Number(event.target.value), 0, 1);
+          $('#modalVolumeValue').textContent = `${Math.round(meta.settings.volume * 100)}%`;
+          audio ||= new SynthAudio(); audio.ensure(); audio.setVolume(meta.settings.volume);
+          persistMeta();
+        }
+      });
+      document.addEventListener('change', event => {
+        if (event.target.id === 'densityInput' && sim) setDensity(Number(event.target.value));
+        if (event.target.id === 'temperatureInput' && sim) addEvent(`Thermostat setpoint changed to ${sim.targetT.toFixed(2)} T*.`, 'normal');
+        if (event.target.id === 'pressureInput' && sim) addEvent(`Barostat target changed to ${sim.targetP.toFixed(2)} P*.`, 'normal');
+        if (event.target.id === 'speedSelect') changeSpeed(event.target.value);
+        if (event.target.id === 'rdfSelect') {
+          rdfMode = meta.tech.spectroscopy ? event.target.value : 'all';
+          updateCharts();
+        }
+      });
+
+      document.addEventListener('keydown', event => {
+        if (event.target.matches('input, textarea, select, [contenteditable="true"]')) return;
+        if (event.key === 'Escape') {
+          if (!$('#modalLayer').classList.contains('hidden')) {
+            if (modalKind === 'pause') { closeModal(); if (sim && !sim.completed && !sim.failed) sim.paused = false; }
+            else if (modalKind === 'tutorial') { meta.tutorialDone = true; persistMeta(); closeModal(); }
+            else closeModal();
+          } else if (screen === 'lab') togglePause();
+          return;
+        }
+        if (event.key === '?' || (event.shiftKey && event.key === '/')) { openModal('help'); return; }
+        if (screen !== 'lab' || !sim) return;
+        if (event.code === 'Space') { event.preventDefault(); togglePause(); }
+        else if (event.key === '1') changeSpeed(.5);
+        else if (event.key === '2') changeSpeed(1);
+        else if (event.key === '3') changeSpeed(2);
+        else if (event.key === '4') changeSpeed(4);
+        else if (event.key.toLowerCase() === 'b') setOverlay('bonds');
+        else if (event.key.toLowerCase() === 'v') setOverlay('velocity');
+        else if (event.key.toLowerCase() === 'o') setOverlay('order');
+        else if (event.key.toLowerCase() === 'h') pulseTemperature(1);
+        else if (event.key.toLowerCase() === 'c') pulseTemperature(-1);
+        else if (event.key.toLowerCase() === 's' && !event.ctrlKey && !event.metaKey) saveRun();
+      });
+
+      $('#worldCanvas').addEventListener('pointerdown', event => {
+        if (!sim || screen !== 'lab' || !$('#modalLayer').classList.contains('hidden')) return;
+        const world = canvasToWorld(event);
+        if (!world) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        if (sim.toolMode === 'heat') {
+          brushAt(world.x, world.y);
+          return;
+        }
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < sim.n; i++) {
+          const dx = minImage(sim.x[i] - world.x, sim.lx);
+          const dy = minImage(sim.y[i] - world.y, sim.ly);
+          const d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best >= 0) {
+          sim.selectedParticle = best;
+          updateHUD(true);
+          audio?.play('select');
+        }
+      });
+      $('#worldCanvas').addEventListener('pointermove', event => {
+        if (!sim || sim.toolMode !== 'heat' || event.buttons === 0 || !$('#modalLayer').classList.contains('hidden')) return;
+        const world = canvasToWorld(event);
+        if (world) brushAt(world.x, world.y);
+      });
+      $('#worldCanvas').addEventListener('pointerleave', () => { worldRect = null; });
+
+      function canvasToWorld(event) {
+        const canvas = $('#worldCanvas');
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left, y = event.clientY - rect.top;
+        const w = rect.width, h = rect.height;
+        const marginX = Math.max(30, w * .055), marginY = Math.max(44, h * .11);
+        const scale = Math.min((w - marginX * 2) / sim.lx, (h - marginY * 2) / sim.ly);
+        const boxW = sim.lx * scale, boxH = sim.ly * scale;
+        const left = (w - boxW) / 2, top = (h - boxH) / 2;
+        if (x < left || x > left + boxW || y < top || y > top + boxH) return null;
+        return { x: (x - left) / scale, y: (y - top) / scale };
+      }
+
+      function prepareCanvas(canvas) {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const rect = canvas.getBoundingClientRect();
+        const w = Math.max(1, rect.width), h = Math.max(1, rect.height);
+        if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+          canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { ctx, w, h };
+      }
+
+      function drawAmbient(dt) {
+        const canvas = $('#ambientCanvas');
+        if (!ambientNodes.length) {
+          const rand = mulberry32(88110);
+          ambientNodes = Array.from({ length: 75 }, () => ({ x: rand(), y: rand(), vx: (rand() - .5) * .012, vy: (rand() - .5) * .012, phase: rand() * 8 }));
+        }
+        const { ctx, w, h } = prepareCanvas(canvas);
+        ctx.clearRect(0, 0, w, h);
+        const glow = ctx.createRadialGradient(w * .72, h * .40, 4, w * .72, h * .4, Math.max(w, h) * .65);
+        glow.addColorStop(0, 'rgba(34,89,78,.32)'); glow.addColorStop(1, 'rgba(7,15,17,0)');
+        ctx.fillStyle = '#0a1517'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+        const motion = reducedMotion ? 0 : 1;
+        for (let i = 0; i < ambientNodes.length; i++) {
+          const a = ambientNodes[i];
+          a.x = mod(a.x + a.vx * dt * motion, 1); a.y = mod(a.y + a.vy * dt * motion, 1); a.phase += dt;
+          for (let j = i + 1; j < ambientNodes.length; j++) {
+            const b = ambientNodes[j];
+            const dx = (a.x - b.x) * w, dy = (a.y - b.y) * h;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < 135) {
+              ctx.strokeStyle = `rgba(135,205,174,${(1 - d / 135) * .12})`;
+              ctx.lineWidth = .6; ctx.beginPath(); ctx.moveTo(a.x * w, a.y * h); ctx.lineTo(b.x * w, b.y * h); ctx.stroke();
+            }
+          }
+          const radius = 1.2 + (Math.sin(a.phase * .7) + 1) * .65;
+          ctx.beginPath(); ctx.arc(a.x * w, a.y * h, radius, 0, Math.PI * 2);
+          ctx.fillStyle = i % 7 === 0 ? 'rgba(212,237,136,.66)' : 'rgba(158,230,201,.38)'; ctx.fill();
+        }
+      }
+
+      function drawWorld() {
+        if (!sim) return;
+        const canvas = $('#worldCanvas');
+        const { ctx, w, h } = prepareCanvas(canvas);
+        ctx.clearRect(0, 0, w, h);
+        const bg = ctx.createLinearGradient(0, 0, w, h);
+        bg.addColorStop(0, '#081416'); bg.addColorStop(.52, '#0a191a'); bg.addColorStop(1, '#0b1718');
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+        const halo = ctx.createRadialGradient(w * .52, h * .53, 20, w * .52, h * .53, Math.max(w,h)*.6);
+        halo.addColorStop(0, 'rgba(52,112,91,.11)'); halo.addColorStop(1, 'rgba(5,12,13,0)');
+        ctx.fillStyle = halo; ctx.fillRect(0, 0, w, h);
+        const marginX = Math.max(30, w * .055), marginY = Math.max(44, h * .11);
+        const scale = Math.min((w - marginX * 2) / sim.lx, (h - marginY * 2) / sim.ly);
+        const boxW = sim.lx * scale, boxH = sim.ly * scale;
+        const left = (w - boxW) / 2, top = (h - boxH) / 2;
+        worldRect = { left, top, scale, boxW, boxH };
+        ctx.fillStyle = 'rgba(7,18,19,.55)'; ctx.fillRect(left, top, boxW, boxH);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(left, top, boxW, boxH); ctx.clip();
+        ctx.strokeStyle = 'rgba(158,230,201,.055)'; ctx.lineWidth = 1;
+        const gridStep = 2.5 * scale;
+        for (let x = left + gridStep; x < left + boxW; x += gridStep) { ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + boxH); ctx.stroke(); }
+        for (let y = top + gridStep; y < top + boxH; y += gridStep) { ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + boxW, y); ctx.stroke(); }
+        if (sim.overlays.density && meta.tech.densityField) drawDensityField(ctx, left, top, boxW, boxH);
+        if (sim.overlays.bonds) drawBonds(ctx, left, top, scale);
+        for (let i = 0; i < sim.n; i++) {
+          const x = left + mod(sim.x[i], sim.lx) * scale;
+          const y = top + mod(sim.y[i], sim.ly) * scale;
+          const sigma = sim.species[i] ? .88 : 1;
+          const radius = Math.max(2.6, Math.min(10, scale * .27 * sigma));
+          let base = sim.species[i] ? [240,165,116] : [132,207,218];
+          if (sim.overlays.order) {
+            const q = clamp((sim.q6[i] - .1) / .8, 0, 1);
+            base = mixColor([72,118,147], [217,239,135], q);
+          }
+          if (sim.pinned[i]) base = [224,240,139];
+          if (sim.overlays.density && !sim.overlays.order) {
+            const n = sim.neighborCount[i] || 0;
+            base = mixColor(base, [244,130,96], clamp((n - 3) / 7, 0, .52));
+          }
+          const color = `rgb(${base[0]},${base[1]},${base[2]})`;
+          if (sim.overlays.velocity && i % 5 === 0) {
+            const speed = Math.sqrt(sim.vx[i] * sim.vx[i] + sim.vy[i] * sim.vy[i]) + .1;
+            const len = Math.min(19, speed * scale * .33);
+            ctx.strokeStyle = 'rgba(235,244,207,.36)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x + sim.vx[i]/speed*len, y + sim.vy[i]/speed*len); ctx.stroke();
+          }
+          const glowR = radius * 2.5;
+          const gradient = ctx.createRadialGradient(x - radius*.3, y - radius*.3, radius*.05, x, y, glowR);
+          gradient.addColorStop(0, color); gradient.addColorStop(.44, color); gradient.addColorStop(1, 'rgba(9,20,22,0)');
+          ctx.beginPath(); ctx.arc(x,y,glowR,0,Math.PI*2); ctx.fillStyle = gradient; ctx.fill();
+          ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fillStyle = color; ctx.fill();
+          ctx.beginPath(); ctx.arc(x-radius*.28,y-radius*.3,Math.max(.7,radius*.25),0,Math.PI*2); ctx.fillStyle = 'rgba(242,250,228,.5)'; ctx.fill();
+          if (sim.selectedParticle === i) {
+            ctx.beginPath(); ctx.arc(x,y,radius+5+Math.sin(sim.time*4)*1.1,0,Math.PI*2);
+            ctx.strokeStyle = 'rgba(226,246,159,.92)'; ctx.lineWidth = 1.3; ctx.stroke();
+          }
+        }
+        drawEffects(ctx, left, top, scale);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(173,225,199,.45)'; ctx.lineWidth = 1;
+        ctx.strokeRect(left, top, boxW, boxH);
+        ctx.fillStyle = 'rgba(158,230,201,.52)';
+        ctx.beginPath(); ctx.arc(left, top, 2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(left+boxW, top, 2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(158,230,201,.45)'; ctx.font = '9px monospace';
+        ctx.fillText('x / periodic', left + boxW - 67, top + boxH + 15);
+        ctx.save(); ctx.translate(left - 13, top + 17); ctx.rotate(-Math.PI/2); ctx.fillText('y / periodic', 0, 0); ctx.restore();
+      }
+
+      function mixColor(a,b,t) { return [0,1,2].map(i => Math.round(a[i] + (b[i] - a[i]) * t)); }
+
+      function drawDensityField(ctx, left, top, boxW, boxH) {
+        const columns = 20, rows = 14;
+        const counts = new Uint16Array(columns * rows);
+        for (let i = 0; i < sim.n; i++) {
+          const c = Math.min(columns-1, Math.floor(mod(sim.x[i], sim.lx) / sim.lx * columns));
+          const r = Math.min(rows-1, Math.floor(mod(sim.y[i], sim.ly) / sim.ly * rows));
+          counts[r * columns + c]++;
+        }
+        for (let r = 0; r < rows; r++) for (let c = 0; c < columns; c++) {
+          const d = counts[r * columns + c] / Math.max(1, sim.n / (columns * rows));
+          const alpha = clamp((d - .25) * .10, 0, .18);
+          if (alpha <= 0) continue;
+          ctx.fillStyle = `rgba(240,165,116,${alpha})`;
+          ctx.fillRect(left + c*boxW/columns, top + r*boxH/rows, boxW/columns, boxH/rows);
+        }
+      }
+
+      function drawBonds(ctx, left, top, scale) {
+        ctx.strokeStyle = 'rgba(158,230,201,.16)'; ctx.lineWidth = .75;
+        for (let i = 0; i < sim.n; i++) {
+          for (let j = i + 1; j < sim.n; j++) {
+            const dx = minImage(sim.x[i] - sim.x[j], sim.lx), dy = minImage(sim.y[i] - sim.y[j], sim.ly);
+            if (dx*dx + dy*dy < 1.48*1.48) {
+              const x1 = left + mod(sim.x[i],sim.lx)*scale, y1 = top + mod(sim.y[i],sim.ly)*scale;
+              const x2 = x1 - dx*scale, y2 = y1 - dy*scale;
+              ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+            }
+          }
+        }
+      }
+
+      function drawEffects(ctx, left, top, scale) {
+        for (const effect of sim.effects) {
+          const p = clamp(effect.life / effect.max, 0, 1);
+          const x = left + mod(effect.x + effect.vx * (effect.max - effect.life), sim.lx) * scale;
+          const y = top + mod(effect.y + effect.vy * (effect.max - effect.life), sim.ly) * scale;
+          const color = effect.kind === 'cool' ? '158,230,201' : effect.kind === 'crystal' ? '212,237,136' : '240,165,116';
+          ctx.beginPath(); ctx.arc(x,y,Math.max(1, 2 + 5*(1-p)),0,Math.PI*2);
+          ctx.fillStyle = `rgba(${color},${p*.6})`; ctx.fill();
+        }
+      }
+
+      function drawTrendChart() {
+        const canvas = $('#trendCanvas');
+        const { ctx, w, h } = prepareCanvas(canvas);
+        ctx.clearRect(0,0,w,h);
+        ctx.fillStyle = 'rgba(7,15,16,.34)'; ctx.fillRect(0,0,w,h);
+        const pad = { l: 31, r: 29, t: 9, b: 19 };
+        const pw = Math.max(1,w-pad.l-pad.r), ph = Math.max(1,h-pad.t-pad.b);
+        ctx.strokeStyle = 'rgba(180,211,196,.09)'; ctx.lineWidth = 1;
+        for (let i=0;i<4;i++) { const y=pad.t+ph*i/3; ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+pw,y);ctx.stroke(); }
+        if (!sim || sim.history.length < 2) {
+          ctx.fillStyle = '#60736d';ctx.font='10px sans-serif';ctx.fillText('Collecting measurements...',pad.l+8,pad.t+ph*.55);return;
+        }
+        const points = sim.history;
+        const xMin = points[0].time, xMax = points[points.length-1].time || xMin+1;
+        const valuesFor = (key) => points.map(p => Number(p[key])).filter(Number.isFinite);
+        const keyA = chartMode === 'energy' ? 'potential' : chartMode === 'msd' ? 'msd' : 'temperature';
+        const valsA = valuesFor(keyA);
+        let minA = Math.min(...valsA), maxA = Math.max(...valsA);
+        if (Math.abs(maxA-minA)<.05) { maxA+=.05;minA-=.05; }
+        const padA=(maxA-minA)*.14; minA-=padA;maxA+=padA;
+        const keyB = chartMode === 'thermo' ? 'pressure' : chartMode === 'energy' ? 'energy' : null;
+        const valsB = keyB ? valuesFor(keyB) : [];
+        let minB = Math.min(...valsB), maxB = Math.max(...valsB);
+        if (keyB) { if (Math.abs(maxB-minB)<.05){maxB+=.05;minB-=.05;}const p=(maxB-minB)*.14;minB-=p;maxB+=p; }
+        const xAt = i => pad.l + (points[i].time-xMin)/Math.max(.0001,xMax-xMin)*pw;
+        const yAt = (v,min,max) => pad.t+ph-(v-min)/Math.max(.0001,max-min)*ph;
+        const colorA = chartMode === 'msd' ? '#d4ed88' : '#9ee6c9';
+        ctx.beginPath();
+        points.forEach((point,i)=>{const x=xAt(i),y=yAt(point[keyA],minA,maxA);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+        ctx.strokeStyle=colorA;ctx.lineWidth=1.7;ctx.stroke();
+        if (keyB) {
+          ctx.beginPath();points.forEach((point,i)=>{const x=xAt(i),y=yAt(point[keyB],minB,maxB);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+          ctx.strokeStyle=chartMode==='thermo'?'#f0a574':'#85c8e8';ctx.lineWidth=1.25;ctx.stroke();
+        }
+        ctx.fillStyle='#71857d';ctx.font='8px monospace';
+        ctx.textAlign='right';ctx.fillText(fmt(maxA,1),pad.l-5,pad.t+5);ctx.fillText(fmt(minA,1),pad.l-5,pad.t+ph);
+        ctx.textAlign='left';ctx.fillText(fmt(xMax,1),pad.l+pw+4,pad.t+ph);
+        ctx.textAlign='left';ctx.fillStyle='#9ee6c9';ctx.fillText(keyA==='temperature'?'T':keyA==='potential'?'U/N':'MSD',4,pad.t+9);
+        if(keyB){ctx.fillStyle=chartMode==='thermo'?'#f0a574':'#85c8e8';ctx.fillText(keyB==='pressure'?'P':'E/N',4,pad.t+ph-1);}
+        $('#trendTitle').textContent=chartMode==='thermo'?'Thermodynamic trace':chartMode==='energy'?'Energy per atom':'Mean-square displacement';
+        $('#trendLegend').innerHTML=chartMode==='thermo'?'<i class="legend-line"></i>Temperature <i class="legend-line second"></i>Pressure':chartMode==='energy'?'<i class="legend-line"></i>Potential / atom <i class="legend-line second"></i>Total / atom':'<i class="legend-line"></i>Unwrapped MSD';
+      }
+
+      function drawRdfChart() {
+        const canvas = $('#rdfCanvas');
+        const { ctx, w, h } = prepareCanvas(canvas);
+        ctx.clearRect(0,0,w,h);
+        ctx.fillStyle='rgba(7,15,16,.34)';ctx.fillRect(0,0,w,h);
+        const pad={l:26,r:8,t:9,b:17},pw=Math.max(1,w-pad.l-pad.r),ph=Math.max(1,h-pad.t-pad.b);
+        ctx.strokeStyle='rgba(180,211,196,.09)';ctx.lineWidth=1;
+        for(let i=0;i<3;i++){const y=pad.t+ph*i/2;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+pw,y);ctx.stroke();}
+        if(!sim||!sim.rdf){ctx.fillStyle='#60736d';ctx.font='10px sans-serif';ctx.fillText('Awaiting pair structure',pad.l+5,pad.t+ph*.55);return;}
+        const curves = rdfMode==='all' ? [{values:sim.rdf,color:'#9ee6c9'}] : rdfMode==='partial' ? [
+          {values:sim.rdfAA,color:'#9ee6c9'},{values:sim.rdfAB,color:'#f0a574'},{values:sim.rdfBB,color:'#85c8e8'}
+        ] : [{values:sim[rdfMode],color:rdfMode==='rdfAA'?'#9ee6c9':rdfMode==='rdfAB'?'#f0a574':'#85c8e8'}];
+        let max=3;
+        for(const c of curves)for(const v of c.values)if(Number.isFinite(v))max=Math.max(max,v);
+        max=Math.min(9,Math.ceil(max*1.1));
+        for(const c of curves){
+          ctx.beginPath();
+          c.values.forEach((v,i)=>{const x=pad.l+i/(c.values.length-1)*pw;const y=pad.t+ph-clamp(v/max,0,1)*ph;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+          ctx.strokeStyle=c.color;ctx.lineWidth=1.45;ctx.stroke();
+        }
+        const idealY=pad.t+ph-clamp(1/max,0,1)*ph;
+        ctx.setLineDash([3,4]);ctx.strokeStyle='rgba(212,237,136,.3)';ctx.beginPath();ctx.moveTo(pad.l,idealY);ctx.lineTo(pad.l+pw,idealY);ctx.stroke();ctx.setLineDash([]);
+        ctx.fillStyle='#71857d';ctx.font='8px monospace';ctx.textAlign='left';ctx.fillText('g(r)',3,pad.t+7);ctx.fillText('0',pad.l,pad.t+ph+12);ctx.textAlign='right';ctx.fillText(fmt(sim.rdfMax,1),pad.l+pw,pad.t+ph+12);
+        $('#rdfSelect').value = rdfMode;
+      }
+
+      function updateCharts() { drawTrendChart(); drawRdfChart(); }
+
+      function animate(now) {
+        const dtWall = lastFrame ? Math.min(.05, Math.max(0, (now - lastFrame) / 1000)) : 0;
+        lastFrame = now;
+        if (screen === 'title') drawAmbient(dtWall);
+        else if (screen === 'lab' && sim) {
+          if (!sim.paused && !sim.completed && !sim.failed) {
+            accumulator += dtWall * sim.speed;
+            let ticks = 0;
+            while (accumulator >= BASE_DT && ticks < 60 && sim && !sim.paused && !sim.completed && !sim.failed) {
+              physicsStep(sim, BASE_DT);
+              accumulator -= BASE_DT;
+              ticks++;
+            }
+            if (ticks >= 60) accumulator = Math.min(accumulator, BASE_DT * 2);
+          }
+          drawWorld();
+          uiAccumulator += dtWall; chartAccumulator += dtWall;
+          if (uiAccumulator > .16) { updateHUD(); updateEventLog(); uiAccumulator = 0; }
+          if (chartAccumulator > .42) { updateCharts(); chartAccumulator = 0; }
+        }
+        requestAnimationFrame(animate);
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && sim && !sim.paused && !sim.completed && !sim.failed) {
+          sim.paused = true;
+          openModal('pause');
+        }
+      });
+      window.addEventListener('resize', () => { worldRect = null; if (screen === 'lab') updateCharts(); });
+
+      function init() {
+        audio = new SynthAudio();
+        audio.setVolume(meta.settings.volume);
+        audio.setMuted(meta.settings.muted);
+        reducedMotion = !!meta.settings.reducedMotion;
+        updateTitleSelection();
+        updatePersistentUI();
+        $('#temperatureInput').disabled = false;
+        $('#pressureInput').disabled = true;
+        requestAnimationFrame(animate);
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

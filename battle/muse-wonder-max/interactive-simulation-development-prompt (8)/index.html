@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fishery Commons — Blue Recovery</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{font-family:'Manrope',system-ui,sans-serif}
+  .display{font-family:'Fraunces',serif}
+  body{background:#03131e}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#061e2e}::-webkit-scrollbar-thumb{background:#155e75;border-radius:99px}
+  .glass{background:linear-gradient(160deg,rgba(10,47,66,.92),rgba(4,32,48,.94));border:1px solid rgba(103,232,249,.14);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .glass2{background:rgba(6,35,52,.82);border:1px solid rgba(148,233,255,.12)}
+  .btn{transition:.18s} .btn:hover{transform:translateY(-1px);filter:brightness(1.12)} .btn:active{transform:translateY(0) scale(.98)}
+  .btn:disabled{opacity:.38;pointer-events:none}
+  input[type=range]{-webkit-appearance:none;width:100%;height:6px;border-radius:99px;background:linear-gradient(90deg,#0891b2,#22d3ee);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#ecfeff;border:3px solid #0891b2;cursor:pointer;box-shadow:0 2px 10px rgba(34,211,238,.5)}
+  .tool-active{background:#0891b2!important;color:white!important;border-color:#67e8f9!important;box-shadow:0 0 0 3px rgba(34,211,238,.2)}
+  .seg-active{background:#e0f2fe!important;color:#082f49!important}
+  .scenario-card{transition:.25s;cursor:pointer}.scenario-card:hover{transform:translateY(-4px);border-color:rgba(103,232,249,.55)}
+  .scenario-selected{border-color:#22d3ee!important;background:linear-gradient(160deg,rgba(8,145,178,.35),rgba(4,47,66,.95))!important;box-shadow:0 0 0 3px rgba(34,211,238,.18),0 18px 40px rgba(0,0,0,.3)}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes waveMove{from{background-position-x:0}to{background-position-x:800px}}
+  @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,.5)}50%{box-shadow:0 0 0 8px rgba(244,63,94,0)}}
+  .alarm{animation:pulseRed 1.2s infinite}
+  .toast-in{animation:toastIn .35s cubic-bezier(.2,.9,.3,1.2)}@keyframes toastIn{from{opacity:0;transform:translateX(30px) scale(.95)}to{opacity:1;transform:none}}
+  .fade-in{animation:fadeIn .4s ease}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .waves-bg{background-image:radial-gradient(ellipse at 20% -10%,rgba(34,211,238,.28),transparent 55%),radial-gradient(ellipse at 90% 10%,rgba(45,212,191,.18),transparent 50%),linear-gradient(180deg,#06283d,#03131e)}
+  .meter{height:8px;border-radius:99px;background:#0b354d;overflow:hidden}.meter>div{height:100%;border-radius:99px;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+  .log-item{border-left:3px solid #155e75}.log-warn{border-color:#f59e0b}.log-bad{border-color:#f43f5e}.log-good{border-color:#34d399}
+  .switch{width:46px;height:24px;border-radius:99px;background:#164e63;position:relative;cursor:pointer;transition:.2s;flex:none}.switch:after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#a5f3fc;transition:.2s}.switch.on{background:#0891b2}.switch.on:after{left:25px;background:white}
+  .tab-active{background:#164e63!important;color:#a5f3fc!important}
+  canvas{display:block}
+  .kv{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body class="text-slate-100 min-h-screen overflow-x-hidden">
+
+<!-- ============ TOP HUD ============ -->
+<header id="hud" class="hidden sticky top-0 z-40 backdrop-blur-xl bg-[#041c2c]/90 border-b border-cyan-300/15">
+  <div class="max-w-[1700px] mx-auto px-3 py-2 flex flex-wrap items-center gap-2">
+    <div class="flex items-center gap-2 mr-1">
+      <div class="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-300/30 flex items-center justify-center text-cyan-300"><i data-lucide="fish" class="w-5 h-5"></i></div>
+      <div class="leading-tight"><div class="font-extrabold tracking-tight text-sm">FISHERY COMMONS</div><div id="hudScenario" class="text-[10px] text-cyan-300/80 font-bold uppercase tracking-widest">—</div></div>
+    </div>
+    <div class="glass2 rounded-xl px-3 py-1.5 flex items-center gap-2"><i data-lucide="calendar-days" class="w-4 h-4 text-cyan-300"></i><div class="leading-tight"><div id="hudDate" class="font-extrabold text-sm kv">Year 1 · Jan</div><div id="hudSeason" class="text-[10px] text-slate-300">Winter</div></div></div>
+    <div class="glass2 rounded-xl px-3 py-1.5" title="Treasury — taxes and fines in, enforcement and programmes out. Below −$400k is bankruptcy."><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold flex gap-1 items-center"><i data-lucide="landmark" class="w-3 h-3"></i>Treasury</div><div id="hudMoney" class="font-extrabold text-emerald-300 kv">$900k</div></div>
+    <div class="glass2 rounded-xl px-3 py-1.5" title="Science points — earned monthly and by surveys. Spend on research."><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold flex gap-1 items-center"><i data-lucide="flask-conical" class="w-3 h-3"></i>Science</div><div id="hudScience" class="font-extrabold text-violet-300 kv">20</div></div>
+    <div class="glass2 rounded-xl px-3 py-1.5" title="Public approval — blends port, industry, ecology and treasury health."><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold flex gap-1 items-center"><i data-lucide="heart-handshake" class="w-3 h-3"></i>Approval</div><div id="hudApproval" class="font-extrabold text-amber-300 kv">62%</div></div>
+    <div class="glass2 rounded-xl px-3 py-1.5" title="Ecology score — average stock health plus protected habitat."><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold flex gap-1 items-center"><i data-lucide="leaf" class="w-3 h-3"></i>Ecology</div><div id="hudEcology" class="font-extrabold text-teal-300 kv">—</div></div>
+    <div class="flex-1"></div>
+    <div class="flex items-center rounded-xl overflow-hidden border border-cyan-300/20 bg-cyan-950/60" role="group" aria-label="Simulation speed">
+      <button data-speed="0.5" class="speedBtn btn px-2.5 py-2 text-xs font-extrabold">0.5×</button>
+      <button data-speed="1" class="speedBtn btn px-2.5 py-2 text-xs font-extrabold seg-active">1×</button>
+      <button data-speed="2" class="speedBtn btn px-2.5 py-2 text-xs font-extrabold">2×</button>
+      <button data-speed="4" class="speedBtn btn px-2.5 py-2 text-xs font-extrabold">4×</button>
+    </div>
+    <button id="btnPause" class="btn bg-amber-400 text-amber-950 font-extrabold px-3 py-2 rounded-xl text-sm flex items-center gap-1.5"><i data-lucide="pause" class="w-4 h-4"></i><span>Pause</span></button>
+    <button id="btnStep" class="btn glass2 px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1" title="Advance one month (N)"><i data-lucide="step-forward" class="w-4 h-4"></i>Step</button>
+    <button id="btnSave" class="btn glass2 px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1" title="Save game"><i data-lucide="save" class="w-4 h-4"></i></button>
+    <button id="btnMute" class="btn glass2 px-3 py-2 rounded-xl" title="Mute (audio)"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+    <button id="btnHelpTop" class="btn glass2 px-3 py-2 rounded-xl" title="Help (H)"><i data-lucide="info" class="w-4 h-4"></i></button>
+    <button id="btnSettingsTop" class="btn glass2 px-3 py-2 rounded-xl" title="Settings"><i data-lucide="settings" class="w-4 h-4"></i></button>
+  </div>
+  <div class="h-1 bg-cyan-950"><div id="monthProgress" class="h-full bg-gradient-to-r from-cyan-400 to-teal-300" style="width:0%"></div></div>
+</header>
+
+<!-- ============ MAIN ============ -->
+<main id="gameMain" class="hidden max-w-[1700px] mx-auto p-3 grid gap-3 lg:grid-cols-[318px_minmax(0,1fr)_330px] items-start">
+
+  <!-- LEFT: GOVERNANCE -->
+  <section class="space-y-3 lg:sticky lg:top-[76px] max-h-[calc(100vh-86px)] overflow-y-auto pr-1 pb-4">
+    <div class="glass rounded-2xl p-3">
+      <div class="flex items-center justify-between"><h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="target" class="w-4 h-4 text-cyan-300"></i>CAPSTONE · BLUE RECOVERY</h3><span id="objYears" class="text-[10px] font-bold text-slate-400"></span></div>
+      <p class="text-[11px] text-slate-300 mt-1">Hold <b class="text-teal-300">every stock ≥65% of virgin biomass</b>, ecology ≥70 and port ≥55 for <b>12 straight months</b> — or end your mandate in good health.</p>
+      <div class="mt-2 space-y-1.5 text-[11px] font-bold">
+        <div><div class="flex justify-between"><span>Recovery streak</span><span id="objStreak" class="kv">0 / 12 mo</span></div><div class="meter mt-0.5"><div id="objStreakBar" class="bg-teal-300" style="width:0%"></div></div></div>
+        <div><div class="flex justify-between"><span>Weakest stock</span><span id="objWeak" class="kv">—</span></div><div class="meter mt-0.5"><div id="objWeakBar" class="bg-cyan-300" style="width:0%"></div></div></div>
+        <div><div class="flex justify-between"><span>Mandate progress</span><span id="objMandate" class="kv">—</span></div><div class="meter mt-0.5"><div id="objMandateBar" class="bg-amber-300" style="width:0%"></div></div></div>
+      </div>
+      <div id="warnBox" class="hidden mt-2 rounded-xl bg-rose-500/15 border border-rose-400/40 text-rose-200 text-[11px] font-bold p-2"></div>
+    </div>
+
+    <div id="tutorialCard" class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="compass" class="w-4 h-4 text-amber-300"></i>GUIDED FIRST STEPS</h3>
+      <div id="tutorialSteps" class="mt-2 space-y-1.5"></div>
+    </div>
+
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="scale" class="w-4 h-4 text-cyan-300"></i>QUOTAS · TOTAL ALLOWABLE CATCH</h3>
+      <p class="text-[11px] text-slate-400 mt-0.5">As % of scientific advice. Above 100% grows landings now, eats tomorrow's recruitment.</p>
+      <div id="quotaControls" class="mt-2 space-y-3"></div>
+      <div class="mt-3 pt-3 border-t border-cyan-300/10 space-y-3">
+        <div><div class="flex justify-between text-xs font-bold"><span class="flex gap-1 items-center"><i data-lucide="shield" class="w-3.5 h-3.5 text-cyan-300"></i>Enforcement budget</span><span id="enfVal" class="kv text-cyan-200"></span></div><input id="enforcement" type="range" min="0" max="90" step="1" value="28"><div class="flex justify-between text-[10px] text-slate-400"><span>Poachers thrive</span><span>Deters illegal fleets &amp; over-quota fishing</span></div></div>
+        <div><div class="flex justify-between text-xs font-bold"><span class="flex gap-1 items-center"><i data-lucide="fuel" class="w-3.5 h-3.5 text-amber-300"></i>Fuel subsidy</span><span id="subVal" class="kv text-amber-200"></span></div><input id="subsidy" type="range" min="0" max="60" step="1" value="10"><div class="text-[10px] text-slate-400">You pay this share of fleet fuel. Cheap fuel = more effort.</div></div>
+        <div><div class="flex justify-between text-xs font-bold"><span class="flex gap-1 items-center"><i data-lucide="ticket" class="w-3.5 h-3.5 text-emerald-300"></i>Licence fee / boat</span><span id="licVal" class="kv text-emerald-200"></span></div><input id="licence" type="range" min="0" max="2.4" step="0.1" value="0.7"><div class="text-[10px] text-slate-400">Steady treasury income — squeezes fleet margins.</div></div>
+        <div class="flex items-center justify-between gap-2"><div><div class="text-xs font-bold flex gap-1 items-center"><i data-lucide="egg" class="w-3.5 h-3.5 text-teal-300"></i>Spring spawning closure</div><div class="text-[10px] text-slate-400">No fishing Mar–May · +35% recruitment</div></div><div id="closureSwitch" class="switch on" role="switch" aria-checked="true" tabindex="0"></div></div>
+      </div>
+    </div>
+
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="zap" class="w-4 h-4 text-amber-300"></i>ACTIONS</h3>
+      <div class="grid grid-cols-2 gap-2 mt-2">
+        <button id="actPatrol" class="btn rounded-xl bg-cyan-600/80 border border-cyan-300/30 p-2 text-left"><div class="font-extrabold text-xs flex gap-1 items-center"><i data-lucide="radar" class="w-4 h-4"></i>Patrol Surge</div><div class="text-[10px] text-cyan-100/80">$70k · +enforcement 3 mo</div></button>
+        <button id="actClosure" class="btn rounded-xl bg-teal-600/80 border border-teal-300/30 p-2 text-left"><div class="font-extrabold text-xs flex gap-1 items-center"><i data-lucide="octagon-pause" class="w-4 h-4"></i>Emergency Closure</div><div class="text-[10px] text-teal-100/80">Weakest stock · 3 mo · free</div></button>
+        <button id="actSurveyAll" class="btn rounded-xl bg-violet-600/80 border border-violet-300/30 p-2 text-left"><div class="font-extrabold text-xs flex gap-1 items-center"><i data-lucide="satellite" class="w-4 h-4"></i>Full Survey</div><div class="text-[10px] text-violet-100/80">$35k · +14 science</div></button>
+        <button id="actFestival" class="btn rounded-xl bg-amber-500/80 text-amber-950 border border-amber-200/40 p-2 text-left"><div class="font-extrabold text-xs flex gap-1 items-center"><i data-lucide="party-popper" class="w-4 h-4"></i>Seafood Festival</div><div class="text-[10px] opacity-80">$45k · port &amp; demand ↑</div></button>
+      </div>
+      <div id="actionMsg" class="text-[11px] text-slate-300 mt-2 min-h-[14px]"></div>
+    </div>
+
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="flask-conical" class="w-4 h-4 text-violet-300"></i>RESEARCH &amp; TECHNOLOGY</h3>
+      <p class="text-[11px] text-slate-400">Science accrues monthly. Unlocks permanently reshape the system.</p>
+      <div id="researchList" class="mt-2 space-y-2"></div>
+    </div>
+  </section>
+
+  <!-- CENTER: MAP -->
+  <section class="space-y-3 min-w-0">
+    <div class="glass rounded-2xl p-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex rounded-xl overflow-hidden border border-cyan-300/20 bg-cyan-950/60">
+          <button data-tool="inspect" class="toolBtn btn px-3 py-2 text-xs font-extrabold flex items-center gap-1.5 tool-active"><i data-lucide="mouse-pointer-2" class="w-3.5 h-3.5"></i>Inspect</button>
+          <button data-tool="mpa" class="toolBtn btn px-3 py-2 text-xs font-extrabold flex items-center gap-1.5"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i>Protect (MPA)</button>
+          <button data-tool="restore" class="toolBtn btn px-3 py-2 text-xs font-extrabold flex items-center gap-1.5"><i data-lucide="sprout" class="w-3.5 h-3.5"></i>Restore $45k</button>
+          <button data-tool="survey" class="toolBtn btn px-3 py-2 text-xs font-extrabold flex items-center gap-1.5"><i data-lucide="scan-search" class="w-3.5 h-3.5"></i>Survey $15k</button>
+        </div>
+        <div class="flex rounded-xl overflow-hidden border border-cyan-300/20 bg-cyan-950/60 ml-auto">
+          <button data-layer="habitat" class="layerBtn btn px-3 py-2 text-xs font-extrabold seg-active">Habitat</button>
+          <button data-layer="stocks" class="layerBtn btn px-3 py-2 text-xs font-extrabold">Fish Density</button>
+          <button data-layer="pressure" class="layerBtn btn px-3 py-2 text-xs font-extrabold">Fishing Pressure</button>
+        </div>
+      </div>
+      <div class="relative mt-2 rounded-xl overflow-hidden border border-cyan-300/20 bg-[#062a42]">
+        <canvas id="mapCanvas" class="w-full cursor-crosshair touch-none" style="height:min(56vh,560px)"></canvas>
+        <div id="decisionCard" class="hidden absolute left-3 right-3 bottom-3 glass rounded-2xl p-3 border-amber-300/40 fade-in" style="border-color:rgba(252,211,77,.5)">
+          <div class="flex gap-2"><i data-lucide="triangle-alert" class="w-5 h-5 text-amber-300 flex-none"></i><div class="min-w-0"><div id="decTitle" class="font-extrabold text-amber-200 text-sm"></div><div id="decText" class="text-xs text-slate-200 mt-0.5"></div><div id="decBtns" class="flex flex-wrap gap-2 mt-2"></div></div></div>
+        </div>
+        <div class="absolute top-2 left-2 glass2 rounded-xl px-2.5 py-1.5 text-[11px] font-bold flex items-center gap-3">
+          <span class="flex items-center gap-1"><i data-lucide="thermometer" class="w-3.5 h-3.5 text-rose-300"></i><span id="wxTemp" class="kv">+0.0°C</span></span>
+          <span class="flex items-center gap-1"><i data-lucide="wind" class="w-3.5 h-3.5 text-cyan-300"></i><span id="wxWind" class="kv">12 kn</span></span>
+          <span class="flex items-center gap-1"><i data-lucide="fuel" class="w-3.5 h-3.5 text-amber-300"></i><span id="wxFuel" class="kv">$1.00</span></span>
+          <span id="wxStorm" class="hidden items-center gap-1 text-rose-300"><i data-lucide="cloud-lightning" class="w-3.5 h-3.5"></i>STORM</span>
+        </div>
+        <div class="absolute top-2 right-2 glass2 rounded-xl px-2.5 py-1.5 text-[11px] font-bold"><span class="text-cyan-300">MPA</span> <span id="mpaCov" class="kv">0%</span> of grounds</div>
+      </div>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] font-bold text-slate-300">
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#0d5a74"></span>Shelf</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#08304e"></span>Deep</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#8a6d3b"></span>Reef</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#1d7a4f"></span>Kelp forest</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded border-2 border-cyan-300 bg-cyan-400/20"></span>Marine Protected Area</span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#c2a878"></span>Port / land</span>
+        <span class="ml-auto text-slate-400">Click tiles · drag to paint MPAs · keys 1-4 speed, Space pause, M protect</span>
+      </div>
+      <div id="tileInfo" class="mt-2 glass2 rounded-xl p-2.5 text-xs text-slate-300">Select a tile to inspect habitat, fish density and protection status.</div>
+    </div>
+
+    <div class="glass rounded-2xl p-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="chart-spline" class="w-4 h-4 text-cyan-300"></i>TRENDS</h3>
+        <div class="flex rounded-lg overflow-hidden border border-cyan-300/20 bg-cyan-950/60 ml-auto">
+          <button data-chart="stocks" class="chartBtn btn px-3 py-1.5 text-[11px] font-extrabold tab-active">Stocks %</button>
+          <button data-chart="economy" class="chartBtn btn px-3 py-1.5 text-[11px] font-extrabold">Economy</button>
+          <button data-chart="stake" class="chartBtn btn px-3 py-1.5 text-[11px] font-extrabold">Stakeholders</button>
+        </div>
+      </div>
+      <canvas id="chartCanvas" class="w-full mt-2" style="height:170px"></canvas>
+      <div id="chartLegend" class="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-bold mt-1"></div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center">
+        <div class="glass2 rounded-xl p-2"><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Total catch / mo</div><div id="statCatch" class="font-extrabold kv">0 t</div></div>
+        <div class="glass2 rounded-xl p-2"><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Bycatch waste</div><div id="statBycatch" class="font-extrabold kv text-rose-300">0 t</div></div>
+        <div class="glass2 rounded-xl p-2"><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">Port jobs</div><div id="statJobs" class="font-extrabold kv">0</div></div>
+        <div class="glass2 rounded-xl p-2"><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">CO₂ from fleets</div><div id="statCO2" class="font-extrabold kv">0 t</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <section class="space-y-3 lg:sticky lg:top-[76px] max-h-[calc(100vh-86px)] overflow-y-auto pr-1 pb-4">
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="users" class="w-4 h-4 text-cyan-300"></i>STAKEHOLDER SCORECARD</h3>
+      <p class="text-[11px] text-slate-400">You are graded by all four at once. Maximising one usually wounds another.</p>
+      <div id="stakeList" class="mt-2 space-y-2.5"></div>
+    </div>
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="fish" class="w-4 h-4 text-teal-300"></i>STOCKS</h3>
+      <div id="speciesList" class="mt-2 space-y-2"></div>
+    </div>
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="ship" class="w-4 h-4 text-amber-300"></i>FLEETS ON THE WATER</h3>
+      <div id="fleetList" class="mt-2 space-y-2"></div>
+    </div>
+    <div class="glass rounded-2xl p-3">
+      <div class="flex items-center justify-between"><h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="newspaper" class="w-4 h-4 text-slate-300"></i>HARBOUR LOG</h3><button id="btnClearLog" class="btn text-[10px] font-bold text-slate-400 hover:text-white">clear</button></div>
+      <div id="eventLog" class="mt-2 space-y-1.5 max-h-[300px] overflow-y-auto pr-1"></div>
+    </div>
+    <div class="glass rounded-2xl p-3">
+      <h3 class="font-extrabold flex items-center gap-2 text-sm"><i data-lucide="trophy" class="w-4 h-4 text-amber-300"></i>MILESTONES</h3>
+      <div id="milestoneList" class="mt-2 space-y-1.5 text-xs"></div>
+    </div>
+  </section>
+</main>
+
+<div id="toasts" class="fixed top-[74px] right-3 z-[70] space-y-2 w-[320px] max-w-[calc(100vw-24px)] pointer-events-none"></div>
+
+<!-- ============ TITLE ============ -->
+<div id="titleScreen" class="fixed inset-0 z-50 overflow-y-auto waves-bg">
+  <div class="min-h-full max-w-6xl mx-auto px-4 py-8 flex flex-col">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-2xl bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center text-cyan-200" style="animation:floaty 4s ease-in-out infinite"><i data-lucide="fish" class="w-7 h-7"></i></div>
+      <div><div class="text-[11px] font-extrabold tracking-[.3em] text-cyan-300 uppercase">Commons Stewardship Simulator</div><div class="text-xs text-slate-400">Ministry of Fisheries · Est. 2026</div></div>
+      <div class="ml-auto flex gap-2">
+        <button id="btnTitleHelp" class="btn glass2 px-3 py-2 rounded-xl text-sm font-bold flex gap-1.5 items-center"><i data-lucide="info" class="w-4 h-4"></i>How to play</button>
+        <button id="btnTitleSettings" class="btn glass2 px-3 py-2 rounded-xl text-sm font-bold flex gap-1.5 items-center"><i data-lucide="settings" class="w-4 h-4"></i>Settings</button>
+      </div>
+    </div>
+    <h1 class="display text-5xl sm:text-7xl font-black leading-[.95] mt-8">Fishery<br><span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-teal-200 to-amber-200">Commons</span></h1>
+    <p class="text-slate-300 max-w-2xl mt-4 text-sm sm:text-base">Four wild stocks. Four rival fleets. One harbour town that lives or dies by your signature. Set quotas, draw protected areas, fund patrols and research — then watch biology, markets and politics push back. <b class="text-teal-300">Recover every stock without bankrupting the port.</b></p>
+    <div class="flex flex-wrap gap-2 mt-4 text-[11px] font-bold">
+      <span class="glass2 rounded-full px-3 py-1.5 flex gap-1 items-center"><i data-lucide="fish" class="w-3.5 h-3.5 text-cyan-300"></i>Age-structured stocks &amp; recruitment</span>
+      <span class="glass2 rounded-full px-3 py-1.5 flex gap-1 items-center"><i data-lucide="ship" class="w-3.5 h-3.5 text-amber-300"></i>Competing AI &amp; poacher fleets</span>
+      <span class="glass2 rounded-full px-3 py-1.5 flex gap-1 items-center"><i data-lucide="trending-up" class="w-3.5 h-3.5 text-emerald-300"></i>Live fish market</span>
+      <span class="glass2 rounded-full px-3 py-1.5 flex gap-1 items-center"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-teal-300"></i>MPAs · seasons · enforcement</span>
+      <span class="glass2 rounded-full px-3 py-1.5 flex gap-1 items-center"><i data-lucide="thermometer" class="w-3.5 h-3.5 text-rose-300"></i>Warming seas &amp; storms</span>
+    </div>
+
+    <h2 class="font-extrabold tracking-wide text-sm mt-8 mb-2 flex items-center gap-2"><i data-lucide="map" class="w-4 h-4 text-cyan-300"></i>CHOOSE YOUR MANDATE <span class="text-slate-500 font-bold">— difficulty &amp; scenario</span></h2>
+    <div class="grid md:grid-cols-3 gap-3" id="scenarioCards">
+      <div data-scenario="calm" class="scenario-card scenario-selected glass rounded-2xl p-4">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-300/30">EASY · GUIDED</span><i data-lucide="sun" class="w-5 h-5 text-amber-300"></i></div>
+        <h3 class="display text-2xl font-bold mt-2">Calm Shoals</h3><p class="text-xs text-slate-300 mt-1">Healthy stocks, patient fleets, kind weather. Learn the ropes with the guided steps. 8-year mandate.</p>
+        <div class="grid grid-cols-3 gap-1 text-center mt-3 text-[10px] font-bold"><div class="glass2 rounded-lg p-1.5">Stocks<br><span class="text-teal-300">85%</span></div><div class="glass2 rounded-lg p-1.5">Treasury<br><span class="text-emerald-300">$1,200k</span></div><div class="glass2 rounded-lg p-1.5">Fleets<br><span class="text-amber-300">Calm</span></div></div>
+        <div id="best-calm" class="text-[10px] text-slate-400 mt-2 font-bold"></div>
+      </div>
+      <div data-scenario="commons" class="scenario-card glass rounded-2xl p-4">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">NORMAL · CLASSIC</span><i data-lucide="scale" class="w-5 h-5 text-cyan-300"></i></div>
+        <h3 class="display text-2xl font-bold mt-2">The Commons Dilemma</h3><p class="text-xs text-slate-300 mt-1">The textbook tragedy: stocks at 65%, an aggressive industrial fleet, volatile prices. 10-year mandate.</p>
+        <div class="grid grid-cols-3 gap-1 text-center mt-3 text-[10px] font-bold"><div class="glass2 rounded-lg p-1.5">Stocks<br><span class="text-amber-300">65%</span></div><div class="glass2 rounded-lg p-1.5">Treasury<br><span class="text-emerald-300">$850k</span></div><div class="glass2 rounded-lg p-1.5">Fleets<br><span class="text-rose-300">Hungry</span></div></div>
+        <div id="best-commons" class="text-[10px] text-slate-400 mt-2 font-bold"></div>
+      </div>
+      <div data-scenario="warming" class="scenario-card glass rounded-2xl p-4">
+        <div class="flex items-center justify-between"><span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-rose-400/20 text-rose-300 border border-rose-300/30">HARD · CRISIS</span><i data-lucide="thermometer-sun" class="w-5 h-5 text-rose-300"></i></div>
+        <h3 class="display text-2xl font-bold mt-2">Warming Seas</h3><p class="text-xs text-slate-300 mt-1">The ocean warms every year. Cod retreat, tuna surge, storms multiply, poachers circle. 12-year mandate.</p>
+        <div class="grid grid-cols-3 gap-1 text-center mt-3 text-[10px] font-bold"><div class="glass2 rounded-lg p-1.5">Stocks<br><span class="text-rose-300">55%</span></div><div class="glass2 rounded-lg p-1.5">Treasury<br><span class="text-emerald-300">$650k</span></div><div class="glass2 rounded-lg p-1.5">Climate<br><span class="text-rose-300">+Heat</span></div></div>
+        <div id="best-warming" class="text-[10px] text-slate-400 mt-2 font-bold"></div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-3 mt-6 items-center">
+      <button id="btnStart" class="btn bg-gradient-to-r from-cyan-500 to-teal-400 text-white font-extrabold px-7 py-3.5 rounded-2xl text-base flex items-center gap-2 shadow-lg shadow-cyan-500/25"><i data-lucide="anchor" class="w-5 h-5"></i>Begin Mandate</button>
+      <button id="btnContinue" class="btn glass px-5 py-3.5 rounded-2xl font-extrabold flex items-center gap-2 disabled:opacity-40" disabled><i data-lucide="history" class="w-5 h-5 text-cyan-300"></i>Continue Saved Game</button>
+      <span class="text-[11px] text-slate-400 font-bold">Space = pause · 1–4 = speed · Click the sea to inspect &amp; protect it</span>
+    </div>
+    <div class="mt-auto pt-8 text-[11px] text-slate-500 font-bold flex flex-wrap gap-x-4"><span>Every control is live — no decorative buttons.</span><span>Progress, best grades &amp; settings persist locally.</span><span>Sound is fully synthesised · headphones optional.</span></div>
+  </div>
+</div>
+
+<!-- ============ HELP ============ -->
+<div id="helpModal" class="hidden fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm p-3 overflow-y-auto">
+  <div class="max-w-3xl mx-auto glass rounded-3xl p-5 my-6 fade-in">
+    <div class="flex items-start justify-between"><h2 class="display text-3xl font-black">How to Steward a Commons</h2><button class="closeHelp btn glass2 rounded-xl p-2"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+    <div class="grid sm:grid-cols-2 gap-3 mt-4 text-sm">
+      <div class="glass2 rounded-2xl p-3"><h3 class="font-extrabold flex gap-2 items-center text-cyan-300"><i data-lucide="repeat" class="w-4 h-4"></i>The core loop (60 seconds)</h3><ol class="list-decimal ml-5 mt-1 space-y-1 text-slate-300 text-[13px]"><li>Press play and watch boats fish and stocks move.</li><li>Click sea tiles — protect the densest nursery areas as MPAs.</li><li>Trim any quota glowing red (above advice while stock falls).</li><li>Watch prices, fleet profits and the harbour log react next month.</li><li>Spend science on Selective Gear first in most runs.</li></ol></div>
+      <div class="glass2 rounded-2xl p-3"><h3 class="font-extrabold flex gap-2 items-center text-teal-300"><i data-lucide="fish" class="w-4 h-4"></i>System 1 · Biology</h3><p class="text-slate-300 text-[13px] mt-1">Each stock grows logistically per-tile, recruits in spring, diffuses between tiles and spills out of MPAs. Warming water helps tuna, hurts cod. Bycatch of juveniles quietly steals future adults. A stock under 3% of virgin biomass for 3 months is extinct — game over.</p></div>
+      <div class="glass2 rounded-2xl p-3"><h3 class="font-extrabold flex gap-2 items-center text-amber-300"><i data-lucide="ship" class="w-4 h-4"></i>System 2 · Fleets &amp; Market</h3><p class="text-slate-300 text-[13px] mt-1">Community, Industrial and Artisan fleets chase profit: price up or fuel down means more effort. Legal fleets share your TAC; the Industrial fleet cheats when enforcement is thin, and foreign poachers arrive when prices are high and patrols are low. Scarcity raises prices — which raises effort. That loop is the tragedy.</p></div>
+      <div class="glass2 rounded-2xl p-3"><h3 class="font-extrabold flex gap-2 items-center text-emerald-300"><i data-lucide="landmark" class="w-4 h-4"></i>System 3 · Treasury &amp; Port</h3><p class="text-slate-300 text-[13px] mt-1">Landing taxes, licence fees and poacher fines fund enforcement, MPAs and festivals. The port's jobs track landings — starve the fleet and approval collapses; bankrupt the treasury (−$400k) and your mandate ends.</p></div>
+      <div class="glass2 rounded-2xl p-3"><h3 class="font-extrabold flex gap-2 items-center text-violet-300"><i data-lucide="flask-conical" class="w-4 h-4"></i>System 4 · Research</h3><p class="text-slate-300 text-[13px] mt-1">Selective gear cuts bycatch, satellites cheapen enforcement, restored habitat raises carrying capacity, aquaculture decouples port jobs from wild catch. Research is how a hard scenario becomes winnable.</p></div>
+      <div class="glass2 rounded-2xl p-3"><h3 class="font-extrabold flex gap-2 items-center text-rose-300"><i data-lucide="trophy" class="w-4 h-4"></i>Winning &amp; losing</h3><p class="text-slate-300 text-[13px] mt-1"><b class="text-teal-300">Win early:</b> all stocks ≥65%, ecology ≥70, port ≥55 for 12 straight months.<br><b class="text-teal-300">Win at term end:</b> ecology ≥55, weakest stock ≥35%, port ≥45, treasury ≥0.<br><b class="text-rose-300">Lose:</b> any extinction, bankruptcy, or approval under 10% for a full year.</p></div>
+    </div>
+    <div class="glass2 rounded-2xl p-3 mt-3 text-[13px]"><h3 class="font-extrabold text-slate-200">Controls</h3><div class="grid sm:grid-cols-3 gap-2 mt-1 text-slate-300"><span><b class="text-white">Mouse / touch:</b> select tools, click &amp; drag on the sea, sliders</span><span><b class="text-white">Space</b> pause · <b class="text-white">1–4</b> speed · <b class="text-white">N</b> step month</span><span><b class="text-white">I / M / R / S</b> tools · <b class="text-white">H</b> help · <b class="text-white">Esc</b> pause menu</span></div></div>
+    <button class="closeHelp btn w-full mt-4 bg-cyan-600 font-extrabold py-3 rounded-2xl">Back to the harbour</button>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="settingsModal" class="hidden fixed inset-0 z-[85] bg-black/70 backdrop-blur-sm p-3 overflow-y-auto">
+  <div class="max-w-md mx-auto glass rounded-3xl p-5 my-10 fade-in">
+    <div class="flex items-start justify-between"><h2 class="display text-3xl font-black">Settings</h2><button class="closeSettings btn glass2 rounded-xl p-2"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+    <div class="space-y-4 mt-4 text-sm">
+      <div><div class="flex justify-between font-bold"><span class="flex gap-2 items-center"><i data-lucide="volume-2" class="w-4 h-4 text-cyan-300"></i>Volume</span><span id="volVal">70%</span></div><input id="setVolume" type="range" min="0" max="100" value="70"></div>
+      <div class="flex items-center justify-between"><span class="font-bold">Mute all audio</span><div id="setMute" class="switch" role="switch" tabindex="0"></div></div>
+      <div class="flex items-center justify-between"><span class="font-bold">Ambient ocean sound</span><div id="setAmbient" class="switch on" role="switch" tabindex="0"></div></div>
+      <div class="flex items-center justify-between"><span class="font-bold">Particles &amp; splashes</span><div id="setParticles" class="switch on" role="switch" tabindex="0"></div></div>
+      <div class="flex items-center justify-between"><span class="font-bold">Autosave each January</span><div id="setAutosave" class="switch on" role="switch" tabindex="0"></div></div>
+      <div class="pt-2 border-t border-cyan-300/10"><button id="btnResetMeta" class="btn w-full bg-rose-600/80 font-extrabold py-2.5 rounded-xl">Reset saved game &amp; records</button></div>
+    </div>
+    <button class="closeSettings btn w-full mt-4 bg-cyan-600 font-extrabold py-3 rounded-2xl">Done</button>
+  </div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<div id="pauseModal" class="hidden fixed inset-0 z-[75] bg-black/70 backdrop-blur-sm p-3 flex items-center justify-center">
+  <div class="w-full max-w-sm glass rounded-3xl p-5 fade-in text-center">
+    <i data-lucide="anchor" class="w-10 h-10 text-cyan-300 mx-auto"></i>
+    <h2 class="display text-3xl font-black mt-1">Paused</h2><p class="text-xs text-slate-400">The tide waits for you.</p>
+    <div class="space-y-2 mt-4">
+      <button id="btnResume" class="btn w-full bg-cyan-600 font-extrabold py-3 rounded-2xl flex items-center justify-center gap-2"><i data-lucide="play" class="w-4 h-4"></i>Resume</button>
+      <button id="btnPauseSave" class="btn w-full glass2 font-extrabold py-2.5 rounded-2xl">Save game</button>
+      <button id="btnPauseSettings" class="btn w-full glass2 font-extrabold py-2.5 rounded-2xl">Settings</button>
+      <button id="btnRestart" class="btn w-full glass2 font-extrabold py-2.5 rounded-2xl">Restart scenario</button>
+      <button id="btnQuitTitle" class="btn w-full bg-rose-600/80 font-extrabold py-2.5 rounded-2xl">Abandon to title</button>
+    </div>
+    <div id="pauseStats" class="text-left text-xs text-slate-300 mt-4 glass2 rounded-xl p-3"></div>
+  </div>
+</div>
+
+<!-- ============ END ============ -->
+<div id="endModal" class="hidden fixed inset-0 z-[90] bg-black/80 backdrop-blur-md p-3 overflow-y-auto">
+  <div class="max-w-2xl mx-auto glass rounded-3xl p-6 my-8 fade-in text-center">
+    <div id="endIcon"></div>
+    <h2 id="endTitle" class="display text-4xl sm:text-5xl font-black mt-2"></h2>
+    <p id="endText" class="text-slate-300 text-sm mt-2 max-w-lg mx-auto"></p>
+    <div id="endGrade" class="display text-7xl font-black my-3"></div>
+    <div id="endStats" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-left"></div>
+    <div id="endStake" class="mt-3 space-y-2 text-left"></div>
+    <div class="flex flex-wrap gap-2 mt-5 justify-center">
+      <button id="btnEndRestart" class="btn bg-gradient-to-r from-cyan-500 to-teal-400 font-extrabold px-5 py-3 rounded-2xl flex gap-2 items-center"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Play again</button>
+      <button id="btnEndTitle" class="btn glass2 font-extrabold px-5 py-3 rounded-2xl">Change scenario</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= UTIL & STORAGE ================= */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let RNG=mulberry32(12345);
+const rand=(a=1,b)=>b===undefined?RNG()*a:a+RNG()*(b-a);
+const fmt$=v=>((v<0?'-$':'$')+Math.abs(Math.round(v)).toLocaleString()+'k');
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const SEASONS=['Winter','Winter','Spring','Spring','Spring','Summer','Summer','Summer','Autumn','Autumn','Autumn','Winter'];
+function store(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k));localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
+function delStore(k){try{localStorage.removeItem(k)}catch(e){}}
+
+/* ================= AUDIO ================= */
+const AudioSys={ctx:null,master:null,ambientGain:null,noiseSrc:null,
+ init(){if(this.ctx)return;try{this.ctx=new(window.AudioContext||window.webkitAudioContext)();this.master=this.ctx.createGain();this.master.gain.value=settings.muted?0:settings.volume;this.master.connect(this.ctx.destination);if(settings.ambient)this.startAmbient();}catch(e){}},
+ startAmbient(){if(!this.ctx||this.noiseSrc)return;const len=2*this.ctx.sampleRate,buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate),d=buf.getChannelData(0);let last=0;for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+.02*w)/1.02;d[i]=last*3.2}this.noiseSrc=this.ctx.createBufferSource();this.noiseSrc.buffer=buf;this.noiseSrc.loop=true;const f=this.ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=420;this.ambientGain=this.ctx.createGain();this.ambientGain.gain.value=.16;const lfo=this.ctx.createOscillator(),lg=this.ctx.createGain();lfo.frequency.value=.09;lg.gain.value=.07;lfo.connect(lg);lg.connect(this.ambientGain.gain);this.noiseSrc.connect(f);f.connect(this.ambientGain);this.ambientGain.connect(this.master);this.noiseSrc.start();lfo.start();},
+ stopAmbient(){try{this.noiseSrc&&this.noiseSrc.stop()}catch(e){}this.noiseSrc=null},
+ tone(freq,dur=.12,type='sine',vol=.18,when=0){if(!this.ctx||settings.muted)return;const t=this.ctx.currentTime+when,o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+.02)},
+ sfx(name){if(!this.ctx)return;if(name==='click')this.tone(620,.06,'triangle',.1);else if(name==='coin'){this.tone(880,.09,'triangle',.14);this.tone(1320,.12,'triangle',.12,.07)}else if(name==='splash'){this.tone(220,.18,'sine',.1);this.tone(150,.22,'sine',.08,.05)}else if(name==='alarm'){this.tone(520,.16,'square',.12);this.tone(392,.2,'square',.12,.17)}else if(name==='good'){[523,659,784,1046].forEach((f,i)=>this.tone(f,.22,'triangle',.14,i*.09))}else if(name==='bad'){[330,262,196].forEach((f,i)=>this.tone(f,.25,'sawtooth',.1,i*.11))}else if(name==='ping')this.tone(1560,.3,'sine',.07)},
+ apply(){if(this.master)this.master.gain.value=settings.muted?0:settings.volume;if(this.ctx){if(settings.ambient&&!this.noiseSrc)this.startAmbient();if(!settings.ambient)this.stopAmbient()}}
+};
+let settings=Object.assign({volume:.7,muted:false,ambient:true,particles:true,autosave:true},store('fisherySettings')||{});
+function saveSettings(){store('fisherySettings',settings)}
+
+/* ================= DATA ================= */
+const SPECIES=[
+ {id:'herring',name:'Atlantic Herring',short:'Herring',color:'#38bdf8',K:1200,r:.16,basePrice:2.1,demand:36,pref:[.5,1.35,.7,1.0],temp:-.05},
+ {id:'cod',name:'North Sea Cod',short:'Cod',color:'#fbbf24',K:850,r:.075,basePrice:6.8,demand:19,pref:[.7,1.1,.95,1.2],temp:-.30},
+ {id:'tuna',name:'Bluefin Tuna',short:'Tuna',color:'#f472b6',K:650,r:.095,basePrice:10.5,demand:13,pref:[1.45,.7,.3,.2],temp:.28},
+ {id:'crab',name:'King Crab',short:'Crab',color:'#fb7185',K:550,r:.085,basePrice:7.4,demand:11,pref:[.2,.85,1.55,1.25],temp:-.10},
+];
+const HAB=['Deep','Shelf','Reef','Kelp','Port'];
+const SCENARIOS={
+ calm:{name:'Calm Shoals',years:8,treasury:1200,stock:.85,aggr:.7,tempTrend:0,storm:.06,seed:7101,fuel:1.0},
+ commons:{name:'The Commons Dilemma',years:10,treasury:850,stock:.65,aggr:1.05,tempTrend:.0015,storm:.09,seed:4202,fuel:1.1},
+ warming:{name:'Warming Seas',years:12,treasury:650,stock:.55,aggr:1.3,tempTrend:.012,storm:.14,seed:9903,fuel:1.25},
+};
+const RESEARCH=[
+ {id:'selective',name:'Selective Gear & TEDs',cost:45,icon:'filter',desc:'Bycatch −50%, habitat damage −35%.'},
+ {id:'assessment',name:'Stock Assessment Programme',cost:40,icon:'chart-spline',desc:'+1 science/mo, shows stock forecasts.'},
+ {id:'satellite',name:'Satellite Enforcement (AIS)',cost:70,icon:'satellite',desc:'Enforcement 35% more effective.'},
+ {id:'engines',name:'Efficient Engines',cost:55,icon:'leaf',desc:'Fleet fuel costs −25%, CO₂ −25%.'},
+ {id:'habitat',name:'Habitat Restoration Network',cost:60,icon:'sprout',desc:'Carrying capacity +12%, habitat +0.10.'},
+ {id:'aqua',name:'Port Aquaculture Cooperative',cost:80,icon:'warehouse',desc:'+90 port jobs & $10k/mo not tied to wild catch.'},
+];
+const MILESTONES=[
+ {id:'mpa10',name:'Reef Guardian',desc:'Protect 10% of fishing grounds',reward:'+$60k'},
+ {id:'rebound',name:'The Rebound',desc:'Total biomass back above 75%',reward:'+20 science'},
+ {id:'profit',name:'Golden Year',desc:'Fleets earn $600k profit in a year',reward:'+$80k'},
+ {id:'research3',name:'Science-Led Harbour',desc:'Unlock 3 technologies',reward:'+$60k'},
+ {id:'peace',name:'Clean Waters',desc:'Zero poacher catch for 6 straight months',reward:'+15 science'},
+ {id:'streak6',name:'Recovery in Sight',desc:'6-month Blue Recovery streak',reward:'+$100k'},
+];
+const FLEETDEF=[
+ {id:'community',name:'Community Fleet',color:'#38bdf8',boats:12,q:.055,aggr:.75,jobs:2.6,pref:{herring:.34,cod:.28,tuna:.08,crab:.30},legal:true,obey:1},
+ {id:'industrial',name:'Industrial Trawlers',color:'#f59e0b',boats:20,q:.075,aggr:1.1,jobs:1.1,pref:{herring:.24,cod:.34,tuna:.30,crab:.12},legal:true,obey:.8},
+ {id:'artisan',name:'Artisan Day-Boats',color:'#34d399',boats:10,q:.045,aggr:.6,jobs:3.4,pref:{herring:.30,cod:.24,tuna:.06,crab:.40},legal:true,obey:1},
+ {id:'foreign',name:'Foreign Poachers',color:'#f43f5e',boats:0,q:.07,aggr:1,jobs:0,pref:{herring:.18,cod:.36,tuna:.42,crab:.04},legal:false,obey:0},
+];
+const W=20,H=13,N=W*H,MONTH_LEN=2000;
+
+/* ================= STATE ================= */
+let G=null,selectedScenario='calm',paused=true,speed=1,tool='inspect',layer='habitat',chartMode='stocks',monthAcc=0,lastTs=0,selectedTile=-1,painting=false,decisionOpen=false,gameOver=false;
+let particles=[],boats=[],floaters=[];
+function newFleetState(){return FLEETDEF.map(d=>({...d,effort:.6,catch:0,revenue:0,profit:0,lastCatch:{},active:d.id!=='foreign'}))}
+function freshState(sc){
+ return{scenario:sc,year:1,month:0,absMonth:0,treasury:SCENARIOS[sc].treasury,science:25,approval:62,
+ quotas:{herring:100,cod:100,tuna:100,crab:100},enforcement:28,subsidy:10,licence:.7,closure:true,
+ prices:{},prevBiomass:{},biomass:{},catchMonth:{},advice:{},research:{},milestones:{},history:[],log:[],
+ habitat:.86,tempAnom:sc==='warming'?.4:0,fuelPrice:SCENARIOS[sc].fuel,fuelEvent:1,demandBoost:1,patrolUntil:-1,closureUntil:{},festivalUntil:-1,
+ scores:{ecology:70,industry:60,port:60,government:60},streak:0,poachFree:0,lowApprovalMonths:0,extinctMonths:{},yearProfit:0,yearCatch:0,
+ stats:{totalCatch:0,totalRevenue:0,totalBycatch:0,totalFines:0,totalCO2:0,peakEcology:0,minStock:100,events:0,surveys:0,mpasMade:0},
+ tut:{inspect:false,mpa:false,quota:false,research:false,done:false},nextEventAt:5+Math.floor(rand(4)),habitatEvents:0};}
+function generateWorld(sc){
+ const cfg=SCENARIOS[sc];RNG=mulberry32(cfg.seed);
+ const hab=new Uint8Array(N),mpa=new Uint8Array(N),restored=new Uint8Array(N),pressure=new Float32Array(N);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(x===0){hab[i]=4}else{hab[i]=x>14&&RNG()<.7?0:1}}
+ for(let b=0;b<7;b++){const cx=2+Math.floor(rand(W-3)),cy=Math.floor(rand(H)),r=rand(1.2,2.6),type=b%2?3:2;for(let y=0;y<H;y++)for(let x=1;x<W;x++){const d=Math.hypot(x-cx,y-cy);if(d<r)hab[y*W+x]=type}}
+ // tile K per species
+ const tileK=SPECIES.map(sp=>{const arr=new Float32Array(N);let sum=0;for(let i=0;i<N;i++){if(hab[i]===4)continue;arr[i]=sp.pref[hab[i]];sum+=arr[i]}for(let i=0;i<N;i++)arr[i]=arr[i]/Math.max(sum,1)*sp.K;return arr});
+ const dens=SPECIES.map((sp,si)=>{const a=new Float32Array(N);for(let i=0;i<N;i++)a[i]=tileK[si][i]*cfg.stock*rand(.8,1.2);return a});
+ return{hab,mpa,restored,pressure,tileK,dens}}
+function biomassOf(si){let s=0;const a=G.world.dens[si];for(let i=0;i<N;i++)s+=a[i];return s}
+function fishableTiles(){let c=0;for(let i=0;i<N;i++)if(G.world.hab[i]!==4)c++;return c}
+function mpaCoverage(){let c=0;for(let i=0;i<N;i++)if(G.world.mpa[i])c++;return c/Math.max(fishableTiles(),1)}
+
+/* ================= UI BUILD ================= */
+function buildQuotaControls(){
+ $('quotaControls').innerHTML=SPECIES.map((sp,i)=>`<div class="glass2 rounded-xl p-2.5">
+  <div class="flex items-center justify-between"><span class="font-extrabold text-xs flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${sp.color}"></span>${sp.name}</span><span class="text-[11px] font-extrabold kv" id="qVal-${sp.id}"></span></div>
+  <input type="range" min="0" max="150" step="5" value="100" data-quota="${sp.id}" class="mt-1.5">
+  <div class="flex justify-between text-[10px] text-slate-400 mt-0.5"><span>Advice <b class="text-slate-200 kv" id="qAdvice-${sp.id}">—</b></span><span id="qState-${sp.id}" class="font-bold"></span></div></div>`).join('');
+ document.querySelectorAll('[data-quota]').forEach(el=>el.addEventListener('input',()=>{G.quotas[el.dataset.quota]=+el.value;G.tut.quota=true;AudioSys.sfx('click');updatePanels();tutorialRender();}));
+}
+function buildResearch(){
+ $('researchList').innerHTML=RESEARCH.map(r=>`<div class="glass2 rounded-xl p-2.5 flex gap-2 items-center"><div class="w-9 h-9 rounded-lg bg-violet-500/20 border border-violet-300/25 flex items-center justify-center text-violet-300 flex-none"><i data-lucide="${r.icon}" class="w-4.5 h-4.5"></i></div><div class="min-w-0 flex-1"><div class="font-extrabold text-xs">${r.name}</div><div class="text-[10px] text-slate-400">${r.desc}</div></div><button data-research="${r.id}" class="btn flex-none bg-violet-600 font-extrabold text-[11px] px-2.5 py-2 rounded-lg">${r.cost} sci</button></div>`).join('');
+ document.querySelectorAll('[data-research]').forEach(b=>b.addEventListener('click',()=>buyResearch(b.dataset.research)));
+ if(window.lucide)lucide.createIcons();
+}
+function buyResearch(id){const r=RESEARCH.find(x=>x.id===id);if(!r||G.research[id])return;if(G.science<r.cost){toast('Not enough science — run surveys or wait for monthly reports.','warn');return}G.science-=r.cost;G.research[id]=true;G.tut.research=true;if(id==='habitat'){G.habitat=clamp(G.habitat+.1,0,1)}AudioSys.sfx('good');toast('Unlocked: '+r.name,'good');logEvent('Research unlocked: '+r.name+'. '+r.desc,'good');checkMilestones();updatePanels();tutorialRender()}
+function stakeholderDefs(){return[
+ {k:'ecology',name:'Ecology & Future Stocks',icon:'leaf',color:'#2dd4bf'},
+ {k:'industry',name:'Fleet Profitability',icon:'ship',color:'#f59e0b'},
+ {k:'port',name:'Port Jobs & Food Supply',icon:'users',color:'#38bdf8'},
+ {k:'government',name:'Treasury & Public Trust',icon:'landmark',color:'#a78bfa'}]}
+function buildStaticPanels(){
+ $('stakeList').innerHTML=stakeholderDefs().map(s=>`<div><div class="flex justify-between text-xs font-bold"><span class="flex gap-1.5 items-center"><i data-lucide="${s.icon}" class="w-3.5 h-3.5" style="color:${s.color}"></i>${s.name}</span><span id="stake-${s.k}" class="kv">—</span></div><div class="meter mt-1"><div id="stakeBar-${s.k}" style="background:${s.color};width:50%"></div></div></div>`).join('');
+ $('milestoneList').innerHTML=MILESTONES.map(m=>`<div id="ms-${m.id}" class="flex gap-2 items-start glass2 rounded-lg p-2 opacity-60"><i data-lucide="circle-dashed" class="w-4 h-4 mt-0.5 flex-none"></i><div><div class="font-extrabold">${m.name} <span class="text-amber-300 text-[10px]">${m.reward}</span></div><div class="text-[10px] text-slate-400">${m.desc}</div></div></div>`).join('');
+ if(window.lucide)lucide.createIcons();
+}
+
+/* ================= LOG / TOAST ================= */
+function logEvent(msg,type='info'){if(!G)return;G.log.unshift({m:G.absMonth,msg,type});if(G.log.length>60)G.log.pop();renderLog()}
+function renderLog(){if(!G)return;$('eventLog').innerHTML=G.log.length?G.log.map(e=>`<div class="log-item log-${e.type==='warn'?'warn':e.type==='bad'?'bad':e.type==='good'?'good':''} glass2 rounded-r-lg rounded-l-sm px-2 py-1.5 text-[11px]"><span class="text-slate-500 font-bold">Y${Math.floor(e.m/12)+1} ${MONTHS[e.m%12]}</span> · ${e.msg}</div>`).join(''):'<div class="text-xs text-slate-500">No events yet.</div>'}
+function toast(msg,type='info'){const t=document.createElement('div');const col=type==='bad'?'border-rose-400/60':type==='warn'?'border-amber-300/60':type==='good'?'border-emerald-300/60':'border-cyan-300/40';t.className=`toast-in pointer-events-auto glass ${col} rounded-xl px-3 py-2.5 text-xs font-bold shadow-xl`;t.style.borderWidth='1px';t.textContent=msg;$('toasts').appendChild(t);setTimeout(()=>{t.style.transition='.4s';t.style.opacity='0';t.style.transform='translateX(20px)';setTimeout(()=>t.remove(),420)},4200);if(type==='bad')AudioSys.sfx('alarm');else if(type==='good')AudioSys.sfx('coin')}
+
+/* ================= GAME START ================= */
+function startGame(sc,loaded){
+ selectedScenario=sc;AudioSys.init();if(AudioSys.ctx&&AudioSys.ctx.state==='suspended')AudioSys.ctx.resume();
+ G=loaded?loaded:freshState(sc);if(!loaded){G.world=generateWorld(sc);SPECIES.forEach(sp=>{G.prices[sp.id]=sp.basePrice;G.extinctMonths[sp.id]=0;G.closureUntil[sp.id]=-1})} 
+ G.fleets=newFleetState(); // fleets re-derived; saved profits not critical
+ gameOver=false;paused=false;speed=1;monthAcc=0;selectedTile=-1;particles=[];floaters=[];decisionOpen=false;
+ spawnBoats();
+ $('titleScreen').classList.add('hidden');$('endModal').classList.add('hidden');$('pauseModal').classList.add('hidden');$('decisionCard').classList.add('hidden');$('helpModal').classList.add('hidden');$('settingsModal').classList.add('hidden');$('hud').classList.remove('hidden');$('gameMain').classList.remove('hidden');
+ $('hudScenario').textContent=SCENARIOS[sc].name;document.querySelectorAll('.speedBtn').forEach(b=>b.classList.toggle('seg-active',+b.dataset.speed===1));syncPauseBtn();
+ // sync controls
+ document.querySelectorAll('[data-quota]').forEach(el=>el.value=G.quotas[el.dataset.quota]);
+ $('enforcement').value=G.enforcement;$('subsidy').value=G.subsidy;$('licence').value=G.licence;$('closureSwitch').classList.toggle('on',G.closure);
+ buildResearch();buildStaticPanels();renderLog();computeAdvice();SPECIES.forEach((sp,si)=>{G.biomass[sp.id]=biomassOf(si);G.prevBiomass[sp.id]=G.biomass[sp.id]});
+ updatePanels(true);tutorialRender();drawChart();
+ if(!loaded){logEvent('Mandate begins in '+SCENARIOS[sc].name+'. Stocks at '+Math.round(SCENARIOS[sc].stock*100)+'% of virgin biomass.','good');toast('Welcome, Minister. Press play — then click the sea to inspect it.','good')}
+ AudioSys.sfx('ping');
+ if(window.lucide)lucide.createIcons();
+}
+function spawnBoats(){boats=[];const counts={community:5,industrial:6,artisan:4,foreign:0};FLEETDEF.forEach((f,fi)=>{for(let i=0;i<(counts[f.id]||0);i++)boats.push({fi,x:.5,y:6.5,tx:5+rand(14),ty:rand(H),state:'out',t:rand(1),speed:rand(.5,.9),catchCooldown:0})})}
+
+/* ================= SIMULATION ================= */
+function computeAdvice(){SPECIES.forEach(sp=>{const b=G.biomass[sp.id]||0,ratio=b/sp.K;const msy=sp.r*sp.K/4;G.advice[sp.id]=Math.round(msy*clamp(ratio/.6,0,1.25))})}
+function tempFactor(sp){return clamp(1+sp.temp*G.tempAnom,.45,1.45)}
+function tickMonth(){
+ if(gameOver)return;const sc=SCENARIOS[G.scenario];
+ G.absMonth++;G.month++;if(G.month>11){G.month=0;G.year++;G.yearProfit=0;G.yearCatch=0;if(settings.autosave)saveGame(true)}
+ const season=SEASONS[G.month],isSpring=season==='Spring',isWinter=season==='Winter';
+ // ---- environment
+ G.tempAnom=clamp(G.tempAnom+sc.tempTrend+rand(-.03,.03)+Math.sin(G.absMonth/12*Math.PI*2)*.004,-.4,2.4);
+ const storm=isWinter&&RNG()<sc.storm+G.tempAnom*.03;
+ G.storm=storm;G.windKnots=Math.round(rand(8,storm?38:20));
+ G.fuelPrice=clamp(G.fuelPrice*rand(.96,1.045)* (G.absMonth%17===0?rand(.9,1.25):1),.55,2.6);
+ // habitat drift: trawling damages, MPA + restoration heal
+ const indEffort=(G.fleets[1].effort||.6);G.habitat=clamp(G.habitat - indEffort*.0035*(G.research.selective?.35:1) + mpaCoverage()*.004 + .001,.35,1);
+ // ---- biology
+ SPECIES.forEach((sp,si)=>{
+  const dens=G.world.dens[si],tileK=G.world.tileK[si],next=new Float32Array(dens);
+  const closed=isSpring&&G.closure, spawnBoost=isSpring?(closed?1.4:.92):1;
+  for(let i=0;i<N;i++){if(G.world.hab[i]===4){next[i]=0;continue}
+   const K=tileK[i]*(0.7+0.4*G.habitat)*(G.world.restored[i]?1.35:1)*(G.research.habitat?1.12:1);
+   let d=dens[i];const growth=sp.r*tempFactor(sp)*spawnBoost*d*(1-d/Math.max(K,.01));next[i]=Math.max(0,d+growth-d*.008);}
+  // diffusion / spillover
+  const out=new Float32Array(next);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(G.world.hab[i]===4)continue;let mv=next[i]*.06;out[i]-=mv;const nb=[];if(x>0)nb.push(i-1);if(x<W-1)nb.push(i+1);if(y>0)nb.push(i-W);if(y<H-1)nb.push(i+W);const valid=nb.filter(j=>G.world.hab[j]!==4);valid.forEach(j=>out[j]+=mv/Math.max(valid.length,1));}
+  G.world.dens[si]=out;G.prevBiomass[sp.id]=G.biomass[sp.id]||out.reduce((a,b)=>a+b,0);G.biomass[sp.id]=biomassOf(si);
+ });
+ for(let i=0;i<N;i++)G.world.pressure[i]*=.82;
+ computeAdvice();
+ // ---- fleets & fishing
+ const enforceEff=clamp((G.enforcement/75)*(G.research.satellite?1.35:1)+(G.absMonth<=G.patrolUntil?.35:0),0,1.15);
+ const closedNow=isSpring&&G.closure;
+ let totalLegalCatch=0,totalRevenue=0,totalBycatch=0,poachCatch=0,fines=0;
+ G.fleets.forEach(f=>{f.catch=0;f.revenue=0;f.lastCatch={}});
+ // foreign fleet size responds to price & enforcement
+ const avgPriceIdx=SPECIES.reduce((a,sp)=>a+G.prices[sp.id]/sp.basePrice,0)/4;
+ const foreign=G.fleets[3];const targetBoats=enforceEff<.55&&avgPriceIdx>1.02?Math.round(clamp((avgPriceIdx-0.9)*10*(1-enforceEff),0,8)):Math.max(0,foreign.boats-(enforceEff>.6?2:0));
+ foreign.boats=targetBoats;foreign.active=foreign.boats>0;
+ const demandBySp={};SPECIES.forEach(sp=>demandBySp[sp.id]=0);
+ G.fleets.forEach(f=>{if(!f.legal)return;const priceMotiv=clamp(avgPriceIdx,.6,1.7);let eff=clamp(f.aggr*sc.aggr*priceMotiv*(1.55-G.fuelPrice*.45)*(G.licence>1.6?.85:1),.08,1);if(storm)eff*=.5;if(closedNow)eff=0;f.effort=eff;
+  const potential=f.boats*f.q*eff*38;SPECIES.forEach(sp=>{const avail=clamp(((G.biomass[sp.id]/sp.K)/.55),.12,1.15);demandBySp[sp.id]+=potential*f.pref[sp.id]*avail})});
+ SPECIES.forEach(sp=>{const tac=G.advice[sp.id]*G.quotas[sp.id]/100*(G.absMonth<= (G.closureUntil[sp.id]||-1)?0:1);let caught=0;
+  G.fleets.forEach(f=>{if(!f.legal)return;const share=demandBySp[sp.id]>0?(f.boats*f.q*f.effort*38*f.pref[sp.id]*clamp(((G.biomass[sp.id]/sp.K)/.55),.12,1.15))/demandBySp[sp.id]:0;let want=demandBySp[sp.id]*share;let c=Math.min(want,tac*share); // legal share of TAC
+   if(f.id==='industrial'&&enforceEff<.8)c+=want*.22*(0.8-enforceEff); // cheating
+   const si=SPECIES.indexOf(sp);const actual=removeFish(si,c,f);f.lastCatch[sp.id]=actual;f.catch+=actual;caught+=actual;const rev=actual*G.prices[sp.id];f.revenue+=rev;});
+  G.catchMonth[sp.id]=caught;totalLegalCatch+=caught;});
+ // poachers
+ if(foreign.active&&!closedNow){foreign.effort=clamp(.85*(1-enforceEff*.5),.2,1);SPECIES.forEach(sp=>{const si=SPECIES.indexOf(sp);const want=foreign.boats*foreign.q*foreign.effort*38*foreign.pref[sp.id]*(1-enforceEff*.65);const actual=removeFish(si,want,foreign);foreign.catch+=actual;foreign.lastCatch[sp.id]=actual;poachCatch+=actual;G.catchMonth[sp.id]=(G.catchMonth[sp.id]||0)+actual});
+  if(RNG()<enforceEff*.55){const fine=poachCatch*3.2*enforceEff;fines+=fine;if(fine>4)logEvent('Patrols seized a poaching vessel — fines +'+fmt$(fine)+'.','good')}}
+ // bycatch (juvenile mortality, no revenue)
+ const byRate=G.research.selective?.055:.115;['cod','crab'].forEach(id=>{const si=SPECIES.findIndex(s=>s.id===id);const bc=(G.catchMonth[id]||0)*byRate;removeFish(si,bc,null);totalBycatch+=bc});
+ SPECIES.forEach((sp,si)=>G.biomass[sp.id]=biomassOf(si));
+ // fleet economics
+ let industryProfit=0,industryRev=0,fleetFuelCost=0;
+ G.fleets.forEach(f=>{if(!f.legal)return;const fuelPerBoat=(G.research.engines?1.65:2.2)*G.fuelPrice;const fuel=f.boats*fuelPerBoat*f.effort;const maint=f.boats*.75;const grossFuel=fuel;fleetFuelCost+=grossFuel;const subsidyPaid=grossFuel*G.subsidy/100;f.profit=f.revenue-fuel+ (0) -maint;f.profit+=subsidyPaid; // subsidy reimburses fleet
+  f._subsidy=subsidyPaid;f._fuel=fuel;industryProfit+=f.profit;industryRev+=f.revenue;totalRevenue+=f.revenue});
+ // ---- treasury
+ const taxes=totalRevenue*.12,licenceIncome=G.fleets.filter(f=>f.legal).reduce((a,f)=>a+f.boats,0)*G.licence;
+ const mpaCost=mpaCoverage()*55,enforceCost=G.enforcement+(G.absMonth<=G.patrolUntil?22:0);
+ const subsidyTotal=G.fleets.reduce((a,f)=>a+(f._subsidy||0),0),aquaIncome=G.research.aqua?10:0;
+ const net=taxes+licenceIncome+fines+aquaIncome-16-enforceCost-mpaCost-subsidyTotal;
+ G.treasury+=net;G.stats.totalFines+=fines;
+ // ---- market prices
+ SPECIES.forEach(sp=>{const supply=Math.max(G.catchMonth[sp.id]||0,.5);const target=sp.basePrice*clamp(sp.demand*(G.absMonth<=G.festivalUntil?1.25:1)*G.demandBoost/supply,.5,2)*(1+G.tempAnom*(sp.id==='tuna'?.05:0));G.prices[sp.id]=clamp(lerp(G.prices[sp.id],target,.3),sp.basePrice*.35,sp.basePrice*2.6)});
+ // ---- science
+ G.science+=1+(G.research.assessment?1:0);
+ // ---- port & scores
+ const jobs=Math.round(110+totalLegalCatch*2.4+(G.research.aqua?90:0)+mpaCoverage()*40);
+ const portScore=clamp(18+totalLegalCatch*.85+(G.research.aqua?14:0)-Math.max(0,G.licence-1.4)*8,2,98);
+ const indScore=clamp(50+industryProfit/6,2,98);
+ const ecoScore=Math.round(clamp(SPECIES.reduce((a,sp)=>a+G.biomass[sp.id]/sp.K,0)/4*92+mpaCoverage()*22+(G.habitat-.7)*20,1,99));
+ const govScore=clamp(55+clamp(G.treasury,-400,1200)/28,2,98);
+ G.scores={ecology:ecoScore,industry:Math.round(indScore),port:Math.round(portScore),government:Math.round(govScore)};
+ const approvalTarget=.34*portScore+.26*indScore+.22*ecoScore+.18*govScore;G.approval=clamp(lerp(G.approval,approvalTarget,.22),0,100);
+ G.jobs=jobs;G.lastCatchTotal=totalLegalCatch;G.lastBycatch=totalBycatch;G.lastNet=net;G.lastPoach=poachCatch;
+ G.stats.totalCatch+=totalLegalCatch+poachCatch;G.stats.totalRevenue+=totalRevenue;G.stats.totalBycatch+=totalBycatch;G.stats.totalCO2+=fleetFuelCost*(G.research.engines?.75:1)*.9;G.yearProfit+=industryProfit;G.yearCatch+=totalLegalCatch;
+ G.stats.peakEcology=Math.max(G.stats.peakEcology,ecoScore);G.stats.minStock=Math.min(G.stats.minStock,...SPECIES.map(sp=>G.biomass[sp.id]/sp.K*100));
+ if(poachCatch<.5)G.poachFree++;else G.poachFree=0;
+ // history
+ G.history.push({m:G.absMonth,bio:SPECIES.map(sp=>Math.round(G.biomass[sp.id]/sp.K*1000)/10),treasury:Math.round(G.treasury),eco:ecoScore,port:Math.round(portScore),ind:Math.round(indScore),gov:Math.round(govScore),catch:Math.round(totalLegalCatch),rev:Math.round(totalRevenue),approval:Math.round(G.approval)});if(G.history.length>160)G.history.shift();
+ // events & narrative
+ if(storm){logEvent('Winter storm — fleets kept in port, effort halved and hulls battered.','warn');if(RNG()<.5){const dmg=rand(15,45);G.treasury-=dmg;logEvent('Storm repairs billed to the harbour fund: −'+fmt$(dmg)+'.','bad')}}
+ if(foreign.boats>=4&&RNG()<.4)logEvent(foreign.boats+' foreign poaching vessels are working the edge of your waters. Raise enforcement or accept the loss.','warn');
+ SPECIES.forEach(sp=>{const r=G.biomass[sp.id]/sp.K;if(r<.18)logEvent(sp.name+' is CRITICAL at '+Math.round(r*100)+'% of virgin biomass. Close it or lose it.','bad');else if(r<.35&&RNG()<.3)logEvent(sp.name+' remains stressed ('+Math.round(r*100)+'%). Scientists advise restraint.','warn')});
+ if(net<-25)logEvent('Treasury burned '+fmt$(-net)+' this month (enforcement '+fmt$(enforceCost)+', subsidies '+fmt$(subsidyTotal)+', MPA upkeep '+fmt$(mpaCost)+').','warn');
+ maybeEvent();checkMilestones();
+ // capstone streak
+ const weakest=Math.min(...SPECIES.map(sp=>G.biomass[sp.id]/sp.K*100));
+ const capOK=weakest>=65&&ecoScore>=70&&portScore>=55;G.streak=capOK?G.streak+1:0;
+ if(G.streak===6)grantMilestone('streak6');
+ // end checks
+ SPECIES.forEach(sp=>{if(G.biomass[sp.id]/sp.K<.03)G.extinctMonths[sp.id]++;else G.extinctMonths[sp.id]=0});
+ const extinct=SPECIES.find(sp=>G.extinctMonths[sp.id]>=3);
+ if(G.approval<10)G.lowApprovalMonths++;else G.lowApprovalMonths=0;
+ updatePanels();drawChart();tutorialCheckMonth();
+ if(extinct)return endGame(false,'extinct',extinct);
+ if(G.treasury<-400)return endGame(false,'bankrupt');
+ if(G.lowApprovalMonths>=12)return endGame(false,'approval');
+ if(G.streak>=12)return endGame(true,'capstone');
+ if(G.absMonth>=SCENARIOS[G.scenario].years*12){const ok=ecoScore>=55&&weakest>=35&&portScore>=45&&G.treasury>=0;return endGame(ok,ok?'term':'termfail')}
+}
+function removeFish(si,amount,fleet){if(amount<=0)return 0;const dens=G.world.dens[si];let total=0;for(let i=0;i<N;i++)if(G.world.hab[i]!==4&&!G.world.mpa[i])total+=dens[i];if(total<=0)return 0;const actual=Math.min(amount,total*.45);for(let i=0;i<N;i++){if(G.world.hab[i]===4||G.world.mpa[i])continue;const take=actual*dens[i]/total;dens[i]-=take;G.world.pressure[i]+=take*2}return actual}
+
+/* ================= EVENTS ================= */
+function maybeEvent(){if(decisionOpen||G.absMonth<G.nextEventAt)return;G.nextEventAt=G.absMonth+5+Math.floor(rand(5));G.stats.events++;
+ const pool=[
+  {title:'Fuel price shock',text:'OPEC rumblings push diesel up 35% for a season. Fleets demand help; the treasury winces.',a:{label:'Subsidise fuel — $110k',fn:()=>{G.treasury-=110;G.fuelPrice*=.88;G.approval=clamp(G.approval+4,0,100);return 'Fleet owners applaud the relief.'}},b:{label:'Let the market ride',fn:()=>{G.fuelPrice*=1.3;G.scores.industry-=6;return 'Effort falls as marginal boats tie up.'}}},
+  {title:'Poacher fleet sighted',text:'Coastguard reports six unmarked trawlers inside the reef zone at night.',a:{label:'Scramble patrols — $60k',fn:()=>{G.treasury-=60;G.patrolUntil=G.absMonth+2;G.fleets[3].boats=Math.max(0,G.fleets[3].boats-3);return 'Two vessels are boarded and fined.'}},b:{label:'Log & monitor',fn:()=>{G.fleets[3].boats=clamp(G.fleets[3].boats+2,0,8);return 'The trawlers grow bolder.'}}},
+  {title:'Algal bloom warning',text:'Warm, still water is blooming green off the kelp beds. Scientists want a precautionary pause.',a:{label:'Fund response — $50k',fn:()=>{G.treasury-=50;G.habitat=clamp(G.habitat+.04,0,1);return 'Bloom contained; habitat improves.'}},b:{label:'Ride it out',fn:()=>{G.habitat=clamp(G.habitat-.07,0,1);return 'Fish kills reported in the shallows.'}}},
+  {title:'Whale migration spectacle',text:'A superpod is migrating through the grounds. Tourism boats beg access; fishers want the zone kept clear.',a:{label:'Eco-tourism festival — $30k',fn:()=>{G.treasury+=55;G.approval=clamp(G.approval+5,0,100);return 'Hotels fill; the harbour cashes in +$85k net.'}},b:{label:'Keep it a working sea',fn:()=>{G.approval=clamp(G.approval-2,0,100);return 'Crews grumble less than hoteliers.'}}},
+  {title:'Research breakthrough',text:'University partners can fast-track a stock genetics programme — if you co-fund it.',a:{label:'Co-fund — $40k, +22 science',fn:()=>{G.treasury-=40;G.science+=22;return 'Genetic markers sharpen every survey.'}},b:{label:'Decline politely',fn:()=>{G.science+=4;return 'The team publishes without you.'}}},
+  {title:'Port infrastructure failure',text:'The main ice plant has failed at peak season. Spoilage looms over every landing.',a:{label:'Emergency repair — $75k',fn:()=>{G.treasury-=75;return 'Cold chain restored within days.'}},b:{label:'Let processors cope',fn:()=>{G.scores.port-=10;G.approval=clamp(G.approval-5,0,100);return 'Spoiled catch sours the town mood.'}}},
+ ];
+ const ev=pool[Math.floor(rand(pool.length))];showDecision(ev)}
+function showDecision(ev){decisionOpen=true;paused=true;syncPauseBtn();$('decisionCard').classList.remove('hidden');$('decTitle').textContent=ev.title;$('decText').textContent=ev.text;$('decBtns').innerHTML='';[ev.a,ev.b].forEach((opt,i)=>{const b=document.createElement('button');b.className='btn '+(i===0?'bg-amber-400 text-amber-950':'glass2')+' font-extrabold text-xs px-3 py-2 rounded-xl';b.textContent=opt.label;b.onclick=()=>{const out=opt.fn();$('decisionCard').classList.add('hidden');decisionOpen=false;paused=false;syncPauseBtn();logEvent(ev.title+': '+out,'warn');toast(out,'warn');AudioSys.sfx('click');updatePanels()};$('decBtns').appendChild(b)});AudioSys.sfx('alarm');logEvent('Decision required: '+ev.title,'warn')}
+function checkMilestones(){
+ const cov=mpaCoverage();if(cov>=.10)grantMilestone('mpa10');
+ const total=SPECIES.reduce((a,sp)=>a+G.biomass[sp.id]/sp.K,0)/4;if(total>=.75&&G.absMonth>6)grantMilestone('rebound');
+ if(G.yearProfit>=600)grantMilestone('profit');
+ if(Object.keys(G.research).length>=3)grantMilestone('research3');
+ if(G.poachFree>=6)grantMilestone('peace');}
+function grantMilestone(id){if(!G||G.milestones[id])return;G.milestones[id]=true;const m=MILESTONES.find(x=>x.id===id);if(id==='mpa10'||id==='profit')G.treasury+=id==='profit'?80:60;if(id==='rebound')G.science+=20;if(id==='research3')G.treasury+=60;if(id==='peace')G.science+=15;if(id==='streak6')G.treasury+=100;toast('Milestone: '+m.name+' — '+m.reward,'good');logEvent('Milestone reached: '+m.name+' ('+m.reward+').','good');AudioSys.sfx('good');const el=$('ms-'+id);if(el){el.classList.remove('opacity-60');el.querySelector('svg')?.remove();el.insertAdjacentHTML('afterbegin','<span class="text-emerald-300 font-black">✓</span>')}}
+
+/* ================= ACTIONS ================= */
+function actionMsg(t){$('actionMsg').textContent=t}
+function doPatrol(){if(G.treasury<70){toast('Treasury cannot fund a patrol surge.','warn');return}G.treasury-=70;G.patrolUntil=G.absMonth+3;AudioSys.sfx('ping');toast('Patrol surge deployed for 3 months.','good');logEvent('Patrol surge funded ($70k) — enforcement boosted for 3 months.','good');updatePanels()}
+function doEmergencyClosure(){let weakest=SPECIES[0];SPECIES.forEach(sp=>{if(G.biomass[sp.id]/sp.K<G.biomass[weakest.id]/weakest.K)weakest=sp});G.closureUntil[weakest.id]=G.absMonth+3;G.approval=clamp(G.approval-3,0,100);toast('Emergency closure: '+weakest.name+' for 3 months.','warn');logEvent('Emergency 3-month closure declared on '+weakest.name+' ('+Math.round(G.biomass[weakest.id]/weakest.K*100)+'% of virgin). Industry protests.','warn');AudioSys.sfx('alarm');updatePanels()}
+function doSurveyAll(){if(G.treasury<35){toast('Not enough funds for a full survey.','warn');return}G.treasury-=35;G.science+=14;G.stats.surveys++;G.tut.research=G.tut.research||false;toast('Survey complete: +14 science. Stock estimates refreshed.','good');logEvent('Full stock survey completed (+14 science).','good');AudioSys.sfx('ping');updatePanels()}
+function doFestival(){if(G.treasury<45){toast('Not enough funds for the festival.','warn');return}G.treasury-=45;G.festivalUntil=G.absMonth+3;G.approval=clamp(G.approval+4,0,100);toast('Seafood festival! Demand and port mood rise for 3 months.','good');logEvent('Seafood festival funded — demand boosted for a season.','good');AudioSys.sfx('coin');updatePanels()}
+
+/* ================= TUTORIAL ================= */
+const TUTSTEPS=[{k:'inspect',label:'Click a sea tile to inspect it',icon:'mouse-pointer-2'},{k:'mpa',label:'Use Protect tool on a dense tile (MPA)',icon:'shield-check'},{k:'quota',label:'Move any quota slider',icon:'scale'},{k:'research',label:'Buy research or run a survey action',icon:'flask-conical'},{k:'month6',label:'Reach month 6 with ecology above 45',icon:'sprout'}];
+function tutorialRender(){if(!G)return;const w=$('tutorialSteps');w.innerHTML=TUTSTEPS.map(s=>{const done=G.tut[s.k]||(s.k==='month6'&&G.tut.month6);return `<div class="flex items-center gap-2 text-xs font-bold ${done?'text-emerald-300':'text-slate-300'}"><span class="w-5 h-5 rounded-md ${done?'bg-emerald-400/20':'bg-cyan-400/10'} flex items-center justify-center flex-none">${done?'✓':''}</span>${s.label}</div>`}).join('');
+ if(!G.tut.done&&TUTSTEPS.every(s=>G.tut[s.k]||(s.k==='month6'&&G.tut.month6))){G.tut.done=true;G.science+=25;toast('Guided steps complete: +25 science. The commons is yours now.','good');logEvent('Harbour training complete (+25 science).','good')}}
+function tutorialCheckMonth(){if(G&&G.absMonth>=6&&G.scores.ecology>45)G.tut.month6=true;tutorialRender()}
+
+/* ================= PANELS ================= */
+function stockStatus(r){return r<.15?['COLLAPSED','#f43f5e']:r<.3?['Critical','#fb7185']:r<.5?['Stressed','#f59e0b']:r<.75?['Recovering','#38bdf8']:['Thriving','#34d399']}
+function updatePanels(light){
+ if(!G)return;computeAdvice();
+ $('hudDate').textContent='Year '+G.year+' · '+MONTHS[G.month];$('hudSeason').textContent=SEASONS[G.month]+(G.storm?' · Storm':'')+(G.scenario==='warming'?' · Warming':'');
+ $('hudMoney').textContent=fmt$(G.treasury);$('hudMoney').className='font-extrabold kv '+(G.treasury<0?'text-rose-300':G.treasury<200?'text-amber-300':'text-emerald-300');
+ $('hudScience').textContent=Math.floor(G.science);$('hudApproval').textContent=Math.round(G.approval)+'%';$('hudEcology').textContent=G.scores.ecology;
+ $('enfVal').textContent=fmt$(G.enforcement)+'/mo';$('subVal').textContent=G.subsidy+'% of fuel';$('licVal').textContent='$'+G.licence.toFixed(1)+'k';
+ $('wxTemp').textContent=(G.tempAnom>=0?'+':'')+G.tempAnom.toFixed(1)+'°C';$('wxWind').textContent=(G.windKnots||12)+' kn';$('wxFuel').textContent='$'+G.fuelPrice.toFixed(2);$('wxStorm').classList.toggle('hidden',!G.storm);$('wxStorm').classList.toggle('flex',!!G.storm);
+ $('mpaCov').textContent=Math.round(mpaCoverage()*100)+'%';
+ const weakest=Math.min(...SPECIES.map(sp=>G.biomass[sp.id]/sp.K*100));const wSp=SPECIES.find(sp=>G.biomass[sp.id]/sp.K*100===weakest);
+ $('objStreak').textContent=G.streak+' / 12 mo';$('objStreakBar').style.width=(G.streak/12*100)+'%';$('objWeak').textContent=wSp.short+' '+Math.round(weakest)+'%';$('objWeakBar').style.width=weakest+'%';
+ const totalMonths=SCENARIOS[G.scenario].years*12;$('objMandate').textContent='Month '+G.absMonth+' / '+totalMonths;$('objMandateBar').style.width=(G.absMonth/totalMonths*100)+'%';$('objYears').textContent=SCENARIOS[G.scenario].years+'-year mandate';
+ const warn=[];SPECIES.forEach(sp=>{if(G.biomass[sp.id]/sp.K<.2)warn.push(sp.short+' critical')});if(G.treasury<150)warn.push('Treasury low');if(G.fleets[3].boats>=4)warn.push('Poachers active');if(G.approval<25)warn.push('Approval collapsing');
+ const wb=$('warnBox');if(warn.length){wb.classList.remove('hidden');wb.textContent='WARNING: '+warn.join(' · ')}else wb.classList.add('hidden');
+ stakeholderDefs().forEach(s=>{const v=G.scores[s.k];$('stake-'+s.k).textContent=v;$('stakeBar-'+s.k).style.width=v+'%'});
+ SPECIES.forEach(sp=>{const r=G.biomass[sp.id]/sp.K;const [label,col]=stockStatus(r);const q=G.advice[sp.id]*G.quotas[sp.id]/100;const qEl=$('qVal-'+sp.id);if(qEl){qEl.textContent=G.quotas[sp.id]+'% · '+Math.round(q)+' t';qEl.style.color=G.quotas[sp.id]>100&&r<.5?'#fb7185':'';$('qAdvice-'+sp.id).textContent=Math.round(G.advice[sp.id])+' t/mo';const qs=$('qState-'+sp.id);qs.textContent=G.absMonth<=(G.closureUntil[sp.id]||-1)?'CLOSED':(G.quotas[sp.id]>110?'Over advice':G.quotas[sp.id]<60?'Precautionary':'Near advice');qs.style.color=G.absMonth<=(G.closureUntil[sp.id]||-1)?'#f43f5e':G.quotas[sp.id]>110?'#fb7185':'#94a3b8'}});
+ $('speciesList').innerHTML=SPECIES.map(sp=>{const b=G.biomass[sp.id],r=b/sp.K;const [label,col]=stockStatus(r);const trend=(G.prevBiomass[sp.id]||b)>=b?'▼':'▲';const fc=G.research.assessment?`<span class="text-violet-300">forecast ${trend}</span>`:'';return `<div class="glass2 rounded-xl p-2.5"><div class="flex justify-between items-center"><span class="font-extrabold text-xs flex gap-1.5 items-center"><span class="w-2.5 h-2.5 rounded-full" style="background:${sp.color}"></span>${sp.name}</span><span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded" style="background:${col}22;color:${col}">${label}</span></div><div class="meter mt-1.5"><div style="width:${Math.round(r*100)}%;background:${sp.color}"></div></div><div class="flex justify-between text-[10px] text-slate-400 mt-1 font-bold"><span class="kv">${Math.round(b)} / ${sp.K} t · ${Math.round(r*100)}%</span><span class="kv">$${G.prices[sp.id].toFixed(1)}k/t · caught ${Math.round(G.catchMonth[sp.id]||0)}t</span></div><div class="text-[10px] text-slate-500 font-bold">${fc}</div></div>`}).join('');
+ $('fleetList').innerHTML=G.fleets.map(f=>{if(f.id==='foreign'&&f.boats===0)return `<div class="glass2 rounded-xl p-2.5 flex justify-between text-xs"><span class="font-extrabold flex gap-1.5 items-center"><span class="w-2.5 h-2.5 rounded-full" style="background:${f.color}"></span>${f.name}</span><span class="text-slate-400 font-bold">None detected</span></div>`;return `<div class="glass2 rounded-xl p-2.5"><div class="flex justify-between text-xs"><span class="font-extrabold flex gap-1.5 items-center"><span class="w-2.5 h-2.5 rounded-full" style="background:${f.color}"></span>${f.name}</span><span class="kv font-bold ${f.legal?(f.profit>=0?'text-emerald-300':'text-rose-300'): 'text-rose-300'}">${f.legal?fmt$(f.profit)+' profit':'STEALING '+Math.round(f.catch)+'t'}</span></div><div class="flex justify-between text-[10px] text-slate-400 font-bold mt-0.5"><span>${f.boats} boats · effort ${Math.round((f.effort||0)*100)}%</span><span>catch ${Math.round(f.catch)} t/mo</span></div><div class="meter mt-1"><div style="width:${Math.round((f.effort||0)*100)}%;background:${f.color}"></div></div></div>`}).join('');
+ $('statCatch').textContent=Math.round(G.lastCatchTotal||0)+' t';$('statBycatch').textContent=(G.lastBycatch||0).toFixed(1)+' t';$('statJobs').textContent=(G.jobs||0).toLocaleString();$('statCO2').textContent=Math.round(G.stats.totalCO2)+' t';
+ document.querySelectorAll('[data-research]').forEach(b=>{const r=RESEARCH.find(x=>x.id===b.dataset.research);if(G.research[r.id]){b.textContent='Owned';b.disabled=true;b.className='btn flex-none bg-emerald-600/70 font-extrabold text-[11px] px-2.5 py-2 rounded-lg'}else{b.disabled=G.science<r.cost;b.textContent=r.cost+' sci'}});
+ MILESTONES.forEach(m=>{const el=$('ms-'+m.id);if(el&&G.milestones[m.id])el.classList.remove('opacity-60')});
+ if(window.lucide)lucide.createIcons();
+}
+function selectedTileInfo(i){if(!G||i<0){$('tileInfo').textContent='Select a tile to inspect habitat, fish density and protection status.';return}const x=i%W,y=Math.floor(i/W),hab=G.world.hab[i];let txt;
+ if(hab===4)txt=`<b class="text-amber-200">Port of Gullhaven</b> — home harbour. Landings here drive jobs, tax and approval. Fleets sail from this tile.`;
+ else{const parts=SPECIES.map((sp,si)=>`<span style="color:${sp.color}">${sp.short} ${G.world.dens[si][i].toFixed(1)}t</span>`).join(' · ');txt=`<b class="text-cyan-200">Tile ${x+1},${y+1} · ${HAB[hab]}</b>${G.world.mpa[i]?' · <b class="text-cyan-300">PROTECTED (no fishing, fish spill over edges)</b>':''}${G.world.restored[i]?' · <b class="text-emerald-300">Restored habitat (+35% capacity)</b>':''}<br>${parts}<br><span class="text-slate-400">Carrying capacity here scales with global habitat health (${Math.round(G.habitat*100)}%). ${hab===2||hab===3?'Prime nursery ground — high value as an MPA.':''}</span>`}
+ $('tileInfo').innerHTML=txt}
+
+/* ================= MAP RENDER ================= */
+const mapC=$('mapCanvas'),mctx=mapC.getContext('2d');let MW=0,MH=0,DPR=1;
+function sizeCanvas(c){const r=c.getBoundingClientRect();DPR=Math.min(devicePixelRatio||1,2);c.width=Math.max(300,r.width*DPR);c.height=Math.max(150,r.height*DPR);return{w:c.width,h:c.height}}
+function renderMap(t){
+ if(!G)return;const{w,h}=sizeCanvas(mapC);MW=w;MH=h;const cw=w/W,ch=h/H;const time=t*.001;
+ const habCols=['#08304e','#0d5a74','#8a6d3b','#1d7a4f','#c2a878'];
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x,hab=G.world.hab[i];let col=habCols[hab];
+  if(layer==='stocks'&&hab!==4){let tot=0,mx=0;SPECIES.forEach((sp,si)=>{tot+=G.world.dens[si][i];mx+=G.world.tileK[si][i]});const r=clamp(tot/Math.max(mx,1)*1.6,0,1);col=r<.25?'#07304a':r<.5?'#0e7490':r<.75?'#2dd4bf':'#fde68a'}
+  if(layer==='pressure'&&hab!==4){const p=clamp(G.world.pressure[i]/6,0,1);col=p<.2?'#0a3a56':p<.5?'#9a3412':'#ef4444'}
+  mctx.fillStyle=col;mctx.fillRect(x*cw,y*ch,cw+1,ch+1);
+  if(hab!==4){mctx.fillStyle='rgba(255,255,255,.05)';for(let d=0;d<2;d++){const px=x*cw+((i*37+d*53)%Math.max(cw-6,1))+3,py=y*ch+((i*21+d*31)%Math.max(ch-6,1))+3+Math.sin(time*1.4+i+d)*1.5;mctx.beginPath();mctx.arc(px,py,1.4,DPR*.8,0,7);mctx.fill()}}
+  if(hab===2||hab===3){mctx.strokeStyle=hab===3?'rgba(74,222,128,.35)':'rgba(253,224,171,.3)';mctx.lineWidth=1;mctx.beginPath();mctx.moveTo(x*cw+4,y*ch+ch-4);mctx.quadraticCurveTo(x*cw+cw/2,y*ch+2,x*cw+cw-4,y*ch+ch-5);mctx.stroke()}
+  if(G.world.restored[i]){mctx.fillStyle='#4ade80';mctx.beginPath();mctx.arc(x*cw+cw-5,y*ch+5,3,0,7);mctx.fill()}
+  if(G.world.mpa[i]){mctx.strokeStyle='rgba(103,232,249,.95)';mctx.lineWidth=2;mctx.setLineDash([5,4]);mctx.strokeRect(x*cw+2,y*ch+2,cw-4,ch-4);mctx.setLineDash([]);mctx.fillStyle='rgba(34,211,238,.13)';mctx.fillRect(x*cw,y*ch,cw,ch)}
+ }
+ // port buildings
+ mctx.fillStyle='#8a6d3b';mctx.fillRect(2,H/2*ch-14,Math.max(cw-6,10),10);mctx.fillStyle='#fef3c7';mctx.fillRect(5,H/2*ch-20,6,6);
+ // fishing boats
+ boats.forEach(b=>drawBoat(b,cw,ch,time));
+ // particles
+ if(settings.particles){particles=particles.filter(p=>p.life>0);particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.015;p.life-=.02;mctx.globalAlpha=Math.max(p.life,0);mctx.fillStyle=p.color;mctx.beginPath();mctx.arc(p.x,p.y,p.r,0,7);mctx.fill();mctx.globalAlpha=1})}
+ floaters=floaters.filter(f=>f.life>0);floaters.forEach(f=>{f.y-=.35;f.life-=.012;mctx.globalAlpha=clamp(f.life,0,1);mctx.fillStyle=f.color;mctx.font=`800 ${11*DPR}px Manrope`;mctx.fillText(f.text,f.x,f.y);mctx.globalAlpha=1});
+ if(selectedTile>=0){const x=selectedTile%W,y=Math.floor(selectedTile/W);mctx.strokeStyle='#fff';mctx.lineWidth=2.5;mctx.strokeRect(x*cw+1.5,y*ch+1.5,cw-3,ch-3)}
+ // layer label for fish schools on stocks
+ if(layer==='stocks'){SPECIES.forEach((sp,si)=>{for(let k=0;k<10;k++){let best=-1,bv=0;for(let s=0;s<30;s++){const i=Math.floor(rand(N));if(G.world.dens[si][i]>bv){bv=G.world.dens[si][i];best=i}}if(best>0&&bv>2){const x=best%W,y=Math.floor(best/W);mctx.fillStyle=sp.color;mctx.globalAlpha=.85;for(let d=0;d<4;d++){mctx.beginPath();mctx.ellipse(x*cw+cw/2+Math.sin(time*2+d*1.7+k)*5,y*ch+ch/2+Math.cos(time*1.6+d)*3,3.4,1.8,0,0,7);mctx.fill()}mctx.globalAlpha=1}}})}
+}
+function drawBoat(b,cw,ch,time){const f=G.fleets[b.fi];if(!f||(f.id==='foreign'&&f.boats===0))return;const active=f.id==='foreign'?true:(f.effort||0)>.12&&!(SEASONS[G.month]==='Spring'&&G.closure);const px=b.x*cw,py=b.y*ch+Math.sin(time*2+b.t)*1.6;mctx.save();mctx.translate(px,py);if(b.tx<b.x)mctx.scale(-1,1);mctx.fillStyle=f.color;mctx.beginPath();mctx.moveTo(-7,-1);mctx.lineTo(7,-1);mctx.lineTo(4,4);mctx.lineTo(-4,4);mctx.closePath();mctx.fill();mctx.fillStyle='#fff';mctx.fillRect(-1,-6,2,5);mctx.fillStyle=active?'#fef3c7':'#64748b';mctx.beginPath();mctx.arc(0,-7,1.6,0,7);mctx.fill();mctx.restore();if(!active){mctx.fillStyle='rgba(255,255,255,.45)';mctx.font=`700 ${8*DPR}px Manrope`;mctx.fillText('in port',px-10,py+13)}}
+function updateBoats(dt){if(!G)return;const sp=dt*.55*speed;boats.forEach(b=>{const f=G.fleets[b.fi];if(!f)return;if(f.id==='foreign'&&f.boats===0){b.x=.5;b.y=6.5;return}const dx=b.tx-b.x,dy=b.ty-b.y,d=Math.hypot(dx,dy);if(d<.15){if(b.state==='out'){b.state='back';b.tx=.5;b.ty=6.5;if(settings.particles&&RNG()<.6){const cw=MW/W,ch=MH/H;for(let k=0;k<6;k++)particles.push({x:b.x*cw,y:b.y*ch,vx:rand(-1,1),vy:rand(-1.4,-.2),life:rand(.5,1),color:f.color,r:rand(1,2.4)});if(RNG()<.35)floaters.push({x:b.x*cw-8,y:b.y*ch-6,text:'+catch',color:f.color,life:1});AudioSys.sfx('splash')}}else{b.state='out';let best=-1,bv=-1;for(let s=0;s<24;s++){const i=Math.floor(rand(N));if(G.world.hab[i]===4||G.world.mpa[i])continue;let v=0;SPECIES.forEach((spp,si)=>v+=G.world.dens[si][i]*(f.pref[spp.id]||0));if(v>bv){bv=v;best=i}}if(best>=0){b.tx=best%W+.5;b.ty=Math.floor(best/W)+.5}}}else{b.x+=dx/d*sp*b.speed;b.y+=dy/d*sp*b.speed}})}
+
+/* ================= CHART ================= */
+const chartC=$('chartCanvas'),cctx=chartC.getContext('2d');
+function drawChart(){if(!G)return;const{w,h}=sizeCanvas(chartC);cctx.clearRect(0,0,w,h);const hist=G.history;const pad=26*DPR,plotW=w-pad*1.4,plotH=h-pad*1.3;
+ cctx.strokeStyle='rgba(148,233,255,.14)';cctx.lineWidth=1;for(let g=0;g<=4;g++){const y=pad/2+plotH*g/4;cctx.beginPath();cctx.moveTo(pad,y);cctx.lineTo(pad+plotW,y);cctx.stroke()}
+ if(hist.length<2){cctx.fillStyle='#94a3b8';cctx.font=`700 ${11*DPR}px Manrope`;cctx.fillText('History will appear after the first months…',pad,h/2);$('chartLegend').innerHTML='';return}
+ let series=[];
+ if(chartMode==='stocks')series=SPECIES.map((sp,i)=>({name:sp.short+' %',color:sp.color,data:hist.map(x=>x.bio[i]),max:100}));
+ else if(chartMode==='economy')series=[{name:'Treasury $k',color:'#34d399',data:hist.map(x=>x.treasury),max:Math.max(1200,...hist.map(x=>Math.abs(x.treasury)))},{name:'Revenue $k',color:'#f59e0b',data:hist.map(x=>x.rev),max:Math.max(300,...hist.map(x=>x.rev))},{name:'Catch t',color:'#38bdf8',data:hist.map(x=>x.catch),max:Math.max(90,...hist.map(x=>x.catch))}];
+ else series=[{name:'Ecology',color:'#2dd4bf',data:hist.map(x=>x.eco),max:100},{name:'Port',color:'#38bdf8',data:hist.map(x=>x.port),max:100},{name:'Industry',color:'#f59e0b',data:hist.map(x=>x.ind),max:100},{name:'Approval',color:'#f472b6',data:hist.map(x=>x.approval),max:100}];
+ series.forEach(s=>{cctx.strokeStyle=s.color;cctx.lineWidth=2*DPR;cctx.beginPath();s.data.forEach((v,i)=>{const x=pad+plotW*i/Math.max(hist.length-1,1),y=pad/2+plotH*(1-clamp(v/s.max,0,1));i?cctx.lineTo(x,y):cctx.moveTo(x,y)});cctx.stroke()});
+ cctx.fillStyle='#64748b';cctx.font=`700 ${9*DPR}px Manrope`;cctx.fillText('−'+hist.length+' mo',pad,h-6*DPR);cctx.fillText('now',pad+plotW-18*DPR,h-6*DPR);
+ $('chartLegend').innerHTML=series.map(s=>`<span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:${s.color}"></span>${s.name}: <b class="text-slate-100 kv">${Math.round(s.data[s.data.length-1])}</b></span>`).join('')}
+
+/* ================= END ================= */
+function gradeOf(score){return score>=85?['S','#fbbf24']:score>=72?['A','#34d399']:score>=58?['B','#38bdf8']:score>=42?['C','#f59e0b']:['D','#fb7185']}
+function endGame(win,kind,species){
+ if(gameOver)return;gameOver=true;paused=true;G.stats.events++;
+ const finalScore=Math.round(G.scores.ecology*.38+G.scores.port*.24+G.scores.industry*.18+G.scores.government*.2);
+ const [grade,gcol]=gradeOf(win?finalScore:Math.min(finalScore,45));
+ let title,text,icon;
+ if(kind==='capstone'){title='BLUE RECOVERY ACHIEVED';text='Twelve straight months with every stock above 65%, a thriving port and a solvent treasury. The commons is healed — and still feeding people. Other ministries will study this mandate.';icon='trophy'}
+ else if(kind==='term'){title='Mandate Complete';text='Your term ends with the sea in respectable health, the port working and the books balanced. A stewardship worth re-electing.';icon='badge-check'}
+ else if(kind==='termfail'){title='A Sea Left Poorer';text='Your mandate expired before the commons recovered. The stocks, the port, or the treasury fell short of the recovery standard.';icon='cloud-rain'}
+ else if(kind==='extinct'){title=(species?species.name:'A stock')+' Is Extinct';text='Three months below 3% of virgin biomass. A food web tore, jobs followed the fish, and the harbour will tell this story for a generation.';icon='skull'}
+ else if(kind==='bankrupt'){title='The Ministry Is Bankrupt';text='Treasury fell below −$400k. Creditors seized the patrol boats, the port went dark, and your mandate was dissolved.';icon='landmark'}
+ else{title='The Government Falls';text='Approval stayed under 10% for a full year. The harbour voted with its feet — and its boats.';icon='megaphone'}
+ $('endIcon').innerHTML=`<div class="w-16 h-16 mx-auto rounded-3xl ${win?'bg-emerald-400/20 border-emerald-300/40 text-emerald-300':'bg-rose-400/20 border-rose-300/40 text-rose-300'} border flex items-center justify-center"><i data-lucide="${icon}" class="w-9 h-9"></i></div>`;
+ $('endTitle').textContent=title;$('endTitle').className='display text-4xl sm:text-5xl font-black mt-2 '+(win?'text-emerald-300':'text-rose-300');$('endText').textContent=text;
+ const ge=$('endGrade');ge.textContent=win?('Grade '+grade):'Failed';ge.style.color=gcol;ge.style.fontSize=win?'64px':'40px';
+ $('endStats').innerHTML=[['Mandate',G.year+' yrs · '+G.absMonth+' mo'],['Total catch',Math.round(G.stats.totalCatch).toLocaleString()+' t'],['Fleet revenue',fmt$(G.stats.totalRevenue)],['Bycatch wasted',Math.round(G.stats.totalBycatch)+' t'],['Peak ecology',G.stats.peakEcology+' / 100'],['Weakest moment',Math.round(G.stats.minStock)+'% stock'],['Milestones',Object.keys(G.milestones).length+' / '+MILESTONES.length],['Technologies',Object.keys(G.research).length+' / '+RESEARCH.length]].map(([k,v])=>`<div class="glass2 rounded-xl p-2.5 text-left"><div class="text-[9px] uppercase tracking-widest text-slate-400 font-bold">${k}</div><div class="font-extrabold text-sm kv">${v}</div></div>`).join('');
+ $('endStake').innerHTML=stakeholderDefs().map(s=>`<div><div class="flex justify-between text-xs font-bold"><span>${s.name}</span><span class="kv">${G.scores[s.k]}</span></div><div class="meter mt-1"><div style="width:${G.scores[s.k]}%;background:${s.color}"></div></div></div>`).join('');
+ $('endModal').classList.remove('hidden');AudioSys.sfx(win?'good':'bad');
+ // persist best
+ const best=store('fisheryBest')||{};const key=G.scenario;if(!best[key]||finalScore>(best[key].score||0))best[key]={score:finalScore,grade:win?grade:'—',win};store('fisheryBest',best);renderBest();delStore('fisherySave');
+ if(window.lucide)lucide.createIcons();
+}
+function renderBest(){const best=store('fisheryBest')||{};Object.keys(SCENARIOS).forEach(k=>{const el=$('best-'+k);if(el)el.textContent=best[k]?('Best: '+best[k].score+'/100 · Grade '+best[k].grade+(best[k].win?' · Recovered':'')):'No completed mandate yet.'});const has=!!store('fisherySave');$('btnContinue').disabled=!has}
+
+/* ================= SAVE / LOAD ================= */
+function saveGame(silent){if(!G||gameOver)return;try{const s={...G,fleets:undefined,world:{hab:Array.from(G.world.hab),mpa:Array.from(G.world.mpa),restored:Array.from(G.world.restored),pressure:Array.from(G.world.pressure),tileK:G.world.tileK.map(a=>Array.from(a)),dens:G.world.dens.map(a=>Array.from(a).map(v=>Math.round(v*100)/100))}};store('fisherySave',s);if(!silent){toast('Game saved. Continue any time from the title screen.','good');AudioSys.sfx('coin')}renderBest()}catch(e){if(!silent)toast('Saving unavailable in this browser.','warn')}}
+function loadGame(){const s=store('fisherySave');if(!s)return;try{s.world={hab:new Uint8Array(s.world.hab),mpa:new Uint8Array(s.world.mpa),restored:new Uint8Array(s.world.restored),pressure:new Float32Array(s.world.pressure),tileK:s.world.tileK.map(a=>new Float32Array(a)),dens:s.world.dens.map(a=>new Float32Array(a))};startGame(s.scenario,s);toast('Saved mandate restored — Year '+s.year+', '+MONTHS[s.month]+'.','good')}catch(e){toast('Saved game was corrupted and cleared.','bad');delStore('fisherySave');renderBest()}}
+
+/* ================= INPUT ================= */
+function canvasTile(e){const r=mapC.getBoundingClientRect();const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left,cy=(e.touches?e.touches[0].clientY:e.clientY)-r.top;const x=Math.floor(cx/r.width*W),y=Math.floor(cy/r.height*H);if(x<0||y<0||x>=W||y>=H)return-1;return y*W+x}
+function applyTool(i,fromDrag){if(!G||i<0)return;const hab=G.world.hab[i];selectedTile=i;selectedTileInfo(i);AudioSys.init();
+ if(tool==='inspect'){G.tut.inspect=true;AudioSys.sfx('click')}
+ else if(tool==='mpa'){if(hab===4){if(!fromDrag)toast('The port cannot be protected — boats need a harbour.','warn');return}
+  if(!G.world.mpa[i]){if(mpaCoverage()>=.35){if(!fromDrag)toast('MPA cap reached (35%). Unprotect a tile first — the fleet needs grounds too.','warn');return}G.world.mpa[i]=1;G.stats.mpasMade++;G.tut.mpa=true;AudioSys.sfx('good');if(settings.particles){const cw=MW/W,ch=MH/H;for(let k=0;k<10;k++)particles.push({x:(i%W+.5)*cw,y:(Math.floor(i/W)+.5)*ch,vx:rand(-1.4,1.4),vy:rand(-1.6,0),life:1,color:'#22d3ee',r:rand(1,2.6)})}}
+  else G.world.mpa[i]=0;checkMilestones()}
+ else if(tool==='restore'){if(hab===4||G.world.restored[i])return;if(G.treasury<45){if(!fromDrag)toast('Restoration costs $45k per tile.','warn');return}G.treasury-=45;G.world.restored[i]=1;G.habitat=clamp(G.habitat+.006,0,1);AudioSys.sfx('good');if(!fromDrag)toast('Habitat restored — carrying capacity +35% on this tile.','good')}
+ else if(tool==='survey'){if(hab===4)return;if(G.treasury<15){if(!fromDrag)toast('A tile survey costs $15k.','warn');return}if(fromDrag)return;G.treasury-=15;G.science+=6;G.stats.surveys++;toast('Survey: dense '+SPECIES.reduce((a,sp,si)=>G.world.dens[si][i]>G.world.dens[SPECIES.indexOf(a)][i]?sp:a,SPECIES[0]).short+' here. +6 science.','good');AudioSys.sfx('ping')}
+ tutorialRender();updatePanels()}
+mapC.addEventListener('pointerdown',e=>{painting=true;mapC.setPointerCapture(e.pointerId);applyTool(canvasTile(e),false)});
+mapC.addEventListener('pointermove',e=>{if(painting&&(tool==='mpa'))applyTool(canvasTile(e),true)});
+addEventListener('pointerup',()=>painting=false);
+function setTool(t){tool=t;document.querySelectorAll('.toolBtn').forEach(b=>b.classList.toggle('tool-active',b.dataset.tool===t))}
+function syncPauseBtn(){$('btnPause').querySelector('span').textContent=paused?'Resume':'Pause';$('btnPause').innerHTML=`<i data-lucide="${paused?'play':'pause'}" class="w-4 h-4"></i><span>${paused?'Resume':'Pause'}</span>`;if(window.lucide)lucide.createIcons()}
+function setPaused(v){if(!G||gameOver)return;paused=v;syncPauseBtn();if(paused)showPauseStats()}
+function showPauseStats(){if(!G)return;$('pauseStats').innerHTML=`<b class="text-cyan-300">${SCENARIOS[G.scenario].name}</b> · Year ${G.year}, ${MONTHS[G.month]}<br>Treasury ${fmt$(G.treasury)} · Ecology ${G.scores.ecology} · Approval ${Math.round(G.approval)}%<br>Total catch ${Math.round(G.stats.totalCatch)}t · Milestones ${Object.keys(G.milestones).length}/${MILESTONES.length}`;$('pauseModal').classList.remove('hidden')}
+
+/* ================= WIRING ================= */
+document.querySelectorAll('.scenario-card').forEach(c=>c.addEventListener('click',()=>{selectedScenario=c.dataset.scenario;document.querySelectorAll('.scenario-card').forEach(x=>x.classList.toggle('scenario-selected',x===c));AudioSys.init();AudioSys.sfx('click')}));
+$('btnStart').addEventListener('click',()=>startGame(selectedScenario));
+$('btnContinue').addEventListener('click',loadGame);
+$('btnTitleHelp').addEventListener('click',()=>$('helpModal').classList.remove('hidden'));
+$('btnTitleSettings').addEventListener('click',()=>$('settingsModal').classList.remove('hidden'));
+document.querySelectorAll('.closeHelp').forEach(b=>b.addEventListener('click',()=>$('helpModal').classList.add('hidden')));
+document.querySelectorAll('.closeSettings').forEach(b=>b.addEventListener('click',()=>$('settingsModal').classList.add('hidden')));
+$('btnHelpTop').addEventListener('click',()=>$('helpModal').classList.remove('hidden'));
+$('btnSettingsTop').addEventListener('click',()=>$('settingsModal').classList.remove('hidden'));
+$('btnPause').addEventListener('click',()=>{if(decisionOpen)return;setPaused(!paused);if(paused)showPauseStats();else $('pauseModal').classList.add('hidden')});
+$('btnStep').addEventListener('click',()=>{if(G&&!gameOver){paused=true;syncPauseBtn();tickMonth()}});
+$('btnSave').addEventListener('click',()=>saveGame(false));
+$('btnResume').addEventListener('click',()=>{$('pauseModal').classList.add('hidden');setPaused(false)});
+$('btnPauseSave').addEventListener('click',()=>saveGame(false));
+$('btnPauseSettings').addEventListener('click',()=>$('settingsModal').classList.remove('hidden'));
+$('btnRestart').addEventListener('click',()=>{$('pauseModal').classList.add('hidden');startGame(G.scenario)});
+$('btnQuitTitle').addEventListener('click',()=>location.reload());
+$('btnEndRestart').addEventListener('click',()=>{$('endModal').classList.add('hidden');startGame(selectedScenario)});
+$('btnEndTitle').addEventListener('click',()=>location.reload());
+document.querySelectorAll('.speedBtn').forEach(b=>b.addEventListener('click',()=>{speed=+b.dataset.speed;document.querySelectorAll('.speedBtn').forEach(x=>x.classList.toggle('seg-active',x===b));AudioSys.sfx('click')}));
+document.querySelectorAll('.toolBtn').forEach(b=>b.addEventListener('click',()=>{setTool(b.dataset.tool);AudioSys.sfx('click')}));
+document.querySelectorAll('.layerBtn').forEach(b=>b.addEventListener('click',()=>{layer=b.dataset.layer;document.querySelectorAll('.layerBtn').forEach(x=>x.classList.toggle('seg-active',x===b))}));
+document.querySelectorAll('.chartBtn').forEach(b=>b.addEventListener('click',()=>{chartMode=b.dataset.chart;document.querySelectorAll('.chartBtn').forEach(x=>x.classList.toggle('tab-active',x===b));drawChart()}));
+$('enforcement').addEventListener('input',e=>{G.enforcement=+e.target.value;updatePanels()});
+$('subsidy').addEventListener('input',e=>{G.subsidy=+e.target.value;updatePanels()});
+$('licence').addEventListener('input',e=>{G.licence=+e.target.value;updatePanels()});
+$('closureSwitch').addEventListener('click',()=>{G.closure=!G.closure;$('closureSwitch').classList.toggle('on',G.closure);AudioSys.sfx('click');logEvent('Spring spawning closure '+(G.closure?'enabled — recruitment protected, spring landings sacrificed.':'lifted — spring fishing resumes at recruitment risk.'),'warn')});
+$('actPatrol').addEventListener('click',doPatrol);$('actClosure').addEventListener('click',doEmergencyClosure);$('actSurveyAll').addEventListener('click',doSurveyAll);$('actFestival').addEventListener('click',doFestival);
+$('btnClearLog').addEventListener('click',()=>{G.log=[];renderLog()});
+/* settings */
+function syncSettingsUI(){$('setVolume').value=settings.volume*100;$('volVal').textContent=Math.round(settings.volume*100)+'%';$('setMute').classList.toggle('on',settings.muted);$('setAmbient').classList.toggle('on',settings.ambient);$('setParticles').classList.toggle('on',settings.particles);$('setAutosave').classList.toggle('on',settings.autosave);$('btnMute').innerHTML=`<i data-lucide="${settings.muted?'volume-x':'volume-2'}" class="w-4 h-4"></i>`;if(window.lucide)lucide.createIcons()}
+$('setVolume').addEventListener('input',e=>{settings.volume=+e.target.value/100;saveSettings();AudioSys.init();AudioSys.apply();syncSettingsUI()});
+function bindSwitch(id,key,after){$(id).addEventListener('click',()=>{settings[key]=!settings[key];saveSettings();AudioSys.init();AudioSys.apply();syncSettingsUI();if(after)after()})}
+bindSwitch('setMute','muted');bindSwitch('setAmbient','ambient');bindSwitch('setParticles','particles');bindSwitch('setAutosave','autosave');
+$('btnMute').addEventListener('click',()=>{settings.muted=!settings.muted;saveSettings();AudioSys.init();AudioSys.apply();syncSettingsUI()});
+$('btnResetMeta').addEventListener('click',()=>{delStore('fisherySave');delStore('fisheryBest');renderBest();toast('Saved game and records cleared.','warn')});
+addEventListener('keydown',e=>{if(!$('gameMain')||$('gameMain').classList.contains('hidden'))return;if(e.code==='Space'){e.preventDefault();if(!decisionOpen){setPaused(!paused);if(paused)showPauseStats();else $('pauseModal').classList.add('hidden')}}else if(['1','2','3','4'].includes(e.key)){const s=[.5,1,2,4][+e.key-1];speed=s;document.querySelectorAll('.speedBtn').forEach(x=>x.classList.toggle('seg-active',+x.dataset.speed===s))}else if(e.key==='n'||e.key==='N'){if(G&&!gameOver){paused=true;syncPauseBtn();tickMonth()}}else if(e.key==='i'||e.key==='I')setTool('inspect');else if(e.key==='m'||e.key==='M')setTool('mpa');else if(e.key==='r'||e.key==='R')setTool('restore');else if(e.key==='s'||e.key==='S')setTool('survey');else if(e.key==='h'||e.key==='H')$('helpModal').classList.toggle('hidden');else if(e.key==='Escape'){if(!$('helpModal').classList.contains('hidden'))$('helpModal').classList.add('hidden');else if(!$('settingsModal').classList.contains('hidden'))$('settingsModal').classList.add('hidden');else if(G&&!gameOver){setPaused(true);showPauseStats()}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&G&&!paused&&!gameOver){setPaused(true);showPauseStats();toast('Auto-paused while tab was hidden.','warn')}});
+addEventListener('resize',()=>{if(G){drawChart()}});
+
+/* ================= LOOP ================= */
+function loop(ts){requestAnimationFrame(loop);const dt=Math.min((ts-lastTs)/1000,.05);lastTs=ts;if(!G||$('gameMain').classList.contains('hidden'))return;renderMap(ts);if(!paused&&!gameOver&&!decisionOpen){monthAcc+=dt*1000*speed;$('monthProgress').style.width=(monthAcc/MONTH_LEN*100)+'%';if(monthAcc>=MONTH_LEN){monthAcc=0;tickMonth()}}updateBoats(dt)}
+buildQuotaControls();buildResearch();buildStaticPanels();syncSettingsUI();renderBest();requestAnimationFrame(loop);
+if(window.lucide)lucide.createIcons();
+</script>
+</body>
+</html>

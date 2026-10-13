@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spiking Neural Lab — Izhikevich Network Simulator</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  html,body{background:#050816;color:#e5eefc;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+  .glass{background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.028));border:1px solid rgba(148,197,255,.16);box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  .glass2{background:rgba(8,15,35,.78);border:1px solid rgba(148,197,255,.14)}
+  .btn{transition:.18s;cursor:pointer}.btn:hover{transform:translateY(-1px);filter:brightness(1.12)}.btn:active{transform:translateY(0) scale(.98)}
+  .btn:disabled{opacity:.38;cursor:not-allowed;transform:none}
+  .tool.active,.diff.active,.speed.active,.scenario.active{outline:2px solid #22d3ee;background:rgba(34,211,238,.18)!important;color:#fff!important}
+  input[type=range]{accent-color:#22d3ee}
+  select,input[type=number]{color-scheme:dark}
+  .scrollthin::-webkit-scrollbar{width:6px}.scrollthin::-webkit-scrollbar-thumb{background:#1e4b6b;border-radius:99px}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.0)}50%{box-shadow:0 0 26px 4px rgba(248,113,113,.45)}}
+  .alarm{animation:pulseGlow 1s infinite}
+  @keyframes floatUp{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-28px)}}
+  @keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
+  .shake{animation:shake .45s}
+  .fadein{animation:fi .35s ease both}@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .bar{height:8px;border-radius:99px;background:#12233d;overflow:hidden}.bar>div{height:100%;border-radius:99px;transition:width .35s ease}
+  .kbd{font:11px ui-monospace,monospace;background:#0b1b31;border:1px solid #2b587d;border-bottom-width:2px;border-radius:5px;padding:1px 5px}
+  canvas{display:block}
+</style>
+</head>
+<body class="min-h-screen overflow-x-hidden selection:bg-cyan-500/40">
+
+<!-- ================= TITLE SCREEN ================= -->
+<section id="titleScreen" class="min-h-screen relative px-4 py-6 sm:px-8">
+  <div class="absolute inset-0 pointer-events-none opacity-60" style="background:radial-gradient(700px 380px at 15% 0%,rgba(34,211,238,.18),transparent 60%),radial-gradient(700px 420px at 90% 10%,rgba(217,70,239,.14),transparent 60%),radial-gradient(900px 600px at 50% 110%,rgba(59,130,246,.12),transparent 60%)"></div>
+  <div class="relative max-w-7xl mx-auto">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-400/10 border border-cyan-300/30 grid place-items-center">
+          <svg width="30" height="30" viewBox="0 0 48 48" fill="none"><circle cx="12" cy="24" r="4" fill="#22d3ee"/><circle cx="30" cy="10" r="4" fill="#e879f9"/><circle cx="36" cy="30" r="4" fill="#facc15"/><circle cx="22" cy="38" r="3" fill="#34d399"/><path d="M15 22 27 13M16 25l17 4M14 27l6 8M28 14l6 12" stroke="#7dd3fc" stroke-width="1.6" opacity=".8"/></svg>
+        </div>
+        <div><div class="font-black tracking-[.25em] text-cyan-300 text-xs">NEUROFORGE LABS</div><div class="text-xs text-slate-400">Interactive computational neuroscience</div></div>
+      </div>
+      <div class="flex gap-2">
+        <button id="titleHelpBtn" class="btn glass rounded-xl px-4 py-2 text-sm">How to Play</button>
+        <button id="titleSettingsBtn" class="btn glass rounded-xl px-4 py-2 text-sm">⚙ Settings</button>
+      </div>
+    </header>
+
+    <div class="text-center mt-10 mb-8 fadein">
+      <h1 class="text-4xl sm:text-6xl font-black tracking-tight">SPIKING <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-sky-400 to-fuchsia-400">NEURAL LAB</span></h1>
+      <p class="text-slate-300 max-w-2xl mx-auto mt-3 text-sm sm:text-base">Build living circuits from Izhikevich neurons. Stimulate, wire, and teach a network with STDP — then keep it rhythmic and intelligent without tipping it into seizure or silence.</p>
+      <div class="flex flex-wrap justify-center gap-2 mt-4 text-[11px] text-slate-300">
+        <span class="glass rounded-full px-3 py-1">🧠 Izhikevich dynamics</span><span class="glass rounded-full px-3 py-1">🔗 STDP plasticity</span><span class="glass rounded-full px-3 py-1">🕸 3 topologies</span><span class="glass rounded-full px-3 py-1">📊 Raster + spectra</span><span class="glass rounded-full px-3 py-1">⚠ Seizure / silence states</span>
+      </div>
+    </div>
+
+    <div class="flex items-end justify-between flex-wrap gap-2 mb-3">
+      <h2 class="font-bold text-lg">Select Mission</h2>
+      <div id="progressSummary" class="text-xs text-slate-400"></div>
+    </div>
+    <div id="scenarioGrid" class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3"></div>
+
+    <div class="grid lg:grid-cols-[1fr_auto] gap-4 items-center mt-6 glass rounded-3xl p-4 sm:p-5">
+      <div>
+        <div class="text-xs tracking-widest text-slate-400 mb-2">DIFFICULTY / LAB CONDITIONS</div>
+        <div class="flex flex-wrap gap-2" id="difficultyRow">
+          <button data-diff="calm" class="diff btn glass2 rounded-xl px-4 py-2 text-sm">🌿 Calm <span class="text-slate-400 text-xs">low noise · forgiving</span></button>
+          <button data-diff="standard" class="diff btn glass2 rounded-xl px-4 py-2 text-sm">⚖ Standard <span class="text-slate-400 text-xs">balanced</span></button>
+          <button data-diff="volatile" class="diff btn glass2 rounded-xl px-4 py-2 text-sm">🌩 Volatile <span class="text-slate-400 text-xs">drift + noise · harsh</span></button>
+        </div>
+        <p id="diffDesc" class="text-xs text-slate-400 mt-2"></p>
+      </div>
+      <div class="flex flex-col sm:flex-row lg:flex-col gap-2 min-w-52">
+        <button id="launchBtn" class="btn rounded-2xl px-8 py-4 font-black text-slate-950 bg-gradient-to-r from-cyan-300 to-fuchsia-400 shadow-lg shadow-cyan-500/20">▶ ENTER THE LAB</button>
+        <button id="resetProgressBtn" class="btn glass rounded-xl px-4 py-2 text-xs text-slate-300">Reset saved progress</button>
+      </div>
+    </div>
+    <p class="text-center text-[11px] text-slate-500 mt-5">Tip: every mission is won with the same living network — activity changes synapses, synapses change rhythm, rhythm changes stability, stability changes your score.</p>
+  </div>
+</section>
+
+<!-- ================= MAIN APP ================= -->
+<main id="app" class="hidden min-h-screen flex flex-col">
+  <header class="sticky top-0 z-30 backdrop-blur bg-[#050816]/85 border-b border-cyan-300/10 px-3 py-2">
+    <div class="flex flex-wrap items-center gap-2">
+      <button id="backTitleBtn" class="btn glass rounded-lg px-3 py-1.5 text-xs">← Title</button>
+      <div class="mr-1"><div id="hudMission" class="font-black text-sm leading-none">Mission</div><div id="hudClock" class="text-[11px] text-slate-400">t = 0.0 s · 1×</div></div>
+      <span id="hudState" class="text-[11px] font-bold rounded-full px-2.5 py-1 bg-emerald-400/15 text-emerald-300 border border-emerald-300/20">STABLE</span>
+      <span class="text-[11px] glass rounded-full px-2.5 py-1">Rate <b id="hudRate" class="text-cyan-300">0 Hz</b></span>
+      <span class="text-[11px] glass rounded-full px-2.5 py-1">Sync <b id="hudSync" class="text-fuchsia-300">0.00</b></span>
+      <div class="flex items-center gap-2 min-w-44 flex-1 max-w-xs"><span class="text-[11px] text-slate-400 whitespace-nowrap">Integrity</span><div class="bar flex-1"><div id="hudIntegrity" style="width:100%;background:linear-gradient(90deg,#34d399,#22d3ee)"></div></div><b id="hudIntegrityTxt" class="text-xs">100</b></div>
+      <div class="flex items-center gap-1 ml-auto">
+        <button data-speed="0.5" class="speed btn glass rounded-lg px-2.5 py-1.5 text-xs">0.5×</button>
+        <button data-speed="1" class="speed btn glass rounded-lg px-2.5 py-1.5 text-xs">1×</button>
+        <button data-speed="2" class="speed btn glass rounded-lg px-2.5 py-1.5 text-xs">2×</button>
+        <button data-speed="4" class="speed btn glass rounded-lg px-2.5 py-1.5 text-xs">4×</button>
+        <button id="pauseBtn" class="btn rounded-lg px-3 py-1.5 text-xs font-bold bg-amber-400 text-slate-950">⏸ Pause</button>
+        <button id="muteBtn" class="btn glass rounded-lg px-2.5 py-1.5 text-xs">🔊</button>
+        <button id="helpBtn" class="btn glass rounded-lg px-2.5 py-1.5 text-xs">? Help</button>
+        <button id="settingsBtn" class="btn glass rounded-lg px-2.5 py-1.5 text-xs">⚙</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex-1 grid xl:grid-cols-[300px_minmax(0,1fr)_320px] lg:grid-cols-[280px_minmax(0,1fr)] gap-3 p-3 max-w-[1800px] w-full mx-auto">
+    <!-- LEFT -->
+    <aside class="space-y-3 order-2 lg:order-1">
+      <section class="glass rounded-3xl p-4">
+        <div class="flex justify-between items-start gap-2"><h3 class="font-black text-sm">🎯 Mission Objective</h3><span id="taskScore" class="text-[11px] text-amber-300 font-bold"></span></div>
+        <p id="taskInstruction" class="text-xs text-slate-300 leading-relaxed mt-1.5"></p>
+        <div class="bar mt-3"><div id="taskProgress" style="width:0%;background:linear-gradient(90deg,#facc15,#f472b6)"></div></div>
+        <div id="taskDetail" class="text-[11px] text-slate-400 mt-1.5"></div>
+        <div id="taskActions" class="flex flex-wrap gap-1.5 mt-3"></div>
+      </section>
+
+      <section class="glass rounded-3xl p-4">
+        <h3 class="font-black text-sm mb-2">🧰 Tools <span class="text-slate-500 font-normal text-[11px]">click canvas · keys 1–5</span></h3>
+        <div class="grid grid-cols-3 gap-1.5" id="toolGrid">
+          <button data-tool="inspect" class="tool btn glass2 rounded-xl px-2 py-2 text-xs">🔍<br>Inspect</button>
+          <button data-tool="stim" class="tool btn glass2 rounded-xl px-2 py-2 text-xs">⚡<br>Stimulate</button>
+          <button data-tool="inhibit" class="tool btn glass2 rounded-xl px-2 py-2 text-xs">🧊<br>Inhibit</button>
+          <button data-tool="electrode" class="tool btn glass2 rounded-xl px-2 py-2 text-xs">📍<br>Electrode</button>
+          <button data-tool="lesion" class="tool btn glass2 rounded-xl px-2 py-2 text-xs">✂<br>Lesion</button>
+          <button data-tool="erase" class="tool btn glass2 rounded-xl px-2 py-2 text-xs">🧹<br>Clear FX</button>
+        </div>
+        <label class="text-[11px] text-slate-400 flex justify-between mt-3"><span>Stimulus strength</span><b id="stimVal" class="text-cyan-300">18</b></label>
+        <input id="stimStrength" type="range" min="4" max="40" value="18" class="w-full">
+        <div class="flex gap-1.5 mt-2">
+          <button id="globalStimBtn" class="btn flex-1 rounded-xl bg-cyan-500/20 border border-cyan-300/30 px-2 py-2 text-xs font-bold">⚡ Pulse all (Space+S)</button>
+          <button id="calmBtn" class="btn flex-1 rounded-xl bg-indigo-500/20 border border-indigo-300/30 px-2 py-2 text-xs font-bold">🧊 Calm wave</button>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-2">Electrodes pulse the clicked neuron at 2 Hz. Lesioned neurons can be clicked again to restore them.</p>
+      </section>
+
+      <section class="glass rounded-3xl p-4 space-y-3">
+        <h3 class="font-black text-sm">🕸 Network & Plasticity</h3>
+        <div><label class="text-[11px] text-slate-400">Topology</label>
+          <select id="topologySel" class="w-full mt-1 bg-[#0a1730] border border-cyan-300/20 rounded-xl px-2 py-2 text-sm">
+            <option value="modular">Modular (4 clusters)</option><option value="smallworld">Small-world</option><option value="random">Random</option><option value="ring">Ring lattice</option>
+          </select></div>
+        <div><label class="text-[11px] text-slate-400 flex justify-between"><span>Neurons</span><b id="nVal">84</b></label><input id="nSlider" type="range" min="40" max="140" step="4" value="84" class="w-full"></div>
+        <div><label class="text-[11px] text-slate-400 flex justify-between"><span>Inhibitory fraction (E/I balance)</span><b id="eiVal">22%</b></label><input id="eiSlider" type="range" min="8" max="45" value="22" class="w-full"><p class="text-[10px] text-slate-500">More inhibition calms synchrony but risks silence; less invites seizures.</p></div>
+        <div><label class="text-[11px] text-slate-400 flex justify-between"><span>Baseline drive</span><b id="driveVal">2.0</b></label><input id="driveSlider" type="range" min="0" max="8" step="0.1" value="2" class="w-full"></div>
+        <div><label class="text-[11px] text-slate-400 flex justify-between"><span>Noise</span><b id="noiseVal">1.2</b></label><input id="noiseSlider" type="range" min="0" max="5" step="0.1" value="1.2" class="w-full"></div>
+        <div class="flex items-center justify-between gap-2"><label class="text-xs">STDP learning</label><button id="stdpToggle" class="btn rounded-lg px-3 py-1 text-xs font-bold bg-emerald-400 text-slate-950">ON</button></div>
+        <div><label class="text-[11px] text-slate-400 flex justify-between"><span>Learning rate</span><b id="lrVal">0.35</b></label><input id="lrSlider" type="range" min="0" max="1" step="0.05" value="0.35" class="w-full"></div>
+        <div><label class="text-[11px] text-slate-400 flex justify-between"><span>Synaptic decay /s</span><b id="decayVal">0.4%</b></label><input id="decaySlider" type="range" min="0" max="3" step="0.1" value="0.4" class="w-full"></div>
+        <button id="rebuildBtn" class="btn w-full rounded-xl bg-fuchsia-500/20 border border-fuchsia-300/30 px-3 py-2 text-xs font-bold">↻ Rebuild network (same mission)</button>
+      </section>
+    </aside>
+
+    <!-- CENTER -->
+    <section class="space-y-3 order-1 lg:order-2 min-w-0">
+      <div id="canvasWrap" class="glass rounded-3xl overflow-hidden relative">
+        <canvas id="mainCanvas" class="w-full cursor-crosshair touch-none" style="height:min(58vh,560px)"></canvas>
+        <div id="alertBanner" class="hidden absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs font-black bg-red-500 text-white alarm">⚠ SEIZURE — runaway synchrony!</div>
+        <div id="floatLayer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+        <div class="absolute bottom-2 left-2 flex flex-wrap gap-1.5 text-[10px]">
+          <span class="glass2 rounded-full px-2 py-1"><span class="text-cyan-300">●</span> RS excitatory</span>
+          <span class="glass2 rounded-full px-2 py-1"><span class="text-fuchsia-300">◆</span> FS inhibitory</span>
+          <span class="glass2 rounded-full px-2 py-1"><span class="text-amber-300">◎</span> electrode</span>
+          <span class="glass2 rounded-full px-2 py-1"><span class="text-slate-400">✕</span> lesioned</span>
+          <span class="glass2 rounded-full px-2 py-1">brightness = membrane voltage</span>
+        </div>
+        <div id="missionTag" class="absolute top-2 right-2 glass2 rounded-full px-3 py-1 text-[10px] text-slate-300"></div>
+      </div>
+
+      <div id="tutorialCard" class="hidden glass rounded-3xl p-4 border-cyan-300/40 fadein">
+        <div class="flex gap-3"><div class="text-2xl">🧑‍🏫</div><div class="flex-1"><b id="tutTitle" class="text-sm"></b><p id="tutText" class="text-xs text-slate-300 mt-1 leading-relaxed"></p></div></div>
+        <div class="flex justify-between items-center mt-3"><span id="tutStep" class="text-[11px] text-slate-500"></span><div class="flex gap-2"><button id="tutSkip" class="btn glass rounded-lg px-3 py-1.5 text-xs">Skip</button><button id="tutNext" class="btn rounded-lg px-4 py-1.5 text-xs font-bold bg-cyan-400 text-slate-950">Next →</button></div></div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div class="glass rounded-3xl p-3"><div class="flex justify-between"><b class="text-xs">Raster plot</b><span class="text-[10px] text-slate-500">each dot = 1 spike · last 8 s</span></div><canvas id="rasterCanvas" class="w-full mt-1" height="150"></canvas></div>
+        <div class="glass rounded-3xl p-3"><div class="flex justify-between"><b class="text-xs">Population firing rate</b><span id="rateNow" class="text-[10px] text-cyan-300"></span></div><canvas id="rateCanvas" class="w-full mt-1" height="150"></canvas></div>
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <aside class="space-y-3 order-3">
+      <section class="glass rounded-3xl p-4">
+        <h3 class="font-black text-sm">🔬 Selected neuron <span id="selId" class="text-cyan-300"></span></h3>
+        <div id="selInfo" class="text-[11px] text-slate-400 mt-1">Click a neuron with Inspect.</div>
+        <canvas id="traceCanvas" class="w-full mt-2" height="86"></canvas>
+        <div class="flex gap-1.5 mt-2"><button id="stimSelBtn" class="btn flex-1 glass2 rounded-lg py-1.5 text-[11px]">⚡ Stim selected</button><button id="followBtn" class="btn flex-1 glass2 rounded-lg py-1.5 text-[11px]">◎ Electrode on selected</button></div>
+      </section>
+
+      <section class="glass rounded-3xl p-4">
+        <h3 class="font-black text-sm mb-2">📈 Network state</h3>
+        <div id="bandBars" class="space-y-1.5 text-[10px]"></div>
+        <div class="grid grid-cols-2 gap-2 mt-3 text-center">
+          <div class="glass2 rounded-xl p-2"><div class="text-[10px] text-slate-500">BURSTS</div><b id="statBursts">0</b></div>
+          <div class="glass2 rounded-xl p-2"><div class="text-[10px] text-slate-500">TOTAL SPIKES</div><b id="statSpikes">0</b></div>
+          <div class="glass2 rounded-xl p-2"><div class="text-[10px] text-slate-500">Δ SYNAPTIC</div><b id="statSyn">0</b></div>
+          <div class="glass2 rounded-xl p-2"><div class="text-[10px] text-slate-500">ACTIVE</div><b id="statActive">0%</b></div>
+        </div>
+        <canvas id="specCanvas" class="w-full mt-3" height="70"></canvas>
+        <p class="text-[10px] text-slate-500">Oscillation spectrum from the live population-rate signal (Goertzel bands). Gamma surges usually precede seizures; a clean beta/theta peak helps CPG rhythm.</p>
+      </section>
+
+      <section class="glass rounded-3xl p-4">
+        <h3 class="font-black text-sm mb-2">📜 Lab log</h3>
+        <ul id="eventLog" class="space-y-1.5 text-[11px] text-slate-300 max-h-52 overflow-auto scrollthin pr-1"></ul>
+      </section>
+
+      <section class="glass rounded-3xl p-4">
+        <h3 class="font-black text-sm">⌨ Shortcuts</h3>
+        <p class="text-[11px] text-slate-400 leading-6"><span class="kbd">Space</span> pause · <span class="kbd">1–5</span> tools · <span class="kbd">S</span> pulse · <span class="kbd">C</span> calm · <span class="kbd">+</span>/<span class="kbd">−</span> speed · <span class="kbd">M</span> mute · <span class="kbd">H</span> help</p>
+        <button id="restartBtn" class="btn w-full mt-2 rounded-xl bg-red-500/15 border border-red-300/30 px-3 py-2 text-xs font-bold">↺ Restart mission</button>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<!-- ================= MODALS ================= -->
+<div id="helpModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 overflow-auto">
+  <div class="max-w-3xl mx-auto glass rounded-3xl p-6 mt-8 fadein">
+    <div class="flex justify-between"><h2 class="text-xl font-black">How to Play — Spiking Neural Lab</h2><button class="closeModal btn glass rounded-lg px-3">✕</button></div>
+    <div class="grid sm:grid-cols-2 gap-4 text-sm text-slate-300 mt-4 leading-relaxed">
+      <div><b class="text-cyan-300">The living circuit</b><p>Each dot is an Izhikevich neuron (v: membrane voltage, u: recovery). Excitatory RS cells excite, FS inhibitory cells suppress. Spikes travel along synapses; brightness shows voltage.</p><p class="mt-2"><b class="text-cyan-300">STDP plasticity</b><br>“Cells that fire together wire together.” If a presynaptic cell fires just before its target, that synapse strengthens; reverse order weakens it. Teach patterns by co-stimulating groups, then test with a partial cue.</p></div>
+      <div><b class="text-fuchsia-300">Balance or break</b><p>Healthy networks fire ~5–30 Hz with moderate synchrony. Too much drive / too little inhibition → <b class="text-red-300">seizure</b>. Too much inhibition / decay → <b class="text-sky-300">silence</b>. Both drain Lab Integrity — at 0 the experiment fails.</p><p class="mt-2"><b class="text-fuchsia-300">Your levers interact</b><br>Drive & noise feed activity → activity drives STDP → STDP reshapes rhythm → topology decides where rhythm can travel. Change one, watch them all.</p></div>
+      <div><b class="text-amber-300">Tools</b><p>Inspect (trace a cell), Stimulate ⚡, Inhibit 🧊, place pulsing Electrodes 📍, Lesion ✂ (click again to restore). Sliders retune E/I balance live — no rebuild needed.</p></div>
+      <div><b class="text-emerald-300">Missions</b><p>1 Awaken → keep a stable firing band. 2 Pattern Memory → teach & recall. 3 CPG → alternating module rhythm. 4 Classifier Gauntlet (capstone) → train X/Y decisions, pass 4 of 5 blind trials. Sandbox is endless.</p></div>
+    </div>
+    <button class="closeModal btn mt-5 rounded-xl bg-cyan-400 text-slate-950 font-bold px-5 py-2.5">Got it</button>
+  </div>
+</div>
+
+<div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 overflow-auto">
+  <div class="max-w-md mx-auto glass rounded-3xl p-6 mt-16 fadein">
+    <div class="flex justify-between"><h2 class="font-black text-lg">⚙ Settings</h2><button class="closeModal btn glass rounded-lg px-3">✕</button></div>
+    <label class="text-xs text-slate-400 flex justify-between mt-4"><span>Volume</span><b id="volVal">70%</b></label><input id="volSlider" type="range" min="0" max="100" value="70" class="w-full">
+    <label class="flex justify-between text-sm mt-4"><span>Mute audio</span><input id="muteChk" type="checkbox" class="w-5 h-5"></label>
+    <label class="flex justify-between text-sm mt-3"><span>Show synapse lines</span><input id="connChk" type="checkbox" checked class="w-5 h-5"></label>
+    <label class="flex justify-between text-sm mt-3"><span>Spike particles</span><input id="partChk" type="checkbox" checked class="w-5 h-5"></label>
+    <label class="flex justify-between text-sm mt-3"><span>Reduce flashing</span><input id="flashChk" type="checkbox" class="w-5 h-5"></label>
+    <p class="text-[11px] text-slate-500 mt-4">Settings, unlocked missions and best scores persist in localStorage on this device.</p>
+    <button class="closeModal btn mt-4 rounded-xl bg-cyan-400 text-slate-950 font-bold px-5 py-2.5 w-full">Done</button>
+  </div>
+</div>
+
+<div id="pauseModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4">
+  <div class="max-w-sm mx-auto glass rounded-3xl p-6 mt-24 text-center fadein">
+    <div class="text-4xl">⏸</div><h2 class="font-black text-xl mt-2">Paused</h2><p class="text-xs text-slate-400 mt-1">The network is frozen in time. Synapses, integrity and clocks are held.</p>
+    <div class="grid gap-2 mt-5"><button id="resumeBtn" class="btn rounded-xl bg-cyan-400 text-slate-950 font-bold py-2.5">▶ Resume</button><button id="pauseSettingsBtn" class="btn glass rounded-xl py-2.5 text-sm">⚙ Settings</button><button id="pauseRestartBtn" class="btn glass rounded-xl py-2.5 text-sm">↺ Restart mission</button><button id="pauseTitleBtn" class="btn glass rounded-xl py-2.5 text-sm">← Return to title</button></div>
+  </div>
+</div>
+
+<div id="endModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm p-4 overflow-auto">
+  <div class="max-w-lg mx-auto glass rounded-3xl p-6 mt-16 text-center fadein">
+    <div id="endIcon" class="text-5xl">🏆</div><h2 id="endTitle" class="font-black text-2xl mt-2">Mission complete</h2><p id="endText" class="text-sm text-slate-300 mt-2 leading-relaxed"></p>
+    <div id="endStats" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-5 text-center"></div>
+    <div class="flex flex-wrap justify-center gap-2 mt-6">
+      <button id="nextMissionBtn" class="btn rounded-xl bg-gradient-to-r from-cyan-300 to-fuchsia-400 text-slate-950 font-black px-5 py-2.5">Next mission →</button>
+      <button id="replayBtn" class="btn glass rounded-xl px-5 py-2.5">↺ Replay</button>
+      <button id="endTitleBtn" class="btn glass rounded-xl px-5 py-2.5">Title screen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ utilities ============ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let save={unlocked:["awaken","sandbox"],completed:{},best:{},settings:{vol:70,mute:false,conn:true,particles:true,flash:false},seenTutorial:false};
+try{const s=localStorage.getItem("spikingNeuralLab_v1");if(s){const p=JSON.parse(s);if(p&&typeof p==="object")save={...save,...p,settings:{...save.settings,...(p.settings||{})}}}}catch(e){}
+function persist(){try{localStorage.setItem("spikingNeuralLab_v1",JSON.stringify(save))}catch(e){}}
+function logEvent(txt,color){const li=document.createElement("li");li.innerHTML=`<span class="text-slate-500">${sim?fmtTime(sim.t):"—"}</span> <span style="color:${color||"#cbd5e1"}">${txt}</span>`;const ul=$("eventLog");if(ul){ul.prepend(li);while(ul.children.length>42)ul.lastChild.remove()}}
+const fmtTime=ms=>{const s=ms/1000;return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`};
+
+/* ============ audio ============ */
+const AudioSys={ctx:null,master:null,ambient:null,lastPop:0,
+ init(){if(this.ctx)return;try{this.ctx=new (window.AudioContext||window.webkitAudioContext)();this.master=this.ctx.createGain();this.master.connect(this.ctx.destination);this.applyVol();
+  const o1=this.ctx.createOscillator(),o2=this.ctx.createOscillator(),g=this.ctx.createGain(),f=this.ctx.createBiquadFilter();o1.frequency.value=54;o2.frequency.value=108.5;o1.type="sine";o2.type="triangle";f.type="lowpass";f.frequency.value=240;g.gain.value=.016;o1.connect(f);o2.connect(f);f.connect(g);g.connect(this.master);o1.start();o2.start();this.ambient={o1,o2,g};}catch(e){}},
+ applyVol(){if(this.master)this.master.gain.value=save.settings.mute?0:(save.settings.vol/100)*.9;const m=$("muteBtn");if(m)m.textContent=save.settings.mute?"🔇":"🔊"},
+ tone(freq,dur,type,vol,slide){if(!this.ctx||save.settings.mute)return;const t=this.ctx.currentTime,o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type||"sine";o.frequency.setValueAtTime(freq,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,slide),t+dur);g.gain.setValueAtTime(vol||.08,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+.02)},
+ pop(n){const now=performance.now();if(now-this.lastPop<70||!this.ctx)return;this.lastPop=now;this.tone(520+Math.random()*420+Math.min(400,n*18),.045,"triangle",.018+Math.min(.04,n*.004))},
+ stim(){this.tone(180,.16,"sawtooth",.05,720)},calm(){this.tone(420,.25,"sine",.05,140)},
+ success(){[523,659,784,1046].forEach((f,i)=>setTimeout(()=>this.tone(f,.22,"triangle",.09),i*110))},
+ fail(){[330,262,196,131].forEach((f,i)=>setTimeout(()=>this.tone(f,.3,"sawtooth",.07),i*140))},
+ alarm(){this.tone(880,.12,"square",.05,660)}
+};
+
+/* ============ mission definitions ============ */
+const MISSIONS=[
+ {id:"awaken",icon:"🌅",name:"1 · Awaken the Network",desc:"Learn stimulation & balance. Hold a healthy 5–30 Hz rhythm for 6 s without seizure or silence.",tag:"Tutorial mission"},
+ {id:"memory",icon:"🧩",name:"2 · Pattern Memory",desc:"Teach Pattern A with STDP co-stimulation, then recall the whole pattern from a half-strength cue.",tag:"Associative memory"},
+ {id:"cpg",icon:"🥁",name:"3 · Central Pattern Generator",desc:"Make modules A and B alternate in a steady rhythm — the circuit behind walking and breathing.",tag:"Rhythm generation"},
+ {id:"classifier",icon:"🏆",name:"4 · Classifier Gauntlet",desc:"CAPSTONE: train inputs X→P and Y→Q, then pass blind trials. Needs ≥4 of 5 correct.",tag:"Capstone"},
+ {id:"sandbox",icon:"🧪",name:"Sandbox · Free Lab",desc:"No win condition. Rewire topologies, lesion cells, place electrodes and chase (or dodge) seizures.",tag:"Endless"}
+];
+const DIFFS={calm:{name:"Calm",noise:.6,drain:.55,desc:"Calm: noise ×0.6, integrity drains slowly. Best first run."},standard:{name:"Standard",noise:1,drain:1,desc:"Standard: balanced noise and integrity pressure."},volatile:{name:"Volatile",noise:1.55,drain:1.45,desc:"Volatile: noise ×1.55, excitability slowly drifts, integrity drains fast. Expert labs only."}};
+let selectedMission="awaken",selectedDiff="standard";
+
+/* ============ simulation state ============ */
+let sim=null,running=false,paused=false,speed=1,currentTool="inspect",rafId=null,lastFrame=0,uiTimer=0;
+let particles=[],floaters=[],edgeFlashes=[];
+
+function neuronParams(type,rng){return type===0?{a:.02,b:.2,c:-65+15*rng()*rng(),d:8-6*rng()*rng()}:{a:.1,b:.2,c:-65,d:2}}
+
+function buildNetwork(){
+ const rng=mulberry32(sim.seed);
+ const N=sim.N,topo=sim.topology,inhFrac=sim.inhFrac;
+ sim.neurons=[];sim.out=[];sim.inEdges=[];sim.electrodes=[];particles=[];edgeFlashes=[];
+ const order=[...Array(N).keys()];for(let i=N-1;i>0;i--){const j=Math.floor(rng()*(i+1));[order[i],order[j]]=[order[j],order[i]]}
+ const inhSet=new Set(order.slice(0,Math.round(N*inhFrac)));
+ const centers=[[.27,.28],[.73,.28],[.27,.74],[.73,.74]];
+ for(let i=0;i<N;i++){
+   let x,y;const mod=i%4;
+   if(topo==="modular"){x=clamp(centers[mod][0]+(rng()+rng()-1)*.16,.04,.96);y=clamp(centers[mod][1]+(rng()+rng()-1)*.16,.05,.95)}
+   else if(topo==="ring"){const a=i/N*Math.PI*2;x=.5+Math.cos(a)*.36;y=.5+Math.sin(a)*.36}
+   else{x=.06+rng()*.88;y=.08+rng()*.84}
+   const type=inhSet.has(i)?1:0,p=neuronParams(type,rng);
+   sim.neurons.push({i,x,y,mod,type,...p,v:-65,u:p.b*-65,Isyn:0,ext:0,disabled:false,lastSpike:-1e9,spikeCount:0,glow:0});
+   sim.out.push([]);sim.inEdges.push([]);
+ }
+ const addEdge=(a,b,w)=>{if(a===b||sim.out[a].some(e=>e.to===b))return;const e={from:a,to:b,w};sim.out[a].push(e);sim.inEdges[b].push(e)};
+ const excList=sim.neurons.filter(n=>n.type===0).map(n=>n.i),all=[...Array(N).keys()];
+ for(let i=0;i<N;i++){
+   let targets=[];
+   if(topo==="ring"||topo==="smallworld"){for(let k=1;k<=5;k++){targets.push((i+k)%N,(i-k+N)%N)}if(topo==="smallworld")targets=targets.map(t=>rng()<.16?Math.floor(rng()*N):t)}
+   else if(topo==="modular"){for(let k=0;k<11;k++){targets.push(rng()<.8?sim.neurons.filter(n=>n.mod===sim.neurons[i].mod)[Math.floor(rng()*N/4)]?.i??Math.floor(rng()*N):Math.floor(rng()*N))}}
+   else{for(let k=0;k<11;k++)targets.push(Math.floor(rng()*N))}
+   targets.forEach(t=>{if(t==null)return;const w=sim.neurons[i].type===0?3+rng()*5:-(4+rng()*6);addEdge(i,t,w)});
+ }
+ // groups
+ const byMod=m=>[0,1,2,3].map(m=>sim.neurons.filter(n=>n.mod===m&&n.type===0).map(n=>n.i));
+ sim.groups={patternA:byMod[0].slice(0,12),patternB:byMod[1].slice(0,12),inputX:byMod[0].slice(2,12),inputY:byMod[1].slice(2,12),outputP:byMod[2].slice(0,10),outputQ:byMod[3].slice(0,10),modA:sim.neurons.filter(n=>n.mod===0).map(n=>n.i),modB:sim.neurons.filter(n=>n.mod===1).map(n=>n.i),modExcA:byMod[0],modExcB:byMod[1]};
+ // mission-guaranteed wiring so tasks are physically learnable
+ if(sim.mission==="memory")sim.groups.patternA.forEach(a=>sim.groups.patternA.forEach(b=>{if(a!==b&&rng()<.55)addEdge(a,b,2.2)}));
+ if(sim.mission==="cpg"){const inhA=sim.neurons.filter(n=>n.mod===0&&n.type===1).map(n=>n.i),inhB=sim.neurons.filter(n=>n.mod===1&&n.type===1).map(n=>n.i);
+   inhA.forEach(a=>byMod[1].forEach(b=>{if(rng()<.4)addEdge(a,b,-5)}));inhB.forEach(a=>byMod[0].forEach(b=>{if(rng()<.4)addEdge(a,b,-5)}));
+   byMod[0].forEach(a=>inhA.forEach(b=>{if(rng()<.3)addEdge(a,b,4)}));byMod[1].forEach(a=>inhB.forEach(b=>{if(rng()<.3)addEdge(a,b,4)}));}
+ if(sim.mission==="classifier"){sim.groups.inputX.forEach(a=>sim.groups.outputP.forEach(b=>{if(rng()<.65)addEdge(a,b,1.6)}));sim.groups.inputY.forEach(a=>sim.groups.outputQ.forEach(b=>{if(rng()<.65)addEdge(a,b,1.6)}));sim.groups.inputX.forEach(a=>sim.groups.outputQ.forEach(b=>{if(rng()<.12)addEdge(a,b,.5)}));sim.groups.inputY.forEach(a=>sim.groups.outputP.forEach(b=>{if(rng()<.12)addEdge(a,b,.5)}))}
+ sim.totalEdges=sim.out.reduce((s,a)=>s+a.length,0);
+ sim.rng=rng;
+}
+
+function newSim(mission,diff){
+ const seedBase={awaken:1103,memory:2207,cpg:3313,classifier:4417,sandbox:5521}[mission]||1234;
+ sim={mission,diff,t:0,N:parseInt($("nSlider")?.value||84),topology:$("topologySel")?.value||"modular",inhFrac:.22,seed:seedBase+Math.floor(Math.random()*0),
+  stdp:true,lr:.35,decay:.004,drive:2,noise:1.2*(DIFFS[diff].noise),stimStrength:18,
+  neurons:[],out:[],inEdges:[],electrodes:[],groups:{},spikeEvents:[],rateHist:[],rateSamples:[],selected:0,
+  totalSpikes:0,synChange:0,bursts:0,lastRate:0,sync:0,integrity:100,seizureT:0,silenceT:0,stableT:0,ended:false,
+  drift:0,task:null,pacemaker:{on:false,side:0,next:0},eval:null,trace:[],lastBurstHigh:false,activeSet:new Set(),statsPeak:0};
+ buildNetwork();initTask();sim.selected=sim.groups.patternA?.[0]??0;
+}
+
+function initTask(){
+ const m=sim.mission;
+ if(m==="awaken")sim.task={phase:"learn",stable:0,stimmed:false,done:false};
+ else if(m==="memory")sim.task={phase:"teach",teach:0,done:false,lastTeach:-9e9};
+ else if(m==="cpg")sim.task={phase:"setup",alt:0,lastSide:null,lastSwitch:0,evalEnd:0,evaluating:false,done:false};
+ else if(m==="classifier")sim.task={phase:"train",trainX:0,trainY:0,trial:0,correct:0,current:null,done:false};
+ else sim.task={phase:"free",bestStable:0,done:false};
+ renderTaskActions();updateTaskUI(0);
+}
+
+/* ============ stimulation / plasticity ============ */
+function stimulateSet(list,strength,label){
+ if(!list||!list.length)return;let cx=0,cy=0,n=0;
+ list.forEach(i=>{const nr=sim.neurons[i];if(!nr||nr.disabled)return;nr.ext=Math.max(nr.ext,strength);cx+=nr.x;cy+=nr.y;n++});
+ if(n){spawnFloater(cx/n,cy/n,(label||"⚡ +I"),"#67e8f9");AudioSys.stim();sim.task&&(sim.task.stimmed=true)}
+}
+function inhibitSet(list,strength){list.forEach(i=>{const nr=sim.neurons[i];if(nr)nr.ext=Math.min(nr.ext,-(strength||14))})}
+function allIndices(){return sim.neurons.map(n=>n.i)}
+function onSpike(nr){
+ nr.lastSpike=sim.t;nr.spikeCount++;nr.glow=1;sim.totalSpikes++;sim.activeSet.add(nr.i);
+ sim.spikeEvents.push({t:sim.t,i:nr.i});if(sim.spikeEvents.length>9000)sim.spikeEvents.splice(0,2000);
+ // propagate
+ for(const e of sim.out[nr.i]){const post=sim.neurons[e.to];if(post.disabled)continue;post.Isyn+=e.w;if(edgeFlashes.length<240)edgeFlashes.push({from:nr.i,to:e.to,t:sim.t,inh:nr.type===1})}
+ // STDP
+ if(sim.stdp){
+   for(const e of sim.inEdges[nr.i]){const dt=sim.t-sim.neurons[e.from].lastSpike;if(dt>0&&dt<25){const d=sim.lr*.55*Math.exp(-dt/12)*(e.w>=0?1:-1);applyW(e,d)}}
+   for(const e of sim.out[nr.i]){const dt=sim.t-sim.neurons[e.to].lastSpike;if(dt>0&&dt<25){const d=-sim.lr*.45*Math.exp(-dt/12)*(e.w>=0?1:-1);applyW(e,d)}}
+ }
+ if(save.settings.particles&&particles.length<420){for(let k=0;k<2;k++)particles.push({x:nr.x,y:nr.y,vx:(Math.random()-.5)*.12,vy:(Math.random()-.5)*.12-.03,life:1,c:nr.type?"#f0abfc":"#67e8f9"})}
+}
+function applyW(e,d){const old=e.w;e.w=e.w>=0?clamp(e.w+d,.05,16):clamp(e.w+d,-16,-.05);sim.synChange+=Math.abs(e.w-old)}
+
+function stepSim(){
+ const dt=1;sim.t+=dt;
+ if(sim.diff==="volatile")sim.drift=Math.sin(sim.t/28000)*1.1;
+ // pacemaker
+ if(sim.pacemaker.on&&sim.t>=sim.pacemaker.next){sim.pacemaker.next=sim.t+650;sim.pacemaker.side=1-sim.pacemaker.side;stimulateSet(sim.pacemaker.side?sim.groups.modExcB:sim.groups.modExcA,20,sim.pacemaker.side?"PACE B":"PACE A");logEvent(`Pacemaker fired module ${sim.pacemaker.side?"B":"A"}`,"#facc15")}
+ // electrodes
+ for(const el of sim.electrodes){if(sim.t>=el.next){el.next=sim.t+500;const nr=sim.neurons[el.i];if(nr&&!nr.disabled){nr.ext=Math.max(nr.ext,16);nr.glow=Math.max(nr.glow,.6)}}}
+ const decayF=Math.exp(-dt/5);
+ // two half-steps for Izhikevich stability
+ for(let sub=0;sub<2;sub++){
+  for(const nr of sim.neurons){
+   if(nr.disabled){nr.v=-70;continue}
+   const noise=(Math.random()-.5)*2*sim.noise;
+   const I=nr.Isyn+nr.ext+sim.drive+sim.drift+noise;
+   nr.v+=.5*(0.04*nr.v*nr.v+5*nr.v+140-nr.u+I);
+   nr.v+=.5*(0.04*nr.v*nr.v+5*nr.v+140-nr.u+I);
+   nr.u+=nr.a*(nr.b*nr.v-nr.u)*.5; // approx per half step pair
+   if(nr.v>=30){nr.v=nr.c;nr.u+=nr.d;if(sub===1)onSpike(nr)}
+   if(nr.v>60)nr.v=60;if(nr.v<-100)nr.v=-100;
+  }
+ }
+ for(const nr of sim.neurons){nr.Isyn*=decayF;nr.ext*=Math.exp(-dt/28);nr.glow*=.94}
+ // synaptic decay toward baseline magnitude
+ if(sim.decay>0&&Math.random()<.25){for(const edges of sim.out)for(const e of edges){const target=e.w>=0?3.5:-5;e.w+=(target-e.w)*sim.decay*.002}}
+ // evaluation window (memory / classifier)
+ if(sim.eval&&sim.t>=sim.eval.end)finishEval();
+ // selected trace
+ if(sim.t%10<1){const nr=sim.neurons[sim.selected];if(nr){sim.trace.push(nr.v);if(sim.trace.length>140)sim.trace.shift()}
+   // rate sample for spectrum every 10ms
+   const recent=countSpikes(sim.t-100,sim.t);sim.rateSamples.push(recent/Math.max(1,sim.N));if(sim.rateSamples.length>180)sim.rateSamples.shift()}
+}
+function countSpikes(a,b,set){let c=0;for(let k=sim.spikeEvents.length-1;k>=0;k--){const e=sim.spikeEvents[k];if(e.t<a)break;if(e.t<=b&&(!set||set.has(e.i)))c++}return c}
+
+/* ============ metrics ============ */
+function computeMetrics(){
+ const win=600,total=countSpikes(sim.t-win,sim.t);
+ sim.lastRate=total/(sim.N*(win/1000));sim.statsPeak=Math.max(sim.statsPeak,sim.lastRate);
+ // synchrony from 10ms bins
+ const bins=new Array(50).fill(0);for(let k=sim.spikeEvents.length-1;k>=0;k--){const e=sim.spikeEvents[k];if(e.t<sim.t-500)break;bins[clamp(Math.floor((e.t-(sim.t-500))/10),0,49)]++}
+ const mean=bins.reduce((a,b)=>a+b,0)/50;let chi=0;bins.forEach(c=>chi+=(c-mean)*(c-mean)/(mean+.4));sim.sync=clamp((chi/50)/14,0,1);
+ if(sim.lastRate>34&&!sim.lastBurstHigh){sim.bursts++;sim.lastBurstHigh=true}if(sim.lastRate<20)sim.lastBurstHigh=false;
+ sim.rateHist.push({t:sim.t,r:sim.lastRate});if(sim.rateHist.length>420)sim.rateHist.shift();
+ if(Math.random()<.4)AudioSys.pop(Math.min(14,Math.round(sim.lastRate/4)));
+}
+function groupRate(set,win){if(!set||!set.length)return 0;const s=new Set(set);return countSpikes(sim.t-win,sim.t,s)/(set.length*(win/1000))}
+
+/* ============ tasks ============ */
+function renderTaskActions(){
+ const box=$("taskActions");if(!box||!sim)return;box.innerHTML="";
+ const mk=(label,fn,primary)=>{const b=document.createElement("button");b.className="btn rounded-lg px-3 py-1.5 text-[11px] font-bold "+(primary?"bg-cyan-400 text-slate-950":"glass2");b.textContent=label;b.onclick=()=>{AudioSys.init();fn()};box.appendChild(b);return b};
+ const m=sim.mission,t=sim.task;
+ if(m==="awaken"){mk("⚡ Pulse stimulus",()=>{stimulateSet(sim.groups.patternA.concat(sim.groups.patternB.slice(0,6)),sim.stimStrength);logEvent("Manual pulse delivered to pattern groups","#67e8f9")},true);mk("🧊 Calm wave",calmWave)}
+ if(m==="memory"){mk(`🎓 Teach Pattern A (${t.teach}/3)`,teachPattern,true);mk("🔎 Run recall test",runRecall);mk("Reset training",()=>{t.teach=0;t.phase="teach";logEvent("Pattern training reset — synapses keep their current weights; rebuild to fully reset.","#facc15");renderTaskActions();updateTaskUI(0)})}
+ if(m==="cpg"){mk("⚡ Stim A",()=>stimulateSet(sim.groups.modExcA,20,"A"));mk("⚡ Stim B",()=>stimulateSet(sim.groups.modExcB,20,"B"));mk(t.paceLabel||"🥁 Toggle A/B pacemaker",togglePacemaker,true);mk("▶ Start 15 s rhythm test",startCPGEval)}
+ if(m==="classifier"){mk(`Train X→P (${t.trainX})`,()=>trainPair("X"),true);mk(`Train Y→Q (${t.trainY})`,()=>trainPair("Y"),true);mk("🎲 Begin blind test (5 trials)",startClassifierTest)}
+ if(m==="sandbox"){mk("⚡ Random pattern",()=>{const s=[...allIndices()].sort(()=>Math.random()-.5).slice(0,16);stimulateSet(s,20,"RANDOM")},true);mk("🌊 Rhythm preset",()=>{applyPreset("rhythm")});mk("🧘 Calm preset",()=>{applyPreset("calm")});mk("🔥 Excite preset",()=>{applyPreset("excite")})}
+}
+function calmWave(){inhibitSet(allIndices(),16);AudioSys.calm();spawnFloater(.5,.45,"🧊 CALM","#a5b4fc");logEvent("Global inhibitory calm wave applied","#a5b4fc")}
+function applyPreset(kind){if(kind==="rhythm"){setSlider("driveSlider",3.2);setSlider("noiseSlider",.8);setSlider("eiSlider",28);sim.pacemaker.on=true;sim.pacemaker.next=sim.t+100;logEvent("Rhythm preset: pacemaker on, inhibition raised","#facc15")}if(kind==="calm"){setSlider("driveSlider",1.1);setSlider("eiSlider",36);sim.pacemaker.on=false;calmWave()}if(kind==="excite"){setSlider("driveSlider",4.6);setSlider("eiSlider",14);stimulateSet(allIndices().filter((_,i)=>i%3===0),22,"EXCITE")}syncControlsFromSim();renderTaskActions()}
+function setSlider(id,v){const el=$(id);if(el)el.value=v}
+function togglePacemaker(){sim.pacemaker.on=!sim.pacemaker.on;sim.pacemaker.next=sim.t+50;sim.task.paceLabel=sim.pacemaker.on?"⏹ Stop pacemaker":"🥁 Toggle A/B pacemaker";logEvent("A/B pacemaker "+(sim.pacemaker.on?"started (650 ms alternation)":"stopped"),"#facc15");renderTaskActions()}
+function teachPattern(){const t=sim.task;if(sim.t-t.lastTeach<900){logEvent("Wait for the network to settle between teachings (~1 s).","#facc15");return}t.lastTeach=sim.t;t.teach++;if(!sim.stdp)logEvent("⚠ STDP is OFF — co-firing will not wire together. Turn STDP on!","#f87171");stimulateSet(sim.groups.patternA,26,"TEACH A");logEvent(`Taught Pattern A (${t.teach}/3) — recurrent synapses potentiating`,"#34d399");if(t.teach>=3){t.phase="test";logEvent("Training complete. Run the recall test: only half the pattern will be cued.","#67e8f9")}renderTaskActions();updateTaskUI(0)}
+function runRecall(){const t=sim.task;if(t.teach<1){logEvent("Teach Pattern A at least once first.","#f87171");return}const half=sim.groups.patternA.filter((_,i)=>i%2===0);stimulateSet(half,22,"CUE ½A");sim.eval={kind:"memory",end:sim.t+650,start:sim.t+40,set:new Set()};logEvent("Recall test: cueing half of Pattern A… watching for completion","#facc15")}
+function trainPair(kind){const t=sim.task;if(kind==="X"){t.trainX++;stimulateSet(sim.groups.inputX.concat(sim.groups.outputP),24,"X→P")}else{t.trainY++;stimulateSet(sim.groups.inputY.concat(sim.groups.outputQ),24,"Y→Q")}if(!sim.stdp)logEvent("⚠ STDP is OFF — pairing will not be learned!","#f87171");logEvent(`Paired training ${kind} (${kind==="X"?t.trainX:t.trainY}×) — Hebbian wiring in progress`,"#34d399");if(t.trainX>=2&&t.trainY>=2&&t.phase==="train"){t.phase="ready";logEvent("Both associations trained. Begin the blind test when ready.","#67e8f9")}renderTaskActions();updateTaskUI(0)}
+function startClassifierTest(){const t=sim.task;if(t.trainX<1||t.trainY<1){logEvent("Train both X→P and Y→Q at least once first.","#f87171");return}t.phase="test";t.trial=0;t.correct=0;nextTrial()}
+function nextTrial(){const t=sim.task;t.trial++;t.current=Math.random()<.5?"X":"Y";const input=t.current==="X"?sim.groups.inputX:sim.groups.inputY;stimulateSet(input,24,"?");sim.eval={kind:"classifier",end:sim.t+650,start:sim.t+40};logEvent(`Blind trial ${t.trial}/5: mystery input presented…`,"#facc15");updateTaskUI(0)}
+function startCPGEval(){const t=sim.task;t.evaluating=true;t.alt=0;t.lastSide=null;t.evalEnd=sim.t+15000;logEvent("Rhythm test running for 15 s — counting clean A↔B alternations…","#facc15")}
+function finishEval(){
+ const ev=sim.eval;sim.eval=null;const t=sim.task;
+ const fired=new Set();for(let k=sim.spikeEvents.length-1;k>=0;k--){const e=sim.spikeEvents[k];if(e.t<ev.start)break;fired.add(e.i)}
+ if(ev.kind==="memory"){
+   const pat=sim.groups.patternA,patFired=pat.filter(i=>fired.has(i)).length/pat.length;
+   const non=allIndices().filter(i=>!pat.includes(i)),nonFired=non.filter(i=>fired.has(i)).length/Math.max(1,non.length);
+   const score=clamp(patFired-nonFired*1.4,0,1);t.lastRecall=score;
+   logEvent(`Recall: pattern completion ${(patFired*100)|0}%, off-pattern ${(nonFired*100)|0}% → score ${(score*100)|0}%`,score>=.55?"#34d399":"#f87171");
+   if(score>=.55){completeMission(`Pattern completion reached ${(patFired*100)|0}% from a half cue — the attractor lives in the synapses you trained.`)}else{logEvent("Recall too weak. Teach more, raise STDP rate, or lower noise and try again.","#facc15")}
+ }else if(ev.kind==="classifier"){
+   const p=countSpikes(ev.start,ev.end,new Set(sim.groups.outputP)),q=countSpikes(ev.start,ev.end,new Set(sim.groups.outputQ));
+   const decision=p>=q?"X":"Y";const ok=decision===t.current;if(ok)t.correct++;
+   logEvent(`Trial ${t.trial}: output P=${p} spikes, Q=${q} → decision ${decision} ${ok?"✓ correct":"✗ (was "+t.current+")"}`,ok?"#34d399":"#f87171");
+   if(t.trial<5){setTimeout(()=>{if(sim&&!sim.ended&&running)nextTrial()},650)}
+   else if(t.correct>=4)completeMission(`Blind classification ${t.correct}/5 correct — two clean input→output channels were carved by STDP alone.`);
+   else{t.phase="ready";logEvent(`Only ${t.correct}/5 correct. Train each pairing more (STDP on, moderate noise), then retest.`,"#facc15");renderTaskActions()}
+ }
+ updateTaskUI(1);
+}
+
+function updateTask(dtSec){
+ if(!sim||sim.ended)return;const t=sim.task,m=sim.mission;
+ // integrity / pathology
+ const drain=DIFFS[sim.diff].drain;
+ if(sim.lastRate>55||sim.sync>.88){sim.seizureT+=dtSec;sim.integrity-=4.2*drain*dtSec;if(sim.seizureT>.4&&Math.random()<dtSec*1.4)AudioSys.alarm()}
+ else if(sim.t>6000&&sim.lastRate<0.8){sim.silenceT+=dtSec;sim.integrity-=1.6*drain*dtSec}
+ else{sim.seizureT=Math.max(0,sim.seizureT-dtSec);sim.silenceT=Math.max(0,sim.silenceT-dtSec);sim.integrity+=1.5*dtSec}
+ sim.integrity=clamp(sim.integrity,0,100);
+ if(sim.integrity<=0&&m!=="sandbox"){failMission(sim.lastRate>40?"Runaway synchrony destroyed the preparation — a full-blown seizure burned out lab integrity.":"The network fell silent and never recovered — integrity lost to a flatlined culture.");return}
+ if(sim.integrity<=0&&m==="sandbox"){sim.integrity=35;logEvent("⚠ Crisis in sandbox: integrity auto-restored to 35. The culture barely survived.","#f87171")}
+ // mission logic
+ if(m==="awaken"){
+   const stable=sim.lastRate>=5&&sim.lastRate<=30&&sim.sync<.78;
+   if(stable){t.stable+=dtSec;if(t.stable>1&&Math.floor(t.stable)%3===0&&Math.random()<dtSec)logEvent(`Stable rhythm held ${t.stable.toFixed(0)} s…`,"#34d399")}
+   else t.stable=Math.max(0,t.stable-dtSec*1.6);
+   if(t.stable>=6)completeMission("You held a living, balanced rhythm for 6 seconds — the core skill of every neural engineer.");
+ }else if(m==="cpg"&&t.evaluating){
+   const ra=groupRate(sim.groups.modExcA,300),rb=groupRate(sim.groups.modExcB,300);
+   let side=null;if(ra>7&&ra>rb*1.45)side="A";if(rb>7&&rb>ra*1.45)side="B";
+   if(side&&t.lastSide&&side!==t.lastSide&&sim.t-t.lastSwitch>280){t.alt++;t.lastSwitch=sim.t;spawnFloater(side==="A"?.27:.73,.18,`⇄ ${t.alt}`,"#facc15")}
+   if(side)t.lastSide=side;
+   if(sim.t>=t.evalEnd){t.evaluating=false;if(t.alt>=6)completeMission(`${t.alt} clean A↔B alternations in 15 s — a working central pattern generator.`);else logEvent(`Rhythm test ended: ${t.alt}/6 alternations. Try the pacemaker, more cross-inhibition (raise inhibitory %), or stim A then B manually.`,"#f87171")}
+ }else if(m==="sandbox"){if(sim.lastRate>=5&&sim.lastRate<=30)t.bestStable+=dtSec}
+ updateTaskUI(dtSec);
+}
+function updateTaskUI(_){
+ if(!sim)return;const t=sim.task,m=sim.mission;let pct=0,instr="",detail="";
+ if(m==="awaken"){pct=clamp(t.stable/6*100,0,100);instr=t.stimmed?"Good — now tune Drive / Noise / Inhibitory % until firing sits in the green band (5–30 Hz, sync < 0.78) and hold it.":"Use ⚡ Pulse stimulus (or click neurons with Stimulate), then balance the network into the 5–30 Hz band and hold 6 s.";detail=`Stable hold: ${t.stable.toFixed(1)} / 6.0 s · band ${sim.lastRate>=5&&sim.lastRate<=30?"✓ in range":"✗ out of range"}`}
+ if(m==="memory"){pct=t.phase==="test"?80:t.teach/3*70;instr=t.teach<3?`Press 🎓 Teach Pattern A ${3-t.teach} more time(s) with STDP ON. Co-firing welds the pattern's recurrent synapses.`:"Training done. Press 🔎 Run recall test — half the pattern is cued; ≥55% completion wins.";detail=`Teachings: ${t.teach}/3 · STDP ${sim.stdp?"ON":"OFF ⚠"} · last recall ${t.lastRecall!=null?Math.round(t.lastRecall*100)+"%":"—"}`}
+ if(m==="cpg"){pct=t.evaluating?clamp(t.alt/6*100,0,100):15;instr="Goal: modules A (left-top cluster) and B (right-top) must take turns bursting. Use Stim A/B, the A/B pacemaker, and cross-inhibition; then run the 15 s rhythm test.";detail=t.evaluating?`Rhythm test: ${t.alt}/6 alternations · ${(Math.max(0,t.evalEnd-sim.t)/1000).toFixed(0)} s left · A ${groupRate(sim.groups.modExcA,300).toFixed(0)} Hz vs B ${groupRate(sim.groups.modExcB,300).toFixed(0)} Hz`:"Tip: pacemaker + inhibitory 26–34% usually locks a clean alternation."}
+ if(m==="classifier"){pct=t.phase==="test"?t.trial/5*100:(Math.min(t.trainX,3)+Math.min(t.trainY,3))/6*60;instr=t.phase==="test"?`Blind trial ${t.trial}/5 running — the network decides P vs Q from spikes alone.`:"Alternate Train X→P and Train Y→Q (2–4× each, STDP ON). Paired stimulation wires each input to its own output pool. Then begin the blind test.";detail=`Train X ${t.trainX}× · Y ${t.trainY}× · correct ${t.correct}/${Math.max(0,t.trial)}`}
+ if(m==="sandbox"){pct=clamp(t.bestStable/30*100,0,100);instr="Free lab: no failure. Chase rhythms, provoke (and rescue) seizures, lesion hubs, compare topologies. Your longest stable stretch is tracked.";detail=`Longest quasi-stable stretch this session grows with balanced play · peak rate ${sim.statsPeak.toFixed(0)} Hz`}
+ $("taskInstruction").textContent=instr;$("taskDetail").textContent=detail;$("taskProgress").style.width=pct+"%";
+}
+function missionScore(){return Math.round(600+sim.integrity*4+ (sim.mission==="classifier"?sim.task.correct*90:0)+(sim.mission==="memory"&&sim.task.lastRecall?sim.task.lastRecall*220:0)-Math.min(250,sim.t/1000*2))}
+function completeMission(text){
+ if(sim.ended)return;sim.ended=true;running=false;const score=missionScore();
+ save.completed[sim.mission]=true;save.best[sim.mission]=Math.max(save.best[sim.mission]||0,score);
+ const order=["awaken","memory","cpg","classifier"];const idx=order.indexOf(sim.mission);let unlockedNext=null;
+ if(idx>=0&&idx<order.length-1){unlockedNext=order[idx+1];if(!save.unlocked.includes(unlockedNext))save.unlocked.push(unlockedNext)}
+ persist();AudioSys.success();celebrate();
+ $("endIcon").textContent=sim.mission==="classifier"?"👑":"🏆";$("endTitle").textContent=sim.mission==="classifier"?"CAPSTONE COMPLETE — Neural Engineer!":"Mission Complete";
+ $("endText").textContent=text+(unlockedNext?` Unlocked: ${MISSIONS.find(x=>x.id===unlockedNext).name}.`:"");
+ fillEndStats(score);$("nextMissionBtn").style.display=unlockedNext?"":"none";$("nextMissionBtn").dataset.next=unlockedNext||"";
+ $("endModal").classList.remove("hidden");logEvent("🏆 Mission complete! Score "+score,"#facc15");renderScenarioGrid();
+}
+function failMission(text){
+ if(sim.ended)return;sim.ended=true;running=false;AudioSys.fail();
+ $("endIcon").textContent="💥";$("endTitle").textContent="Experiment Failed";$("endText").textContent=text+" Adjust E/I balance earlier next time — seizures and silence both announce themselves in the rate chart first.";
+ fillEndStats(missionScore());$("nextMissionBtn").style.display="none";$("endModal").classList.remove("hidden");logEvent("💥 Experiment failed.","#f87171");
+}
+function fillEndStats(score){const items=[["Score",score],["Sim time",fmtTime(sim.t)],["Total spikes",sim.totalSpikes.toLocaleString()],["Peak rate",sim.statsPeak.toFixed(0)+" Hz"],["Integrity",Math.round(sim.integrity)+"%"],["Bursts",sim.bursts],["Synaptic Δ",Math.round(sim.synChange)],["Edges",sim.totalEdges]];$("endStats").innerHTML=items.map(([k,v])=>`<div class="glass2 rounded-xl p-2"><div class="text-[9px] text-slate-500">${k.toUpperCase()}</div><b class="text-sm">${v}</b></div>`).join("")}
+function celebrate(){for(let i=0;i<130;i++)particles.push({x:Math.random(),y:Math.random()*.5,vx:(Math.random()-.5)*.25,vy:Math.random()*.22+.05,life:1.6,c:["#22d3ee","#e879f9","#facc15","#34d399"][i%4]})}
+
+/* ============ rendering ============ */
+const mainC=$("mainCanvas"),mctx=mainC.getContext("2d");
+function resizeCanvas(c){const r=c.getBoundingClientRect(),d=Math.min(2,window.devicePixelRatio||1);const h=c.id==="mainCanvas"?r.height:(parseInt(c.getAttribute("height"))||120);c.width=Math.max(50,r.width*d);c.height=Math.max(40,h*d);return[w=>w,h]}
+function drawMain(){
+ const wrap=$("canvasWrap");if(!wrap||!sim)return;const d=Math.min(2,window.devicePixelRatio||1);
+ const W=wrap.clientWidth,H=mainC.clientHeight||420;if(mainC.width!==Math.round(W*d)){mainC.width=W*d;mainC.height=H*d}
+ const ctx=mctx;ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,W,H);
+ const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,"#071228");g.addColorStop(.55,"#050a1c");g.addColorStop(1,"#0d0721");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle="rgba(103,232,249,.05)";ctx.lineWidth=1;for(let x=0;x<W;x+=34){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=34){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ const X=x=>x*W,Y=y=>y*H;
+ // module tints
+ if(sim.topology==="modular"){const cols=["rgba(34,211,238,.05)","rgba(232,121,249,.05)","rgba(52,211,153,.05)","rgba(250,204,21,.05)"],cen=[[.27,.28],[.73,.28],[.27,.74],[.73,.74]];cen.forEach((c,i)=>{ctx.fillStyle=cols[i];ctx.beginPath();ctx.arc(X(c[0]),Y(c[1]),Math.min(W,H)*.24,0,7);ctx.fill()});
+  ctx.fillStyle="rgba(165,243,252,.55)";ctx.font="bold 10px sans-serif";ctx.fillText("MODULE A",X(.27)-26,Y(.28)-Math.min(W,H)*.24-4);ctx.fillText("MODULE B",X(.73)-26,Y(.28)-Math.min(W,H)*.24-4)}
+ // group highlight for current mission
+ const hl=new Map();const paint=(set,c)=>set&&set.forEach(i=>hl.set(i,c));
+ if(sim.mission==="memory")paint(sim.groups.patternA,"rgba(250,204,21,.9)");
+ if(sim.mission==="classifier"){paint(sim.groups.inputX,"rgba(34,211,238,.9)");paint(sim.groups.inputY,"rgba(232,121,249,.9)");paint(sim.groups.outputP,"rgba(52,211,153,.9)");paint(sim.groups.outputQ,"rgba(251,146,60,.9)")}
+ // connections
+ if(save.settings.conn){ctx.lineWidth=1;for(let i=0;i<sim.N;i++){const a=sim.neurons[i];if(a.disabled)continue;for(const e of sim.out[i]){const b=sim.neurons[e.to];ctx.strokeStyle=a.type?"rgba(240,171,252,.028)":"rgba(125,211,252,.032)";ctx.beginPath();ctx.moveTo(X(a.x),Y(a.y));ctx.lineTo(X(b.x),Y(b.y));ctx.stroke()}}}
+ // flashes
+ edgeFlashes=edgeFlashes.filter(f=>sim.t-f.t<130);for(const f of edgeFlashes){const a=sim.neurons[f.from],b=sim.neurons[f.to];if(!a||!b)continue;const al=1-(sim.t-f.t)/130;ctx.strokeStyle=f.inh?`rgba(240,171,252,${al*.75})`:`rgba(103,232,249,${al*.8})`;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(X(a.x),Y(a.y));ctx.lineTo(X(b.x),Y(b.y));ctx.stroke()}
+ // electrodes
+ for(const el of sim.electrodes){const nr=sim.neurons[el.i];if(!nr)continue;ctx.strokeStyle="rgba(250,204,21,.9)";ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(X(nr.x),Y(nr.y),13+Math.sin(performance.now()/220)*2,0,7);ctx.stroke();ctx.fillStyle="#facc15";ctx.font="9px sans-serif";ctx.fillText("⚡2Hz",X(nr.x)+14,Y(nr.y)-8)}
+ // neurons
+ for(const nr of sim.neurons){
+   const px=X(nr.x),py=Y(nr.y);const vt=clamp((nr.v+70)/100,0,1);
+   if(nr.disabled){ctx.fillStyle="#334155";ctx.fillRect(px-5,py-1.5,10,3);ctx.fillRect(px-1.5,py-5,3,10);continue}
+   if(hl.has(nr.i)){ctx.strokeStyle=hl.get(nr.i);ctx.lineWidth=1.2;ctx.globalAlpha=.75;ctx.beginPath();ctx.arc(px,py,10.5,0,7);ctx.stroke();ctx.globalAlpha=1}
+   const r=(nr.type?6.4:5.6)+nr.glow*(save.settings.flash?3:6);
+   const col=vt<.5?`rgb(${lerp(56,34,vt*2)|0},${lerp(120,211,vt*2)|0},${lerp(246,238,vt*2)|0})`:`rgb(${lerp(250,239,vt)|0},${lerp(204,68,vt)|0},68)`;
+   ctx.save();if(nr.glow>.25){ctx.shadowColor=nr.type?"#e879f9":"#22d3ee";ctx.shadowBlur=save.settings.flash?4:16*nr.glow}
+   ctx.fillStyle=nr.type?"#e879f9":col;
+   if(nr.type){ctx.translate(px,py);ctx.rotate(Math.PI/4);ctx.fillRect(-r*.72,-r*.72,r*1.44,r*1.44)}else{ctx.beginPath();ctx.arc(px,py,r,0,7);ctx.fill()}
+   ctx.restore();
+   if(nr.i===sim.selected){ctx.strokeStyle="#fff";ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(px,py,11,0,7);ctx.stroke()}
+ }
+ // particles
+ particles=particles.filter(p=>p.life>0);for(const p of particles){p.x+=p.vx*.016;p.y+=p.vy*.016;p.life-=.022;ctx.globalAlpha=clamp(p.life,0,1);ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(X(p.x),Y(p.y),2,0,7);ctx.fill()}ctx.globalAlpha=1;
+}
+function spawnFloater(nx,ny,text,color){const layer=$("floatLayer"),wrap=$("canvasWrap");if(!layer||!wrap)return;const d=document.createElement("div");d.textContent=text;d.style.cssText=`position:absolute;left:${nx*100}%;top:${ny*100}%;color:${color};font:800 11px sans-serif;text-shadow:0 2px 8px #000;animation:floatUp 1s ease forwards;transform:translate(-50%,-50%)`;layer.appendChild(d);setTimeout(()=>d.remove(),1000)}
+function lineChart(canvas,data,get,color,fill,ymax,label){
+ const ctx=canvas.getContext("2d");const d=Math.min(2,window.devicePixelRatio||1);const r=canvas.getBoundingClientRect();if(canvas.width!==Math.round(r.width*d)){canvas.width=r.width*d;canvas.height=(parseInt(canvas.getAttribute("height"))||120)*d}
+ ctx.setTransform(d,0,0,d,0,0);const W=r.width,H=parseInt(canvas.getAttribute("height"))||120;ctx.clearRect(0,0,W,H);
+ ctx.strokeStyle="rgba(148,197,255,.12)";[0.25,.5,.75].forEach(f=>{ctx.beginPath();ctx.moveTo(0,H*f);ctx.lineTo(W,H*f);ctx.stroke()});
+ if(label){ctx.fillStyle="rgba(226,238,252,.5)";ctx.font="9px sans-serif";ctx.fillText(label,6,11)}
+ if(data.length<2)return;ctx.beginPath();data.forEach((p,i)=>{const x=i/(data.length-1)*W,y=H-4-clamp(get(p)/ymax,0,1)*(H-14);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+ ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.stroke();if(fill){ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fillStyle=fill;ctx.fill()}
+}
+function drawRaster(){
+ const c=$("rasterCanvas"),ctx=c.getContext("2d");const d=Math.min(2,window.devicePixelRatio||1);const r=c.getBoundingClientRect();if(c.width!==Math.round(r.width*d)){c.width=r.width*d;c.height=150*d}
+ ctx.setTransform(d,0,0,d,0,0);const W=r.width,H=150;ctx.clearRect(0,0,W,H);ctx.fillStyle="rgba(2,8,23,.35)";ctx.fillRect(0,0,W,H);
+ const t0=sim.t-8000;ctx.fillStyle="#67e8f9";
+ for(const e of sim.spikeEvents){if(e.t<t0)continue;const nr=sim.neurons[e.i];ctx.fillStyle=nr&&nr.type?"#f0abfc":"#67e8f9";ctx.fillRect((e.t-t0)/8000*W,(e.i/Math.max(1,sim.N))*(H-8)+3,1.7,1.7)}
+}
+function drawTrace(){
+ const c=$("traceCanvas");lineChart(c,sim.trace,v=>v+72,"#facc15","rgba(250,204,21,.08)",105,"membrane v (mV, selected)");
+}
+function bandPower(){
+ // Goertzel on recent rate samples (100 Hz sampling -> array values spikes/10ms)
+ const x=sim.rateSamples.slice(-128);if(x.length<32)return[.2,.2,.2,.2,.2];
+ const mean=x.reduce((a,b)=>a+b,0)/x.length,fs=100,bands=[[1,4],[4,8],[8,13],[13,30],[30,48]];
+ return bands.map(([lo,hi])=>{let best=0;for(let f=lo;f<=hi;f+=1.5){let re=0,im=0;for(let n=0;n<x.length;n++){const a=2*Math.PI*f*n/fs;re+=(x[n]-mean)*Math.cos(a);im-=(x[n]-mean)*Math.sin(a)}best=Math.max(best,Math.sqrt(re*re+im*im)/x.length)}return clamp(best*3.2,0,1)});
+}
+function drawSpecAndBands(){
+ const bands=bandPower(),names=["Delta 1–4","Theta 4–8","Alpha 8–13","Beta 13–30","Gamma 30–48"],cols=["#818cf8","#22d3ee","#34d399","#facc15","#f472b6"];
+ $("bandBars").innerHTML=names.map((n,i)=>`<div class="flex items-center gap-2"><span class="w-20 text-slate-400">${n} Hz</span><div class="bar flex-1"><div style="width:${(bands[i]*100)|0}%;background:${cols[i]}"></div></div><b class="w-8 text-right">${bands[i].toFixed(2)}</b></div>`).join("");
+ const c=$("specCanvas"),ctx=c.getContext("2d");const d=Math.min(2,window.devicePixelRatio||1);const r=c.getBoundingClientRect();if(c.width!==Math.round(r.width*d)){c.width=r.width*d;c.height=70*d}
+ ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,r.width,70);const bw=r.width/5;bands.forEach((b,i)=>{ctx.fillStyle=cols[i];ctx.fillRect(i*bw+8,62-b*52,bw-16,b*52);ctx.fillStyle="#94a3b8";ctx.font="8px sans-serif";ctx.fillText(names[i].split(" ")[0],i*bw+10,68)});
+}
+
+/* ============ UI sync ============ */
+function syncControlsFromSim(){
+ if(!sim)return;$("nVal").textContent=sim.N;$("eiVal").textContent=Math.round(sim.inhFrac*100)+"%";$("driveVal").textContent=sim.drive.toFixed(1);
+ const baseNoise=sim.noise/(DIFFS[sim.diff].noise||1);$("noiseVal").textContent=baseNoise.toFixed(1);$("lrVal").textContent=sim.lr.toFixed(2);$("decayVal").textContent=(sim.decay*100).toFixed(1)+"%";$("stimVal").textContent=sim.stimStrength;
+ $("stdpToggle").textContent=sim.stdp?"ON":"OFF";$("stdpToggle").className="btn rounded-lg px-3 py-1 text-xs font-bold "+(sim.stdp?"bg-emerald-400 text-slate-950":"bg-slate-600 text-white");
+}
+function updateHUD(){
+ if(!sim)return;$("hudClock").textContent=`t = ${fmtTime(sim.t)} · ${speed}× · ${sim.N} neurons · ${sim.totalEdges} synapses`;
+ $("hudRate").textContent=sim.lastRate.toFixed(1)+" Hz";$("hudSync").textContent=sim.sync.toFixed(2);
+ $("hudIntegrity").style.width=sim.integrity+"%";$("hudIntegrityTxt").textContent=Math.round(sim.integrity);
+ $("hudIntegrity").style.background=sim.integrity>55?"linear-gradient(90deg,#34d399,#22d3ee)":sim.integrity>25?"linear-gradient(90deg,#facc15,#fb923c)":"linear-gradient(90deg,#f87171,#ef4444)";
+ const st=$("hudState"),banner=$("alertBanner");let txt="STABLE",cls="text-[11px] font-bold rounded-full px-2.5 py-1 bg-emerald-400/15 text-emerald-300 border border-emerald-300/20";
+ if(sim.lastRate>55||sim.sync>.88){txt="⚠ SEIZURE";cls+=" bg-red-500/20 text-red-300 border-red-300/30";banner.classList.remove("hidden");banner.textContent="⚠ SEIZURE — runaway synchrony! Inhibit / calm now"}
+ else if(sim.t>6000&&sim.lastRate<0.8){txt="💤 SILENCE";cls="text-[11px] font-bold rounded-full px-2.5 py-1 bg-sky-400/15 text-sky-300 border border-sky-300/20";banner.classList.remove("hidden");banner.textContent="💤 SILENCE — stimulate or raise drive"}
+ else if(sim.lastRate>34){txt="▲ HYPERACTIVE";cls="text-[11px] font-bold rounded-full px-2.5 py-1 bg-amber-400/15 text-amber-300 border border-amber-300/20";banner.classList.add("hidden")}
+ else banner.classList.add("hidden");
+ st.textContent=txt;st.className=cls;$("canvasWrap").classList.toggle("alarm",txt.includes("SEIZURE"));
+ $("rateNow").textContent=sim.lastRate.toFixed(1)+" Hz avg/neuron";
+ $("statBursts").textContent=sim.bursts;$("statSpikes").textContent=sim.totalSpikes.toLocaleString();$("statSyn").textContent=Math.round(sim.synChange);
+ const act=new Set();for(let k=sim.spikeEvents.length-1;k>=0;k--){if(sim.spikeEvents[k].t<sim.t-2000)break;act.add(sim.spikeEvents[k].i)}
+ $("statActive").textContent=Math.round(act.size/Math.max(1,sim.N)*100)+"%";
+ $("taskScore").textContent="Score if finished now: "+missionScore();
+ const nr=sim.neurons[sim.selected];if(nr){$("selId").textContent="#"+nr.i;$("selInfo").innerHTML=`${nr.type?"◆ FS inhibitory":"● RS excitatory"} · module ${"ABCD"[nr.mod]} · v=${nr.v.toFixed(1)} mV · u=${nr.u.toFixed(1)} · ${nr.spikeCount} spikes${nr.disabled?" · <b class='text-red-300'>LESIONED</b>":""}`}
+}
+
+/* ============ main loop ============ */
+function loop(ts){
+ rafId=requestAnimationFrame(loop);if(!sim)return;const dtReal=Math.min(.05,(ts-lastFrame)/1000||0);lastFrame=ts;
+ if(running&&!paused&&!sim.ended){
+   const steps=clamp(Math.round(14*speed),4,64);
+   for(let s=0;s<steps;s++)stepSim();
+   computeMetrics();updateTask(dtReal*speed*.9);
+ }
+ drawMain();
+ uiTimer+=dtReal;if(uiTimer>.12){uiTimer=0;if(!$("app").classList.contains("hidden")){updateHUD();drawRaster();drawTrace();drawSpecAndBands();lineChart($("rateCanvas"),sim.rateHist,p=>p.r,"#22d3ee","rgba(34,211,238,.10)",70,"Hz / neuron · healthy band 5–30 Hz")}}
+}
+requestAnimationFrame(loop);
+
+/* ============ start / restart / navigation ============ */
+function startMission(mission,diff){
+ AudioSys.init();selectedMission=mission;selectedDiff=diff;
+ $("titleScreen").classList.add("hidden");$("app").classList.remove("hidden");$("endModal").classList.add("hidden");$("pauseModal").classList.add("hidden");
+ // apply difficulty presets
+ if(diff==="calm"){setSlider("driveSlider",1.8);setSlider("noiseSlider",.8)}else if(diff==="volatile"){setSlider("driveSlider",2.6);setSlider("noiseSlider",1.6)}else{setSlider("driveSlider",2);setSlider("noiseSlider",1.2)}
+ newSim(mission,diff);
+ sim.drive=parseFloat($("driveSlider").value);sim.noise=parseFloat($("noiseSlider").value)*DIFFS[diff].noise;sim.stimStrength=parseInt($("stimStrength").value);
+ const m=MISSIONS.find(x=>x.id===mission);$("hudMission").textContent=m.name;$("missionTag").textContent=`${m.tag} · ${DIFFS[diff].name} · seed ${sim.seed}`;
+ paused=false;running=true;speed=1;document.querySelectorAll(".speed").forEach(b=>b.classList.toggle("active",b.dataset.speed==="1"));$("pauseBtn").textContent="⏸ Pause";
+ $("eventLog").innerHTML="";logEvent(`Lab started: ${m.name} on ${DIFFS[diff].name}. ${sim.totalEdges} synapses wired.`,"#67e8f9");
+ logEvent(mission==="sandbox"?"Sandbox: integrity crises auto-recover; experiment freely.":"Hold integrity above 0 — watch the rate chart for early warnings.","#facc15");
+ setTimeout(()=>stimulateSet(sim.groups.patternA.slice(0,6),18,"WAKE"),350);
+ syncControlsFromSim();setTool("inspect");
+ if(!save.seenTutorial&&(mission==="awaken"||mission==="sandbox"))startTutorial();else $("tutorialCard").classList.add("hidden");
+ window.scrollTo({top:0});
+}
+function restartMission(){if(!sim)return;$("endModal").classList.add("hidden");startMission(sim.mission,sim.diff)}
+function goTitle(){running=false;paused=false;$("app").classList.add("hidden");$("pauseModal").classList.add("hidden");$("endModal").classList.add("hidden");$("titleScreen").classList.remove("hidden");renderScenarioGrid()}
+
+/* ============ scenario grid ============ */
+function renderScenarioGrid(){
+ const grid=$("scenarioGrid");grid.innerHTML="";
+ MISSIONS.forEach(m=>{
+  const locked=!save.unlocked.includes(m.id);const done=save.completed[m.id];const best=save.best[m.id];
+  const b=document.createElement("button");b.className="scenario btn glass rounded-3xl p-4 text-left fadein"+(selectedMission===m.id?" active":"");
+  b.innerHTML=`<div class="flex justify-between"><span class="text-2xl">${locked?"🔒":m.icon}</span>${done?'<span class="text-[10px] font-bold text-emerald-300 bg-emerald-400/10 border border-emerald-300/20 rounded-full px-2 py-0.5">COMPLETED</span>':""}</div><b class="block mt-2 text-sm">${m.name}</b><p class="text-[11px] text-slate-400 leading-relaxed mt-1">${locked?"Complete the previous mission to unlock.":m.desc}</p><div class="text-[10px] mt-2 ${best?"text-amber-300":"text-slate-500"}">${best?"Best score "+best:m.tag}</div>`;
+  b.onclick=()=>{if(locked){b.classList.add("shake");setTimeout(()=>b.classList.remove("shake"),500);return}selectedMission=m.id;renderScenarioGrid()};
+  grid.appendChild(b);
+ });
+ const c=Object.keys(save.completed).length;$("progressSummary").textContent=`Progress saved locally · ${c}/4 missions complete · unlocked ${save.unlocked.length}/5`;
+ document.querySelectorAll(".diff").forEach(b=>b.classList.toggle("active",b.dataset.diff===selectedDiff));$("diffDesc").textContent=DIFFS[selectedDiff].desc;
+}
+document.querySelectorAll(".diff").forEach(b=>b.onclick=()=>{selectedDiff=b.dataset.diff;renderScenarioGrid()});
+
+/* ============ tools & input ============ */
+function setTool(tool){currentTool=tool;document.querySelectorAll(".tool").forEach(b=>b.classList.toggle("active",b.dataset.tool===tool))}
+document.querySelectorAll(".tool").forEach(b=>b.onclick=()=>{AudioSys.init();if(b.dataset.tool==="erase"){particles=[];edgeFlashes=[];logEvent("Visual effects cleared");return}setTool(b.dataset.tool)});
+function canvasPos(e){const r=mainC.getBoundingClientRect();return{x:clamp((e.clientX-r.left)/r.width,0,1),y:clamp((e.clientY-r.top)/r.height,0,1)}}
+function nearestNeuron(p,maxD){let best=null,bd=1e9;for(const nr of sim.neurons){const d=Math.hypot(nr.x-p.x,nr.y-p.y);if(d<bd){bd=d;best=nr}}return bd<(maxD||.09)?best:null}
+mainC.addEventListener("pointerdown",e=>{
+ if(!sim||!running)return;AudioSys.init();const p=canvasPos(e),nr=nearestNeuron(p,.11);
+ if(currentTool==="inspect"){if(nr){sim.selected=nr.i;updateHUD()}}
+ else if(currentTool==="stim"){const targets=nr?[nr.i,...sim.out[nr.i].map(x=>x.to)]:allIndices().filter(i=>Math.hypot(sim.neurons[i].x-p.x,sim.neurons[i].y-p.y)<.09);stimulateSet(targets.slice(0,18),sim.stimStrength,"⚡ +I");if(nr)sim.selected=nr.i}
+ else if(currentTool==="inhibit"){const targets=nr?[nr.i]:allIndices().filter(i=>Math.hypot(sim.neurons[i].x-p.x,sim.neurons[i].y-p.y)<.09);inhibitSet(targets,18);spawnFloater(p.x,p.y,"🧊 −I","#a5b4fc");AudioSys.calm()}
+ else if(currentTool==="electrode"){if(nr){if(sim.electrodes.length>=6)sim.electrodes.shift();sim.electrodes.push({i:nr.i,next:sim.t+80});sim.selected=nr.i;logEvent(`Electrode placed on neuron #${nr.i} (2 Hz pulsing)`,"#facc15");spawnFloater(nr.x,nr.y,"📍 ELECTRODE","#facc15")}}
+ else if(currentTool==="lesion"){if(nr){nr.disabled=!nr.disabled;logEvent(nr.disabled?`Neuron #${nr.i} lesioned — its synapses go silent`:`Neuron #${nr.i} restored`,nr.disabled?"#f87171":"#34d399");sim.selected=nr.i}}
+});
+$("globalStimBtn").onclick=()=>{if(sim)stimulateSet(sim.groups.patternA.concat(sim.groups.patternB),sim.stimStrength,"⚡ PULSE")};
+$("calmBtn").onclick=()=>{if(sim)calmWave()};
+$("stimSelBtn").onclick=()=>{if(sim)stimulateSet([sim.selected],sim.stimStrength,"⚡ SEL")};
+$("followBtn").onclick=()=>{if(sim){if(sim.electrodes.length>=6)sim.electrodes.shift();sim.electrodes.push({i:sim.selected,next:sim.t+80});logEvent(`Electrode placed on selected #${sim.selected}`,"#facc15")}};
+
+/* sliders */
+function bindSlider(id,fn){$(id).addEventListener("input",e=>{if(!sim)return;fn(parseFloat(e.target.value));syncControlsFromSim()})}
+bindSlider("nSlider",v=>{sim.N=Math.round(v)}); // applied on rebuild
+bindSlider("eiSlider",v=>{ // live E/I rebalance: convert neuron types proportionally
+ const target=v/100;sim.inhFrac=target;const want=Math.round(sim.N*target);const cur=sim.neurons.filter(n=>n.type===1).length;
+ const rng=mulberry32(sim.seed+sim.t|0);
+ if(cur<want){const exc=sim.neurons.filter(n=>n.type===0);for(let k=0;k<want-cur&&k<exc.length;k++){convertNeuron(exc[Math.floor(rng()*exc.length)],1)}}
+ else if(cur>want){const inh=sim.neurons.filter(n=>n.type===1);for(let k=0;k<cur-want&&k<inh.length;k++){convertNeuron(inh[Math.floor(rng()*inh.length)],0)}}
+ logEvent(`E/I rebalance: inhibitory fraction now ${Math.round(target*100)}% (converted cells flip their outgoing sign)`,"#f0abfc")});
+function convertNeuron(nr,type){if(!nr||nr.type===type)return;nr.type=type;const p=neuronParams(type,Math.random);Object.assign(nr,{a:p.a,b:p.b,c:p.c,d:p.d});for(const e of sim.out[nr.i])e.w=(type===0?Math.abs(e.w)||4:-Math.abs(e.w)||-6)}
+bindSlider("driveSlider",v=>sim.drive=v);
+bindSlider("noiseSlider",v=>sim.noise=v*(DIFFS[sim.diff].noise||1));
+bindSlider("lrSlider",v=>sim.lr=v);
+bindSlider("decaySlider",v=>sim.decay=v/100);
+$("stimStrength").addEventListener("input",e=>{if(sim)sim.stimStrength=parseInt(e.target.value);$("stimVal").textContent=e.target.value});
+$("topologySel").addEventListener("change",e=>{if(sim)sim.topology=e.target.value});
+$("stdpToggle").onclick=()=>{if(!sim)return;sim.stdp=!sim.stdp;logEvent("STDP "+(sim.stdp?"enabled — timing now rewires synapses":"disabled — weights frozen (decay still applies)"),sim.stdp?"#34d399":"#facc15");syncControlsFromSim();updateTaskUI(0)};
+$("rebuildBtn").onclick=()=>{if(!sim)return;sim.N=parseInt($("nSlider").value);sim.topology=$("topologySel").value;buildNetwork();initTask();sim.t=0;sim.totalSpikes=0;sim.integrity=100;sim.ended=false;running=true;logEvent(`Network rebuilt: ${sim.topology}, ${sim.N} neurons, ${sim.totalEdges} synapses. Mission reset.`,"#e879f9");syncControlsFromSim()};
+$("restartBtn").onclick=restartMission;
+
+/* speed / pause */
+document.querySelectorAll(".speed").forEach(b=>b.onclick=()=>{speed=parseFloat(b.dataset.speed);document.querySelectorAll(".speed").forEach(x=>x.classList.toggle("active",x===b))});
+function setPaused(p){if(!sim)return;paused=p;$("pauseBtn").textContent=paused?"▶ Resume":"⏸ Pause";$("pauseModal").classList.toggle("hidden",!paused)}
+$("pauseBtn").onclick=()=>setPaused(!paused);
+$("resumeBtn").onclick=()=>setPaused(false);
+$("pauseSettingsBtn").onclick=()=>{$("settingsModal").classList.remove("hidden")};
+$("pauseRestartBtn").onclick=()=>{setPaused(false);restartMission()};
+$("pauseTitleBtn").onclick=()=>{setPaused(false);goTitle()};
+$("backTitleBtn").onclick=goTitle;
+
+/* modals & settings */
+function openModal(id){$(id).classList.remove("hidden")}function closeModals(){["helpModal","settingsModal"].forEach(i=>$(i).classList.add("hidden"))}
+$("helpBtn").onclick=()=>openModal("helpModal");$("titleHelpBtn").onclick=()=>openModal("helpModal");
+$("settingsBtn").onclick=()=>openModal("settingsModal");$("titleSettingsBtn").onclick=()=>openModal("settingsModal");
+document.querySelectorAll(".closeModal").forEach(b=>b.onclick=closeModals);
+["helpModal","settingsModal"].forEach(id=>$(id).addEventListener("click",e=>{if(e.target.id===id)closeModals()}));
+function applySettingsUI(){$("volSlider").value=save.settings.vol;$("volVal").textContent=save.settings.vol+"%";$("muteChk").checked=save.settings.mute;$("connChk").checked=save.settings.conn;$("partChk").checked=save.settings.particles;$("flashChk").checked=save.settings.flash;AudioSys.applyVol()}
+$("volSlider").addEventListener("input",e=>{save.settings.vol=parseInt(e.target.value);$("volVal").textContent=save.settings.vol+"%";AudioSys.init();AudioSys.applyVol();persist()});
+$("muteChk").addEventListener("change",e=>{save.settings.mute=e.target.checked;AudioSys.applyVol();persist()});
+$("connChk").addEventListener("change",e=>{save.settings.conn=e.target.checked;persist()});
+$("partChk").addEventListener("change",e=>{save.settings.particles=e.target.checked;persist()});
+$("flashChk").addEventListener("change",e=>{save.settings.flash=e.target.checked;persist()});
+$("muteBtn").onclick=()=>{AudioSys.init();save.settings.mute=!save.settings.mute;applySettingsUI();persist()};
+$("launchBtn").onclick=()=>startMission(selectedMission,selectedDiff);
+$("resetProgressBtn").onclick=()=>{save.unlocked=["awaken","sandbox"];save.completed={};save.best={};save.seenTutorial=false;persist();renderScenarioGrid();logEvent&&0};
+$("nextMissionBtn").onclick=e=>{const n=e.target.dataset.next;if(n)startMission(n,selectedDiff)};
+$("replayBtn").onclick=restartMission;$("endTitleBtn").onclick=()=>{$("endModal").classList.add("hidden");goTitle()};
+
+/* tutorial */
+const TUT=[["Welcome to the living circuit","Every dot is a simulated neuron firing in real time. Bright cells are near threshold; a flash means a spike just travelled down its synapses. Your job: keep this culture alive, balanced, and learning."],
+["Step 1 — Wake it up","Press ⚡ Pulse stimulus in the Mission panel (or pick the Stimulate tool and click the canvas). Watch spikes cascade and the population-rate chart (bottom) rise into the 5–30 Hz green zone."],
+["Step 2 — Balance E/I","Too much excitation synchronises everything into a seizure; too much inhibition flatlines it. Drag Inhibitory %, Drive and Noise and watch rate + synchrony respond. Both extremes drain Lab Integrity."],
+["Step 3 — Hold the rhythm","For this first mission, simply keep firing between 5–30 Hz with synchrony under 0.78 for 6 seconds. Later missions add STDP teaching, rhythm generation and a classifier capstone. Good luck, engineer."]];
+let tutIdx=0;
+function startTutorial(){tutIdx=0;$("tutorialCard").classList.remove("hidden");showTut()}
+function showTut(){$("tutTitle").textContent=TUT[tutIdx][0];$("tutText").textContent=TUT[tutIdx][1];$("tutStep").textContent=`Step ${tutIdx+1} / ${TUT.length}`;$("tutNext").textContent=tutIdx===TUT.length-1?"Start experimenting ✓":"Next →"}
+$("tutNext").onclick=()=>{if(tutIdx<TUT.length-1){tutIdx++;showTut()}else{$("tutorialCard").classList.add("hidden");save.seenTutorial=true;persist()}};
+$("tutSkip").onclick=()=>{$("tutorialCard").classList.add("hidden");save.seenTutorial=true;persist()};
+
+/* keyboard */
+window.addEventListener("keydown",e=>{
+ if($("app").classList.contains("hidden"))return;const tag=(e.target.tagName||"").toLowerCase();if(tag==="input"||tag==="select"||tag==="textarea")return;
+ if(e.code==="Space"){e.preventDefault();if(!$("endModal").classList.contains("hidden"))return;setPaused(!paused)}
+ else if(e.key>="1"&&e.key<="5")setTool(["inspect","stim","inhibit","electrode","lesion"][+e.key-1]);
+ else if(e.key==="s"||e.key==="S"){if(sim)stimulateSet(sim.groups.patternA.concat(sim.groups.patternB),sim.stimStrength,"⚡ PULSE")}
+ else if(e.key==="c"||e.key==="C"){if(sim)calmWave()}
+ else if(e.key==="+"||e.key==="="){speed=clamp(speed*2,.5,4);document.querySelectorAll(".speed").forEach(x=>x.classList.toggle("active",parseFloat(x.dataset.speed)===speed))}
+ else if(e.key==="-"){speed=clamp(speed/2,.5,4);document.querySelectorAll(".speed").forEach(x=>x.classList.toggle("active",parseFloat(x.dataset.speed)===speed))}
+ else if(e.key==="m"||e.key==="M")$("muteBtn").click();
+ else if(e.key==="h"||e.key==="H")openModal("helpModal");
+ else if(e.key==="Escape")closeModals();
+});
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&running&&!paused&&sim&&!sim.ended){setPaused(true);logEvent("Auto-paused (tab hidden) — state held safely.","#facc15")}});
+window.addEventListener("resize",()=>{if(sim)drawMain()});
+
+/* init */
+applySettingsUI();renderScenarioGrid();setTool("stim");
+</script>
+</body>
+</html>

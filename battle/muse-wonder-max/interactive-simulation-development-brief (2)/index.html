@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steel Signal — Rail Network Dispatcher</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html{scroll-behavior:smooth}
+  body{font-family:Inter,system-ui,sans-serif;background:#0C130F;color:#E7EFE9}
+  .font-display{font-family:"Barlow Condensed",Inter,sans-serif;letter-spacing:.04em}
+  .panel{background:#14211A;border:1px solid #26382D;border-radius:16px;box-shadow:0 10px 28px rgba(0,0,0,.28)}
+  .panel-soft{background:#18271E;border:1px solid #2A4033;border-radius:12px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border-radius:10px;padding:.55rem .85rem;font-weight:700;font-size:.82rem;border:1px solid #33473A;background:#1C2E24;color:#E7EFE9;cursor:pointer;transition:all .15s ease;white-space:nowrap}
+  .btn:hover{background:#263A2E;transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .btn-amber{background:#E8A317;border-color:#E8A317;color:#171207}
+  .btn-amber:hover{background:#F2B733}
+  .btn-green{background:#1F7A4C;border-color:#2D9A63;color:#fff}
+  .btn-green:hover{background:#278B58}
+  .btn-red{background:#8E2F2F;border-color:#B94343;color:#fff}
+  .btn-red:hover{background:#A93A3A}
+  .btn-ghost{background:transparent}
+  .icon-btn{width:38px;height:38px;padding:0;border-radius:10px}
+  .chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid #33473A;background:#17251D;border-radius:999px;padding:.28rem .6rem;font-size:.72rem;font-weight:700;color:#C9D8CE}
+  .tab-btn{flex:1;padding:.55rem .25rem;border-radius:9px;font-size:.75rem;font-weight:800;color:#A9BCAE;cursor:pointer;border:1px solid transparent}
+  .tab-btn.active{background:#24372B;color:#FFD166;border-color:#3A5743}
+  .speed-btn.active,.diff-btn.active,.overlay-btn.active{background:#E8A317;color:#171207;border-color:#E8A317}
+  .scenario-card{border:2px solid #2A4033;background:#15231B;border-radius:16px;padding:16px;cursor:pointer;transition:all .15s ease;text-align:left;width:100%}
+  .scenario-card:hover{border-color:#52745E;transform:translateY(-2px)}
+  .scenario-card.selected{border-color:#E8A317;background:#1C2A1D}
+  .scenario-card.locked{opacity:.55;cursor:not-allowed}
+  .train-row{width:100%;text-align:left;border:1px solid #2A4033;background:#17251D;border-radius:12px;padding:10px;cursor:pointer;transition:all .12s}
+  .train-row:hover{border-color:#5A7A64}
+  .train-row.selected{border-color:#E8A317;background:#24311F}
+  .meter{height:8px;border-radius:999px;background:#26362C;overflow:hidden}
+  .meter>div{height:100%;border-radius:999px;transition:width .4s ease}
+  .log-item{border-left:3px solid #3E5A48;padding:7px 9px;background:#16231B;border-radius:0 9px 9px 0;font-size:.76rem}
+  .toast{background:#1B2C21;border:1px solid #48624F;border-left:5px solid #E8A317;color:#EEF5EF;border-radius:12px;padding:11px 13px;box-shadow:0 12px 30px rgba(0,0,0,.4);animation:toastIn .25s ease both;max-width:360px;font-size:.82rem}
+  @keyframes toastIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+  @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(232,163,23,.55)}100%{box-shadow:0 0 0 14px rgba(232,163,23,0)}}
+  .pulse-attn{animation:pulseRing 1.1s ease-out infinite}
+  .modal-backdrop{background:rgba(3,8,5,.78);backdrop-filter:blur(4px)}
+  .kbd{font-family:ui-monospace,monospace;font-size:.68rem;border:1px solid #44584B;border-bottom-width:2px;border-radius:5px;padding:.08rem .32rem;background:#101B14;color:#D7E5DA}
+  .scroll-thin::-webkit-scrollbar{width:6px;height:6px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:#35503F;border-radius:99px}
+  input[type=range]{accent-color:#E8A317}
+  select,input[type=text]{background:#101B14;border:1px solid #33473A;border-radius:9px;color:#E7EFE9;padding:.5rem .65rem;font-size:.85rem}
+  .stat-num{font-family:"Barlow Condensed";font-size:1.65rem;line-height:1;font-weight:700}
+  .blink{animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.35}}
+  #simCanvas{touch-action:none}
+  .upgrade-card{border:1px solid #2A4033;background:#15231B;border-radius:13px;padding:12px}
+  .star-on{color:#FFD166}.star-off{color:#3A4D40}
+  @media(max-width:640px){.btn{padding:.5rem .65rem;font-size:.78rem}}
+</style>
+</head>
+<body>
+
+<div id="toastBox" class="fixed top-3 right-3 z-[120] flex flex-col gap-2 items-end pointer-events-none"></div>
+
+<!-- ===================== TITLE SCREEN ===================== -->
+<section id="titleScreen" class="min-h-screen">
+  <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-5">
+    <header class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-[#E8A317] text-[#171207] flex items-center justify-center"><i data-lucide="train-front" class="w-7 h-7"></i></div>
+        <div>
+          <div class="font-display text-3xl font-bold leading-none">STEEL SIGNAL</div>
+          <div class="text-xs text-[#9DB3A3] font-semibold tracking-widest">RAIL NETWORK DISPATCHER</div>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn" id="titleHelpBtn"><i data-lucide="info" class="w-4 h-4"></i> How to Play</button>
+        <button class="btn" id="titleSettingsBtn"><i data-lucide="settings" class="w-4 h-4"></i> Settings</button>
+        <button class="btn icon-btn" id="titleMuteBtn" title="Mute"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+      </div>
+    </header>
+
+    <div class="grid lg:grid-cols-[1.05fr_.95fr] gap-6 items-start">
+      <div>
+        <div class="panel p-6 sm:p-8">
+          <span class="chip !text-[#FFD166] !border-[#6B5520]"><span class="w-2 h-2 rounded-full bg-[#FFD166] blink"></span> LIVE DISPATCH SIMULATION</span>
+          <h1 class="font-display text-5xl sm:text-6xl font-bold leading-[.92] mt-4">Keep every train<br>on time. <span class="text-[#E8A317]">Safely.</span></h1>
+          <p class="text-[#B7C9BB] mt-4 leading-relaxed max-w-xl">You are the signaller for a busy mixed-traffic railway. Set the points, work the signals, thread expresses past heavy freight on single-track sections — and hold your nerve when breakdowns, possessions and storms start stacking delays across the network.</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+            <div class="panel-soft p-3"><div class="stat-num text-[#FFD166]" id="metaRuns">0</div><div class="text-[11px] text-[#93AA99] font-bold">SHIFTS WORKED</div></div>
+            <div class="panel-soft p-3"><div class="stat-num text-[#7FE0A8]" id="metaBest">0</div><div class="text-[11px] text-[#93AA99] font-bold">BEST SCORE</div></div>
+            <div class="panel-soft p-3"><div class="stat-num text-[#8ED0FF]" id="metaTrains">0</div><div class="text-[11px] text-[#93AA99] font-bold">TRAINS LANDED</div></div>
+            <div class="panel-soft p-3"><div class="stat-num text-[#FFB3A7]" id="metaRep">0 ★</div><div class="text-[11px] text-[#93AA99] font-bold">REPUTATION</div></div>
+          </div>
+          <div class="flex flex-wrap gap-3 mt-6">
+            <button class="btn btn-amber !text-base !px-6 !py-3" id="startBtn"><i data-lucide="play" class="w-5 h-5"></i> Start Shift</button>
+            <button class="btn !text-base !px-5 !py-3 hidden" id="continueBtn"><i data-lucide="save" class="w-5 h-5"></i> Resume Saved Shift</button>
+            <button class="btn !text-base !px-5 !py-3" id="heroHelpBtn"><i data-lucide="graduation-cap" class="w-5 h-5"></i> Guided Tutorial</button>
+          </div>
+          <p class="text-xs text-[#839B89] mt-4">The first scenario includes a step-by-step guided tutorial. Progress, upgrades and best scores are saved on this device.</p>
+        </div>
+
+        <div class="panel p-5 mt-5">
+          <div class="flex items-center gap-2 mb-3"><i data-lucide="wrench" class="w-5 h-5 text-[#FFD166]"></i><h3 class="font-display text-2xl font-bold">SIGNAL BOX UPGRADES</h3><span class="chip ml-auto">Spend ★ reputation earned from completed shifts</span></div>
+          <div id="shopBox" class="grid sm:grid-cols-2 gap-3"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel p-5">
+          <div class="flex items-center justify-between mb-1"><h3 class="font-display text-2xl font-bold">SELECT SCENARIO</h3><i data-lucide="map" class="w-5 h-5 text-[#FFD166]"></i></div>
+          <p class="text-xs text-[#93AA99] mb-4">Complete a shift to unlock the next. The Stormbound capstone combines every system at once.</p>
+          <div id="scenarioBox" class="flex flex-col gap-3"></div>
+          <div class="mt-5">
+            <div class="text-xs font-extrabold tracking-widest text-[#93AA99] mb-2">DIFFICULTY</div>
+            <div class="grid grid-cols-3 gap-2" id="diffBox">
+              <button class="btn diff-btn" data-diff="relaxed">Relaxed</button>
+              <button class="btn diff-btn active" data-diff="standard">Standard</button>
+              <button class="btn diff-btn" data-diff="dispatcher">Dispatcher</button>
+            </div>
+            <p class="text-xs text-[#839B89] mt-2" id="diffDesc"></p>
+          </div>
+        </div>
+
+        <div class="panel p-5 mt-5">
+          <h3 class="font-display text-2xl font-bold mb-3">THE NETWORK</h3>
+          <div class="grid grid-cols-2 gap-2 text-[13px]">
+            <div class="panel-soft p-3"><b class="text-[#7FE0A8]">Single-track blocks</b><br><span class="text-[#A9BCAE]">One train per section. Signals protect every entry — plan meets at station loops.</span></div>
+            <div class="panel-soft p-3"><b class="text-[#FFD166]">Junction points</b><br><span class="text-[#A9BCAE]">Mill &amp; Riverdale points must be set by hand for branch trains.</span></div>
+            <div class="panel-soft p-3"><b class="text-[#8ED0FF]">Mixed traffic</b><br><span class="text-[#A9BCAE]">Fast expresses, stopping locals, branch shuttles and slow heavy freight share the line.</span></div>
+            <div class="panel-soft p-3"><b class="text-[#FFB3A7]">Live disruptions</b><br><span class="text-[#A9BCAE]">Breakdowns, debris, possessions, surges and storms propagate delays.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-[11px] text-[#657C6C] mt-8">Steel Signal · A signalling &amp; timetable management simulation · All audio is synthesized live · Progress saves locally</p>
+  </div>
+</section>
+
+<!-- ===================== GAME SCREEN ===================== -->
+<section id="gameScreen" class="hidden min-h-screen">
+  <header class="sticky top-0 z-40 bg-[#0E1812]/95 border-b border-[#26382D]">
+    <div class="max-w-[1500px] mx-auto px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2">
+      <div class="flex items-center gap-2 mr-1">
+        <div class="w-9 h-9 rounded-xl bg-[#E8A317] text-[#171207] flex items-center justify-center"><i data-lucide="train-front" class="w-5 h-5"></i></div>
+        <div class="leading-none"><div class="font-display font-bold text-xl">STEEL SIGNAL</div><div class="text-[10px] text-[#8FA695] font-bold" id="hudScenario">—</div></div>
+      </div>
+      <div class="chip"><i data-lucide="clock" class="w-3.5 h-3.5"></i><span id="hudClock">06:00</span></div>
+      <div class="hidden md:flex items-center gap-2 min-w-[150px] flex-1 max-w-[230px]"><span class="text-[10px] font-bold text-[#8FA695]">SHIFT</span><div class="meter flex-1"><div id="shiftFill" style="width:0%;background:#E8A317"></div></div><span class="text-[11px] font-bold" id="shiftPct">0%</span></div>
+      <div class="chip" title="Operating budget"><i data-lucide="wallet" class="w-3.5 h-3.5 text-[#7FE0A8]"></i><span id="hudBudget">£0</span></div>
+      <div class="chip" title="Score"><i data-lucide="trophy" class="w-3.5 h-3.5 text-[#FFD166]"></i><span id="hudScore">0</span></div>
+      <div class="chip" title="Passenger satisfaction"><i data-lucide="heart-pulse" class="w-3.5 h-3.5 text-[#FF9DB0]"></i><span id="hudSat">85%</span></div>
+      <div class="chip" title="On-time arrivals"><i data-lucide="timer" class="w-3.5 h-3.5 text-[#8ED0FF]"></i><span id="hudPunct">—</span></div>
+      <div class="chip" id="weatherChip" title="Weather"><i data-lucide="cloud-sun" class="w-3.5 h-3.5"></i><span id="hudWeather">Calm</span></div>
+      <div class="flex items-center gap-1 ml-auto">
+        <div class="flex bg-[#14211A] border border-[#2A4033] rounded-[10px] p-1 gap-1">
+          <button class="btn speed-btn !py-1.5 !px-2.5" data-speed="0.5">0.5×</button>
+          <button class="btn speed-btn active !py-1.5 !px-2.5" data-speed="1">1×</button>
+          <button class="btn speed-btn !py-1.5 !px-2.5" data-speed="2">2×</button>
+          <button class="btn speed-btn !py-1.5 !px-2.5" data-speed="4">4×</button>
+        </div>
+        <button class="btn icon-btn" id="pauseBtn" title="Pause (Space)"><i data-lucide="pause" class="w-4 h-4"></i></button>
+        <button class="btn icon-btn" id="muteBtn" title="Mute"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+        <button class="btn icon-btn" id="gameHelpBtn" title="Help"><i data-lucide="info" class="w-4 h-4"></i></button>
+        <button class="btn icon-btn" id="gameSettingsBtn" title="Settings"><i data-lucide="settings" class="w-4 h-4"></i></button>
+        <button class="btn btn-red !py-2" id="pauseMenuBtn">Menu</button>
+      </div>
+    </div>
+    <div class="max-w-[1500px] mx-auto px-3 sm:px-4 pb-2">
+      <div class="panel-soft px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]" id="objectiveBar"></div>
+    </div>
+  </header>
+
+  <main class="max-w-[1500px] mx-auto px-3 sm:px-4 py-3 grid xl:grid-cols-[minmax(0,1fr)_370px] gap-3 items-start">
+    <div>
+      <div class="panel p-2 relative">
+        <div class="flex flex-wrap items-center gap-2 px-1 pb-2">
+          <span class="text-[11px] font-extrabold tracking-widest text-[#8FA695]">MAP OVERLAY</span>
+          <button class="btn overlay-btn active !py-1.5" data-overlay="normal">Normal</button>
+          <button class="btn overlay-btn !py-1.5" data-overlay="blocks">Block Occupancy</button>
+          <button class="btn overlay-btn !py-1.5" data-overlay="delay">Delay Heat</button>
+          <span class="chip ml-auto" id="activeCountChip">0 trains on network</span>
+          <button class="btn btn-red !py-1.5" id="emergencyBtn" title="Emergency stop all trains (E)"><i data-lucide="octagon-alert" class="w-4 h-4"></i> STOP ALL</button>
+        </div>
+        <div id="canvasWrap" class="relative rounded-xl overflow-hidden bg-[#122019]" style="height:min(62vh,600px);min-height:400px">
+          <canvas id="simCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+          <div id="tutorialCard" class="absolute left-3 bottom-3 max-w-[340px] panel p-3 hidden" style="background:#1D2B1B;border-color:#E8A317">
+            <div class="flex items-start gap-2">
+              <i data-lucide="graduation-cap" class="w-5 h-5 text-[#FFD166] shrink-0 mt-0.5"></i>
+              <div class="flex-1"><div class="font-bold text-sm" id="tutTitle">Welcome, Signaller</div><div class="text-xs text-[#C4D4C7] leading-relaxed" id="tutText"></div></div>
+            </div>
+            <div class="flex gap-2 mt-2"><span class="chip" id="tutStep">Step 1/5</span><button class="btn !py-1 !px-2 ml-auto" id="tutSkip">Skip tutorial</button></div>
+          </div>
+          <div class="absolute right-3 bottom-3 panel-soft px-3 py-2 text-[11px] leading-relaxed pointer-events-none hidden sm:block">
+            <b>Legend:</b> <span class="text-[#7FE0A8]">●</span> signal clear · <span class="text-[#FFD166]">●</span> caution · <span class="text-[#FF7B72]">●</span> stop · <span class="text-[#FFD166]">◆</span> points (click to swing) · Click trains, signals &amp; blocks
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2 text-[11px] text-[#8FA695]">
+          <span><span class="kbd">Space</span> pause</span><span><span class="kbd">1–4</span> speed</span><span><span class="kbd">Tab</span> next train</span><span><span class="kbd">H</span> hold selected</span><span><span class="kbd">X</span> expedite</span><span><span class="kbd">E</span> stop all</span><span><span class="kbd">Esc</span> menu</span>
+          <span class="ml-auto" id="tickerText">Network nominal.</span>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-3 mt-3">
+        <div class="panel p-4"><div class="text-[11px] font-extrabold tracking-widest text-[#8FA695]">NEXT DEPARTURES</div><div id="nextDeps" class="mt-2 flex flex-col gap-1.5 text-[12px]"></div></div>
+        <div class="panel p-4"><div class="text-[11px] font-extrabold tracking-widest text-[#8FA695]">NETWORK ALERTS</div><div id="alertsBox" class="mt-2 flex flex-col gap-1.5 text-[12px]"></div></div>
+        <div class="panel p-4"><div class="text-[11px] font-extrabold tracking-widest text-[#8FA695]">SHIFT MILESTONES</div><div id="milestoneBox" class="mt-2 flex flex-col gap-1.5 text-[12px]"></div></div>
+      </div>
+    </div>
+
+    <aside class="flex flex-col gap-3">
+      <div class="panel p-4" id="selectedPanel"></div>
+      <div class="panel p-3">
+        <div class="flex gap-1 bg-[#101B14] rounded-[10px] p-1">
+          <button class="tab-btn active" data-tab="control">Control</button>
+          <button class="tab-btn" data-tab="trains">Trains <span id="trainTabCount"></span></button>
+          <button class="tab-btn" data-tab="schedule">Schedule</button>
+          <button class="tab-btn" data-tab="stats">Stats</button>
+          <button class="tab-btn" data-tab="log">Log</button>
+        </div>
+        <div class="mt-3 max-h-[560px] overflow-y-auto scroll-thin pr-1">
+          <div id="tab-control" class="tab-page"></div>
+          <div id="tab-trains" class="tab-page hidden"></div>
+          <div id="tab-schedule" class="tab-page hidden"></div>
+          <div id="tab-stats" class="tab-page hidden"></div>
+          <div id="tab-log" class="tab-page hidden"><div id="logBox" class="flex flex-col gap-1.5"></div></div>
+        </div>
+      </div>
+    </aside>
+  </main>
+</section>
+
+<!-- ===================== HELP MODAL ===================== -->
+<div id="helpModal" class="fixed inset-0 z-[100] hidden items-center justify-center modal-backdrop p-3">
+  <div class="panel max-w-3xl w-full max-h-[92vh] overflow-y-auto scroll-thin p-6">
+    <div class="flex items-start justify-between"><div><h2 class="font-display text-4xl font-bold">SIGNALLER'S HANDBOOK</h2><p class="text-sm text-[#9DB3A3]">Everything you need to run the railway.</p></div><button class="btn icon-btn close-help"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+    <div class="grid sm:grid-cols-2 gap-4 mt-5 text-sm leading-relaxed">
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Your job</h4>Move timetabled trains to their destinations on time. You don't drive trains — you control <b>signals</b>, <b>junction points</b> and <b>priorities</b>. Trains drive themselves, brake for red signals and stop at booked stations.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Blocks &amp; signals</h4>Each section between stations is a <b>block</b>: only one train may occupy it. A signal shows <span class="text-[#7FE0A8]">green</span> when the road ahead is clear, <span class="text-[#FFD166]">yellow</span> for caution, <span class="text-[#FF7B72]">red</span> for stop. Click any signal to <b>hold</b> it at red and stage trains in your chosen order.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Points (◆)</h4>Mill Junction and Riverdale have hand points. Branch trains to North Mine / Harbour Port need the points swung to <b>BRANCH</b>; main-line trains need <b>MAIN</b>. Click the ◆ on the map or use the Control tab. A train waiting on points shows “Waiting: points”.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Meets on single track</h4>Opposing trains cannot share a block. Hold the lower-priority train at a station loop (2 platforms) and let the other pass. Freight is slow and earns well but blocks the line for a long time — expresses lose you the most satisfaction when delayed.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Train actions</h4>Click a train: <b>Hold/Release</b> it at its next opportunity, <b>Expedite</b> (+speed, costs budget), <b>Cancel</b> the service (penalty), call an <b>Engineer</b> to a breakdown, or — dangerously — <b>Proceed at danger</b> past a red into an occupied block. That can cause a collision and end the shift.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Disruptions</h4>Breakdowns stop trains in-section. Debris and maintenance <b>possessions</b> close blocks — click a closed block to dispatch a clearance crew. Passenger surges lengthen station dwells. Storms cut speeds across the network. Warnings appear in Alerts and the Log.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Money &amp; mood</h4>Every arrival earns revenue (freight pays most). Engineers, crews and expediting cost money; the railway also burns operating budget every minute. Satisfaction drifts toward a level set by current delays — keep it above the target and never let it collapse.</div>
+      <div class="panel-soft p-4"><h4 class="font-bold text-[#FFD166] mb-1">Winning &amp; losing</h4>Hit the scenario targets (services completed, punctuality, satisfaction) by the end of the shift for up to ★★★ and reputation to spend on permanent upgrades. You fail early if satisfaction collapses, the budget is exhausted, or a collision occurs.</div>
+    </div>
+    <h4 class="font-bold mt-5 mb-2">Controls</h4>
+    <div class="panel-soft p-4 text-sm grid sm:grid-cols-2 gap-2">
+      <div><span class="kbd">Mouse / Tap</span> select trains, signals, points, blocks</div>
+      <div><span class="kbd">Space</span> pause / resume &nbsp; <span class="kbd">1–4</span> sim speed</div>
+      <div><span class="kbd">Tab</span> cycle trains &nbsp; <span class="kbd">H</span> hold selected</div>
+      <div><span class="kbd">X</span> expedite selected &nbsp; <span class="kbd">E</span> emergency stop all</div>
+      <div><span class="kbd">Esc</span> pause menu &nbsp; Speeds 0.5×–4× in the top bar</div>
+      <div>Tab auto-pauses when hidden. Restart anytime from the Menu.</div>
+    </div>
+    <button class="btn btn-amber w-full mt-5 close-help">Back to the railway</button>
+  </div>
+</div>
+
+<!-- ===================== SETTINGS MODAL ===================== -->
+<div id="settingsModal" class="fixed inset-0 z-[100] hidden items-center justify-center modal-backdrop p-3">
+  <div class="panel max-w-md w-full p-6">
+    <div class="flex items-start justify-between"><h2 class="font-display text-4xl font-bold">SETTINGS</h2><button class="btn icon-btn close-settings"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+    <div class="flex flex-col gap-4 mt-4 text-sm">
+      <label class="flex items-center justify-between gap-3">Master volume <input type="range" id="setVolume" min="0" max="100" value="70" class="w-44"></label>
+      <label class="flex items-center justify-between gap-3">Mute audio <input type="checkbox" id="setMute" class="w-5 h-5" style="accent-color:#E8A317"></label>
+      <label class="flex items-center justify-between gap-3">Weather &amp; smoke particles <input type="checkbox" id="setParticles" class="w-5 h-5" style="accent-color:#E8A317"></label>
+      <label class="flex items-center justify-between gap-3">Show guided tutorial <input type="checkbox" id="setTutorial" class="w-5 h-5" style="accent-color:#E8A317"></label>
+      <label class="flex items-center justify-between gap-3">Default map overlay
+        <select id="setOverlay"><option value="normal">Normal</option><option value="blocks">Block Occupancy</option><option value="delay">Delay Heat</option></select></label>
+      <div class="panel-soft p-3 text-xs text-[#A9BCAE]">Settings, campaign progress, upgrades and best scores persist in your browser. Saved mid-shift runs can be resumed from the title screen.</div>
+      <button class="btn btn-red" id="resetProgressBtn">Reset campaign progress &amp; upgrades</button>
+    </div>
+    <button class="btn btn-amber w-full mt-5 close-settings">Done</button>
+  </div>
+</div>
+
+<!-- ===================== PAUSE MENU ===================== -->
+<div id="pauseModal" class="fixed inset-0 z-[95] hidden items-center justify-center modal-backdrop p-3">
+  <div class="panel max-w-sm w-full p-6 text-center">
+    <div class="w-14 h-14 mx-auto rounded-2xl bg-[#E8A317] text-[#171207] flex items-center justify-center"><i data-lucide="pause" class="w-7 h-7"></i></div>
+    <h2 class="font-display text-4xl font-bold mt-3">SHIFT PAUSED</h2>
+    <p class="text-sm text-[#9DB3A3]" id="pauseSub">The network is holding.</p>
+    <div class="flex flex-col gap-2 mt-5">
+      <button class="btn btn-amber" id="resumeBtn"><i data-lucide="play" class="w-4 h-4"></i> Resume</button>
+      <button class="btn" id="saveRunBtn"><i data-lucide="save" class="w-4 h-4"></i> Save shift to resume later</button>
+      <button class="btn" id="pauseSettingsBtn"><i data-lucide="settings" class="w-4 h-4"></i> Settings</button>
+      <button class="btn" id="pauseHelpBtn"><i data-lucide="info" class="w-4 h-4"></i> Handbook</button>
+      <button class="btn" id="restartBtn"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restart scenario</button>
+      <button class="btn btn-red" id="quitBtn"><i data-lucide="home" class="w-4 h-4"></i> Quit to title</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== END SCREEN ===================== -->
+<div id="endModal" class="fixed inset-0 z-[105] hidden items-center justify-center modal-backdrop p-3">
+  <div class="panel max-w-2xl w-full max-h-[94vh] overflow-y-auto scroll-thin p-6" id="endCard"></div>
+</div>
+
+<script>
+/* ============================================================
+   STEEL SIGNAL — Rail Network Dispatcher
+   Systems: block signalling · junction points · train physics
+   (accel/brake/dwell) · timetable & delay propagation · weather
+   · disruption events · budget/satisfaction economy · campaign
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const fmtMoney=v=>{const s=v<0?'-':'';return s+'£'+Math.abs(Math.round(v)).toLocaleString('en-GB')};
+function fmtClock(absMin){absMin=((Math.floor(absMin)%1440)+1440)%1440;const h=Math.floor(absMin/60),m=absMin%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
+function icons(){if(window.lucide)lucide.createIcons()}
+
+/* ---------------- persistence ---------------- */
+const SAVE_KEY='steelSignalSaveV1', RUN_KEY='steelSignalRunV1';
+let meta={settings:{volume:70,muted:false,particles:true,tutorial:true,overlay:'normal'},progress:{unlocked:1,stars:{},best:{}},upgrades:{},rep:0,totals:{runs:0,success:0,trainsLanded:0,bestScore:0}};
+try{const raw=localStorage.getItem(SAVE_KEY);if(raw){const p=JSON.parse(raw);if(p&&typeof p==='object'){meta.settings={...meta.settings,...(p.settings||{})};meta.progress={...meta.progress,...(p.progress||{})};meta.upgrades=p.upgrades||{};meta.rep=p.rep||0;meta.totals={...meta.totals,...(p.totals||{})}}}}catch(e){}
+function saveMeta(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(meta))}catch(e){}}
+function hasSavedRun(){try{return !!localStorage.getItem(RUN_KEY)}catch(e){return false}}
+
+/* ---------------- audio (all synthesized) ---------------- */
+const AudioSys={ctx:null,master:null,rainGain:null,
+ init(){if(this.ctx)return;try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;this.ctx=new AC();this.master=this.ctx.createGain();this.master.gain.value=meta.settings.muted?0:meta.settings.volume/100;this.master.connect(this.ctx.destination);
+   const len=2*this.ctx.sampleRate,buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+   const src=this.ctx.createBufferSource();src.buffer=buf;src.loop=true;const f=this.ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=900;this.rainGain=this.ctx.createGain();this.rainGain.gain.value=0;src.connect(f);f.connect(this.rainGain);this.rainGain.connect(this.master);src.start();
+   const hum=this.ctx.createOscillator(),hg=this.ctx.createGain();hum.type='sine';hum.frequency.value=55;hg.gain.value=0.008;hum.connect(hg);hg.connect(this.master);hum.start();
+ }catch(e){}},
+ resume(){this.init();if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume()},
+ applyVolume(){if(this.master)this.master.gain.value=meta.settings.muted?0:meta.settings.volume/100},
+ setRain(v){if(this.rainGain)this.rainGain.gain.setTargetAtTime(clamp(v,0,0.16),this.ctx.currentTime,0.4)},
+ tone(fr,dur=0.12,type='sine',vol=0.12,when=0,slide=0){if(!this.ctx||meta.settings.muted)return;const t=this.ctx.currentTime+when,o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=type;o.frequency.setValueAtTime(fr,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,fr+slide),t+dur);g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+0.02)},
+ click(){this.tone(620,0.06,'square',0.05)},ding(){this.tone(880,0.18,'sine',0.1);this.tone(1318,0.22,'sine',0.07,0.07)},
+ horn(){this.tone(311,0.5,'sawtooth',0.06);this.tone(370,0.5,'sawtooth',0.05,0.02)},alarm(){this.tone(660,0.16,'square',0.09);this.tone(494,0.2,'square',0.09,0.18)},
+ cash(){this.tone(1046,0.12,'triangle',0.1);this.tone(1568,0.2,'triangle',0.09,0.09)},bad(){this.tone(180,0.35,'sawtooth',0.1,0,-80)},
+ clank(){this.tone(140,0.2,'square',0.12,0,-60);this.tone(90,0.3,'square',0.1,0.08,-30)},
+ jingle(win){const n=win?[523,659,784,1046]:[440,349,262,196];n.forEach((f,i)=>this.tone(f,0.28,'triangle',0.11,i*0.13))}
+};
+
+/* ---------------- network data ---------------- */
+const NODES={
+ W:{id:'W',name:'Westport',short:'WPT',x:72,y:320,terminus:true},
+ CED:{id:'CED',name:'Cedar Halt',short:'CDR',x:212,y:320},
+ MILL:{id:'MILL',name:'Mill Junction',short:'MLJ',x:362,y:320,junction:'mill'},
+ RIV:{id:'RIV',name:'Riverdale',short:'RVD',x:512,y:320,junction:'river'},
+ EAST:{id:'EAST',name:'Eastgate',short:'EGT',x:672,y:320,terminus:true},
+ NORTH:{id:'NORTH',name:'North Mine',short:'NMI',x:362,y:128,terminus:true},
+ HARB:{id:'HARB',name:'Harbour Port',short:'HRB',x:512,y:488,terminus:true}};
+const EDGES=[
+ {id:'E1',a:'W',b:'CED',label:'Westport–Cedar',max:56},
+ {id:'E2',a:'CED',b:'MILL',label:'Cedar–Mill',max:56},
+ {id:'E3',a:'MILL',b:'RIV',label:'Mill–Riverdale',max:60},
+ {id:'E4',a:'RIV',b:'EAST',label:'Riverdale–Eastgate',max:60},
+ {id:'E5',a:'MILL',b:'NORTH',label:'Mill–North Mine branch',max:42},
+ {id:'E6',a:'RIV',b:'HARB',label:'Riverdale–Harbour branch',max:42}];
+EDGES.forEach(e=>{const A=NODES[e.a],B=NODES[e.b];e.len=Math.hypot(B.x-A.x,B.y-A.y)});
+const ADJ={};Object.keys(NODES).forEach(k=>ADJ[k]=[]);
+EDGES.forEach(e=>{ADJ[e.a].push({to:e.b,edge:e.id});ADJ[e.b].push({to:e.a,edge:e.id})});
+function edgeBetween(a,b){return EDGES.find(e=>(e.a===a&&e.b===b)||(e.a===b&&e.b===a))}
+function findRoute(from,to){if(from===to)return[from];const prev={[from]:null},q=[from];while(q.length){const c=q.shift();for(const n of ADJ[c]){if(!(n.to in prev)){prev[n.to]=c;if(n.to===to){const path=[to];let x=to;while(prev[x]){x=prev[x];path.unshift(x)}return path}q.push(n.to)}}}return[from,to]}
+const TRAIN_TYPES={
+ local:{label:'Local',color:'#2DD4BF',max:44,accel:20,dwell:1.3,revenue:900,prefix:'L',cars:3},
+ express:{label:'Express',color:'#FFB020',max:62,accel:24,dwell:0.8,revenue:1500,prefix:'X',cars:4},
+ regional:{label:'Regional',color:'#C084FC',max:40,accel:18,dwell:1.0,revenue:750,prefix:'R',cars:2},
+ harbour:{label:'Harbour',color:'#F472B6',max:40,accel:18,dwell:1.0,revenue:800,prefix:'H',cars:2},
+ freight:{label:'Freight',color:'#E2725B',max:27,accel:8,dwell:0.4,revenue:2100,prefix:'F',cars:5}};
+const SCENARIOS=[
+ {id:'s1',name:'Morning Commute',sub:'Learn the road · light traffic · guided tutorial',seed:1101,shift:150,start:360,budget:8500,targetServices:10,targetPunct:70,targetSat:60,weather:0.08,desc:'Locals, two expresses and the North Mine shuttle. Master signals, points and your first meet.',
+  patterns:[['local','W','EAST',4,26,4],['local','EAST','W',17,26,4],['express','W','EAST',46,72,2],['regional','MILL','NORTH',22,48,3],['regional','NORTH','MILL',37,48,3],['harbour','RIV','HARB',70,0,1],['harbour','HARB','RIV',86,0,1]],
+  events:[{t:58,type:'surge',dur:14,label:'Football crowd at Riverdale — dwells lengthen'},{t:92,type:'closure',edge:'E2',dur:6,label:'Debris reported on Cedar–Mill'}]},
+ {id:'s2',name:'Freight Rush',sub:'Heavy freight vs passenger priority',seed:2202,shift:180,start:360,budget:9500,targetServices:14,targetPunct:72,targetSat:60,weather:0.24,desc:'Mine-to-port freight drags across your passenger line while a booked possession closes Mill–Riverdale.',
+  patterns:[['local','W','EAST',4,21,5],['local','EAST','W',13,21,5],['express','W','EAST',30,55,3],['express','EAST','W',62,60,2],['freight','NORTH','HARB',14,48,3],['freight','HARB','NORTH',74,58,2],['regional','MILL','NORTH',26,42,3],['regional','NORTH','MILL',44,42,3],['harbour','RIV','HARB',52,50,2],['harbour','HARB','RIV',68,50,2]],
+  events:[{t:48,type:'breakdown',label:'A train will fail in section'},{t:78,type:'closure',edge:'E3',dur:13,label:'Booked possession: Mill–Riverdale closed'},{t:118,type:'surge',dur:16,label:'Peak surge — longer dwells network-wide'},{t:150,type:'closure',edge:'E5',dur:7,label:'Fallen tree on the Mine branch'}]},
+ {id:'s3',name:'Stormbound Eastgate',sub:'CAPSTONE · storm, failures & surging demand',seed:3303,shift:210,start:360,budget:11500,targetServices:18,targetPunct:70,targetSat:55,weather:0.7,desc:'A named storm crawls over the region. Speeds fall, debris flies, trains fail. Land 18 services and keep the railway credible.',
+  patterns:[['local','W','EAST',3,17,7],['local','EAST','W',10,17,7],['express','W','EAST',22,42,4],['express','EAST','W',40,45,3],['freight','NORTH','HARB',8,42,4],['freight','HARB','NORTH',58,50,3],['regional','MILL','NORTH',16,34,4],['regional','NORTH','MILL',30,34,4],['harbour','RIV','HARB',36,38,3],['harbour','HARB','RIV',50,38,3]],
+  events:[{t:35,type:'storm',dur:30,label:'Storm front arrives — severe speed restriction'},{t:55,type:'breakdown',label:'Failure in section'},{t:82,type:'closure',edge:'E4',dur:9,label:'Debris on Riverdale–Eastgate'},{t:105,type:'surge',dur:20,label:'Evacuation surge at coastal stations'},{t:128,type:'breakdown',label:'Second failure in section'},{t:150,type:'closure',edge:'E2',dur:10,label:'Flooding debris Cedar–Mill'},{t:172,type:'signal',dur:12,label:'Signal failure reported'},{t:190,type:'storm',dur:25,label:'Second storm band'}]},
+ {id:'s4',name:'Free Dispatch',sub:'Sandbox · endless pressure, your rules',seed:4404,shift:240,start:360,budget:12000,targetServices:20,targetPunct:70,targetSat:55,weather:0.2,desc:'A dense mixed timetable with procedurally-timed incidents. Chase a personal-best score.',
+  patterns:[['local','W','EAST',3,18,8],['local','EAST','W',11,18,8],['express','W','EAST',26,48,4],['express','EAST','W',44,48,4],['freight','NORTH','HARB',12,46,4],['freight','HARB','NORTH',66,52,3],['regional','MILL','NORTH',18,36,5],['regional','NORTH','MILL',33,36,5],['harbour','RIV','HARB',40,40,4],['harbour','HARB','RIV',55,40,4]],
+  events:[{t:45,type:'breakdown',label:'Failure in section'},{t:95,type:'closure',edge:'E3',dur:8,label:'Debris Mill–Riverdale'},{t:140,type:'surge',dur:16,label:'Event surge'}]}];
+const DIFFS={relaxed:{label:'Relaxed',budget:1.3,punctAdj:-10,eventMul:0.7,scoreMul:0.9,desc:'Bigger budget, gentler targets, fewer surprises. Learn the road.'},
+ standard:{label:'Standard',budget:1,punctAdj:0,eventMul:1,scoreMul:1,desc:'The railway as timetabled. Balanced pressure and scoring.'},
+ dispatcher:{label:'Dispatcher',budget:0.85,punctAdj:6,eventMul:1.35,scoreMul:1.3,desc:'Thin budget, tougher punctuality bar, more incidents — 30% score bonus.'}};
+const UPGRADES=[
+ {id:'autoPoints',name:'Auto-Points Assistant',cost:3,icon:'git-branch',desc:'Points swing automatically for a train waiting on them.'},
+ {id:'engineer2',name:'Second Engineer Crew',cost:2,icon:'wrench',desc:'Breakdown & signal repairs cost 40% less and finish faster.'},
+ {id:'radar',name:'Weather & Incident Radar',cost:2,icon:'radar',desc:'Disruption warnings arrive much earlier.'},
+ {id:'predict',name:'Predictive Signalling',cost:2,icon:'trending-up',desc:'Train list shows live ETAs and projected delay causes.'}];
+/* decorative map features */
+const decoRng=mulberry32(777);const DECO={trees:[],houses:[]};
+for(let i=0;i<90;i++){const x=20+decoRng()*720,y=30+decoRng()*520;if(Math.abs(y-320)<34)continue;if(Math.hypot(x-362,y-225)<40)continue;DECO.trees.push({x,y,r:5+decoRng()*8})}
+for(let i=0;i<16;i++){DECO.houses.push({x:30+decoRng()*700,y:40+decoRng()*500,r:4+decoRng()*4})}
+
+/* signals (directed) */
+const SIGNALS=[];EDGES.forEach(e=>{[[e.a,e.b],[e.b,e.a]].forEach(([f,t])=>{const A=NODES[f],B=NODES[t];const dx=B.x-A.x,dy=B.y-A.y,L=Math.hypot(dx,dy);SIGNALS.push({key:f+'>'+e.id,from:f,to:t,edge:e.id,x:A.x+dx/L*30-dy/L*15,y:A.y+dy/L*30+dx/L*15})})});
+function signalByKey(k){return SIGNALS.find(s=>s.key===k)}
+
+/* ---------------- global UI state ---------------- */
+let selectedScenario='s1',selectedDiff='standard',G=null,simSpeed=1,overlayMode=meta.settings.overlay||'normal';
+let sel={kind:null,id:null},panelTimer=0,lastFrame=performance.now(),tutorialStep=meta.settings.tutorial?0:99,pointsChangedFlag=false,signalChangedFlag=false;
+function scenarioById(id){return SCENARIOS.find(s=>s.id===id)}
+function scenIndex(id){return SCENARIOS.findIndex(s=>s.id===id)}
+function toast(msg,color='#E8A317'){const d=document.createElement('div');d.className='toast';d.style.borderLeftColor=color;d.innerHTML=msg;$('toastBox').appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},4200)}
+
+/* ---------------- services / game setup ---------------- */
+function buildServices(scen,diffKey){
+ const rng=mulberry32(scen.seed+(diffKey==='dispatcher'?99:diffKey==='relaxed'?7:0));const out=[];let seq=100;
+ scen.patterns.forEach(([type,from,to,first,interval,count])=>{for(let i=0;i<count;i++){const dep=first+i*(interval||0)+(i?Math.round((rng()-0.5)*3):0);
+   const route=findRoute(from,to);const tt=TRAIN_TYPES[type];let dist=0;for(let r=0;r<route.length-1;r++)dist+=edgeBetween(route[r],route[r+1]).len;
+   const stops=route.filter((n,idx)=>{if(type==='freight')return idx===0||idx===route.length-1;if(type==='express')return idx===0||idx===route.length-1||n==='MILL'||n==='RIV';return true});
+   const cruise=type==='freight'?19:type==='express'?36:29;const est=dist/cruise+Math.max(0,stops.length-2)*tt.dwell+1;
+   out.push({id:'svc'+(seq),code:tt.prefix+(++seq),type,from,to,depart:dep,schedArr:dep+est,route,stops,status:'scheduled'})}});
+ out.sort((a,b)=>a.depart-b.depart);return out}
+function newGame(scenId,diffKey){
+ const scen=scenarioById(scenId),df=DIFFS[diffKey];
+ G={scenId,diffKey,seed:scen.seed,simTime:0,paused:false,over:false,endSaved:false,score:0,budget:Math.round(scen.budget*df.budget),
+  satisfaction:85,safety:100,trains:[],services:buildServices(scen,diffKey),nextTrain:1,points:{mill:'main',river:'main'},holds:[],failures:{},closed:{},
+  occupancy:{},log:[],history:[],weather:scen.weather,surgeUntil:-1,stormUntil:-1,globalStopUntil:-1,nextRandomEvent:65,
+  stats:{spawned:0,completed:0,cancelled:0,onTime:0,totalDelay:0,revenue:0,costs:0,forced:0,engineerCalls:0,crewCalls:0},
+  milestones:{},events:scen.events.map(e=>({...e,warned:false,triggered:false,dur:Math.round((e.dur||8)*df.eventMul)})),
+  floats:[],rain:[],smoke:[],historyMin:-1,tutAwarded:false,startedAt:Date.now()};
+ EDGES.forEach(e=>G.occupancy[e.id]=[]);
+ G.rng=mulberry32(scen.seed*3+17);
+ sel={kind:null,id:null};tutorialStep=meta.settings.tutorial?0:99;pointsChangedFlag=false;signalChangedFlag=false;
+ simSpeed=1;document.querySelectorAll('.speed-btn').forEach(b=>b.classList.toggle('active',b.dataset.speed==='1'));
+ overlayMode=meta.settings.overlay||'normal';document.querySelectorAll('.overlay-btn').forEach(b=>b.classList.toggle('active',b.dataset.overlay===overlayMode));
+ addLog('Shift started — <b>'+scen.name+'</b> ('+df.label+'). '+G.services.length+' services booked.','system');
+ addLog('Targets: land <b>'+scen.targetServices+'</b> services · punctuality ≥ <b>'+(scen.targetPunct+df.punctAdj)+'%</b> · satisfaction ≥ <b>'+scen.targetSat+'%</b>.','system');
+ addLog('Click trains, signals (●) and points (◆) on the map. Press <b>H</b> for the handbook at any time.','tip');
+ meta.totals.runs++;saveMeta();
+ switchTab('control');showGame();updatePanels(true);
+ toast('<b>Shift started:</b> '+scen.name+'. First departures are imminent — set your road!');AudioSys.horn();
+}
+function showGame(){$('titleScreen').classList.add('hidden');$('gameScreen').classList.remove('hidden');$('endModal').classList.add('hidden');$('endModal').classList.remove('flex');$('pauseModal').classList.add('hidden');$('pauseModal').classList.remove('flex');resizeCanvas();updateObjectiveBar();icons()}
+function showTitle(){if(G){G.paused=true}G=null;$('gameScreen').classList.add('hidden');$('titleScreen').classList.remove('hidden');hideModal('pauseModal');hideModal('endModal');renderTitle()}
+function addLog(html,kind='info'){if(!G)return;const colors={info:'#3E5A48',warn:'#E8A317',bad:'#E05252',good:'#35C26E',system:'#5B83A6',tip:'#8A6D3B'};G.log.unshift({t:G.simTime,html,color:colors[kind]||colors.info});if(G.log.length>90)G.log.pop();const tb=$('tickerText');if(tb)tb.innerHTML=html}
+
+/* ---------------- train core logic ---------------- */
+function stationCount(nodeId,exceptId){return G.trains.filter(t=>t.node===nodeId&&t.id!==exceptId&&(t.state==='dwelling'||t.state==='waiting')).length}
+function stationSlotsUsed(nodeId){return G.trains.filter(t=>t.node===nodeId&&t.slot!==null&&t.slot!==undefined).map(t=>t.slot)}
+function freeSlot(nodeId){const u=stationSlotsUsed(nodeId);return u.includes(0)?(u.includes(1)?0:1):0}
+function pointsNeeded(node,next){if(node==='MILL')return next==='NORTH'?'branch':'main';if(node==='RIV')return next==='HARB'?'branch':'main';return null}
+function junctionOf(node){return node==='MILL'?'mill':node==='RIV'?'river':null}
+function sigKey(from,edgeId){return from+'>'+edgeId}
+function departCheck(train){
+ if(train.manualHold)return{ok:false,reason:'Held by you (H)',code:'hold'};
+ if(G.globalStopUntil>G.simTime)return{ok:false,reason:'Emergency stop-all in force',code:'stopall'};
+ const next=train.route[train.routeIdx+1];if(!next)return{ok:false,reason:'At destination',code:'dest'};
+ const edge=edgeBetween(train.node,next);
+ const key=sigKey(train.node,edge.id);
+ if(G.failures[key]&&G.failures[key]>G.simTime)return{ok:false,reason:'Signal failed — needs engineer',code:'signal',key};
+ if(G.holds.includes(key))return{ok:false,reason:'Signal held at red by you',code:'signal',key};
+ const pn=pointsNeeded(train.node,next);
+ if(pn){const j=junctionOf(train.node);if(G.points[j]!==pn)return{ok:false,reason:'Waiting: points set to '+G.points[j].toUpperCase()+', needs '+pn.toUpperCase(),code:'points',junction:j,need:pn}}
+ if(G.closed[edge.id]&&G.closed[edge.id]>G.simTime)return{ok:false,reason:'Block closed ('+edge.label+')',code:'closed',edge:edge.id};
+ const occ=(G.occupancy[edge.id]||[]).filter(id=>id!==train.id);
+ if(occ.length&&!train.forceProceed)return{ok:false,reason:'Block occupied by '+(G.trains.find(t=>t.id===occ[0])?.code||'train'),code:'occupied',edge:edge.id};
+ const isStopNext=train.stops.includes(next)||train.routeIdx+1===train.route.length-1;
+ if(isStopNext&&stationCount(next,train.id)>=2)return{ok:false,reason:'Platforms full at '+NODES[next].name,code:'platform'};
+ return{ok:true,edge}}
+function tryDepart(train){
+ const chk=departCheck(train);train.waitReason=chk.ok?'':chk.reason;train.waitCode=chk.ok?'':chk.code;train.waitKey=chk.key||null;train.waitJunction=chk.junction||null;
+ if(!chk.ok)return false;
+ const edge=chk.edge,next=train.route[train.routeIdx+1];
+ G.occupancy[edge.id].push(train.id);
+ train.state='running';train.from=train.node;train.to=next;train.edgeId=edge.id;train.dist=0;train.node=null;train.slot=null;train.forceProceed=false;
+ if(train.speed<2)train.speed=2;return true}
+function spawnService(svc){
+ if(stationCount(svc.from,null)>=2)return false;
+ const tt=TRAIN_TYPES[svc.type];
+ const tr={id:'T'+(G.nextTrain++),serviceId:svc.id,code:svc.code,type:svc.type,from:svc.from,to:svc.to,route:svc.route,stops:svc.stops,
+  routeIdx:0,node:svc.from,slot:freeSlot(svc.from),state:'dwelling',dwell:0.8,speed:0,dist:0,edgeId:null,
+  schedDep:svc.depart,schedArr:svc.schedArr,spawnTime:G.simTime,manualHold:false,brokenUntil:-1,engineerCalled:false,expediteUntil:-1,
+  forceProceed:false,waitReason:'Boarding',waitCode:'',projectedDelay:0,x:NODES[svc.from].x,y:NODES[svc.from].y,angle:0,smokeT:0};
+ G.trains.push(tr);svc.status='active';G.stats.spawned++;
+ if(G.simTime-svc.depart>1)tr.waitReason='Late start: platform was busy';
+ return true}
+function completeTrain(train){
+ const delay=G.simTime-train.schedArr;const tt=TRAIN_TYPES[train.type];
+ const onTime=delay<=(train.type==='freight'?6:3.5);
+ const punct=G.stats;punct.completed++;punct.totalDelay+=Math.max(0,delay);if(onTime)punct.onTime++;
+ const earn=tt.revenue+Math.max(0,Math.round(500-delay*60));G.budget+=earn;G.stats.revenue+=earn;
+ const pts=Math.round((train.type==='express'?260:train.type==='freight'?300:200)+(onTime?160:0)-Math.max(0,delay)*14)*DIFFS[G.diffKey].scoreMul;
+ G.score+=Math.max(20,pts);
+ const svc=G.services.find(s=>s.id===train.serviceId);if(svc)svc.status='completed';
+ addFloat(train.x,train.y-26,'+£'+earn+' · '+train.code,delay<=3.5?'#7FE0A8':'#FFD166');
+ addLog('<b>'+train.code+'</b> ('+tt.label+') arrived '+NODES[train.to].name+' '+(delay<=0.5?'<b class="text-[#7FE0A8]">on time</b>':Math.round(delay)+' min late')+' · +'+fmtMoney(earn),delay<=3.5?'good':'warn');
+ AudioSys.cash();checkMilestones();
+ G.trains=G.trains.filter(t=>t.id!==train.id);if(sel.kind==='train'&&sel.id===train.id)sel={kind:null,id:null}}
+function trainCoords(t){
+ if(t.state==='running'&&t.edgeId){const e=EDGES.find(x=>x.id===t.edgeId),A=NODES[t.from],B=NODES[t.to];const p=clamp(t.dist/e.len,0,1);t.x=lerp(A.x,B.x,p);t.y=lerp(A.y,B.y,p);t.angle=Math.atan2(B.y-A.y,B.x-A.x)}
+ else if(t.node){const n=NODES[t.node];let horiz=true;
+   const ni=t.routeIdx,prev=t.route[ni-1],next=t.route[ni+1];const ref=next||prev;
+   if(ref&&(ref==='NORTH'||t.node==='NORTH'||ref==='HARB'||t.node==='HARB')&&(t.node==='MILL'&&next==='NORTH')||(t.node==='RIV'&&next==='HARB')||t.node==='NORTH'||t.node==='HARB')horiz=false;
+   const off=(t.slot===1?13:-13);
+   if(horiz){t.x=n.x;t.y=n.y+off;t.angle=(next&&NODES[next]&&NODES[next].x<n.x)?Math.PI:0}
+   else{t.x=n.x+off;t.y=n.y;t.angle=(next==='NORTH'||(t.node==='MILL'&&next==='NORTH'))?-Math.PI/2:Math.PI/2}
+   if(t.node==='NORTH'||t.node==='HARB')t.angle=t.node==='NORTH'?Math.PI/2:-Math.PI/2}
+ return t}
+function remainingEstimate(t){
+ let dist=0;const cruise=t.type==='freight'?19:t.type==='express'?36:29;
+ if(t.state==='running'){const e=EDGES.find(x=>x.id===t.edgeId);dist+=Math.max(0,e.len-t.dist);for(let i=t.routeIdx+1;i<t.route.length-1;i++)dist+=edgeBetween(t.route[i],t.route[i+1]).len}
+ else{for(let i=t.routeIdx;i<t.route.length-1;i++)dist+=edgeBetween(t.route[i],t.route[i+1]).len}
+ let dwellStops=0;for(let i=t.routeIdx+1;i<t.route.length-1;i++)if(t.stops.includes(t.route[i]))dwellStops++;
+ let est=dist/cruise+dwellStops*TRAIN_TYPES[t.type].dwell+(t.state==='dwelling'?t.dwell:0);
+ if(t.brokenUntil>G.simTime)est+=t.brokenUntil-G.simTime;
+ if(t.state==='waiting')est+=1.2;
+ return est}
+function signalAspect(sig){
+ if(!G)return'green';const edge=EDGES.find(e=>e.id===sig.edge);
+ if(G.failures[sig.key]&&G.failures[sig.key]>G.simTime)return'fail';
+ if(G.holds.includes(sig.key))return'red';
+ const pn=pointsNeeded(sig.from,sig.to);if(pn&&G.points[junctionOf(sig.from)]!==pn)return'red';
+ if(G.closed[sig.edge]&&G.closed[sig.edge]>G.simTime)return'red';
+ if((G.occupancy[sig.edge]||[]).length)return'red';
+ if(stationCount(sig.to,null)>=2)return'yellow';
+ if(G.weather>0.55)return'yellow';
+ return'green'}
+
+/* ---------------- events & milestones ---------------- */
+function triggerEvent(ev){
+ const df=DIFFS[G.diffKey];
+ if(ev.type==='closure'){G.closed[ev.edge]=G.simTime+ev.dur;addLog('<b>Block closed:</b> '+ev.label+' (~'+ev.dur+' min). Click the block to dispatch a clearance crew.','bad');toast('<b>⛔ Block closed</b> — '+ev.label,'#E05252');AudioSys.alarm()}
+ else if(ev.type==='breakdown'){const cand=G.trains.filter(t=>t.state==='running'&&t.brokenUntil<G.simTime);if(!cand.length){ev.time=G.simTime+4;ev.triggered=false;return}
+   const t=cand[Math.floor(G.rng()*cand.length)];t.brokenUntil=G.simTime+(meta.upgrades.engineer2?7:9);t.engineerCalled=false;
+   addLog('<b>Breakdown:</b> '+t.code+' ('+TRAIN_TYPES[t.type].label+') failed in section on '+(EDGES.find(e=>e.id===t.edgeId)?.label||'')+'. Select it and call an engineer.','bad');toast('<b>🔧 Breakdown:</b> '+t.code+' has failed in section.','#E05252');AudioSys.clank()}
+ else if(ev.type==='surge'){G.surgeUntil=G.simTime+ev.dur;addLog('<b>Passenger surge:</b> '+ev.label+'. Station dwells extended for '+ev.dur+' min.','warn');toast('<b>👥 Surge:</b> '+ev.label,'#E8A317');AudioSys.ding()}
+ else if(ev.type==='storm'){G.stormUntil=G.simTime+ev.dur;addLog('<b>Storm band:</b> severe weather for '+ev.dur+' min — network speeds cut.','bad');toast('<b>🌩 Storm band</b> — speeds restricted across the network.','#E05252');AudioSys.alarm()}
+ else if(ev.type==='signal'){const keys=SIGNALS.map(s=>s.key);const k=keys[Math.floor(G.rng()*keys.length)];G.failures[k]=G.simTime+ev.dur;const s=signalByKey(k);
+   addLog('<b>Signal failure:</b> signal at '+NODES[s.from].name+' towards '+NODES[s.to].name+' is stuck at red. Click it and send an engineer.','bad');toast('<b>🚦 Signal failure</b> at '+NODES[s.from].name+'.','#E05252');AudioSys.alarm()}}
+function checkMilestones(){
+ const c=G.stats.completed;const marks=[[1,'First arrival','The railway moves. +100 pts',100],[5,'Five services landed','Flow established. +200 pts',200],[10,'Ten services landed','A real railway now. +300 pts',300],[15,'Fifteen services landed','Master of the road. +400 pts',400],[20,'Twenty services landed','Legendary dispatching. +500 pts',500]];
+ marks.forEach(([n,name,desc,pts])=>{if(c>=n&&!G.milestones[name]){G.milestones[name]=true;G.score+=pts;toast('<b>🏅 Milestone:</b> '+name+' — '+desc,'#35C26E');addLog('<b>Milestone:</b> '+name+'. '+desc,'good');AudioSys.ding()}})}
+
+/* ---------------- simulation step ---------------- */
+function stepSim(dt){
+ G.simTime+=dt;
+ /* weather */
+ const scen=scenarioById(G.scenId);let target=scen.weather;
+ if(G.scenId==='s3')target=0.45+0.3*Math.sin(G.simTime/38)+0.2*Math.sin(G.simTime/11);
+ if(G.stormUntil>G.simTime)target=Math.max(target,0.85);
+ G.weather=lerp(G.weather||scen.weather,clamp(target,0,1),0.02);
+ const speedFactor=1-0.38*G.weather;
+ /* spawns */
+ G.services.forEach(svc=>{if(svc.status==='scheduled'&&G.simTime>=svc.depart)spawnService(svc)});
+ /* events */
+ const warnAhead=meta.upgrades.radar?16:6;
+ G.events.forEach(ev=>{if(!ev.warned&&G.simTime>=ev.t- warnAhead&&G.simTime<ev.t){ev.warned=true;addLog('<b>⚠ Forecast ('+Math.max(1,Math.round(ev.t-G.simTime))+' min):</b> '+ev.label+'. Plan your meets now.','warn');toast('<b>⚠ Incoming:</b> '+ev.label,'#E8A317');AudioSys.ding()}
+  if(!ev.triggered&&G.simTime>=ev.t){ev.triggered=true;triggerEvent(ev)}});
+ if(G.scenId==='s4'&&G.simTime>G.nextRandomEvent){G.nextRandomEvent=G.simTime+38+G.rng()*30;const pool=[{type:'breakdown',label:'Failure in section'},{type:'closure',edge:EDGES[Math.floor(G.rng()*EDGES.length)].id,dur:7,label:'Debris on the line'},{type:'surge',dur:12,label:'Unplanned surge'}];const ev=pool[Math.floor(G.rng()*pool.length)];ev.t=G.simTime;triggerEvent(ev)}
+ /* auto points upgrade */
+ if(meta.upgrades.autoPoints){G.trains.forEach(t=>{if(t.state==='waiting'&&t.waitCode==='points'&&t.waitJunction){const need=pointsNeeded(t.node,t.route[t.routeIdx+1]);if(need&&G.points[t.waitJunction]!==need){G.points[t.waitJunction]=need;addLog('Auto-Points swung '+t.waitJunction.toUpperCase()+' points to '+need.toUpperCase()+' for '+t.code+'.','system')}}})}
+ /* trains */
+ const surgeMul=G.surgeUntil>G.simTime?1.65:1;
+ [...G.trains].forEach(t=>{
+  trainCoords(t);t.projectedDelay=Math.max(0,(G.simTime+remainingEstimate(t))-t.schedArr);
+  const broken=t.brokenUntil>G.simTime;
+  if(t.state==='dwelling'){t.waitReason=t.manualHold?'Held by you':(broken?'Failed at station':'Boarding / dwell');if(!t.manualHold&&!broken){t.dwell-=dt;if(t.dwell<=0)tryDepart(t)}else if(broken)t.dwell=Math.max(t.dwell,0.5)}
+  else if(t.state==='waiting'){tryDepart(t)}
+  else if(t.state==='running'){
+   const e=EDGES.find(x=>x.id===t.edgeId);const tt=TRAIN_TYPES[t.type];
+   let lineMax=Math.min(e.max,tt.max)*(t.expediteUntil>G.simTime?1.2:1)*speedFactor;
+   let target=broken||G.globalStopUntil>G.simTime?0:lineMax;
+   const nextIdx=t.routeIdx+1,isFinal=nextIdx===t.route.length-1,isStop=isFinal||t.stops.includes(t.route[nextIdx]);
+   let needStop=isStop;
+   if(!needStop&&nextIdx<t.route.length-1){ /* will it be blocked at the through node? */
+     const nn=t.route[nextIdx],nf=t.route[nextIdx+1],ne=edgeBetween(nn,nf),nk=sigKey(nn,ne.id);
+     const pn=pointsNeeded(nn,nf);
+     if((G.occupancy[ne.id]||[]).length||G.holds.includes(nk)||(G.failures[nk]&&G.failures[nk]>G.simTime)||(G.closed[ne.id]&&G.closed[ne.id]>G.simTime)||(pn&&G.points[junctionOf(nn)]!==pn))needStop=true}
+   if(needStop){const rem=Math.max(0,e.len-t.dist);const allowed=rem>55?lineMax:Math.max(4,lineMax*rem/55);target=Math.min(target,allowed)}
+   const rate=t.speed<target?tt.accel:tt.accel*2.1;
+   t.speed+=clamp(target-t.speed,-rate*dt,rate*dt);if(t.speed<0)t.speed=0;
+   t.dist+=t.speed*dt;t.smokeT-=dt;
+   if(meta.settings.particles&&t.speed>14&&t.smokeT<=0){t.smokeT=0.35;G.smoke.push({x:t.x,y:t.y-8,life:1,r:3+G.rng()*3})}
+   if(t.dist>=e.len){ /* arrive at node */
+     G.occupancy[e.id]=G.occupancy[e.id].filter(id=>id!==t.id);
+     t.routeIdx++;t.edgeId=null;t.node=t.to;t.from=null;t.to=null;t.speed=0;
+     if(t.routeIdx===t.route.length-1){trainCoords(t);completeTrain(t);return}
+     if(t.stops.includes(t.node)){t.state='dwelling';t.slot=freeSlot(t.node);const base=tt.dwell*(t.type==='freight'?0.4:surgeMul);t.dwell=base*(0.85+G.rng()*0.4);t.waitReason='Station dwell at '+NODES[t.node].name}
+     else{t.slot=freeSlot(t.node);t.state='waiting';if(!tryDepart(t)){/* waits at through node */}else t.slot=null}
+   }
+  }
+  trainCoords(t)});
+ /* collisions (only possible after Proceed-at-Danger) */
+ const byEdge={};G.trains.filter(t=>t.state==='running').forEach(t=>{(byEdge[t.edgeId]=byEdge[t.edgeId]||[]).push(t)});
+ for(const eid in byEdge){const arr=byEdge[eid];for(let i=0;i<arr.length;i++)for(let j=i+1;j<arr.length;j++){if(Math.hypot(arr[i].x-arr[j].x,arr[i].y-arr[j].y)<20){endGame(false,'Collision on '+ (EDGES.find(e=>e.id===eid)?.label||'the line') +' between '+arr[i].code+' and '+arr[j].code+'. Proceeding at danger into an occupied block caused a crash. The inquiry will not be kind.');AudioSys.bad();return}}}
+ /* per-minute bookkeeping */
+ const wholeMin=Math.floor(G.simTime);
+ if(wholeMin!==G.historyMin){G.historyMin=wholeMin;
+  G.budget-=11;G.stats.costs+=11;
+  const pax=G.trains.filter(t=>t.type!=='freight');const avgD=pax.length?pax.reduce((s,t)=>s+t.projectedDelay,0)/pax.length:0;
+  const targetSat=clamp(93-avgD*3.4-G.stats.cancelled*2.5-(G.surgeUntil>G.simTime?4:0),5,97);
+  G.satisfaction=lerp(G.satisfaction,targetSat,0.35);
+  G.history.push({t:G.simTime,delay:avgD,sat:G.satisfaction,done:G.stats.completed});if(G.history.length>260)G.history.shift();
+  if(G.stats.completed>=5&&G.satisfaction>88&&!G.milestones['Golden service']){G.milestones['Golden service']=true;G.score+=250;toast('<b>🏅 Golden service</b> — satisfaction above 88% with 5+ arrivals. +250 pts','#35C26E')}
+  checkEndConditions();
+ }
+ /* floats & particles */
+ G.floats.forEach(f=>{f.life-=dt*0.5;f.y-=dt*9});G.floats=G.floats.filter(f=>f.life>0);
+ G.smoke.forEach(p=>{p.life-=dt*0.6;p.y-=dt*7;p.r+=dt*5});G.smoke=G.smoke.filter(p=>p.life>0);
+ updateTutorial();
+}
+function punctuality(){return G.stats.completed?Math.round(G.stats.onTime/G.stats.completed*100):null}
+function checkEndConditions(){
+ if(!G||G.over)return;const scen=scenarioById(G.scenId),df=DIFFS[G.diffKey];
+ if(G.satisfaction<=12&&G.simTime>20)return endGame(false,'Passenger confidence collapsed. Satisfaction fell to '+Math.round(G.satisfaction)+'% — the franchise has been stripped and services suspended.');
+ if(G.budget<-1200)return endGame(false,'Budget exhausted ('+fmtMoney(G.budget)+'). The operating company is insolvent; the receiver has taken the keys to the signal box.');
+ const allDone=G.services.every(s=>s.status==='completed'||s.status==='cancelled');
+ if(G.simTime>=scen.shift||allDone){
+  const p=punctuality()||0;const ok=G.stats.completed>=scen.targetServices&&p>=scen.targetPunct+df.punctAdj&&G.satisfaction>=scen.targetSat;
+  if(ok)endGame(true,'Shift complete. The last arrival is in, the road is clear, and the kettle is on.');
+  else{let why=[];if(G.stats.completed<scen.targetServices)why.push('only '+G.stats.completed+'/'+scen.targetServices+' services landed');if(p<scen.targetPunct+df.punctAdj)why.push('punctuality '+p+'% vs '+(scen.targetPunct+df.punctAdj)+'% needed');if(G.satisfaction<scen.targetSat)why.push('satisfaction '+Math.round(G.satisfaction)+'% vs '+scen.targetSat+'% needed');
+   endGame(false,'Shift ended short of target: '+why.join('; ')+'. The travelling public deserved better — review the Stats tab and try a different meet plan.')}}
+}
+function endGame(success,reason){
+ if(!G||G.over)return;G.over=true;G.paused=true;AudioSys.setRain(0);
+ const scen=scenarioById(G.scenId),df=DIFFS[G.diffKey];const p=punctuality()||0;
+ let stars=0;if(success){stars=1;if(p>=scen.targetPunct+df.punctAdj+10)stars++;if(G.satisfaction>=scen.targetSat+14&&G.safety>=90)stars++}
+ if(!G.endSaved){G.endSaved=true;
+  if(success){const idx=scenIndex(G.scenId);meta.progress.unlocked=Math.max(meta.progress.unlocked,Math.min(SCENARIOS.length,idx+2));
+   meta.progress.stars[G.scenId]=Math.max(meta.progress.stars[G.scenId]||0,stars);
+   const repEarn=stars+(G.diffKey==='dispatcher'?1:0);meta.rep+=repEarn;G.repEarned=repEarn;meta.totals.success++}
+  meta.progress.best[G.scenId]=Math.max(meta.progress.best[G.scenId]||0,Math.round(G.score));
+  meta.totals.trainsLanded+=G.stats.completed;meta.totals.bestScore=Math.max(meta.totals.bestScore,Math.round(G.score));saveMeta();
+  try{localStorage.removeItem(RUN_KEY)}catch(e){}}
+ AudioSys.jingle(success);
+ const nextScen=SCENARIOS[scenIndex(G.scenId)+1];
+ $('endCard').innerHTML=`
+  <div class="text-center">
+   <div class="w-16 h-16 mx-auto rounded-2xl ${success?'bg-[#1F7A4C]':'bg-[#8E2F2F]'} flex items-center justify-center"><i data-lucide="${success?'trophy':'octagon-alert'}" class="w-8 h-8 text-white"></i></div>
+   <h2 class="font-display text-5xl font-bold mt-3">${success?'SHIFT COMPLETE':'SHIFT FAILED'}</h2>
+   <div class="text-3xl my-1">${success?('<span class="star-on">'+'★'.repeat(stars)+'</span><span class="star-off">'+'★'.repeat(3-stars)+'</span>'):''}</div>
+   <p class="text-[#B7C9BB] max-w-lg mx-auto text-sm leading-relaxed">${reason}</p>
+   ${success&&G.repEarned?'<div class="chip mt-2">+'+G.repEarned+' ★ reputation earned — spend it on title-screen upgrades</div>':''}
+  </div>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+   ${[['Final score',Math.round(G.score)],['Services landed',G.stats.completed+' / '+G.services.length],['Punctuality',(punctuality()===null?'—':punctuality()+'%')],['Avg delay',(G.stats.completed?(G.stats.totalDelay/G.stats.completed).toFixed(1):'0')+' min'],['Satisfaction',Math.round(G.satisfaction)+'%'],['Safety',Math.round(G.safety)+'/100'],['Budget left',fmtMoney(G.budget)],['Cancelled',G.stats.cancelled]].map(([k,v])=>'<div class="panel-soft p-3 text-center"><div class="stat-num">'+v+'</div><div class="text-[10px] font-bold text-[#93AA99] tracking-wider">'+k.toUpperCase()+'</div></div>').join('')}
+  </div>
+  <div class="panel-soft p-3 mt-3"><canvas id="endChart" width="640" height="120" class="w-full"></canvas><div class="text-[11px] text-[#93AA99] text-center mt-1">Satisfaction (green) vs average projected delay (red) across the shift</div></div>
+  <div class="flex flex-wrap gap-2 mt-5 justify-center">
+   ${success&&nextScen&&scenIndex(G.scenId)+1<meta.progress.unlocked?'<button class="btn btn-amber" id="endNext"><i data-lucide="arrow-right" class="w-4 h-4"></i> Next: '+nextScen.name+'</button>':''}
+   <button class="btn btn-green" id="endRetry"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Replay scenario</button>
+   <button class="btn" id="endTitle"><i data-lucide="home" class="w-4 h-4"></i> Title screen</button>
+  </div>`;
+ $('endModal').classList.remove('hidden');$('endModal').classList.add('flex');icons();drawChart($('endChart'));
+ $('endRetry').onclick=()=>{const s=G.scenId,d=G.diffKey;newGame(s,d)};
+ $('endTitle').onclick=()=>showTitle();
+ const nb=$('endNext');if(nb)nb.onclick=()=>newGame(nextScen.id,G.diffKey);
+ renderTitle();
+}
+
+/* ---------------- player actions ---------------- */
+function addFloat(x,y,text,color){if(G)G.floats.push({x,y,text,color,life:1})}
+function selectedTrain(){return sel.kind==='train'?G.trains.find(t=>t.id===sel.id):null}
+function spend(amount,label){G.budget-=amount;G.stats.costs+=amount;if(label)addLog(label+' — '+fmtMoney(-amount)+'.','info')}
+function togglePoints(j){
+ if(!G||G.over)return;G.points[j]=G.points[j]==='main'?'branch':'main';pointsChangedFlag=true;
+ addLog('<b>Points swung:</b> '+(j==='mill'?'Mill Junction':'Riverdale')+' now set to <b>'+G.points[j].toUpperCase()+'</b>. Trains needing the other road will wait.','system');AudioSys.click();AudioSys.ding();updatePanels(true)}
+function toggleHoldSignal(key){
+ if(!G||G.over)return;const s=signalByKey(key);
+ if(G.failures[key]&&G.failures[key]>G.simTime){toast('<b>Signal failed</b> — holding won\'t help. Dispatch an engineer from the signal panel.','#E05252');return}
+ const i=G.holds.indexOf(key);if(i>=0)G.holds.splice(i,1);else G.holds.push(key);signalChangedFlag=true;
+ addLog('Signal at '+NODES[s.from].name+' → '+NODES[s.to].name+' '+(i>=0?'<b class="text-[#7FE0A8]">released to automatic</b>':'<b class="text-[#FF9D94]">held at red</b>')+'.','system');AudioSys.click();updatePanels(true)}
+function actHoldTrain(){const t=selectedTrain();if(!t)return;t.manualHold=!t.manualHold;addLog('<b>'+t.code+'</b> '+(t.manualHold?'<b class="text-[#FF9D94]">held</b> by signaller.':'<b class="text-[#7FE0A8]">released</b>.') ,'system');AudioSys.click();updatePanels(true)}
+function actExpedite(){const t=selectedTrain();if(!t||G.budget<150){if(G&&G.budget<150)toast('Not enough budget to expedite.','#E05252');return}spend(150,'Expedite '+t.code);t.expediteUntil=G.simTime+9;G.score+=5;addLog('<b>'+t.code+'</b> authorised to run at line speed+ — driver acknowledges.','good');addFloat(t.x,t.y-24,'EXPEDITE','#FFD166');AudioSys.horn();updatePanels(true)}
+function actEngineer(){const t=selectedTrain();if(!t)return;const cost=meta.upgrades.engineer2?360:600;if(G.budget<cost){toast('Not enough budget for an engineer crew.','#E05252');return}
+ spend(cost,'Engineer dispatched to '+t.code);G.stats.engineerCalls++;t.engineerCalled=true;t.brokenUntil=Math.min(t.brokenUntil,G.simTime+(meta.upgrades.engineer2?1.2:2.2));
+ addLog('Engineer crew riding to <b>'+t.code+'</b> — repairs expedited.','good');AudioSys.ding();updatePanels(true)}
+function actFixSignal(key){const cost=meta.upgrades.engineer2?220:350;if(G.budget<cost){toast('Not enough budget.','#E05252');return}spend(cost,'Signal engineer dispatched');delete G.failures[key];addLog('Signal repaired and returned to automatic working.','good');AudioSys.ding();updatePanels(true)}
+function actCancel(){const t=selectedTrain();if(!t)return;if(t.edgeId)G.occupancy[t.edgeId]=G.occupancy[t.edgeId].filter(id=>id!==t.id);
+ const svc=G.services.find(s=>s.id===t.serviceId);if(svc)svc.status='cancelled';G.stats.cancelled++;G.satisfaction=Math.max(0,G.satisfaction-3);G.score=Math.max(0,G.score-150);
+ addLog('<b>'+t.code+'</b> service <b class="text-[#FF9D94]">cancelled</b>. Passengers refunded; satisfaction dips.','bad');G.trains=G.trains.filter(x=>x.id!==t.id);sel={kind:null,id:null};AudioSys.bad();updatePanels(true)}
+function actProceed(){const t=selectedTrain();if(!t)return;const chk=departCheck(t);
+ if(chk.code!=='occupied'){toast('Proceed-at-danger only overrides an occupied block. Current block: '+(chk.reason||'clear'),'#E8A317');return}
+ G.safety=Math.max(0,G.safety-18);G.stats.forced++;t.forceProceed=true;
+ addLog('<b class="text-[#FF9D94]">⚠ '+t.code+' authorised PAST A RED</b> into an occupied block at caution. Safety record damaged — collision risk is real.','bad');
+ toast('<b>⚠ Proceed at danger!</b> '+t.code+' entering occupied block.','#E05252');AudioSys.alarm();
+ if(tryDepart(t))addLog(t.code+' creeping forward at caution speed.','warn');updatePanels(true)}
+function actClearBlock(edgeId){if(!G.closed[edgeId]||G.closed[edgeId]<=G.simTime)return;const cost=meta.upgrades.engineer2?500:800;if(G.budget<cost){toast('Not enough budget for a clearance crew.','#E05252');return}
+ spend(cost,'Clearance crew to '+EDGES.find(e=>e.id===edgeId).label);G.stats.crewCalls++;G.closed[edgeId]=Math.min(G.closed[edgeId],G.simTime+2);
+ addLog('Clearance crew on site — block reopens within ~2 minutes.','good');AudioSys.ding();sel={kind:'block',id:edgeId};updatePanels(true)}
+function emergencyStop(){if(!G||G.over)return;G.globalStopUntil=G.simTime+2.5;G.score=Math.max(0,G.score-40);addLog('<b class="text-[#FF9D94]">EMERGENCY STOP ALL</b> transmitted. Every driver brakes. Delays will follow, but the railway is safe.','bad');toast('<b>🛑 Stop-all in force</b> for ~2.5 minutes.','#E05252');AudioSys.alarm();updatePanels(true)}
+
+/* ---------------- tutorial ---------------- */
+const TUT_STEPS=[
+ ['Select a train','Click any coloured train on the map (or in the Trains tab). Its route, delay and your controls appear in the panel on the right.'],
+ ['Raise the pace','Use the speed buttons in the top bar (or keys 1–4) and set 2× or 4×. Time is your scarcest resource.'],
+ ['Swing the points','Find the amber ◆ at Mill Junction and click it to swing the points between MAIN and BRANCH. Branch trains cannot move until the road is set for them.'],
+ ['Work a signal','Click any small signal light beside a station to hold it at red, then click again to release it. Holding is how you choose who goes first at a single-track meet.'],
+ ['Land your first arrival','Keep the road clear and watch a train reach its destination. On-time arrivals pay revenue and score. Good luck, signaller.']];
+function updateTutorial(){
+ if(!G||tutorialStep>=TUT_STEPS.length)return;
+ const done=[!!selectedTrain(),simSpeed>=2,pointsChangedFlag,signalChangedFlag,G.stats.completed>=1];
+ if(done[tutorialStep]){tutorialStep++;AudioSys.ding();if(tutorialStep>=TUT_STEPS.length&&!G.tutAwarded){G.tutAwarded=true;G.score+=250;toast('<b>🎓 Tutorial complete!</b> +250 pts. The railway is yours.','#35C26E');addLog('<b>Tutorial complete.</b> +250 pts.','good')}}
+ renderTutorial()}
+function renderTutorial(){
+ const card=$('tutorialCard');if(!G||!meta.settings.tutorial||tutorialStep>=TUT_STEPS.length||G.over){card.classList.add('hidden');return}
+ card.classList.remove('hidden');$('tutTitle').textContent=TUT_STEPS[tutorialStep][0];$('tutText').textContent=TUT_STEPS[tutorialStep][1];$('tutStep').textContent='Step '+(tutorialStep+1)+'/'+TUT_STEPS.length}
+
+/* ---------------- rendering ---------------- */
+const canvas=$('simCanvas'),ctx=canvas.getContext('2d');let viewW=800,viewH=560,dpr=1;
+function resizeCanvas(){const w=$('canvasWrap');if(!w)return;const r=w.getBoundingClientRect();dpr=Math.min(2,window.devicePixelRatio||1);viewW=Math.max(320,r.width);viewH=Math.max(320,r.height);canvas.width=viewW*dpr;canvas.height=viewH*dpr}
+window.addEventListener('resize',resizeCanvas);
+function mapTransform(){const s=Math.min(viewW/760,viewH/580);return{s,ox:(viewW-760*s)/2,oy:(viewH-580*s)/2}}
+function toMap(cx,cy){const{s,ox,oy}=mapTransform();return{x:(cx-ox)/s,y:(cy-oy)/s}}
+function drawMap(){
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#122019';ctx.fillRect(0,0,viewW,viewH);
+ if(!G){return}
+ const{s,ox,oy}=mapTransform();ctx.save();ctx.translate(ox,oy);ctx.scale(s,s);
+ /* terrain */
+ ctx.fillStyle='#16281D';ctx.fillRect(0,0,760,580);
+ ctx.strokeStyle='rgba(255,255,255,0.045)';ctx.lineWidth=1;for(let x=0;x<=760;x+=38){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,580);ctx.stroke()}for(let y=0;y<=580;y+=38){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(760,y);ctx.stroke()}
+ DECO.trees.forEach(t=>{ctx.fillStyle='#1E3A28';ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.fill();ctx.fillStyle='#2A5236';ctx.beginPath();ctx.arc(t.x-2,t.y-2,t.r*0.55,0,7);ctx.fill()});
+ DECO.houses.forEach(h=>{ctx.fillStyle='#3A3F35';ctx.fillRect(h.x-h.r,h.y-h.r,h.r*2,h.r*1.6);ctx.fillStyle='#8E4B3A';ctx.beginPath();ctx.moveTo(h.x-h.r-1,h.y-h.r);ctx.lineTo(h.x,h.y-h.r-4);ctx.lineTo(h.x+h.r+1,h.y-h.r);ctx.fill()});
+ /* river */
+ ctx.strokeStyle='#23536E';ctx.lineWidth=26;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(478,20);ctx.bezierCurveTo(500,150,462,250,486,340);ctx.bezierCurveTo(500,430,486,500,500,570);ctx.stroke();
+ ctx.strokeStyle='#2E6B8C';ctx.lineWidth=16;ctx.beginPath();ctx.moveTo(478,20);ctx.bezierCurveTo(500,150,462,250,486,340);ctx.bezierCurveTo(500,430,486,500,500,570);ctx.stroke();
+ /* sea at harbour */
+ ctx.fillStyle='#1D4258';ctx.fillRect(430,520,330,60);ctx.fillStyle='#2E6B8C';for(let i=0;i<7;i++){ctx.fillRect(445+i*44,536+(i%2)*16,26,3)}
+ ctx.fillStyle='#9DB3A3';ctx.font='700 10px Inter';ctx.fillText('RIVER AERON',452,300);ctx.fillText('HARBOUR',640,548);
+ /* roads */
+ ctx.strokeStyle='#2C352E';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(40,390);ctx.bezierCurveTo(240,360,420,410,730,380);ctx.stroke();ctx.beginPath();ctx.moveTo(120,40);ctx.bezierCurveTo(180,180,150,420,210,560);ctx.stroke();
+ /* edges */
+ EDGES.forEach(e=>{const A=NODES[e.a],B=NODES[e.b];const closed=G.closed[e.id]&&G.closed[e.id]>G.simTime;const occ=(G.occupancy[e.id]||[]).length>0;
+  ctx.strokeStyle='#0A120D';ctx.lineWidth=13;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+  let col='#7E9384';if(overlayMode==='blocks')col=closed?'#FF8A3C':occ?'#FF5A4E':'#35C26E';
+  else if(closed)col='#FF8A3C';else if(occ)col='#C86A5A';
+  ctx.strokeStyle=col;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+  ctx.strokeStyle='#D8C9A3';ctx.lineWidth=1.4;const steps=Math.floor(e.len/15);for(let i=1;i<steps;i++){const p=i/steps,x=lerp(A.x,B.x,p),y=lerp(A.y,B.y,p);const ang=Math.atan2(B.y-A.y,B.x-A.x)+Math.PI/2;ctx.beginPath();ctx.moveTo(x-Math.cos(ang)*6,y-Math.sin(ang)*6);ctx.lineTo(x+Math.cos(ang)*6,y+Math.sin(ang)*6);ctx.stroke()}
+  if(closed){const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;ctx.fillStyle='#FF8A3C';ctx.font='800 15px Inter';ctx.textAlign='center';ctx.fillText('⛔ CLOSED',mx,my-12);ctx.font='700 10px Inter';ctx.fillText(Math.max(0,Math.ceil(G.closed[e.id]-G.simTime))+' min · click block for crew',mx,my+22);ctx.textAlign='left'}
+  if(overlayMode==='blocks'){ctx.fillStyle='#C9D8CE';ctx.font='700 10px Inter';ctx.fillText(e.id+' · '+(closed?'CLOSED':occ?'OCCUPIED':'CLEAR'),(A.x+B.x)/2-24,(A.y+B.y)/2-11)}
+  if(sel.kind==='block'&&sel.id===e.id){ctx.strokeStyle='#FFD166';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();ctx.setLineDash([])}
+ });
+ /* junction highlighted road */
+ [['mill','MILL'],['river','RIV']].forEach(([j,nid])=>{const n=NODES[nid];const mode=G.points[j];
+  let target=null;if(j==='mill')target=mode==='branch'?NODES.NORTH:NODES.EAST;else target=mode==='branch'?NODES.HARB:NODES.EAST;
+  ctx.strokeStyle='rgba(232,163,23,0.75)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(n.x,n.y);ctx.lineTo(lerp(n.x,target.x,0.32),lerp(n.y,target.y,0.32));ctx.stroke()});
+ /* stations */
+ Object.values(NODES).forEach(n=>{
+  ctx.fillStyle='#0E1A13';ctx.strokeStyle='#4C6856';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.roundRect(n.x-34,n.y-27,68,54,9);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#263A2E';ctx.fillRect(n.x-30,n.y-14,60,5);ctx.fillRect(n.x-30,n.y+9,60,5);
+  if(n.id==='NORTH'||n.id==='HARB'){ctx.fillRect(n.x-14,n.y-30,5,60);ctx.fillRect(n.x+9,n.y-30,5,60)}
+  ctx.fillStyle='#E8A317';ctx.fillRect(n.x-7,n.y-7,14,14);
+  ctx.fillStyle='#0E1A13';ctx.font='800 8px Inter';ctx.textAlign='center';ctx.fillText('▦',n.x,n.y+3);ctx.textAlign='left';
+  ctx.fillStyle='rgba(10,18,13,0.88)';const w=ctx.measureText(n.name).width+14;ctx.beginPath();ctx.roundRect(n.x-w/2,n.y+30,w,17,8);ctx.fill();
+  ctx.fillStyle='#E7EFE9';ctx.font='700 10.5px Inter';ctx.textAlign='center';ctx.fillText(n.name,n.x,n.y+42);ctx.textAlign='left';
+  const cnt=stationCount(n.id,null);if(cnt){ctx.fillStyle='#FFD166';ctx.font='800 10px Inter';ctx.fillText('🚉 '+cnt+' in station',n.x-30,n.y-34)}
+ });
+ /* signals */
+ SIGNALS.forEach(sig=>{const asp=signalAspect(sig);const col=asp==='green'?'#35E07F':asp==='yellow'?'#FFD166':asp==='fail'?(Math.floor(performance.now()/300)%2?'#FF3B30':'#5A1712'):'#FF5A4E';
+  ctx.fillStyle='#0B140F';ctx.beginPath();ctx.arc(sig.x,sig.y,8,0,7);ctx.fill();ctx.strokeStyle=sel.kind==='signal'&&sel.id===sig.key?'#FFD166':'#54685A';ctx.lineWidth=sel.kind==='signal'&&sel.id===sig.key?2.5:1.2;ctx.stroke();
+  ctx.fillStyle=col;ctx.beginPath();ctx.arc(sig.x,sig.y,4.6,0,7);ctx.fill();
+  if(G.holds.includes(sig.key)){ctx.fillStyle='#FFD166';ctx.font='800 8px Inter';ctx.fillText('H',sig.x-2.5,sig.y-10)}});
+ /* junctions */
+ [['mill','MILL'],['river','RIV']].forEach(([j,nid])=>{const n=NODES[nid];const pulse=tutorialStep===2&&nid==='MILL';
+  ctx.save();ctx.translate(n.x,n.y-42);ctx.rotate(Math.PI/4);ctx.fillStyle=pulse&&Math.floor(performance.now()/350)%2?'#FFD166':'#E8A317';ctx.fillRect(-8,-8,16,16);ctx.restore();
+  ctx.fillStyle='#171207';ctx.font='900 10px Inter';ctx.textAlign='center';ctx.fillText('◆',n.x,n.y-39);ctx.fillStyle='#FFD166';ctx.font='700 9px Inter';ctx.fillText(G.points[j].toUpperCase(),n.x,n.y-56);ctx.textAlign='left'});
+ /* smoke */
+ if(meta.settings.particles)G.smoke.forEach(p=>{ctx.fillStyle='rgba(200,210,200,'+(0.24*p.life)+')';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill()});
+ /* trains */
+ G.trains.forEach(t=>{trainCoords(t);const tt=TRAIN_TYPES[t.type];const isSel=sel.kind==='train'&&sel.id===t.id;
+  if(overlayMode==='delay'){const c=t.projectedDelay<=3?'rgba(53,192,110,.4)':t.projectedDelay<=8?'rgba(255,209,102,.45)':'rgba(255,90,78,.5)';ctx.fillStyle=c;ctx.beginPath();ctx.arc(t.x,t.y,24,0,7);ctx.fill()}
+  if(isSel){ctx.strokeStyle='#FFD166';ctx.lineWidth=2;ctx.beginPath();ctx.arc(t.x,t.y,23+Math.sin(performance.now()/180)*2,0,7);ctx.stroke()}
+  ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.angle);
+  const carCols=t.type==='freight'?['#7A5A44','#5F6B73','#7A5A44','#67755A','#5F6B73']:null;
+  for(let i=(t.type==='freight'?5:TRAIN_TYPES[t.type].cars);i>=1;i--){ctx.fillStyle=carCols?carCols[i-1]:tt.color;ctx.globalAlpha=carCols?1:0.72;ctx.beginPath();ctx.roundRect(-i*17-3,-6.5,15,13,3);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(-i*17+1,-4,3,3);ctx.fillRect(-i*17+6,-4,3,3)}
+  ctx.fillStyle=tt.color;ctx.beginPath();ctx.roundRect(-4,-8,24,16,5);ctx.fill();ctx.fillStyle='#10202B';ctx.fillRect(11,-5.5,7,11);ctx.fillStyle='#FFE9A8';ctx.fillRect(19,-4,3,3);ctx.fillRect(19,1,3,3);
+  if(t.brokenUntil>G.simTime){ctx.fillStyle='#FF5A4E';ctx.font='900 13px Inter';ctx.fillText('🔧',-2,-13)}
+  else if(t.state==='waiting'){ctx.fillStyle='#FFD166';ctx.font='900 12px Inter';ctx.fillText('✋',-2,-13)}
+  else if(t.manualHold){ctx.fillStyle='#FF9D94';ctx.font='900 11px Inter';ctx.fillText('HOLD',-8,-13)}
+  ctx.restore();
+  ctx.fillStyle='rgba(8,15,11,.9)';const label=t.code+' '+tt.label;const w=ctx.measureText(label).width+10;ctx.beginPath();ctx.roundRect(t.x-w/2,t.y-34,w,15,7);ctx.fill();
+  ctx.fillStyle=t.projectedDelay>8?'#FF9D94':t.projectedDelay>3?'#FFD166':'#C9D8CE';ctx.font='700 9.5px Inter';ctx.textAlign='center';ctx.fillText(label,t.x,t.y-23);ctx.textAlign='left';
+  if(t.state==='running'&&t.speed>3){ctx.fillStyle='#9DB3A3';ctx.font='700 9px Inter';ctx.textAlign='center';ctx.fillText(Math.round(t.speed*1.6)+' km/h',t.x,t.y+24);ctx.textAlign='left'}
+ });
+ /* floats */
+ G.floats.forEach(f=>{ctx.globalAlpha=clamp(f.life,0,1);ctx.fillStyle=f.color;ctx.font='800 12px Inter';ctx.textAlign='center';ctx.fillText(f.text,f.x,f.y);ctx.textAlign='left';ctx.globalAlpha=1});
+ /* rain */
+ if(meta.settings.particles&&G.weather>0.22){ctx.strokeStyle='rgba(160,200,230,'+(0.14+G.weather*0.25)+')';ctx.lineWidth=1.2;const n=Math.floor(G.weather*46);for(let i=0;i<n;i++){const x=(i*97+G.simTime*260)%780,y=(i*61+G.simTime*430)%600;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-4,y+13);ctx.stroke()}
+  if(G.weather>0.6){ctx.fillStyle='rgba(210,225,235,.75)';ctx.font='700 11px Inter';ctx.fillText('🌧 STORM — speeds restricted '+Math.round(G.weather*38)+'%',18,26)}}
+ /* tutorial highlight */
+ if(tutorialStep===0&&G.trains.length){const t=G.trains[0];ctx.strokeStyle='#FFD166';ctx.lineWidth=2;ctx.beginPath();ctx.arc(t.x,t.y,30+Math.sin(performance.now()/160)*4,0,7);ctx.stroke()}
+ ctx.restore();
+ /* vignette weather darkness */
+ if(G&&G.weather>0.4){ctx.fillStyle='rgba(8,16,24,'+((G.weather-0.4)*0.22)+')';ctx.fillRect(0,0,viewW,viewH)}
+}
+
+/* ---------------- charts ---------------- */
+function drawChart(cv){
+ if(!cv||!G)return;const c=cv.getContext('2d');const W=cv.width,H=cv.height;c.clearRect(0,0,W,H);c.fillStyle='#101B14';c.fillRect(0,0,W,H);
+ c.strokeStyle='#26362C';c.lineWidth=1;for(let i=1;i<4;i++){c.beginPath();c.moveTo(0,H*i/4);c.lineTo(W,H*i/4);c.stroke()}
+ const data=G.history;if(data.length<2){c.fillStyle='#8FA695';c.font='12px Inter';c.fillText('Collecting shift data…',14,24);return}
+ const maxD=Math.max(12,...data.map(d=>d.delay));
+ function line(get,max,col,lw){c.strokeStyle=col;c.lineWidth=lw;c.beginPath();data.forEach((d,i)=>{const x=i/(data.length-1)*W,y=H-6-(get(d)/max)*(H-16);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}
+ line(d=>d.sat,100,'#35C26E',2);line(d=>d.delay,maxD,'#FF6B5E',2);
+ c.fillStyle='#8FA695';c.font='10px Inter';c.fillText('max delay scale '+maxD.toFixed(0)+' min',8,12)}
+
+/* ---------------- panels ---------------- */
+function updateObjectiveBar(){if(!G)return;const scen=scenarioById(G.scenId),df=DIFFS[G.diffKey];
+ $('objectiveBar').innerHTML='<span class="font-bold text-[#FFD166]">🎯 OBJECTIVES</span><span>Land <b>'+G.stats.completed+'/'+scen.targetServices+'</b> services</span><span>Punctuality <b>'+(punctuality()===null?'—':punctuality()+'%')+'</b> (target '+(scen.targetPunct+df.punctAdj)+'%)</span><span>Satisfaction <b>'+Math.round(G.satisfaction)+'%</b> (target '+scen.targetSat+'%)</span><span>Safety <b>'+Math.round(G.safety)+'</b></span><span class="ml-auto text-[#8FA695]">'+scen.name+' · '+df.label+'</span>'}
+function trainStateText(t){
+ if(t.brokenUntil>G.simTime)return'🔧 Failed — '+(t.engineerCalled?'engineer en route':'needs engineer');
+ if(t.state==='dwelling')return t.node?('At '+NODES[t.node].name+' · '+(t.manualHold?'held':Math.max(0,t.dwell).toFixed(1)+' min dwell')):'Boarding';
+ if(t.state==='waiting')return'Waiting at '+(t.node?NODES[t.node].name:'')+' — '+(t.waitReason||'signal');
+ if(t.state==='running')return'Running '+(EDGES.find(e=>e.id===t.edgeId)?.label||'')+' → '+NODES[t.route[t.routeIdx+1]].name;
+ return t.state}
+function updatePanels(force){
+ if(!G)return;const scen=scenarioById(G.scenId);
+ $('hudScenario').textContent=scen.name+' · '+DIFFS[G.diffKey].label;
+ $('hudClock').textContent=fmtClock(scen.start+G.simTime);
+ $('shiftFill').style.width=clamp(G.simTime/scen.shift*100,0,100)+'%';$('shiftPct').textContent=Math.round(clamp(G.simTime/scen.shift*100,0,100))+'%';
+ $('hudBudget').textContent=fmtMoney(G.budget);$('hudBudget').style.color=G.budget<800?'#FF9D94':'';
+ $('hudScore').textContent=Math.round(G.score).toLocaleString();
+ $('hudSat').textContent=Math.round(G.satisfaction)+'%';
+ $('hudPunct').textContent=punctuality()===null?'—':punctuality()+'%';
+ $('hudWeather').textContent=G.weather<0.18?'Calm':G.weather<0.45?'Showers':G.weather<0.7?'Rain':'Storm';
+ $('activeCountChip').textContent=G.trains.length+' trains on network · '+G.stats.completed+' landed';
+ updateObjectiveBar();renderSelected();renderControl();renderTrains();renderSchedule();renderStats();renderLog();renderSideBoxes();renderTutorial();icons()}
+function renderSideBoxes(){
+ if(!G)return;
+ const upcoming=G.services.filter(s=>s.status==='scheduled').slice(0,5);
+ $('nextDeps').innerHTML=upcoming.length?upcoming.map(s=>{const tt=TRAIN_TYPES[s.type];const inMin=Math.round(s.depart-G.simTime);return '<div class="flex justify-between gap-2"><span><span style="color:'+tt.color+'">●</span> <b>'+s.code+'</b> '+NODES[s.from].short+'→'+NODES[s.to].short+'</span><span class="text-[#8FA695]">'+(inMin<=0?'due now':'in '+inMin+'m')+' · '+fmtClock(scenarioById(G.scenId).start+s.depart)+'</span></div>'}).join(''):'<span class="text-[#8FA695]">No further booked departures.</span>';
+ const alerts=[];
+ G.trains.forEach(t=>{if(t.brokenUntil>G.simTime)alerts.push(['#FF5A4E','🔧 '+t.code+' failed in section — select it & call an engineer']);else if(t.state==='waiting')alerts.push(['#FFD166','✋ '+t.code+': '+(t.waitReason||'waiting')])});
+ Object.keys(G.closed).forEach(eid=>{if(G.closed[eid]>G.simTime)alerts.push(['#FF8A3C','⛔ '+EDGES.find(e=>e.id===eid).label+' closed '+Math.ceil(G.closed[eid]-G.simTime)+' min — click block for crew'])});
+ Object.keys(G.failures).forEach(k=>{if(G.failures[k]>G.simTime)alerts.push(['#FF5A4E','🚦 Signal failure at '+NODES[signalByKey(k).from].name+' — click signal'])});
+ if(G.surgeUntil>G.simTime)alerts.push(['#FFD166','👥 Surge active '+Math.ceil(G.surgeUntil-G.simTime)+' min — dwells extended']);
+ if(G.globalStopUntil>G.simTime)alerts.push(['#FF5A4E','🛑 STOP-ALL in force']);
+ $('alertsBox').innerHTML=alerts.length?alerts.slice(0,6).map(a=>'<div style="border-left:3px solid '+a[0]+'" class="pl-2">'+a[1]+'</div>').join(''):'<span class="text-[#7FE0A8]">✓ No active alerts. The road is yours.</span>';
+ const ms=Object.keys(G.milestones);$('milestoneBox').innerHTML=(ms.length?ms.map(m=>'<div>🏅 '+m+'</div>').join(''):'<span class="text-[#8FA695]">Land arrivals to earn milestones.</span>')+'<div class="text-[#8FA695] mt-1">Next: '+(G.stats.completed<1?'first arrival':G.stats.completed<5?'5 services':G.stats.completed<10?'10 services':G.stats.completed<15?'15 services':G.stats.completed<20?'20 services':'all milestones earned')+'</div>'}
+function renderSelected(){
+ const box=$('selectedPanel');if(!G){box.innerHTML='';return}
+ if(sel.kind==='train'){const t=selectedTrain();if(!t){sel={kind:null,id:null}}
+ if(sel.kind==='train'&&selectedTrain()){const t=selectedTrain(),tt=TRAIN_TYPES[t.type];const chk=t.state!=='running'?departCheck(t):null;
+  box.innerHTML='<div class="flex items-start justify-between gap-2"><div><div class="text-[10px] font-extrabold tracking-widest text-[#8FA695]">SELECTED TRAIN</div><div class="font-display text-3xl font-bold" style="color:'+tt.color+'">'+t.code+' · '+tt.label+'</div><div class="text-sm text-[#C4D4C7]">'+NODES[t.from].name+' → '+NODES[t.to].name+'</div></div><span class="chip">'+t.state.toUpperCase()+'</span></div>'
+  +'<div class="grid grid-cols-3 gap-2 mt-3 text-center">'+[['Status',trainStateText(t)],['Proj. delay',(t.projectedDelay<0.5?'on time':t.projectedDelay.toFixed(1)+' min')],['Due',fmtClock(scenarioById(G.scenId).start+t.schedArr)]].map(([k,v])=>'<div class="panel-soft p-2"><div class="text-[12px] font-bold leading-tight">'+v+'</div><div class="text-[9px] font-bold text-[#8FA695]">'+k.toUpperCase()+'</div></div>').join('')+'</div>'
+  +(chk&&!chk.ok?'<div class="mt-2 text-[12px] panel-soft p-2" style="border-color:#6B5520">⏸ '+chk.reason+'</div>':'')
+  +(t.brokenUntil>G.simTime?'<div class="mt-2 text-[12px] text-[#FF9D94]">🔧 Failed. '+(t.engineerCalled?'Engineer en route — repairs completing.':'No engineer called yet.')+'</div>':'')
+  +'<div class="flex flex-wrap gap-2 mt-3">'
+  +'<button class="btn '+(t.manualHold?'btn-green':'')+'" data-act="hold">'+(t.manualHold?'▶ Release train':'⏸ Hold train')+'</button>'
+  +'<button class="btn" data-act="expedite">⚡ Expedite £150</button>'
+  +(t.brokenUntil>G.simTime?'<button class="btn btn-amber" data-act="engineer">🔧 Engineer £'+(meta.upgrades.engineer2?360:600)+'</button>':'')
+  +(chk&&chk.code==='occupied'?'<button class="btn btn-red" data-act="proceed">⚠ Proceed at danger</button>':'')
+  +'<button class="btn btn-red" data-act="cancel">Cancel service</button></div>'
+  +'<p class="text-[11px] text-[#8FA695] mt-2">Expedite raises line speed for ~9 min. Proceed-at-danger overrides an occupied block: severe safety penalty and real collision risk.</p>';return}
+ if(sel.kind==='signal'){const s=signalByKey(sel.id);if(s){const asp=signalAspect(s);const failed=G.failures[s.key]&&G.failures[s.key]>G.simTime;
+  box.innerHTML='<div class="text-[10px] font-extrabold tracking-widest text-[#8FA695]">SELECTED SIGNAL</div><div class="font-display text-3xl font-bold">'+NODES[s.from].name+' → '+NODES[s.to].name+'</div>'
+  +'<div class="text-sm mt-1">Aspect: <b style="color:'+(asp==='green'?'#35E07F':asp==='yellow'?'#FFD166':'#FF7B72')+'">'+asp.toUpperCase()+'</b> · Block '+(EDGES.find(e=>e.id===s.edge).label)+'</div>'
+  +(failed?'<div class="text-[#FF9D94] text-sm mt-2">🚦 This signal has failed and is stuck at red.</div><button class="btn btn-amber mt-3" data-act="fixsignal" data-key="'+s.key+'">🔧 Send signal engineer £'+(meta.upgrades.engineer2?220:350)+'</button>'
+   :'<button class="btn mt-3 '+(G.holds.includes(s.key)?'btn-green':'')+'" data-act="sig" data-key="'+s.key+'">'+(G.holds.includes(s.key)?'▶ Release signal to auto':'⏸ Hold signal at red')+'</button>')
+  +'<p class="text-[11px] text-[#8FA695] mt-2">Holding a signal is how you sequence a meet: hold the freight, let the express run.</p>';return}}
+ if(sel.kind==='junction'){const j=sel.id;const nid=j==='mill'?'MILL':'RIV';
+  box.innerHTML='<div class="text-[10px] font-extrabold tracking-widest text-[#8FA695]">JUNCTION POINTS</div><div class="font-display text-3xl font-bold">'+NODES[nid].name+'</div><div class="text-sm">Currently set: <b class="text-[#FFD166]">'+G.points[j].toUpperCase()+'</b></div><button class="btn btn-amber mt-3" data-act="points" data-j="'+j+'">◆ Swing to '+(G.points[j]==='main'?'BRANCH':'MAIN')+'</button><p class="text-[11px] text-[#8FA695] mt-2">MAIN = Westport↔Eastgate through road. BRANCH = '+(j==='mill'?'North Mine':'Harbour Port')+'. Trains booked the other way will wait at the signal.</p>';return}
+ if(sel.kind==='block'){const e=EDGES.find(x=>x.id===sel.id);if(e){const closed=G.closed[e.id]&&G.closed[e.id]>G.simTime;const occ=G.occupancy[e.id]||[];
+  box.innerHTML='<div class="text-[10px] font-extrabold tracking-widest text-[#8FA695]">SELECTED BLOCK</div><div class="font-display text-3xl font-bold">'+e.label+'</div><div class="text-sm">'+(closed?'<span class="text-[#FF8A3C]">⛔ Closed for '+Math.ceil(G.closed[e.id]-G.simTime)+' min</span>':occ.length?'<span class="text-[#FF9D94]">Occupied by '+(G.trains.find(t=>t.id===occ[0])?.code||'')+'</span>':'<span class="text-[#7FE0A8]">Clear</span>')+' · limit '+e.max*1.6+' km/h</div>'
+  +(closed?'<button class="btn btn-amber mt-3" data-act="clear" data-edge="'+e.id+'">🚧 Dispatch clearance crew £'+(meta.upgrades.engineer2?500:800)+'</button>':'')+'<p class="text-[11px] text-[#8FA695] mt-2">Single-track block: one train at a time. Trains brake automatically for a red at the far end.</p>';return}}
+ box.innerHTML='<div class="text-[10px] font-extrabold tracking-widest text-[#8FA695]">DISPATCH DESK</div><div class="font-display text-3xl font-bold">Nothing selected</div><p class="text-sm text-[#A9BCAE] leading-relaxed">Click a <b>train</b> to hold, expedite or rescue it. Click a <b>signal ●</b> to hold a meet. Click the <b>◆ points</b> at Mill or Riverdale to swing the road. Click a <b>track section</b> to inspect a block or clear debris.</p><div class="flex gap-2 mt-3"><button class="btn" data-act="tabtrains">View trains</button><button class="btn" data-act="help">Handbook</button></div>'}
+function renderControl(){
+ const box=$('tab-control');if(!box||!G)return;
+ const closedList=EDGES.filter(e=>G.closed[e.id]&&G.closed[e.id]>G.simTime);
+ box.innerHTML='<div class="flex flex-col gap-3">'
+ +'<div class="panel-soft p-3"><div class="font-bold text-sm mb-2">◆ Junction points</div>'
+ +[['mill','Mill Junction'],['river','Riverdale']].map(([j,n])=>'<div class="flex items-center justify-between py-1"><span class="text-sm">'+n+'</span><button class="btn !py-1.5" data-act="points" data-j="'+j+'">'+G.points[j].toUpperCase()+' ◆ swing</button></div>').join('')+'</div>'
+ +'<div class="panel-soft p-3"><div class="font-bold text-sm mb-2">🚦 Held signals ('+G.holds.length+')</div>'+(G.holds.length?G.holds.map(k=>{const s=signalByKey(k);return '<div class="flex justify-between items-center py-1 text-[13px]"><span>'+NODES[s.from].short+' → '+NODES[s.to].short+'</span><button class="btn !py-1" data-act="sig" data-key="'+k+'">Release</button></div>'}).join(''):'<span class="text-[12px] text-[#8FA695]">None held. Click signals on the map to hold them.</span>')+'</div>'
+ +'<div class="panel-soft p-3"><div class="font-bold text-sm mb-2">🌦 Weather & line state</div><div class="flex justify-between text-[13px]"><span>Conditions</span><b>'+($('hudWeather').textContent)+'</b></div><div class="meter mt-1"><div style="width:'+Math.round(G.weather*100)+'%;background:#5EB1D6"></div></div><div class="flex justify-between text-[13px] mt-2"><span>Speed restriction</span><b>−'+Math.round(G.weather*38)+'%</b></div>'
+ +(closedList.length?closedList.map(e=>'<div class="flex justify-between items-center mt-2 text-[13px]"><span class="text-[#FF8A3C]">⛔ '+e.label+'</span><button class="btn !py-1" data-act="clear" data-edge="'+e.id+'">Crew £'+(meta.upgrades.engineer2?500:800)+'</button></div>').join(''):'<div class="text-[12px] text-[#7FE0A8] mt-2">All blocks open.</div>')+'</div>'
+ +'<div class="panel-soft p-3"><div class="font-bold text-sm mb-2">Global controls</div><div class="flex flex-wrap gap-2"><button class="btn btn-red" data-act="stopall">🛑 Emergency stop all</button><button class="btn" data-act="releaseall">Release all holds</button><button class="btn" data-act="save">💾 Save shift</button></div>'
+ +'<div class="text-[12px] text-[#8FA695] mt-2">Upgrades active: '+(Object.keys(meta.upgrades).filter(k=>meta.upgrades[k]).map(k=>UPGRADES.find(u=>u.id===k)?.name).join(', ')||'none — earn ★ on the title screen')+'</div></div></div>'}
+function renderTrains(){
+ const box=$('tab-trains');if(!box||!G)return;$('trainTabCount').textContent='('+G.trains.length+')';
+ if(!G.trains.length){box.innerHTML='<p class="text-sm text-[#8FA695]">No trains on the network yet. Watch for booked departures.</p>';return}
+ const sorted=[...G.trains].sort((a,b)=>b.projectedDelay-a.projectedDelay);
+ box.innerHTML=sorted.map(t=>{const tt=TRAIN_TYPES[t.type];const dc=t.projectedDelay>8?'#FF7B72':t.projectedDelay>3?'#FFD166':'#7FE0A8';
+  return '<button class="train-row '+(sel.kind==='train'&&sel.id===t.id?'selected':'')+' mb-2" data-select-train="'+t.id+'"><div class="flex justify-between gap-2"><span><span style="color:'+tt.color+'">●</span> <b>'+t.code+'</b> <span class="text-[#8FA695]">'+tt.label+'</span></span><b style="color:'+dc+'">'+(t.projectedDelay<0.5?'on time':'+'+t.projectedDelay.toFixed(0)+'m')+'</b></div><div class="text-[12px] text-[#A9BCAE] mt-0.5">'+NODES[t.from].short+' → '+NODES[t.to].short+' · '+trainStateText(t)+'</div>'
+  +(meta.upgrades.predict?'<div class="text-[11px] text-[#8ED0FF] mt-0.5">ETA '+fmtClock(scenarioById(G.scenId).start+G.simTime+remainingEstimate(t))+(t.waitReason&&t.state!=='running'?' · cause: '+t.waitReason:'')+'</div>':'<div class="text-[11px] text-[#8FA695] mt-0.5">Due '+fmtClock(scenarioById(G.scenId).start+t.schedArr)+'</div>')+'</button>'}).join('')}
+function renderSchedule(){
+ const box=$('tab-schedule');if(!box||!G)return;const st=scenarioById(G.scenId).start;
+ const rows=G.services.map(s=>{const tt=TRAIN_TYPES[s.type];const tr=G.trains.find(t=>t.serviceId===s.id);
+  const status=s.status==='completed'?'<span class="text-[#7FE0A8]">✓ landed</span>':s.status==='cancelled'?'<span class="text-[#FF7B72]">cancelled</span>':tr?trainStateText(tr):'<span class="text-[#8FA695]">booked '+fmtClock(st+s.depart)+'</span>';
+  return '<div class="flex justify-between gap-2 py-1.5 border-b border-[#223529] text-[12px]"><span><span style="color:'+tt.color+'">●</span> <b>'+s.code+'</b> '+NODES[s.from].short+'→'+NODES[s.to].short+'</span><span class="text-right">'+status+'<br><span class="text-[#8FA695]">due '+fmtClock(st+s.schedArr)+'</span></span></div>'}).join('');
+ box.innerHTML='<div class="text-[12px] text-[#8FA695] mb-1">'+G.services.length+' booked services this shift.</div>'+rows}
+function renderStats(){
+ const box=$('tab-stats');if(!box||!G)return;const s=G.stats;
+ box.innerHTML='<div class="grid grid-cols-2 gap-2">'
+ +[['Score',Math.round(G.score)],['Punctuality',punctuality()===null?'—':punctuality()+'%'],['Avg delay',(s.completed?(s.totalDelay/s.completed).toFixed(1):'0')+' min'],['Satisfaction',Math.round(G.satisfaction)+'%'],['Safety',Math.round(G.safety)+'/100'],['Revenue',fmtMoney(s.revenue)],['Costs',fmtMoney(s.costs)],['Engineer calls',s.engineerCalls],['Crew callouts',s.crewCalls],['Danger proceeds',s.forced],['Completed',s.completed],['Cancelled',s.cancelled]].map(([k,v])=>'<div class="panel-soft p-2.5 text-center"><div class="font-bold">'+v+'</div><div class="text-[9px] font-bold text-[#8FA695] tracking-wider">'+k.toUpperCase()+'</div></div>').join('')+'</div>'
+ +'<div class="panel-soft p-2 mt-3"><canvas id="chartCanvas" width="330" height="110" class="w-full"></canvas><div class="text-[10px] text-[#8FA695] text-center">Satisfaction (green) vs avg projected delay (red), per minute</div></div>'
+ +'<div class="panel-soft p-3 mt-3 text-[12px]"><b>How systems interact:</b> freight occupies blocks longer → passenger trains wait → projected delay rises → satisfaction falls → end-of-shift targets fail. Storms cut speeds everywhere; surges stretch dwells; cancellations free the line but cost mood and score.</div>';
+ drawChart($('chartCanvas'))}
+function renderLog(){const box=$('logBox');if(!box||!G)return;const st=scenarioById(G.scenId).start;
+ box.innerHTML=G.log.map(l=>'<div class="log-item" style="border-left-color:'+l.color+'"><span class="text-[#8FA695] font-bold">'+fmtClock(st+l.t)+'</span> '+l.html+'</div>').join('')}
+
+/* ---------------- tabs & selection ---------------- */
+function switchTab(name){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('.tab-page').forEach(p=>p.classList.add('hidden'));const pg=$('tab-'+name);if(pg)pg.classList.remove('hidden');if(G)updatePanels(true)}
+document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{AudioSys.resume();AudioSys.click();switchTab(b.dataset.tab)}));
+$('selectedPanel').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||!G)return;AudioSys.resume();handleAction(b.dataset,b)});
+$('tab-control').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||!G)return;AudioSys.resume();handleAction(b.dataset,b)});
+$('tab-trains').addEventListener('click',e=>{const b=e.target.closest('[data-select-train]');if(!b)return;sel={kind:'train',id:b.dataset.selectTrain};AudioSys.click();updatePanels(true)});
+function handleAction(d,b){
+ if(d.act==='hold')actHoldTrain();else if(d.act==='expedite')actExpedite();else if(d.act==='engineer')actEngineer();
+ else if(d.act==='cancel')actCancel();else if(d.act==='proceed')actProceed();else if(d.act==='points')togglePoints(d.j);
+ else if(d.act==='sig')toggleHoldSignal(d.key);else if(d.act==='fixsignal')actFixSignal(d.key);else if(d.act==='clear')actClearBlock(d.edge);
+ else if(d.act==='stopall')emergencyStop();else if(d.act==='releaseall'){if(!G)return;G.holds=[];G.trains.forEach(t=>t.manualHold=false);addLog('All signal and train holds released.','system');AudioSys.ding();updatePanels(true)}
+ else if(d.act==='save')saveRun();else if(d.act==='tabtrains')switchTab('trains');else if(d.act==='help')openModal('helpModal')}
+
+/* ---------------- canvas interaction ---------------- */
+function canvasPos(ev){const r=canvas.getBoundingClientRect();return toMap(ev.clientX-r.left,ev.clientY-r.top)}
+canvas.addEventListener('pointerdown',ev=>{if(!G||G.over)return;AudioSys.resume();const p=canvasPos(ev);
+ /* trains first */
+ let best=null,bd=24;G.trains.forEach(t=>{trainCoords(t);const d=Math.hypot(t.x-p.x,t.y-p.y);if(d<bd){bd=d;best=t}});
+ if(best){sel={kind:'train',id:best.id};AudioSys.click();updatePanels(true);return}
+ /* junctions */
+ for(const[j,nid]of[['mill','MILL'],['river','RIV']]){const n=NODES[nid];if(Math.hypot(n.x-p.x,(n.y-42)-p.y)<22){sel={kind:'junction',id:j};togglePoints(j);updatePanels(true);return}}
+ /* signals */
+ let bs=null,bsd=17;SIGNALS.forEach(s=>{const d=Math.hypot(s.x-p.x,s.y-p.y);if(d<bsd){bsd=d;bs=s}});
+ if(bs){sel={kind:'signal',id:bs.key};AudioSys.click();updatePanels(true);return}
+ /* blocks */
+ let be=null,bed=15;EDGES.forEach(e=>{const A=NODES[e.a],B=NODES[e.b];const L2=(B.x-A.x)**2+(B.y-A.y)**2;let tt=((p.x-A.x)*(B.x-A.x)+(p.y-A.y)*(B.y-A.y))/L2;tt=clamp(tt,0,1);const d=Math.hypot(p.x-(A.x+tt*(B.x-A.x)),p.y-(A.y+tt*(B.y-A.y)));if(d<bed){bed=d;be=e}});
+ if(be){sel={kind:'block',id:be.id};AudioSys.click();updatePanels(true);return}
+ sel={kind:null,id:null};updatePanels(true)});
+canvas.addEventListener('pointermove',ev=>{if(!G)return;const p=canvasPos(ev);let cur='crosshair';
+ if(G.trains.some(t=>Math.hypot(t.x-p.x,t.y-p.y)<28))cur='pointer';
+ SIGNALS.forEach(s=>{if(Math.hypot(s.x-p.x,s.y-p.y)<15)cur='pointer'});
+ canvas.style.cursor=cur});
+
+/* ---------------- save / load run ---------------- */
+function saveRun(){if(!G)return;try{const clone=JSON.parse(JSON.stringify(G,(k,v)=>k==='rng'?undefined:v));clone.floats=[];clone.smoke=[];localStorage.setItem(RUN_KEY,JSON.stringify(clone));toast('<b>💾 Shift saved.</b> Resume it from the title screen.','#35C26E');addLog('Shift saved by signaller.','system');AudioSys.ding();renderTitle()}catch(e){toast('Saving is unavailable in this browser.','#E05252')}}
+function loadRun(){try{const raw=localStorage.getItem(RUN_KEY);if(!raw)return false;const g=JSON.parse(raw);if(!g||!g.scenId)return false;
+ G=g;G.rng=mulberry32((g.seed||1)*3+17+Math.floor(g.simTime));G.paused=false;G.floats=G.floats||[];G.smoke=G.smoke||[];
+ EDGES.forEach(e=>{if(!G.occupancy[e.id])G.occupancy[e.id]=[]});
+ sel={kind:null,id:null};simSpeed=1;document.querySelectorAll('.speed-btn').forEach(b=>b.classList.toggle('active',b.dataset.speed==='1'));
+ overlayMode=meta.settings.overlay||'normal';showGame();addLog('Saved shift resumed. Welcome back to the box.','system');updatePanels(true);toast('<b>Shift resumed</b> at '+fmtClock(scenarioById(G.scenId).start+G.simTime)+'.');return true}catch(e){return false}}
+
+/* ---------------- modals / chrome ---------------- */
+function openModal(id){$(id).classList.remove('hidden');$(id).classList.add('flex');icons()}
+function hideModal(id){$(id).classList.add('hidden');$(id).classList.remove('flex')}
+function setPaused(v,showMenu){if(!G)return;G.paused=v;$('pauseBtn').innerHTML='<i data-lucide="'+(v?'play':'pause')+'" class="w-4 h-4"></i>';icons();
+ if(showMenu&&v){$('pauseSub').textContent=scenarioById(G.scenId).name+' · '+fmtClock(scenarioById(G.scenId).start+G.simTime)+' · score '+Math.round(G.score);openModal('pauseModal')}else hideModal('pauseModal')}
+document.querySelectorAll('.close-help').forEach(b=>b.onclick=()=>hideModal('helpModal'));
+document.querySelectorAll('.close-settings').forEach(b=>b.onclick=()=>{hideModal('settingsModal');saveMeta()});
+$('titleHelpBtn').onclick=()=>{AudioSys.resume();openModal('helpModal')};
+$('heroHelpBtn').onclick=()=>{AudioSys.resume();meta.settings.tutorial=true;$('setTutorial').checked=true;saveMeta();selectedScenario='s1';selectedDiff='standard';syncDiffButtons();renderTitle();newGame('s1','standard')};
+$('titleSettingsBtn').onclick=()=>openModal('settingsModal');
+$('gameHelpBtn').onclick=()=>openModal('helpModal');
+$('gameSettingsBtn').onclick=()=>openModal('settingsModal');
+$('pauseBtn').onclick=()=>{if(G)setPaused(!G.paused,false)};
+$('pauseMenuBtn').onclick=()=>{if(G)setPaused(true,true)};
+$('resumeBtn').onclick=()=>setPaused(false,false);
+$('pauseSettingsBtn').onclick=()=>openModal('settingsModal');
+$('pauseHelpBtn').onclick=()=>openModal('helpModal');
+$('restartBtn').onclick=()=>{hideModal('pauseModal');newGame(G.scenId,G.diffKey)};
+$('quitBtn').onclick=()=>showTitle();
+$('saveRunBtn').onclick=()=>{saveRun()};
+$('emergencyBtn').onclick=()=>{AudioSys.resume();emergencyStop()};
+$('tutSkip').onclick=()=>{tutorialStep=99;renderTutorial()};
+function syncMuteButtons(){const ic=meta.settings.muted?'volume-x':'volume-2';$('muteBtn').innerHTML='<i data-lucide="'+ic+'" class="w-4 h-4"></i>';$('titleMuteBtn').innerHTML='<i data-lucide="'+ic+'" class="w-4 h-4"></i>';icons()}
+function toggleMute(){meta.settings.muted=!meta.settings.muted;$('setMute').checked=meta.settings.muted;AudioSys.resume();AudioSys.applyVolume();saveMeta();syncMuteButtons()}
+$('muteBtn').onclick=toggleMute;$('titleMuteBtn').onclick=toggleMute;
+document.querySelectorAll('.speed-btn').forEach(b=>b.onclick=()=>{AudioSys.resume();simSpeed=parseFloat(b.dataset.speed);document.querySelectorAll('.speed-btn').forEach(x=>x.classList.toggle('active',x===b));if(G&&G.paused)setPaused(false,false);updateTutorial();AudioSys.click()});
+document.querySelectorAll('.overlay-btn').forEach(b=>b.onclick=()=>{overlayMode=b.dataset.overlay;meta.settings.overlay=overlayMode;saveMeta();document.querySelectorAll('.overlay-btn').forEach(x=>x.classList.toggle('active',x===b));AudioSys.click()});
+/* settings bindings */
+$('setVolume').value=meta.settings.volume;$('setMute').checked=meta.settings.muted;$('setParticles').checked=meta.settings.particles;$('setTutorial').checked=meta.settings.tutorial;$('setOverlay').value=meta.settings.overlay;
+$('setVolume').oninput=e=>{meta.settings.volume=+e.target.value;AudioSys.resume();AudioSys.applyVolume();saveMeta()};
+$('setMute').onchange=e=>{meta.settings.muted=e.target.checked;AudioSys.applyVolume();saveMeta();syncMuteButtons()};
+$('setParticles').onchange=e=>{meta.settings.particles=e.target.checked;saveMeta()};
+$('setTutorial').onchange=e=>{meta.settings.tutorial=e.target.checked;tutorialStep=e.target.checked&&G?0:99;saveMeta();renderTutorial()};
+$('setOverlay').onchange=e=>{meta.settings.overlay=e.target.value;overlayMode=e.target.value;document.querySelectorAll('.overlay-btn').forEach(x=>x.classList.toggle('active',x.dataset.overlay===overlayMode));saveMeta()};
+$('resetProgressBtn').onclick=()=>{meta.progress={unlocked:1,stars:{},best:{}};meta.upgrades={};meta.rep=0;meta.totals={runs:0,success:0,trainsLanded:0,bestScore:0};saveMeta();try{localStorage.removeItem(RUN_KEY)}catch(e){}renderTitle();toast('Campaign progress reset.','#E8A317')};
+/* keyboard */
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){if(!$('helpModal').classList.contains('hidden'))hideModal('helpModal');else if(!$('settingsModal').classList.contains('hidden'))hideModal('settingsModal');else if(G&&!G.over)setPaused(!G.paused,true);return}
+ if(!G||$('gameScreen').classList.contains('hidden'))return;
+ if(e.key===' '){e.preventDefault();setPaused(!G.paused,false)}
+ else if(['1','2','3','4'].includes(e.key)){const sp=[0.5,1,2,4][+e.key-1];simSpeed=sp;document.querySelectorAll('.speed-btn').forEach(x=>x.classList.toggle('active',parseFloat(x.dataset.speed)===sp));updateTutorial()}
+ else if(e.key==='Tab'){e.preventDefault();if(G.trains.length){const idx=G.trains.findIndex(t=>sel.kind==='train'&&t.id===sel.id);const n=G.trains[(idx+1)%G.trains.length];sel={kind:'train',id:n.id};updatePanels(true)}}
+ else if(e.key.toLowerCase()==='h'){const t=selectedTrain();if(t)actHoldTrain();else openModal('helpModal')}
+ else if(e.key.toLowerCase()==='x'){actExpedite()}
+ else if(e.key.toLowerCase()==='e'){emergencyStop()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&G&&!G.paused&&!G.over){setPaused(true,false);toast('Auto-paused while the tab was hidden.','#E8A317')}});
+
+/* ---------------- title screen ---------------- */
+function syncDiffButtons(){document.querySelectorAll('.diff-btn').forEach(b=>b.classList.toggle('active',b.dataset.diff===selectedDiff));$('diffDesc').textContent=DIFFS[selectedDiff].desc}
+document.querySelectorAll('.diff-btn').forEach(b=>b.onclick=()=>{selectedDiff=b.dataset.diff;syncDiffButtons();AudioSys.resume();AudioSys.click();renderTitle()});
+function renderTitle(){
+ $('metaRuns').textContent=meta.totals.runs;$('metaBest').textContent=(meta.totals.bestScore||0).toLocaleString();$('metaTrains').textContent=meta.totals.trainsLanded;$('metaRep').textContent=(meta.rep||0)+' ★';
+ $('continueBtn').classList.toggle('hidden',!hasSavedRun());
+ $('scenarioBox').innerHTML=SCENARIOS.map((s,i)=>{const locked=i+1>meta.progress.unlocked;const stars=meta.progress.stars[s.id]||0;const best=meta.progress.best[s.id]||0;
+  return '<button class="scenario-card '+(selectedScenario===s.id?'selected':'')+' '+(locked?'locked':'')+'" data-scen="'+s.id+'" '+(locked?'disabled':'')+'><div class="flex justify-between gap-2"><div><div class="font-display text-2xl font-bold leading-none">'+(i+1)+'. '+s.name+'</div><div class="text-[11px] text-[#8FA695] font-bold mt-0.5">'+s.sub+'</div></div><div class="text-right"><div>'+(locked?'🔒':'<span class="star-on">'+'★'.repeat(stars)+'</span><span class="star-off">'+'★'.repeat(3-stars)+'</span>')+'</div>'+(best?'<div class="text-[11px] text-[#8FA695]">best '+best.toLocaleString()+'</div>':'')+'</div></div><p class="text-[12px] text-[#A9BCAE] mt-2 leading-relaxed">'+s.desc+'</p><div class="flex flex-wrap gap-1.5 mt-2"><span class="chip">⏱ '+s.shift+' min shift</span><span class="chip">🎯 '+s.targetServices+' services</span><span class="chip">⏰ ≥'+(s.targetPunct+DIFFS[selectedDiff].punctAdj)+'% on time</span><span class="chip">💷 '+fmtMoney(Math.round(s.budget*DIFFS[selectedDiff].budget))+'</span></div></button>'}).join('');
+ document.querySelectorAll('[data-scen]').forEach(b=>b.onclick=()=>{selectedScenario=b.dataset.scen;AudioSys.resume();AudioSys.click();renderTitle()});
+ $('shopBox').innerHTML=UPGRADES.map(u=>{const owned=!!meta.upgrades[u.id];return '<div class="upgrade-card"><div class="flex items-center gap-2"><i data-lucide="'+u.icon+'" class="w-5 h-5 text-[#FFD166]"></i><b class="text-sm">'+u.name+'</b><span class="chip ml-auto">'+(owned?'OWNED':u.cost+' ★')+'</span></div><p class="text-[12px] text-[#A9BCAE] mt-1">'+u.desc+'</p>'+(owned?'<div class="text-[12px] text-[#7FE0A8] font-bold mt-2">✓ Active on every shift</div>':'<button class="btn btn-amber w-full mt-2" data-buy="'+u.id+'" '+(meta.rep<u.cost?'disabled':'')+'>Purchase for '+u.cost+' ★</button>')+'</div>'}).join('');
+ document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{const u=UPGRADES.find(x=>x.id===b.dataset.buy);if(meta.rep<u.cost||meta.upgrades[u.id])return;meta.rep-=u.cost;meta.upgrades[u.id]=true;saveMeta();AudioSys.resume();AudioSys.cash();toast('<b>Upgrade installed:</b> '+u.name);renderTitle()});
+ syncDiffButtons();syncMuteButtons();icons()}
+$('startBtn').onclick=()=>{AudioSys.resume();newGame(selectedScenario,selectedDiff)};
+$('continueBtn').onclick=()=>{AudioSys.resume();if(!loadRun())toast('No saved shift found.','#E05252')};
+
+/* ---------------- main loop ---------------- */
+let audioTick=0;
+function loop(now){
+ requestAnimationFrame(loop);
+ const dtReal=Math.min(0.05,(now-lastFrame)/1000||0);lastFrame=now;
+ if(G&&!$('gameScreen').classList.contains('hidden')){
+   if(!G.paused&&!G.over){let simDt=dtReal*simSpeed; /* 1 sim-minute per real second at 1x */
+     let remaining=simDt;while(remaining>0){const step=Math.min(0.045,remaining);stepSim(step);remaining-=step;if(G.over)break}}
+   drawMap();
+   panelTimer+=dtReal;audioTick+=dtReal;
+   if(audioTick>0.6){audioTick=0;AudioSys.setRain(G&&meta.settings.particles?G.weather*0.13:0)}
+   if(panelTimer>0.3){panelTimer=0;updatePanels()}
+ }
+}
+resizeCanvas();renderTitle();icons();requestAnimationFrame(loop);
+setInterval(()=>{if(G&&!$('gameScreen').classList.contains('hidden'))resizeCanvas()},2500);
+</script>
+</body>
+</html>
