@@ -13,4 +13,5 @@ Using HTML, create a light sandbox. Users should be able to create, move, delete
 
 Light should be colored where applicable (eg. a red light should be red, a white light should be white, white light from a prism should be properly rainbow colored)
 The simulation should be physically accurate and use real formulas instead of arbitrary approximations.
+Note: Flashlights do not shoot light in a perfectly straight line. The user should be able to fully customize beam divergence.
 Use a clean, minimal, dark-themed design. Prioritize UI organization and friendliness over a dense, feature-packed UI.
