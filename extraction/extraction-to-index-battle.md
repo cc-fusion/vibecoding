@@ -11,7 +11,7 @@ directory/
   ...
 <style>div a{display:block}</style>
 <h3>Title</h3>
-<p>N characters total</p>
+<p>N total characters used</p>
 
 <div>
 <h4>Model name (N characters used)</h4>
