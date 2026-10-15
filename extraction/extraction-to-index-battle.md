@@ -1,5 +1,5 @@
 Work in the following directory: battle
-Create an index.html in the directory following this format.
+Modify or create the index.html file in the directory. Ensure it follows this format's example
 Example:
 directory/
   model-name/
@@ -8,7 +8,10 @@ directory/
       file2.html
   model-2-name/
     file3.html
+  index.html
   ...
+Resulting index.html file:
+
 <style>div a{display:block}</style>
 <h3>Title</h3>
 <p>N total characters used</p>
