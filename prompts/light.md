@@ -1,4 +1,4 @@
-Using HTML, create a light sandbox. Users should be able to create, move, delete, remove, rotate:
+Use plain HTML, Javascript, and CSS as the main body (libraries ok), create a light sandbox. Do NOT use React/Vite as the main body of the application. Users should be able to create, move, delete, remove, rotate:
 - Flashlights (completely customizable wavelength spectrum) + preset wavelength spectrum (white LED, sunlight, etc...)
 - Laser (customizable wavelength)
 - Polarizing filter
@@ -19,6 +19,7 @@ Notes:
 - Prisms experience internal reflection. Users should also be able to customize this.
 
 Use plain HTML, Javascript, and CSS as the main body (libraries ok). Do NOT use React/Vite as the main body of the application.
-Use a white, clean, dark-themed design. Prioritize UI organization and friendliness over a dense, feature-packed UI.
+Use a clean, minimal, dark-themed design. Prioritize UI organization and friendliness over a dense, feature-packed UI.
 Do not add static chips (eg. Ready) unless they change or are actually used. 
 Remove static text that clouds the UI (eg. "Your information stays in the browser") unless it meaningfully enhances the application.
+Use plain HTML, Javascript, and CSS as the main body (libraries ok). Do NOT use React/Vite as the main body of the application.
