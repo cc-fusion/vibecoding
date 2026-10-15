@@ -1,11 +1,11 @@
 # FluidSimulation — merged WebGL fluid API
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
 **Runtime:** browser JavaScript + WebGL  
 **Dependencies:** none  
 **Model:** real-time 2D, GPU-accelerated fluid/dye simulation, derived from Pavel Dobryakov's WebGL Fluid Simulation
 
-This merged API consolidates the strongest parts of the five supplied implementations: reusable instances, WebGL capability detection and context recovery, observer-based resizing, page-visibility handling, named visual presets, quality presets, custom palettes, manual frame stepping, event subscriptions, scripted splats/strokes, configuration aliases, capture helpers, and explicit resource cleanup.
+This merged API consolidates the strongest parts of the five supplied implementations: reusable instances, WebGL capability detection and context recovery, observer-based resizing, page-visibility handling, named visual presets, quality presets, custom palettes, manual frame stepping, event subscriptions, scripted splats/strokes, configuration aliases, capture helpers, explicit resource cleanup, and advanced controls for simulation time, advection, splat shape, shading, dithering, and sunrays.
 
 > **Scope:** this is a visual, real-time 2D fluid effect—not a general-purpose computational-fluid-dynamics solver. Shader behavior remains based on the upstream implementation. This package passed JavaScript syntax checks and Node-level API smoke checks; it has not been benchmarked across a browser/device matrix. Validate GPU behavior and frame rates on your target devices before production rollout.
 
@@ -230,7 +230,54 @@ fluid.setQuality({ sim: 96, dye: 512, capture: 512 });
 
 `fluid.setQuality({ ... })` accepts `sim`, `dye`, `capture`, `pressureIterations`, `effects`, and recognized config keys. `effects: false` disables shading, bloom, and sunrays together.
 
-## 5. Configuration reference
+## 5. Advanced simulation and rendering controls (v2.1.0)
+
+The original settings still cover the main visual characteristics. The additional controls below expose solver timing and low-level effect parameters without requiring shader edits. They are live-tunable through `setConfig()` and also accept camelCase names.
+
+```js
+fluid.setConfig({
+  // Simulation timing and transport
+  timeScale: 0.85,             // slower fluid evolution
+  maxDeltaTime: 1 / 60,        // cap each frame's simulation delta (seconds)
+  advectionStrength: 1.15,     // how quickly velocity carries dye and itself
+
+  // Splat behavior
+  splatSharpness: 1.2,         // tighter splat profile; radius remains independent
+  randomSplatForce: 850,       // impulse magnitude for randomized bursts
+  randomSplatColorScale: 8,    // brightness multiplier for random burst colors
+
+  // Surface / post-processing detail
+  shadingStrength: 1.0,
+  shadingBase: 0.68,
+  ditheringStrength: 0.8,
+  sunraysDensity: 0.3,
+  sunraysDecay: 0.95,
+  sunraysExposure: 0.7,
+  sunraysIterations: 12
+});
+```
+
+| Setting | Default | Supported range | Effect |
+|---|---:|---:|---|
+| `TIME_SCALE` / `timeScale` | `1` | `0–4` | Scales simulation time after frame delta limiting. `0` freezes solver evolution while render/input handling remains active. |
+| `MAX_DELTA_TIME` / `maxDeltaTime` | `0.016666` | `0.001–0.1` seconds | Upper bound on elapsed time consumed by a single frame; lower values favor stability after stalls, higher values permit larger steps. |
+| `ADVECTION_STRENGTH` / `advectionStrength` | `1` | `0–4` | Controls transport distance in the advection pass independently of dye/velocity dissipation. |
+| `SPLAT_SHARPNESS` / `splatSharpness` | `1` | `0.1–5` | Changes the Gaussian splat profile; values above `1` make injection tighter, values below `1` softer. |
+| `RANDOM_SPLAT_FORCE` / `randomSplatForce` | `1000` | `0–5000` | Maximum scale for the random velocity impulse used by random splat bursts. |
+| `RANDOM_SPLAT_COLOR_SCALE` / `randomSplatColorScale` | `10` | `0–20` | Brightness multiplier applied by randomized bursts after choosing a generated or palette color; explicit `splat()` colors are unaffected. |
+| `SHADING_STRENGTH` / `shadingStrength` | `1` | `0–2` | Scales the light-gradient contribution used by the pseudo-3D shading pass. |
+| `SHADING_BASE` / `shadingBase` | `0.7` | `0–1` | Minimum/fill brightness used by the shading calculation. |
+| `DITHERING_STRENGTH` / `ditheringStrength` | `1` | `0–4` | Strength of the bloom dithering noise. `DITHERING: false` still disables the noise entirely. |
+| `SUNRAYS_DENSITY` / `sunraysDensity` | `0.3` | `0–1` | Sampling distance multiplier for the radial light-ray pass. |
+| `SUNRAYS_DECAY` / `sunraysDecay` | `0.95` | `0–1` | Per-sample attenuation of accumulated light rays. |
+| `SUNRAYS_EXPOSURE` / `sunraysExposure` | `0.7` | `0–4` | Brightness multiplier applied to the sunrays result. |
+| `SUNRAYS_ITERATIONS` / `sunraysIterations` | `16` | `1–16` | Number of radial samples. Fewer samples are cheaper and can look coarser. |
+
+`MAX_DELTA_TIME` is applied before `TIME_SCALE`; the effective solver delta is also capped at 0.1 seconds for stability. Changing `SUNRAYS_ITERATIONS` changes shader work but does not allocate new framebuffers. Changing `SPLAT_SHARPNESS`, shading parameters, or dithering strength updates uniforms and does not rebuild the simulation buffers.
+
+For low-end hardware, begin with `quality: 'performance'`, `pixelRatio: 1`, `timeScale: 1`, `advectionStrength: 1`, and bloom/sunrays disabled. Tune one dimension at a time; these controls are artistic/solver controls, not physically calibrated material properties.
+
+## 6. Configuration reference
 
 Set configuration at creation with `config: { ... }` or update later with `fluid.setConfig({ ... })`. Changes are applied live. Framebuffer-affecting options trigger framebuffer reallocation; display effect changes rebuild the corresponding shader variant.
 
@@ -244,9 +291,17 @@ Set configuration at creation with `config: { ... }` or update later with `fluid
 | `PRESSURE` / `pressure` | `0.8` | Pressure-solver decay factor |
 | `PRESSURE_ITERATIONS` / `pressureIterations` | `20` | Pressure projection iterations |
 | `CURL` / `curl` / `vorticity` | `30` | Vorticity confinement strength |
+| `ADVECTION_STRENGTH` / `advectionStrength` | `1` | Multiplier for the velocity/dye transport distance |
+| `TIME_SCALE` / `timeScale` | `1` | Scales solver time, within the stability cap |
+| `MAX_DELTA_TIME` / `maxDeltaTime` | `0.016666` | Maximum single-frame time delta, in seconds |
 | `SPLAT_RADIUS` / `splatRadius` | `0.25` | Splat radius scale; the upstream solver passes this value divided by 100 to the splat shader |
 | `SPLAT_FORCE` / `splatForce` | `6000` | Force applied during pointer movement |
+| `SPLAT_SHARPNESS` / `splatSharpness` | `1` | Shape/falloff of each injected splat |
+| `RANDOM_SPLAT_FORCE` / `randomSplatForce` | `1000` | Magnitude of random-burst velocity impulses |
+| `RANDOM_SPLAT_COLOR_SCALE` / `randomSplatColorScale` | `10` | Brightness scale for random-burst colors |
 | `SHADING` / `shading` | `true` | Pseudo-3D dye shading |
+| `SHADING_STRENGTH` / `shadingStrength` | `1` | Light-gradient strength |
+| `SHADING_BASE` / `shadingBase` | `0.7` | Shading fill/minimum brightness |
 | `COLORFUL` / `colorful` | `true` | Cycles pointer colors while moving |
 | `COLOR_UPDATE_SPEED` / `colorUpdateSpeed` | `10` | Color cycle speed |
 | `PAUSED` / `paused` | `false` | Freeze physics while continuing rendering |
@@ -264,6 +319,11 @@ Set configuration at creation with `config: { ... }` or update later with `fluid
 | `SUNRAYS_RESOLUTION` / `sunraysResolution` | `196` | Sunrays framebuffer resolution |
 | `SUNRAYS_WEIGHT` / `sunraysWeight` | `1` | Sunrays contribution |
 | `DITHERING` / `dithering` | `true` | Dither bloom to help reduce visible banding |
+| `DITHERING_STRENGTH` / `ditheringStrength` | `1` | Dithering-noise contribution multiplier |
+| `SUNRAYS_DENSITY` / `sunraysDensity` | `0.3` | Radial ray sampling distance |
+| `SUNRAYS_DECAY` / `sunraysDecay` | `0.95` | Light attenuation per radial sample |
+| `SUNRAYS_EXPOSURE` / `sunraysExposure` | `0.7` | Sunrays brightness multiplier |
+| `SUNRAYS_ITERATIONS` / `sunraysIterations` | `16` | Number of radial samples (1–16) |
 
 Example:
 
@@ -308,7 +368,7 @@ fluid.setDithering('/assets/noise.png');
 
 The custom URL must be readable by the page under normal browser image/CORS rules. Dithering mainly affects the bloom pass.
 
-## 6. Simulation controls
+## 7. Simulation controls
 
 ```js
 fluid.start();       // start/continue requestAnimationFrame loop
@@ -350,9 +410,9 @@ function renderOneStep(dt) {
 renderOneStep(1 / 60);
 ```
 
-`frame(dt)` clamps the supplied timestep to at most 0.1 seconds. The internal animation loop caps its timestep at roughly 1/60 second. `step(dt)` advances the simulation solver without performing the full public frame/render cycle; prefer `frame(dt)` for host-driven rendering.
+`frame(dt)` and the internal animation loop cap elapsed time using `MAX_DELTA_TIME` (default about 1/60 second), then scale it with `TIME_SCALE`. The effective solver delta is capped at 0.1 seconds for stability. `step(dt)` advances the simulation solver without performing the full public frame/render cycle; prefer `frame(dt)` for host-driven rendering.
 
-## 7. Interaction and scripted input
+## 8. Interaction and scripted input
 
 Input is enabled by default. Existing canvas/container modes support mouse, pen, and touch pointer input. Disable it with `input: false` or call `fluid.disableInput()`. Set `hover: true` to stir the simulation without holding the pointer button. `pointerTarget` (or its alias `inputTarget`) may be an element or selector; coordinates are still measured relative to the simulation canvas, so only use a wider event target when that mapping is intended.
 
@@ -394,7 +454,7 @@ FluidSimulation.create({
 });
 ```
 
-## 8. Events
+## 9. Events
 
 Register listeners with `.on(name, handler)`, `.once(name, handler)`, and `.off(name, handler)`. Handlers receive `(payload, instance)`. Listener exceptions are caught and reported as warnings so they don't break the frame loop.
 
@@ -425,7 +485,7 @@ Available names (`FluidSimulation.events`): `ready`, `frame`, `splat`, `resize`,
 - `destroy`: teardown completed.
 - `error`: WebGL context lost/restoration failed or another recoverable runtime error was reported.
 
-## 9. Capture, export, and diagnostics
+## 10. Capture, export, and diagnostics
 
 ```js
 const image = fluid.getImageData({ resolution: 512 });
@@ -446,7 +506,7 @@ Capture reads GPU data back to CPU memory and may be expensive at high resolutio
 
 `fluid.gl` exposes the WebGL context for advanced work; manipulating it directly can conflict with the simulation's state. `FluidSimulation.shaders` exposes source strings for inspection/custom builds but should be treated as advanced/unstable surface area.
 
-## 10. Browser and lifecycle notes
+## 11. Browser and lifecycle notes
 
 - Requires WebGL and renderable half-float/float textures. Some devices may disable quality-heavy effects when float-texture linear filtering isn't available.
 - The library attempts WebGL 2 first, then WebGL 1. Actual support depends on browser, GPU, driver, and extensions.
@@ -460,7 +520,7 @@ Capture reads GPU data back to CPU memory and may be expensive at high resolutio
 
 `FluidSimulation.Error` is the error constructor. Errors expose `.code`, `.message`, and optional `.details`. Known codes include `NO_CANVAS`, `NO_WEBGL`, `FLOAT_TEXTURE_UNSUPPORTED`, `SHADER_COMPILE`, `CONTEXT_LOST`, `DESTROYED`, and `INVALID_OPTION`.
 
-## 11. Public static properties
+## 12. Public static properties
 
 - `FluidSimulation.version`
 - `FluidSimulation.instances`
@@ -474,6 +534,6 @@ Capture reads GPU data back to CPU memory and may be expensive at high resolutio
 - `FluidSimulation.shaders`
 - `FluidSimulation.helpers`
 
-## 12. License and attribution
+## 13. License and attribution
 
 The fluid solver and GLSL shader lineage derives from **WebGL Fluid Simulation by Pavel Dobryakov**, originally published under the MIT License. Preserve the upstream copyright and license notice when redistributing derivative code. See `LICENSE-fluid-merged.txt` bundled with this package. The merge wrapper, palette presets, quality controls, and documentation were assembled for this consolidated deliverable; they have not been independently performance-certified.

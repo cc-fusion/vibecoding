@@ -1,5 +1,5 @@
 /*!
- * Fluid Simulation API - v2.0.0 (merged)
+ * Fluid Simulation API - v2.1.0 (merged)
  * A dependency-free, embeddable WebGL fluid simulation.
  *
  * Usage with a plain script tag (no bundler):
@@ -28,7 +28,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '2.0.0';
+  var VERSION = '2.1.0';
 
     // ---------------------------------------------------------------------------
   // GLSL programs. Extracted verbatim from the original WebGL fluid simulation
@@ -153,6 +153,9 @@
     uniform sampler2D uDithering;
     uniform vec2 ditherScale;
     uniform vec2 texelSize;
+    uniform float shadingStrength;
+    uniform float shadingBase;
+    uniform float ditheringStrength;
 
     vec3 linearToGamma (vec3 color) {
         color = max(color, vec3(0));
@@ -174,7 +177,7 @@
         vec3 n = normalize(vec3(dx, dy, length(texelSize)));
         vec3 l = vec3(0.0, 0.0, 1.0);
 
-        float diffuse = clamp(dot(n, l) + 0.7, 0.7, 1.0);
+        float diffuse = clamp(dot(n, l) * shadingStrength + shadingBase, shadingBase, 1.0);
         c *= diffuse;
     #endif
 
@@ -193,7 +196,7 @@
     #ifdef BLOOM
         float noise = texture2D(uDithering, vUv * ditherScale).r;
         noise = noise * 2.0 - 1.0;
-        bloom += noise / 255.0;
+        bloom += noise / 255.0 * ditheringStrength;
         bloom = linearToGamma(bloom);
         c += bloom;
     #endif
@@ -282,31 +285,31 @@
     varying vec2 vUv;
     uniform sampler2D uTexture;
     uniform float weight;
+    uniform float density;
+    uniform float decay;
+    uniform float exposure;
+    uniform int iterations;
 
-    #define ITERATIONS 16
+    #define MAX_ITERATIONS 16
 
     void main () {
-        float Density = 0.3;
-        float Decay = 0.95;
-        float Exposure = 0.7;
-
         vec2 coord = vUv;
         vec2 dir = vUv - 0.5;
+        float safeIterations = max(float(iterations), 1.0);
 
-        dir *= 1.0 / float(ITERATIONS) * Density;
+        dir *= 1.0 / safeIterations * density;
         float illuminationDecay = 1.0;
-
         float color = texture2D(uTexture, vUv).a;
 
-        for (int i = 0; i < ITERATIONS; i++)
-        {
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            if (i >= iterations) break;
             coord -= dir;
             float col = texture2D(uTexture, coord).a;
             color += col * illuminationDecay * weight;
-            illuminationDecay *= Decay;
+            illuminationDecay *= decay;
         }
 
-        gl_FragColor = vec4(color * Exposure, 0.0, 0.0, 1.0);
+        gl_FragColor = vec4(color * exposure, 0.0, 0.0, 1.0);
     }
 `,
     splat: `
@@ -319,11 +322,12 @@
     uniform vec3 color;
     uniform vec2 point;
     uniform float radius;
+    uniform float sharpness;
 
     void main () {
         vec2 p = vUv - point.xy;
         p.x *= aspectRatio;
-        vec3 splat = exp(-dot(p, p) / radius) * color;
+        vec3 splat = exp(-dot(p, p) / radius * sharpness) * color;
         vec3 base = texture2D(uTarget, vUv).xyz;
         gl_FragColor = vec4(base + splat, 1.0);
     }
@@ -339,6 +343,7 @@
     uniform vec2 dyeTexelSize;
     uniform float dt;
     uniform float dissipation;
+    uniform float advectionScale;
 
     vec4 bilerp (sampler2D sam, vec2 uv, vec2 tsize) {
         vec2 st = uv / tsize - 0.5;
@@ -356,10 +361,10 @@
 
     void main () {
     #ifdef MANUAL_FILTERING
-        vec2 coord = vUv - dt * bilerp(uVelocity, vUv, texelSize).xy * texelSize;
+        vec2 coord = vUv - dt * advectionScale * bilerp(uVelocity, vUv, texelSize).xy * texelSize;
         vec4 result = bilerp(uSource, coord, dyeTexelSize);
     #else
-        vec2 coord = vUv - dt * texture2D(uVelocity, vUv).xy * texelSize;
+        vec2 coord = vUv - dt * advectionScale * texture2D(uVelocity, vUv).xy * texelSize;
         vec4 result = texture2D(uSource, coord);
     #endif
         float decay = 1.0 + dissipation * dt;
@@ -525,7 +530,24 @@
     SUNRAYS: true,
     SUNRAYS_RESOLUTION: 196,
     SUNRAYS_WEIGHT: 1.0,
-    DITHERING: true
+    DITHERING: true,
+
+    // Advanced solver / timing controls
+    TIME_SCALE: 1,
+    MAX_DELTA_TIME: 0.016666,
+    ADVECTION_STRENGTH: 1,
+    SPLAT_SHARPNESS: 1,
+    RANDOM_SPLAT_FORCE: 1000,
+    RANDOM_SPLAT_COLOR_SCALE: 10,
+
+    // Fine post-processing controls
+    SHADING_STRENGTH: 1,
+    SHADING_BASE: 0.7,
+    DITHERING_STRENGTH: 1,
+    SUNRAYS_DENSITY: 0.3,
+    SUNRAYS_DECAY: 0.95,
+    SUNRAYS_EXPOSURE: 0.7,
+    SUNRAYS_ITERATIONS: 16
   };
 
   /** Non-simulation options understood by create(). */
@@ -641,7 +663,14 @@
     bloomIntensity: 'BLOOM_INTENSITY', bloomThreshold: 'BLOOM_THRESHOLD',
     bloomSoftKnee: 'BLOOM_SOFT_KNEE', sunrays: 'SUNRAYS',
     sunraysResolution: 'SUNRAYS_RESOLUTION', sunraysWeight: 'SUNRAYS_WEIGHT',
-    dithering: 'DITHERING'
+    dithering: 'DITHERING',
+    timeScale: 'TIME_SCALE', maxDeltaTime: 'MAX_DELTA_TIME',
+    advectionStrength: 'ADVECTION_STRENGTH', splatSharpness: 'SPLAT_SHARPNESS',
+    randomSplatForce: 'RANDOM_SPLAT_FORCE', randomSplatColorScale: 'RANDOM_SPLAT_COLOR_SCALE',
+    shadingStrength: 'SHADING_STRENGTH', shadingBase: 'SHADING_BASE',
+    ditheringStrength: 'DITHERING_STRENGTH', sunraysDensity: 'SUNRAYS_DENSITY',
+    sunraysDecay: 'SUNRAYS_DECAY', sunraysExposure: 'SUNRAYS_EXPOSURE',
+    sunraysIterations: 'SUNRAYS_ITERATIONS'
   };
 
   function normalizeConfigPatch(patch) {
@@ -656,13 +685,26 @@
   var INTEGER_CONFIG_LIMITS = {
     SIM_RESOLUTION: [1, 16384], DYE_RESOLUTION: [1, 16384], CAPTURE_RESOLUTION: [1, 16384],
     PRESSURE_ITERATIONS: [1, 128], BLOOM_ITERATIONS: [2, 16],
-    BLOOM_RESOLUTION: [1, 16384], SUNRAYS_RESOLUTION: [1, 16384]
+    BLOOM_RESOLUTION: [1, 16384], SUNRAYS_RESOLUTION: [1, 16384],
+    SUNRAYS_ITERATIONS: [1, 16]
   };
 
   var NUMERIC_CONFIG_MINIMUMS = {
     DENSITY_DISSIPATION: 0, VELOCITY_DISSIPATION: 0, CURL: 0,
     SPLAT_RADIUS: 0.0001, SPLAT_FORCE: 0, COLOR_UPDATE_SPEED: 0,
-    BLOOM_INTENSITY: 0, BLOOM_THRESHOLD: 0, BLOOM_SOFT_KNEE: 0, SUNRAYS_WEIGHT: 0
+    BLOOM_INTENSITY: 0, BLOOM_THRESHOLD: 0, BLOOM_SOFT_KNEE: 0, SUNRAYS_WEIGHT: 0,
+    TIME_SCALE: 0, ADVECTION_STRENGTH: 0, RANDOM_SPLAT_FORCE: 0,
+    RANDOM_SPLAT_COLOR_SCALE: 0, SHADING_STRENGTH: 0, SHADING_BASE: 0,
+    DITHERING_STRENGTH: 0, SUNRAYS_DENSITY: 0, SUNRAYS_DECAY: 0,
+    SUNRAYS_EXPOSURE: 0
+  };
+
+  var NUMERIC_CONFIG_RANGES = {
+    TIME_SCALE: [0, 4], MAX_DELTA_TIME: [0.001, 0.1],
+    ADVECTION_STRENGTH: [0, 4], SPLAT_SHARPNESS: [0.1, 5],
+    RANDOM_SPLAT_FORCE: [0, 5000], RANDOM_SPLAT_COLOR_SCALE: [0, 20],
+    SHADING_STRENGTH: [0, 2], SHADING_BASE: [0, 1], DITHERING_STRENGTH: [0, 4],
+    SUNRAYS_DENSITY: [0, 1], SUNRAYS_DECAY: [0, 1], SUNRAYS_EXPOSURE: [0, 4]
   };
 
   function normalizeConfigValue(key, raw) {
@@ -691,6 +733,9 @@
         var bounds = INTEGER_CONFIG_LIMITS[key];
         if (number < bounds[0] || number > bounds[1]) return { valid: false, reason: 'value is outside the supported integer range ' + bounds[0] + '–' + bounds[1] };
         number = Math.round(number);
+      } else if (NUMERIC_CONFIG_RANGES[key]) {
+        var range = NUMERIC_CONFIG_RANGES[key];
+        if (number < range[0] || number > range[1]) return { valid: false, reason: 'expected a value in the range ' + range[0] + '–' + range[1] };
       } else if (key === 'PRESSURE') {
         if (number < 0 || number > 1) return { valid: false, reason: 'expected a value from 0 to 1' };
       } else if (NUMERIC_CONFIG_MINIMUMS[key] != null && number < NUMERIC_CONFIG_MINIMUMS[key]) {
@@ -1987,7 +2032,7 @@
     if (this.destroyed || !this.running) return;
 
     var dt = (now() - this._lastUpdateTime) / 1000;
-    dt = Math.min(dt, 0.016666);
+    dt = Math.min(dt, this.config.MAX_DELTA_TIME);
     this._lastUpdateTime = now();
 
     this._advance(dt);
@@ -1998,7 +2043,7 @@
   /** One simulation+render iteration with an explicit timestep. */
   FluidSimulation.prototype.frame = function (dt) {
     assertAlive(this);
-    this._advance(typeof dt === 'number' && dt > 0 ? Math.min(dt, 0.1) : 1 / 60);
+    this._advance(typeof dt === 'number' && dt > 0 ? Math.min(dt, this.config.MAX_DELTA_TIME) : Math.min(1 / 60, this.config.MAX_DELTA_TIME));
     return this;
   };
 
@@ -2009,9 +2054,13 @@
 
   FluidSimulation.prototype._advance = function (dt) {
     if (this._contextLost) return;
+    // Cap elapsed time first, then apply the artistic simulation speed scale.
+    // A final 0.1s cap avoids unstable steps when TIME_SCALE is set aggressively.
+    dt = Math.min(Math.max(0, dt), this.config.MAX_DELTA_TIME);
+    dt = Math.min(dt * this.config.TIME_SCALE, 0.1);
     this._updateColors(dt);
     this._applyInputs();
-    if (!this.config.PAUSED) this.step(dt);
+    if (!this.config.PAUSED && dt > 0) this.step(dt);
     this._render(null);
     this._emit(EVENTS.FRAME, { dt: dt, paused: !!this.config.PAUSED, drawCalls: this._drawCalls });
   };
@@ -2119,6 +2168,7 @@
     gl.uniform1i(programs.advection.uniforms.uVelocity, velocityId);
     gl.uniform1i(programs.advection.uniforms.uSource, velocityId);
     gl.uniform1f(programs.advection.uniforms.dt, dt);
+    gl.uniform1f(programs.advection.uniforms.advectionScale, config.ADVECTION_STRENGTH);
     gl.uniform1f(programs.advection.uniforms.dissipation, config.VELOCITY_DISSIPATION);
     this.blit(velocity.write);
     velocity.swap();
@@ -2128,6 +2178,7 @@
     }
     gl.uniform1i(programs.advection.uniforms.uVelocity, velocity.read.attach(0));
     gl.uniform1i(programs.advection.uniforms.uSource, this.dye.read.attach(1));
+    gl.uniform1f(programs.advection.uniforms.advectionScale, config.ADVECTION_STRENGTH);
     gl.uniform1f(programs.advection.uniforms.dissipation, config.DENSITY_DISSIPATION);
     this.blit(this.dye.write);
     this.dye.swap();
@@ -2186,6 +2237,8 @@
     this.displayMaterial.bind();
     if (config.SHADING) {
       gl.uniform2f(this.displayMaterial.uniforms.texelSize, 1.0 / width, 1.0 / height);
+      gl.uniform1f(this.displayMaterial.uniforms.shadingStrength, config.SHADING_STRENGTH);
+      gl.uniform1f(this.displayMaterial.uniforms.shadingBase, config.SHADING_BASE);
     }
     gl.uniform1i(this.displayMaterial.uniforms.uTexture, this.dye.read.attach(0));
     if (config.BLOOM) {
@@ -2193,6 +2246,7 @@
       gl.uniform1i(this.displayMaterial.uniforms.uDithering, this.ditheringTexture.attach(2));
       var scale = getTextureScale(this.ditheringTexture, width, height);
       gl.uniform2f(this.displayMaterial.uniforms.ditherScale, scale.x, scale.y);
+      gl.uniform1f(this.displayMaterial.uniforms.ditheringStrength, config.DITHERING ? config.DITHERING_STRENGTH : 0);
     }
     if (config.SUNRAYS) {
       gl.uniform1i(this.displayMaterial.uniforms.uSunrays, this.sunrays.attach(3));
@@ -2263,6 +2317,10 @@
     var program = this.programs.sunrays;
     program.bind();
     gl.uniform1f(program.uniforms.weight, this.config.SUNRAYS_WEIGHT);
+    gl.uniform1f(program.uniforms.density, this.config.SUNRAYS_DENSITY);
+    gl.uniform1f(program.uniforms.decay, this.config.SUNRAYS_DECAY);
+    gl.uniform1f(program.uniforms.exposure, this.config.SUNRAYS_EXPOSURE);
+    gl.uniform1i(program.uniforms.iterations, this.config.SUNRAYS_ITERATIONS);
     gl.uniform1i(program.uniforms.uTexture, mask.attach(0));
     this.blit(destination);
   };
@@ -2295,13 +2353,13 @@
   FluidSimulation.prototype._multipleSplats = function (amount) {
     for (var i = 0; i < amount; i++) {
       var color = this.randomColor();
-      color.r *= 10.0;
-      color.g *= 10.0;
-      color.b *= 10.0;
+      color.r *= this.config.RANDOM_SPLAT_COLOR_SCALE;
+      color.g *= this.config.RANDOM_SPLAT_COLOR_SCALE;
+      color.b *= this.config.RANDOM_SPLAT_COLOR_SCALE;
       var x = Math.random();
       var y = Math.random();
-      var dx = 1000 * (Math.random() - 0.5);
-      var dy = 1000 * (Math.random() - 0.5);
+      var dx = this.config.RANDOM_SPLAT_FORCE * (Math.random() - 0.5);
+      var dy = this.config.RANDOM_SPLAT_FORCE * (Math.random() - 0.5);
       this.splat(x, y, dx, dy, color);
     }
   };
@@ -2333,6 +2391,7 @@
     gl.uniform2f(program.uniforms.point, x, y);
     gl.uniform3f(program.uniforms.color, dx || 0, dy || 0, 0.0);
     gl.uniform1f(program.uniforms.radius, this._correctRadius(radius / 100.0));
+    gl.uniform1f(program.uniforms.sharpness, config.SPLAT_SHARPNESS);
     this.blit(this.velocity.write);
     this.velocity.swap();
 
