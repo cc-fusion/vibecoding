@@ -5,7 +5,7 @@ Using HTML, create a light sandbox. Users should be able to create, move, delete
 - Convex/concave lens (customizable focal length)
 - Straight mirrors
 - Curved mirrors
-- Diffraction gratings (customizable parameters)
+- Diffraction gratings (customizable parameters, both transmission and reflective)
 - Prisms (customizable parameters)
 - Colored glass (blocks customizable wavelength spectrum, customizable reflectance)
 - Light blockers
@@ -17,5 +17,5 @@ The simulation should be physically accurate and use real formulas instead of ar
 Notes: 
 - Flashlights do not shoot light in a perfectly straight line. The user should be able to fully customize beam divergence.
 - Prisms experience internal reflection. Users should also be able to customize this.
-- 
+
 Use a clean, minimal, dark-themed design. Prioritize UI organization and friendliness over a dense, feature-packed UI.
