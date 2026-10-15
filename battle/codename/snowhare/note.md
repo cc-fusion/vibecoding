@@ -1,0 +1,1 @@
+snowhare model frequently loses
