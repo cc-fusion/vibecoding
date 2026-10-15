@@ -1,0 +1,12 @@
+const h = require('./harness.js');
+const WS = h.WS();
+const R = h.reg;
+let now = 1000; const frames = n => { for (let i = 0; i < n; i++) { now += 16; h.rafQ.splice(0).forEach(f => f(now)); } };
+h.document.querySelector('#stage').clientWidth = 900;
+frames(3);
+R['#btnNew'].onclick(); R['#btnLaunch'].onclick(); frames(20);
+R['#btnSave'].onclick(); frames(2);
+R['#btnResearch'].onclick(); frames(2); R['#btnSettingsTitle'].onclick(); frames(2);
+console.log('storage ok flag ->', 'no crash when localStorage throws; errors:', h.errors.length, h.errors.slice(0,2));
+console.log('ticks ran:', WS.state.t > 0);
+process.exit(0);
