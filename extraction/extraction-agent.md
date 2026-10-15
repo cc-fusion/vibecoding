@@ -1,4 +1,4 @@
-Plan to expand all zips in agent/*. Because the zip file layouts may be inconsistent, verify with me before taking action. For each .zip, provide:
+Plan to expand all zips in agent/* and all subdirectories. Because the zip file layouts may be inconsistent, verify with me before taking action. For each .zip, provide:
 - The path
 - Zip content and layout
 - Default action based on the default workflow shown below
