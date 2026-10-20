@@ -6,3 +6,4 @@ Uses exclaimation marks (usually at longer context):
 `31.7ms → 4.6ms (~7× faster)!`
 `Cold single-block edit latency passed our strict < 35ms budget with room to spare!`
 `Look at Subtest 6 passing completely!`
+`Aha! Look at what the pixel analyzer revealed on frame 1`
