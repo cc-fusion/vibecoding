@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4f4f5;
+      --bar: #ffffff;
+      --surface: #ffffff;
+      --border: #e4e4e7;
+      --text: #18181b;
+      --muted: #71717a;
+      --hover: #f4f4f5;
+      --accent: #18181b;
+      --accent-text: #ffffff;
+      --accent-hover: #3f3f46;
+      --switch-off: #d4d4d8;
+      --knob: #ffffff;
+      --handle: #a1a1aa;
+      --scrim: rgba(0, 0, 0, 0.3);
+    }
+
+    html.dark {
+      --bg: #18181b;
+      --bar: #18181b;
+      --surface: #1e1e1e;
+      --border: #2a2a2e;
+      --text: #fafafa;
+      --muted: #a1a1aa;
+      --hover: #27272a;
+      --accent: #fafafa;
+      --accent-text: #18181b;
+      --accent-hover: #d4d4d8;
+      --switch-off: #3f3f46;
+      --knob: #fafafa;
+      --handle: #52525b;
+      --scrim: rgba(0, 0, 0, 0.55);
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color-scheme: light;
+    }
+    html.dark, html.dark body { color-scheme: dark; }
+
+    body {
+      overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* ---------- Top bar ---------- */
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex: 0 0 48px;
+      padding: 0 8px 0 12px;
+      background: var(--bar);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .toolbar-group { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+      transition: background-color .12s ease, color .12s ease, opacity .12s ease;
+    }
+    .btn:hover { background: var(--hover); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn:disabled:hover { background: transparent; }
+    .btn:focus-visible, .switch:focus-visible, .setting-select:focus-visible, #resizer:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .btn .slot { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+    .btn-icon { width: 34px; height: 34px; color: var(--muted); }
+    .btn-icon:hover { color: var(--text); }
+
+    .btn-text { height: 34px; padding: 0 10px; font-size: 13px; color: var(--muted); }
+    .btn-text:hover { color: var(--text); }
+
+    .btn-primary {
+      height: 34px;
+      padding: 0 14px 0 11px;
+      background: var(--accent);
+      color: var(--accent-text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled:hover { background: var(--accent); }
+
+    .spin { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Workspace ---------- */
+    #workspace {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: row;
+      min-width: 0;
+      min-height: 0;
+      background: var(--surface);
+    }
+    #workspace.is-column { flex-direction: column; }
+
+    /* z-index:0 gives each pane its own stacking context so Monaco's internal
+       z-indexes (scrollbars, minimap) can never cover the resize handle. */
+    #editor-pane, #result-pane {
+      position: relative;
+      z-index: 0;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    #editor-pane { flex: 0 0 50%; }
+    #result-pane { flex: 1 1 0; }
+
+    #editor { position: absolute; inset: 0; }
+
+    #editor-loading {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      pointer-events: none;
+    }
+    .loading-ring {
+      width: 14px;
+      height: 14px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+
+    #fallback-editor {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 12px 12px 56px;
+      border: 0;
+      outline: 0;
+      resize: none;
+      overflow: auto;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      tab-size: 4;
+    }
+
+    #editor-error {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 8px 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bar);
+      color: var(--muted);
+      font-size: 12.5px;
+    }
+    #editor-error .btn { height: 28px; padding: 0 10px; background: var(--hover); font-size: 12.5px; }
+    #editor-error .btn:hover { background: var(--border); }
+
+    #result { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+
+    #result-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    /* ---------- Resize bar ---------- */
+    #resizer {
+      position: relative;
+      z-index: 5;
+      flex: 0 0 1px;
+      background: var(--border);
+      touch-action: none;
+      user-select: none;
+      transition: background-color .12s ease;
+    }
+    /* Invisible, wider hit area so the 1px line is easy to grab. */
+    #resizer::before { content: ""; position: absolute; inset: 0 -5px; }
+    #workspace:not(.is-column) #resizer { cursor: col-resize; }
+    #workspace:not(.is-column) #resizer:hover,
+    body.is-resizing:not(.is-row-resize) #resizer { background: var(--handle); }
+
+    #workspace.is-column #resizer {
+      flex: 0 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      cursor: row-resize;
+    }
+    #workspace.is-column #resizer::before { inset: -8px 0; }
+    #resizer .grip { display: none; width: 36px; height: 4px; border-radius: 99px; background: var(--handle); pointer-events: none; }
+    #workspace.is-column #resizer .grip { display: block; }
+    body.is-resizing #resizer .grip { background: var(--muted); }
+
+    /* While dragging: the cover + pointer-events:none on both panes guarantee
+       pointer events keep flowing to the window, even over the iframe/Monaco. */
+    body.is-resizing { cursor: col-resize; user-select: none !important; }
+    body.is-resizing.is-row-resize { cursor: row-resize; }
+    body.is-resizing #editor-pane,
+    body.is-resizing #result-pane,
+    body.is-resizing #editor-pane *,
+    body.is-resizing #result-pane * { pointer-events: none !important; }
+    #drag-cover { position: fixed; inset: 0; z-index: 30; cursor: inherit; }
+
+    /* ---------- Settings panel ---------- */
+    #settings-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      justify-content: flex-end;
+      background: var(--scrim);
+      animation: fade-in .15s ease;
+    }
+    #settings-panel {
+      display: flex;
+      flex-direction: column;
+      width: min(360px, 100%);
+      height: 100%;
+      background: var(--bar);
+      color: var(--text);
+      border-left: 1px solid var(--border);
+      animation: slide-in .18s ease;
+    }
+    @keyframes fade-in { from { opacity: 0; } }
+    @keyframes slide-in { from { transform: translateX(24px); opacity: 0; } }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex: 0 0 48px;
+      padding: 0 8px 0 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+
+    .settings-body { flex: 1 1 auto; overflow: auto; padding: 4px 16px 24px; }
+
+    .settings-section { padding: 16px 0 12px; border-bottom: 1px solid var(--border); }
+    .settings-section h3 {
+      margin: 0 0 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 42px;
+      font-size: 14px;
+    }
+    label.setting-row { cursor: pointer; }
+
+    .setting-select {
+      min-width: 132px;
+      max-width: 190px;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .stepper { display: flex; align-items: center; gap: 2px; }
+    .stepper .btn { width: 30px; height: 30px; color: var(--text); background: var(--hover); }
+    .stepper .btn:hover { background: var(--border); }
+    #font-size-value { min-width: 48px; text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+    .switch {
+      position: relative;
+      flex-shrink: 0;
+      width: 40px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      border-radius: 99px;
+      background: var(--switch-off);
+      cursor: pointer;
+      transition: background-color .15s ease;
+    }
+    .switch .knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--knob);
+      transition: transform .15s ease;
+    }
+    .switch[aria-checked="true"] { background: var(--accent); }
+    .switch[aria-checked="true"] .knob { transform: translateX(18px); }
+    html.dark .switch[aria-checked="true"] .knob { background: #18181b; }
+
+    #setting-reset {
+      margin-top: 14px;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    #setting-reset:hover { color: var(--text); background: var(--hover); }
+
+    /* ---------- Touch / small screens ---------- */
+    @media (pointer: coarse) {
+      .btn-icon, .btn-text, .btn-primary { height: 40px; }
+      .btn-icon { width: 40px; }
+      .setting-select { height: 38px; font-size: 16px; }
+      .stepper .btn { width: 36px; height: 36px; }
+      #workspace.is-column #resizer { flex-basis: 20px; }
+    }
+    @media (max-width: 540px) {
+      #topbar { padding: 0 6px 0 8px; }
+      .toolbar-group { gap: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #settings-overlay, #settings-panel { animation: none; }
+      .btn, .switch, .switch .knob, #resizer { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header id="topbar" role="toolbar" aria-label="Editor actions">
+      <div class="toolbar-group" id="toolbar-left"></div>
+      <div class="toolbar-group" id="toolbar-right"></div>
+    </header>
+
+    <main id="workspace">
+      <section id="editor-pane" aria-label="Code editor">
+        <div id="editor"></div>
+        <textarea id="fallback-editor" aria-label="Code editor (basic mode)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" hidden></textarea>
+        <div id="editor-loading" role="status"><span class="loading-ring" aria-hidden="true"></span><span>Loading editor…</span></div>
+        <div id="editor-error" role="alert" hidden>
+          <span>The editor couldn’t load. Basic editing is available.</span>
+          <button type="button" class="btn" id="retry-editor">Retry</button>
+        </div>
+      </section>
+
+      <div id="resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize editor and result" title="Drag to resize · Double-click to reset"><span class="grip"></span></div>
+
+      <section id="result-pane" aria-label="Result">
+        <div id="result-empty">Run your code to see the result here.</div>
+        <iframe id="result" title="Result" referrerpolicy="no-referrer" hidden></iframe>
+      </section>
+    </main>
+  </div>
+
+  <div id="drag-cover" hidden></div>
+
+  <div id="settings-overlay" hidden>
+    <aside id="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-header">
+        <h2 id="settings-title">Settings</h2>
+        <button type="button" class="btn btn-icon" id="settings-close" aria-label="Close settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="settings-body">
+        <section class="settings-section">
+          <h3>Appearance</h3>
+          <label class="setting-row" for="setting-theme">
+            <span>Theme</span>
+            <select class="setting-select" id="setting-theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+          <label class="setting-row" for="setting-font-family">
+            <span>Font</span>
+            <select class="setting-select" id="setting-font-family"></select>
+          </label>
+          <div class="setting-row">
+            <span id="font-size-label">Font size</span>
+            <div class="stepper" role="group" aria-labelledby="font-size-label">
+              <button type="button" class="btn" id="font-size-dec" aria-label="Decrease font size">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+              </button>
+              <span id="font-size-value" aria-live="polite">14px</span>
+              <button type="button" class="btn" id="font-size-inc" aria-label="Increase font size">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Editor</h3>
+          <label class="setting-row"><span>Word wrap</span><button type="button" class="switch" id="setting-wordwrap" role="switch" aria-checked="false"><span class="knob"></span></button></label>
+          <label class="setting-row"><span>Minimap</span><button type="button" class="switch" id="setting-minimap" role="switch" aria-checked="true"><span class="knob"></span></button></label>
+          <label class="setting-row"><span>Suggestions</span><button type="button" class="switch" id="setting-suggest" role="switch" aria-checked="true"><span class="knob"></span></button></label>
+          <label class="setting-row"><span>Parameter hints</span><button type="button" class="switch" id="setting-hints" role="switch" aria-checked="true"><span class="knob"></span></button></label>
+        </section>
+
+        <button type="button" class="btn" id="setting-reset">Reset to defaults</button>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    'use strict';
+
+    /* =====================================================================
+       CONFIGURATION
+       Everything a developer normally needs to change lives in this object.
+       ===================================================================== */
+    const CONFIG = {
+      // Monaco language id, e.g. 'javascript', 'typescript', 'python', 'html',
+      // 'css', 'json', 'markdown', 'cpp', 'java', 'go', 'rust', 'sql', 'plaintext'…
+      language: 'javascript',
+
+      // Code shown the first time the editor opens (saved code takes over afterwards).
+      defaultCode: '',
+
+      // Monaco themes. Use a built-in name ('vs', 'vs-dark', 'hc-black', 'hc-light')
+      // or a custom theme: { name: 'my-theme', data: { base, inherit, rules, colors } }.
+      // `mode` is the initial appearance: 'system' | 'light' | 'dark'.
+      themes: { mode: 'system', light: 'vs', dark: 'vs-dark' },
+
+      // Fonts offered in Settings. The editor.fontFamily default is added automatically.
+      fontFamilies: [
+        { label: 'Menlo / Monaco', value: "Menlo, Monaco, 'Courier New', monospace" },
+        { label: 'Consolas', value: "Consolas, 'Courier New', monospace" },
+        { label: 'Courier New', value: "'Courier New', monospace" },
+        { label: 'System monospace', value: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+        { label: 'JetBrains Mono', value: "'JetBrains Mono', Menlo, Monaco, monospace" },
+        { label: 'Fira Code', value: "'Fira Code', Menlo, Monaco, monospace" }
+      ],
+      fontSizeRange: { min: 10, max: 24 },
+
+      // Default Monaco options (any option from the Monaco docs works here).
+      // fontSize, fontFamily, wordWrap, minimap, quickSuggestions and parameterHints
+      // are the defaults of the user-toggleable settings; the user's choices are saved
+      // and override them. Indentation is detected from the code automatically
+      // (tabSize / insertSpaces are only used as a fallback when nothing can be detected).
+      editor: {
+        fontSize: 14,
+        fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+        lineNumbers: 'on',
+        folding: true,
+        foldingStrategy: 'auto',
+        showFoldingControls: 'always',
+        detectIndentation: true,
+        wordWrap: 'off',
+        minimap: { enabled: true },
+        quickSuggestions: true,
+        suggestOnTriggerCharacters: true,
+        parameterHints: { enabled: true },
+        snippetSuggestions: 'inline',
+        tabCompletion: 'on',
+        renderLineHighlight: 'line',
+        scrollBeyondLastLine: false,
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        padding: { top: 12, bottom: 12 },
+        overviewRulerBorder: false,
+        hideCursorInOverviewRuler: true,
+        fixedOverflowWidgets: true,
+        glyphMargin: false
+      },
+
+      // initialSplit: share of the space given to the editor (0–1).
+      // Below `mobileBreakpoint` px the editor sits on top and the result below.
+      layout: { initialSplit: 0.5, minSplit: 0.18, maxSplit: 0.82, mobileBreakpoint: 768 },
+
+      // localStorage keys. Code is stored per language: `${codeKey}:${language}`.
+      storage: { codeKey: 'code-editor:code', settingsKey: 'code-editor:settings' },
+
+      // Sandbox flags for the result iframe (and the "open in new tab" page).
+      result: { sandbox: 'allow-scripts allow-forms allow-modals allow-popups' },
+
+      monaco: { vsUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.57.0/min/vs' },
+
+      // Top bar buttons, in order. Remove an entry to remove the button.
+      // Built-ins: 'run' | 'openTab' | 'clear' | 'theme' | 'settings'
+      // Custom button: {
+      //   id: 'format', label: 'Format', title: 'Format code',
+      //   icon: '<svg>…</svg>',            // optional (HTML string)
+      //   align: 'left' | 'right',         // default 'right'
+      //   disabled: () => false,           // optional
+      //   onClick: (api, event) => api.editor.getAction('editor.action.formatDocument').run()
+      // }
+      // label / title / icon / disabled may also be functions.
+      buttons: ['run', 'openTab', 'theme', 'settings'],
+
+      // Called when the user presses Run (or Ctrl/Cmd+Enter). Never called automatically.
+      // Plug your compiler / interpreter in here. `api` offers:
+      //   api.setResult(html)  show an HTML document in the result pane
+      //   api.setText(text)    show plain text output
+      //   api.setError(text)   show an error message
+      //   api.clearResult()    empty the result pane
+      //   api.getCode() / api.setCode(code) / api.language / api.editor / api.monaco
+      onRun: async (code, api) => {
+        // Example:
+        //   const output = await myCompiler.run(code);
+        //   api.setText(output);
+      }
+    };
+
+    const ICONS = {
+      play: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72L19 12 8 5.14z"/></svg>',
+      loader: '<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>',
+      external: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+      sun: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
+      moon: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+      settings: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+      trash: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2m-11 0 1 14h12l1-14M10 10v6m4-6v6"/></svg>'
+    };
+
+    /* =====================================================================
+       APPLICATION
+       ===================================================================== */
+    const $ = id => document.getElementById(id);
+    const els = {
+      workspace: $('workspace'),
+      editorPane: $('editor-pane'),
+      editorHost: $('editor'),
+      fallback: $('fallback-editor'),
+      loading: $('editor-loading'),
+      editorError: $('editor-error'),
+      retryEditor: $('retry-editor'),
+      resultPane: $('result-pane'),
+      result: $('result'),
+      resultEmpty: $('result-empty'),
+      resizer: $('resizer'),
+      dragCover: $('drag-cover'),
+      toolbarLeft: $('toolbar-left'),
+      toolbarRight: $('toolbar-right'),
+      overlay: $('settings-overlay'),
+      closeSettings: $('settings-close'),
+      theme: $('setting-theme'),
+      fontFamily: $('setting-font-family'),
+      fontSizeValue: $('font-size-value'),
+      fontDec: $('font-size-dec'),
+      fontInc: $('font-size-inc'),
+      wordWrap: $('setting-wordwrap'),
+      minimap: $('setting-minimap'),
+      suggest: $('setting-suggest'),
+      hints: $('setting-hints'),
+      reset: $('setting-reset')
+    };
+
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const COLOR_MODES = ['system', 'light', 'dark'];
+
+    let editor = null;            // Monaco instance (null while loading or in fallback mode)
+    let settings = null;          // persisted user settings
+    let result = null;            // { kind: 'html' | 'text' | 'error', value } or null
+    let running = false;
+    let toolbarItems = [];
+    let saveTimer = 0;
+    let dragging = false;
+    let splitFrame = 0;
+    let monacoPromise = null;
+    let resizeObserver = null;
+    let appliedFont = '';
+    let resultBlobUrl = null;
+    let lastFocus = null;
+
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+    const val = v => (typeof v === 'function' ? v() : v);
+    const escapeHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    /* ---------- Settings ---------- */
+    function normalizeConfig() {
+      const e = CONFIG.editor;
+      if (e.fontFamily && !CONFIG.fontFamilies.some(f => f.value === e.fontFamily)) {
+        CONFIG.fontFamilies.unshift({ label: 'Default', value: e.fontFamily });
+      }
+      if (!e.fontFamily) e.fontFamily = CONFIG.fontFamilies[0].value;
+    }
+
+    function defaultSettings() {
+      const e = CONFIG.editor, range = CONFIG.fontSizeRange;
+      return {
+        fontSize: clamp(Number(e.fontSize) || 14, range.min, range.max),
+        fontFamily: e.fontFamily,
+        wordWrap: e.wordWrap === 'on',
+        minimap: !(e.minimap && e.minimap.enabled === false),
+        suggest: e.quickSuggestions !== false,
+        parameterHints: !(e.parameterHints && e.parameterHints.enabled === false),
+        colorMode: COLOR_MODES.includes(CONFIG.themes.mode) ? CONFIG.themes.mode : 'system',
+        split: clamp(CONFIG.layout.initialSplit, CONFIG.layout.minSplit, CONFIG.layout.maxSplit)
+      };
+    }
+
+    function loadSettings() {
+      const s = defaultSettings();
+      try {
+        const saved = JSON.parse(localStorage.getItem(CONFIG.storage.settingsKey) || 'null');
+        if (!saved || typeof saved !== 'object') return s;
+        const range = CONFIG.fontSizeRange, layout = CONFIG.layout;
+        if (Number.isFinite(saved.fontSize)) s.fontSize = clamp(saved.fontSize, range.min, range.max);
+        if (CONFIG.fontFamilies.some(f => f.value === saved.fontFamily)) s.fontFamily = saved.fontFamily;
+        for (const key of ['wordWrap', 'minimap', 'suggest', 'parameterHints']) {
+          if (typeof saved[key] === 'boolean') s[key] = saved[key];
+        }
+        if (COLOR_MODES.includes(saved.colorMode)) s.colorMode = saved.colorMode;
+        if (Number.isFinite(saved.split)) s.split = clamp(saved.split, layout.minSplit, layout.maxSplit);
+      } catch { /* ignore corrupt or unavailable storage */ }
+      return s;
+    }
+
+    function saveSettings() {
+      try { localStorage.setItem(CONFIG.storage.settingsKey, JSON.stringify(settings)); } catch { /* storage unavailable */ }
+    }
+
+    function patchSettings(patch) {
+      Object.assign(settings, patch);
+      const range = CONFIG.fontSizeRange;
+      settings.fontSize = clamp(Number(settings.fontSize) || 14, range.min, range.max);
+      if (!CONFIG.fontFamilies.some(f => f.value === settings.fontFamily)) settings.fontFamily = CONFIG.editor.fontFamily;
+      if (!COLOR_MODES.includes(settings.colorMode)) settings.colorMode = 'system';
+      saveSettings();
+      applyEditorSettings();
+      renderSettings();
+      applyTheme();
+    }
+
+    /* ---------- Code persistence (never executes anything) ---------- */
+    const codeStorageKey = () => CONFIG.storage.codeKey + ':' + CONFIG.language;
+
+    function loadCode() {
+      try {
+        const saved = localStorage.getItem(codeStorageKey());
+        if (saved !== null) return saved;
+      } catch { /* storage unavailable */ }
+      return CONFIG.defaultCode == null ? '' : String(CONFIG.defaultCode);
+    }
+    function saveCodeNow() {
+      clearTimeout(saveTimer);
+      saveTimer = 0;
+      try { localStorage.setItem(codeStorageKey(), getCode()); } catch { /* storage unavailable */ }
+    }
+    function scheduleSaveCode() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveCodeNow, 300);
+    }
+    function getCode() { return editor ? editor.getValue() : els.fallback.value; }
+    function setCode(value) {
+      const code = value == null ? '' : String(value);
+      if (editor) { editor.setValue(code); detectIndentation(); }
+      els.fallback.value = code;
+      scheduleSaveCode();
+    }
+    function setLanguage(language) {
+      if (!language) return;
+      CONFIG.language = String(language);
+      if (editor) monaco.editor.setModelLanguage(editor.getModel(), CONFIG.language);
+      scheduleSaveCode();
+    }
+
+    /* ---------- Theme ---------- */
+    function isDark() {
+      return settings.colorMode === 'system' ? darkQuery.matches : settings.colorMode === 'dark';
+    }
+    function resolveThemeName() {
+      const dark = isDark();
+      const spec = dark ? CONFIG.themes.dark : CONFIG.themes.light;
+      if (typeof spec === 'string' && spec) return spec;
+      if (spec && spec.name && spec.data && window.monaco) {
+        monaco.editor.defineTheme(spec.name, spec.data);
+        return spec.name;
+      }
+      return dark ? 'vs-dark' : 'vs';
+    }
+    function applyTheme() {
+      const dark = isDark();
+      document.documentElement.classList.toggle('dark', dark);
+      if (window.monaco && editor) monaco.editor.setTheme(resolveThemeName());
+      // Text/error output follows the theme; user-provided HTML is left untouched.
+      if (result && result.kind !== 'html') els.result.srcdoc = resultDocument();
+      refreshButtons();
+    }
+
+    /* ---------- Result pane ---------- */
+    function resultShell(text, isError) {
+      const dark = isDark();
+      const bg = dark ? '#1e1e1e' : '#ffffff';
+      const fg = isError ? (dark ? '#f87171' : '#dc2626') : (dark ? '#e4e4e7' : '#18181b');
+      return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' +
+        'html,body{margin:0;background:' + bg + ';color:' + fg + '}' +
+        'pre{margin:0;padding:16px;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.55 ' + settings.fontFamily.replace(/"/g, "'") + '}' +
+        '</style></head><body><pre>' + escapeHtml(text) + '</pre></body></html>';
+    }
+    function resultDocument() {
+      if (!result) return '';
+      return result.kind === 'html' ? result.value : resultShell(result.value, result.kind === 'error');
+    }
+    function renderResult() {
+      const has = result !== null;
+      els.result.srcdoc = has ? resultDocument() : '';
+      els.result.hidden = !has;
+      els.resultEmpty.hidden = has;
+      refreshButtons();
+    }
+    function setResult(html) { result = { kind: 'html', value: html == null ? '' : String(html) }; renderResult(); }
+    function setText(text) { result = { kind: 'text', value: text == null ? '' : String(text) }; renderResult(); }
+    function setError(message) { result = { kind: 'error', value: message == null ? '' : String(message) }; renderResult(); }
+    function clearResult() { result = null; renderResult(); }
+
+    // The result runs inside a sandboxed iframe (no same-origin access to this page),
+    // so it stays isolated when opened in its own tab.
+    function openResult() {
+      if (!result) return;
+      const doc = document.implementation.createHTMLDocument('Result');
+      const charset = doc.createElement('meta');
+      charset.setAttribute('charset', 'utf-8');
+      doc.head.prepend(charset);
+      const style = doc.createElement('style');
+      style.textContent = 'html,body{height:100%;margin:0}iframe{display:block;width:100%;height:100%;border:0}';
+      doc.head.append(style);
+      const frame = doc.createElement('iframe');
+      frame.setAttribute('title', 'Result');
+      frame.setAttribute('sandbox', CONFIG.result.sandbox);
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.setAttribute('srcdoc', resultDocument());
+      doc.body.append(frame);
+
+      if (resultBlobUrl) URL.revokeObjectURL(resultBlobUrl);
+      resultBlobUrl = URL.createObjectURL(new Blob(['<!DOCTYPE html>\n' + doc.documentElement.outerHTML], { type: 'text/html' }));
+      const a = document.createElement('a');
+      a.href = resultBlobUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
+
+    /* ---------- Running ---------- */
+    async function runCode() {
+      if (running) return;
+      running = true;
+      refreshButtons();
+      try { await CONFIG.onRun(getCode(), api); }
+      catch (err) { setError(err && err.message ? err.message : String(err)); }
+      finally { running = false; refreshButtons(); }
+    }
+
+    /* ---------- Toolbar ---------- */
+    function builtinButtons() {
+      const mod = isMac ? '⌘' : 'Ctrl';
+      return {
+        run: { id: 'run', label: 'Run', title: 'Run (' + mod + '+Enter)', icon: ICONS.play, primary: true, align: 'left', onClick: () => runCode() },
+        openTab: { id: 'openTab', title: 'Open result in new tab', icon: ICONS.external, disabled: () => !result, onClick: () => openResult() },
+        clear: { id: 'clear', title: 'Clear result', icon: ICONS.trash, disabled: () => !result, onClick: () => clearResult() },
+        theme: {
+          id: 'theme',
+          title: () => (isDark() ? 'Switch to light mode' : 'Switch to dark mode'),
+          icon: () => (isDark() ? ICONS.sun : ICONS.moon),
+          onClick: () => patchSettings({ colorMode: isDark() ? 'light' : 'dark' })
+        },
+        settings: { id: 'settings', title: 'Settings', icon: ICONS.settings, onClick: () => openSettings() }
+      };
+    }
+
+    function renderToolbar() {
+      els.toolbarLeft.replaceChildren();
+      els.toolbarRight.replaceChildren();
+      toolbarItems = [];
+      const builtins = builtinButtons();
+      for (const entry of CONFIG.buttons || []) {
+        const def = typeof entry === 'string' ? builtins[entry] : entry;
+        if (!def || typeof def !== 'object') { console.warn('Unknown toolbar button:', entry); continue; }
+        const el = document.createElement('button');
+        el.type = 'button';
+        if (def.id) el.dataset.btn = def.id;
+        el.className = def.primary ? 'btn btn-primary' : (val(def.label) ? 'btn btn-text' : 'btn btn-icon');
+        const slot = document.createElement('span');
+        slot.className = 'slot';
+        slot.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        el.append(slot, text);
+        el.addEventListener('click', event => {
+          if (!el.disabled && typeof def.onClick === 'function') def.onClick(api, event);
+        });
+        (def.align === 'left' ? els.toolbarLeft : els.toolbarRight).append(el);
+        toolbarItems.push({ def, el, slot, text, icon: null, label: null });
+      }
+      refreshButtons();
+    }
+
+    function refreshButtons() {
+      for (const item of toolbarItems) {
+        const { def, el } = item;
+        const busy = def.id === 'run' && running;
+        const label = val(def.label) || '';
+        const icon = busy ? ICONS.loader : (val(def.icon) || '');
+        const title = val(def.title) || label || def.id || '';
+        if (el.title !== title) { el.title = title; el.setAttribute('aria-label', title); }
+        if (item.icon !== icon) { item.slot.innerHTML = icon; item.icon = icon; item.slot.hidden = !icon; }
+        if (item.label !== label) { item.text.textContent = label; item.label = label; item.text.hidden = !label; }
+        el.disabled = busy || Boolean(val(def.disabled));
+      }
+    }
+
+    function addButton(def, index) {
+      if (!Array.isArray(CONFIG.buttons)) CONFIG.buttons = [];
+      if (Number.isInteger(index)) CONFIG.buttons.splice(index, 0, def); else CONFIG.buttons.push(def);
+      renderToolbar();
+    }
+    function removeButton(id) {
+      CONFIG.buttons = (CONFIG.buttons || []).filter(b => (typeof b === 'string' ? b : b && b.id) !== id);
+      renderToolbar();
+    }
+
+    /* ---------- Settings panel ---------- */
+    function populateFontFamilies() {
+      els.fontFamily.replaceChildren(...CONFIG.fontFamilies.map(f => {
+        const option = document.createElement('option');
+        option.value = f.value;
+        option.textContent = f.label;
+        return option;
+      }));
+    }
+    function renderSettings() {
+      const range = CONFIG.fontSizeRange;
+      const setSwitch = (el, on) => el.setAttribute('aria-checked', on ? 'true' : 'false');
+      els.theme.value = settings.colorMode;
+      els.fontFamily.value = settings.fontFamily;
+      els.fontSizeValue.textContent = settings.fontSize + 'px';
+      els.fontDec.disabled = settings.fontSize <= range.min;
+      els.fontInc.disabled = settings.fontSize >= range.max;
+      setSwitch(els.wordWrap, settings.wordWrap);
+      setSwitch(els.minimap, settings.minimap);
+      setSwitch(els.suggest, settings.suggest);
+      setSwitch(els.hints, settings.parameterHints);
+    }
+    function openSettings() {
+      lastFocus = document.activeElement;
+      els.overlay.hidden = false;
+      els.closeSettings.focus();
+    }
+    function closeSettings() {
+      els.overlay.hidden = true;
+      if (lastFocus && document.contains(lastFocus) && typeof lastFocus.focus === 'function') lastFocus.focus();
+      lastFocus = null;
+    }
+    function trapFocus(e) {
+      if (e.key !== 'Tab') return;
+      const focusable = [...els.overlay.querySelectorAll('button, select, [tabindex]:not([tabindex="-1"])')].filter(el => !el.disabled && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    /* ---------- Monaco ---------- */
+    function userEditorOptions() {
+      const base = CONFIG.editor, on = settings.suggest;
+      const quick = base.quickSuggestions == null || base.quickSuggestions === false ? true : base.quickSuggestions;
+      return {
+        fontSize: settings.fontSize,
+        fontFamily: settings.fontFamily,
+        wordWrap: settings.wordWrap ? 'on' : 'off',
+        minimap: { ...(base.minimap || {}), enabled: settings.minimap },
+        quickSuggestions: on ? quick : false,
+        suggestOnTriggerCharacters: on,
+        wordBasedSuggestions: on ? 'currentDocument' : 'off',
+        snippetSuggestions: on ? (base.snippetSuggestions || 'inline') : 'none',
+        tabCompletion: on ? (base.tabCompletion || 'on') : 'off',
+        acceptSuggestionOnEnter: on ? (base.acceptSuggestionOnEnter || 'on') : 'off',
+        parameterHints: { ...(base.parameterHints || {}), enabled: settings.parameterHints }
+      };
+    }
+
+    function applyEditorSettings() {
+      if (editor) editor.updateOptions(userEditorOptions());
+      // Basic-mode textarea mirrors the same settings.
+      els.fallback.style.fontFamily = settings.fontFamily;
+      els.fallback.style.fontSize = settings.fontSize + 'px';
+      els.fallback.wrap = settings.wordWrap ? 'soft' : 'off';
+      applyFontMetrics();
+    }
+
+    // Web fonts can finish loading after Monaco measured the characters; re-measure.
+    function applyFontMetrics() {
+      if (!editor || !window.monaco || !document.fonts || !document.fonts.load) return;
+      const family = settings.fontFamily;
+      if (family === appliedFont) return;
+      appliedFont = family;
+      document.fonts.load(settings.fontSize + 'px ' + family)
+        .then(() => { if (editor && settings.fontFamily === family) monaco.editor.remeasureFonts(); })
+        .catch(() => { /* font unavailable: the fallback font is already in use */ });
+    }
+
+    // Indentation is detected from the code itself, never fixed to a size.
+    function detectIndentation() {
+      const model = editor && editor.getModel();
+      if (!model || CONFIG.editor.detectIndentation === false) return;
+      const insertSpaces = CONFIG.editor.insertSpaces !== false;
+      const tabSize = Number(CONFIG.editor.tabSize) || 4;
+      model.detectIndentation(insertSpaces, tabSize);
+    }
+
+    function loadScript(src, timeoutMs) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.dataset.monacoLoader = '';
+        const timer = setTimeout(() => { script.remove(); reject(new Error('Timed out while loading the editor.')); }, timeoutMs);
+        script.onload = () => { clearTimeout(timer); resolve(); };
+        script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error('Failed to load the editor.')); };
+        script.src = src;
+        document.head.append(script);
+      });
+    }
+
+    // Monaco appends its stylesheet when editor.main evaluates, but does not wait for it.
+    function monacoStylesReady() {
+      const link = [...document.querySelectorAll('link[rel="stylesheet"]')].find(l => /editor\.main\.css/.test(l.href));
+      if (!link || link.sheet) return Promise.resolve();
+      return new Promise(resolve => {
+        const done = () => resolve();
+        link.addEventListener('load', done, { once: true });
+        link.addEventListener('error', done, { once: true });
+        setTimeout(done, 5000);
+      });
+    }
+
+    function resetMonacoLoader() {
+      document.querySelectorAll('script[data-monaco-loader]').forEach(s => s.remove());
+      window.require = undefined;
+      window.define = undefined;
+    }
+
+    function loadMonaco() {
+      if (window.monaco) return Promise.resolve();
+      if (!monacoPromise) {
+        monacoPromise = (async () => {
+          const vs = CONFIG.monaco.vsUrl.replace(/\/$/, '');
+          const hasLoader = () => typeof window.require === 'function' && typeof window.require.config === 'function';
+          if (!hasLoader()) await loadScript(vs + '/loader.js', 15000);
+          if (!hasLoader()) throw new Error('The editor loader did not initialize.');
+          window.require.config({ paths: { vs } });
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Timed out while loading the editor.')), 30000);
+            window.require(['vs/editor/editor.main'], () => { clearTimeout(timer); resolve(); }, err => { clearTimeout(timer); reject(err); });
+          });
+          await monacoStylesReady();
+        })().catch(err => { monacoPromise = null; resetMonacoLoader(); throw err; });
+      }
+      return monacoPromise;
+    }
+
+    function createEditor() {
+      editor = monaco.editor.create(els.editorHost, {
+        ...CONFIG.editor,
+        ...userEditorOptions(),
+        value: els.fallback.value,
+        language: CONFIG.language,
+        theme: resolveThemeName(),
+        automaticLayout: false
+      });
+      els.loading.hidden = true;
+      els.fallback.hidden = true;
+      els.editorError.hidden = true;
+      els.editorHost.hidden = false;
+
+      editor.onDidChangeModelContent(scheduleSaveCode);
+      editor.onDidPaste(detectIndentation);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runCode());
+      detectIndentation();
+
+      resizeObserver = resizeObserver || new ResizeObserver(() => { if (editor) editor.layout(); });
+      resizeObserver.observe(els.editorPane);
+      appliedFont = '';
+      applyFontMetrics();
+    }
+
+    function showEditorFallback() {
+      if (editor) {
+        els.fallback.value = editor.getValue();
+        editor.dispose();
+        editor = null;
+      }
+      els.loading.hidden = true;
+      els.editorHost.hidden = true;
+      els.fallback.hidden = false;
+      els.editorError.hidden = false;
+      applyEditorSettings();
+    }
+
+    async function initializeEditor() {
+      els.editorError.hidden = true;
+      els.fallback.hidden = true;
+      els.editorHost.hidden = false;
+      els.loading.hidden = false;
+      try {
+        await loadMonaco();
+        createEditor();
+      } catch (err) {
+        console.error(err);
+        showEditorFallback();
+      }
+    }
+
+    // Tab key in basic mode: reuse the indentation style already present in the code.
+    function fallbackIndent(text) {
+      if (/^\t/m.test(text)) return '\t';
+      let smallest = 0;
+      for (const m of text.matchAll(/^( {2,8})\S/gm)) if (!smallest || m[1].length < smallest) smallest = m[1].length;
+      return ' '.repeat(smallest || Number(CONFIG.editor.tabSize) || 4);
+    }
+
+    /* ---------- Layout & resize ---------- */
+    const isMobile = () => window.matchMedia('(max-width: ' + CONFIG.layout.mobileBreakpoint + 'px)').matches;
+
+    function applySplit() {
+      const mobile = isMobile();
+      els.workspace.classList.toggle('is-column', mobile);
+      els.resizer.setAttribute('aria-orientation', mobile ? 'horizontal' : 'vertical');
+      els.resizer.setAttribute('aria-valuenow', String(Math.round(settings.split * 100)));
+      els.editorPane.style.flexBasis = (settings.split * 100) + '%';
+    }
+
+    function splitFromPointer(e) {
+      const rect = els.workspace.getBoundingClientRect();
+      const ratio = isMobile() ? (e.clientY - rect.top) / rect.height : (e.clientX - rect.left) / rect.width;
+      settings.split = clamp(ratio, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+    }
+
+    function stopResizing(persist) {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('is-resizing', 'is-row-resize');
+      els.dragCover.hidden = true;
+      if (persist) saveSettings();
+    }
+
+    function initResize() {
+      const { minSplit, maxSplit, initialSplit } = CONFIG.layout;
+      els.resizer.setAttribute('aria-valuemin', String(Math.round(minSplit * 100)));
+      els.resizer.setAttribute('aria-valuemax', String(Math.round(maxSplit * 100)));
+
+      els.resizer.addEventListener('pointerdown', e => {
+        if (e.button != null && e.button !== 0) return;
+        e.preventDefault();
+        dragging = true;
+        document.body.classList.add('is-resizing');
+        if (isMobile()) document.body.classList.add('is-row-resize');
+        els.dragCover.hidden = false;
+        try { els.resizer.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+        splitFromPointer(e);
+        applySplit();
+      });
+      window.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        splitFromPointer(e);
+        if (!splitFrame) splitFrame = requestAnimationFrame(() => { splitFrame = 0; applySplit(); });
+      });
+      window.addEventListener('pointerup', () => stopResizing(true));
+      window.addEventListener('pointercancel', () => stopResizing(true));
+      els.resizer.addEventListener('lostpointercapture', () => stopResizing(true));
+      window.addEventListener('blur', () => stopResizing(true));
+
+      els.resizer.addEventListener('keydown', e => {
+        const step = e.shiftKey ? 0.05 : 0.02;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') settings.split -= step;
+        else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') settings.split += step;
+        else if (e.key === 'Home') settings.split = minSplit;
+        else if (e.key === 'End') settings.split = maxSplit;
+        else return;
+        e.preventDefault();
+        settings.split = clamp(settings.split, minSplit, maxSplit);
+        applySplit();
+        saveSettings();
+      });
+      els.resizer.addEventListener('dblclick', () => {
+        settings.split = clamp(initialSplit, minSplit, maxSplit);
+        applySplit();
+        saveSettings();
+      });
+    }
+
+    /* ---------- Event wiring ---------- */
+    function initEvents() {
+      const toggle = (el, key) => el.addEventListener('click', () => patchSettings({ [key]: !settings[key] }));
+      toggle(els.wordWrap, 'wordWrap');
+      toggle(els.minimap, 'minimap');
+      toggle(els.suggest, 'suggest');
+      toggle(els.hints, 'parameterHints');
+      els.theme.addEventListener('change', () => patchSettings({ colorMode: els.theme.value }));
+      els.fontFamily.addEventListener('change', () => patchSettings({ fontFamily: els.fontFamily.value }));
+      els.fontDec.addEventListener('click', () => patchSettings({ fontSize: settings.fontSize - 1 }));
+      els.fontInc.addEventListener('click', () => patchSettings({ fontSize: settings.fontSize + 1 }));
+      els.reset.addEventListener('click', () => {
+        const split = settings.split;
+        settings = defaultSettings();
+        settings.split = split;
+        patchSettings({});
+      });
+      els.closeSettings.addEventListener('click', closeSettings);
+      els.overlay.addEventListener('click', e => { if (e.target === els.overlay) closeSettings(); });
+      els.overlay.addEventListener('keydown', trapFocus);
+
+      els.retryEditor.addEventListener('click', async () => {
+        els.retryEditor.disabled = true;
+        await initializeEditor();
+        els.retryEditor.disabled = false;
+      });
+
+      els.fallback.addEventListener('input', scheduleSaveCode);
+      els.fallback.addEventListener('keydown', e => {
+        if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        const ta = els.fallback;
+        ta.setRangeText(fallbackIndent(ta.value), ta.selectionStart, ta.selectionEnd, 'end');
+        scheduleSaveCode();
+      });
+
+      document.addEventListener('keydown', e => {
+        const key = (e.key || '').toLowerCase();
+        if (key === 'escape' && !els.overlay.hidden) { e.preventDefault(); closeSettings(); return; }
+        if (!(e.metaKey || e.ctrlKey)) return;
+        if (key === 'enter' && els.overlay.hidden) { e.preventDefault(); runCode(); }
+        else if (key === 's') { e.preventDefault(); saveCodeNow(); }
+      });
+
+      darkQuery.addEventListener('change', () => { if (settings.colorMode === 'system') applyTheme(); });
+      window.matchMedia('(max-width: ' + CONFIG.layout.mobileBreakpoint + 'px)').addEventListener('change', applySplit);
+      window.addEventListener('pagehide', saveCodeNow);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveCodeNow(); });
+    }
+
+    /* ---------- Public API (also available as window.CodeEditor) ---------- */
+    const api = {
+      get editor() { return editor; },
+      get monaco() { return window.monaco; },
+      get language() { return CONFIG.language; },
+      get config() { return CONFIG; },
+      getCode, setCode, setLanguage,
+      setResult, setText, setError, clearResult,
+      run: runCode,
+      openResult,
+      addButton, removeButton,
+      getSettings: () => ({ ...settings }),
+      updateSettings: patchSettings
+    };
+
+    function init() {
+      normalizeConfig();
+      settings = loadSettings();
+      els.fallback.value = loadCode();
+      populateFontFamilies();
+      renderToolbar();
+      renderSettings();
+      applyTheme();
+      applySplit();
+      applyEditorSettings();
+      initResize();
+      initEvents();
+      window.CodeEditor = api;
+      initializeEditor(); // loads the editor only; code is never run automatically
+    }
+    init();
+  </script>
+</body>
+</html>
