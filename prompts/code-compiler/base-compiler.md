@@ -4,9 +4,10 @@ The application should be easily customizable by the developer. The developer sh
 - Set default themes for light/dark mode
 - Set all default parameters
 - Easily add the compiler functionality
-Monaco editor:
+- Add/remove buttons
+## Monaco editor
 - Enable code folding
-- Theme + developer default for light/dark mode (user customizable)
+- Theme (user customizable)
 - Render all line numbers
 - Size (user customizable)
 - Detect indentation automatically (do not fix to certain tab/space size)
@@ -14,8 +15,18 @@ Monaco editor:
 - Minimap (user toggleable)
 - Suggestions (user toggleable)
 - Parameter hints (user toggleable)
-UI:
-
+## UI
+- Desktop: Code editor on left, result on right.
+- Mobile: Code editor on top, result on bottom
+- Resize bar in between code editor and result.
+- Top bar contains buttons to run, open result in new tab, toggle dark/light mode, open editor settings, developer can add new buttons.
+- Never auto-run code
+## Functionality
+- Save code in localStorage, never execute on page load
+- When dragging, ensure mousemove events do not stop when the mouse goes into the result/code; change pointer events
+- Do not add a custom title, a logo, or branding. This is a generic code editor. Title with "Code Editor"
+- Set theme based on system theme
+- Write everything in a single HTML file.
 
 Use plain HTML, Javascript, and CSS as the main body (libraries ok). Do NOT use React/Vite as the main body of the application.
 Prioritize UI organization and friendliness over a dense, feature-packed UI.
