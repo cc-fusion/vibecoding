@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Code Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f6f7f9;
+      --header: #fff;
+      --editor: #fff;
+      --result: #fbfcfe;
+      --surface: #fff;
+      --border: #e8eaf0;
+      --text: #252936;
+      --secondary: #687181;
+      --muted: #969eac;
+      --hover: #f2f3f7;
+      --accent: #686ad5;
+      --primary: #292d3a;
+      --primary-hover: #3b4050;
+      --primary-text: #fff;
+      --switch-off: #d9dce4;
+      --knob: #fff;
+      --illustration: #f3f4f9;
+      --illustration-line: #cbd0dd;
+      --danger: #c54646;
+      --code-font: 'JetBrains Mono', Menlo, Monaco, monospace;
+      --code-size: 14px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    html.dark {
+      color-scheme: dark;
+      --page: #17181d;
+      --header: #202127;
+      --editor: #1e1e1e;
+      --result: #1b1c22;
+      --surface: #24252c;
+      --border: #34363f;
+      --text: #eeeff4;
+      --secondary: #a4a9b6;
+      --muted: #767d8b;
+      --hover: #30323b;
+      --accent: #aaaaff;
+      --primary: #ececf4;
+      --primary-hover: #d7d8e2;
+      --primary-text: #22242c;
+      --switch-off: #484b56;
+      --knob: #fff;
+      --illustration: #262830;
+      --illustration-line: #5c6170;
+      --danger: #fb8a8a;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body { overflow: hidden; background: var(--page); color: var(--text); -webkit-tap-highlight-color: transparent; }
+    button, select, textarea { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, select:focus-visible, #resizer:focus-visible, a:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    [hidden] { display: none !important; }
+    #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-width: 0; }
+
+    .app-header {
+      height: 64px;
+      flex: 0 0 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 25px 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
+      user-select: none;
+    }
+    .app-header h1 {
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -.025em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .toolbar { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    .toolbar-button {
+      position: relative;
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 36px;
+      min-width: 36px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--secondary);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .toolbar-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+    .toolbar-button:active:not(:disabled) { transform: translateY(1px); }
+    .toolbar-button:disabled { opacity: .32; cursor: not-allowed; }
+    .toolbar-button .button-icon { display: inline-flex; align-items: center; justify-content: center; }
+    .toolbar-button svg { display: block; flex: none; }
+    .toolbar-button.primary {
+      height: 36px;
+      min-width: 80px;
+      margin-right: 11px;
+      padding: 0 12px;
+      background: var(--primary);
+      color: var(--primary-text);
+      box-shadow: 0 1px 2px rgba(20, 23, 34, .09);
+    }
+    .toolbar-button.primary:hover:not(:disabled) { background: var(--primary-hover); color: var(--primary-text); }
+    .run-shortcut { padding-left: 9px; border-left: 1px solid rgba(150, 150, 165, .38); opacity: .65; font-size: 10px; font-weight: 500; }
+    .toolbar-button[data-button="theme"] { margin-left: 9px; }
+    .toolbar-button[data-button="theme"]::before {
+      position: absolute;
+      top: 7px;
+      bottom: 7px;
+      left: -7px;
+      width: 1px;
+      background: var(--border);
+      content: '';
+    }
+
+    .workspace { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; background: var(--editor); }
+    .workspace.is-column { flex-direction: column; }
+    .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+    #editor-pane { flex: 0 0 56%; background: var(--editor); }
+    #result-pane { flex: 1 1 0; background: var(--result); }
+    .pane-heading {
+      display: flex;
+      flex: 0 0 52px;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+      padding: 0 21px 0 25px;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
+      user-select: none;
+    }
+    .file-tab {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      align-self: stretch;
+      gap: 9px;
+      min-width: 0;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .file-tab::after { position: absolute; right: -3px; bottom: -1px; left: -3px; height: 2px; background: var(--accent); content: ''; }
+    .file-tab svg { flex: none; color: var(--accent); }
+    .file-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .language-control { position: relative; display: inline-flex; align-items: center; margin-left: 15px; }
+    .language-control select {
+      max-width: 145px;
+      height: 32px;
+      padding: 0 25px 0 9px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      appearance: none;
+      background: transparent;
+      color: var(--secondary);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .language-control select:hover { background: var(--hover); color: var(--text); }
+    .language-control svg { position: absolute; right: 8px; color: var(--muted); pointer-events: none; }
+    .result-heading { justify-content: flex-start; }
+    .result-heading h2 { margin: 0; color: var(--text); font-size: 12px; font-weight: 650; }
+    .result-heading svg { margin-right: 9px; color: var(--muted); }
+    .editor-content, .result-content { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+    #editor-host, #fallback-wrap, #result-frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #editor-host { background: var(--editor); }
+
+    #fallback-wrap { display: flex; overflow: hidden; padding: 19px 0 0; background: var(--editor); font: var(--code-size)/1.55 var(--code-font); }
+    .fallback-gutter { flex: 0 0 59px; overflow: hidden; color: var(--muted); text-align: right; user-select: none; }
+    #fallback-lines { padding-right: 14px; white-space: pre; }
+    #fallback-editor {
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0 20px 20px 6px;
+      resize: none;
+      overflow: auto;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      white-space: pre;
+      overflow-wrap: normal;
+    }
+    #fallback-editor.is-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .editor-error {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      left: 16px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      box-shadow: 0 4px 18px rgba(18, 22, 34, .06);
+      color: var(--secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .editor-error button { flex: none; padding: 6px 9px; border: 0; border-radius: 5px; background: var(--hover); color: var(--text); cursor: pointer; font-size: 11px; font-weight: 600; }
+
+    #resizer { position: relative; z-index: 3; display: flex; flex: 0 0 9px; align-items: center; justify-content: center; background: var(--header); cursor: col-resize; touch-action: none; user-select: none; }
+    #resizer::before { position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--border); content: ''; }
+    #resizer .grip { position: relative; width: 3px; height: 28px; border-radius: 4px; background: #c7cbd5; transition: background .16s ease, height .16s ease; }
+    #resizer:hover .grip, body.is-resizing #resizer .grip { height: 38px; background: var(--accent); }
+    .workspace.is-column #resizer { flex-basis: 11px; cursor: row-resize; }
+    .workspace.is-column #resizer::before { top: 5px; right: 0; bottom: auto; left: 0; width: auto; height: 1px; }
+    .workspace.is-column #resizer .grip { width: 32px; height: 3px; }
+    .workspace.is-column #resizer:hover .grip, body.is-resizing .workspace.is-column #resizer .grip { width: 42px; height: 3px; }
+    body.is-resizing { cursor: col-resize; user-select: none !important; }
+    body.is-resizing.is-row-resize { cursor: row-resize; }
+    body.is-resizing .pane, body.is-resizing .pane * { pointer-events: none !important; }
+    #drag-shield { position: fixed; inset: 0; z-index: 30; cursor: col-resize; }
+    body.is-row-resize #drag-shield { cursor: row-resize; }
+
+    .empty-result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; animation: appear .24s ease both; }
+    .empty-result svg { width: 84px; height: 72px; margin: 0 0 17px; color: var(--illustration-line); }
+    .empty-result h3 { margin: 0; color: var(--text); font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+    .empty-result p { max-width: 260px; margin: 9px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    #result-frame { display: block; border: 0; background: var(--result); }
+
+    .statusbar {
+      display: flex;
+      flex: 0 0 30px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      min-width: 0;
+      padding: 0 25px 0 28px;
+      border-top: 1px solid var(--border);
+      background: var(--header);
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+    .status-group { display: flex; align-items: center; gap: 14px; min-width: 0; white-space: nowrap; }
+    .status-group > span + span { position: relative; }
+    .status-group > span + span::before { position: absolute; top: 2px; bottom: 2px; left: -8px; width: 1px; background: var(--border); content: ''; }
+    #language-status { color: var(--secondary); }
+    #save-status { overflow: hidden; text-overflow: ellipsis; }
+    kbd { font: inherit; }
+
+    .settings-overlay { position: fixed; inset: 0; z-index: 40; display: flex; justify-content: flex-end; background: rgba(21, 24, 34, .35); animation: appear .18s ease both; }
+    .settings-panel { display: flex; flex-direction: column; width: min(390px, 100%); height: 100%; border-left: 1px solid var(--border); background: var(--header); box-shadow: -10px 0 35px rgba(17, 20, 30, .1); animation: slide-in .22s ease both; }
+    .settings-header { display: flex; flex: 0 0 77px; align-items: center; justify-content: space-between; padding: 0 23px 0 25px; border-bottom: 1px solid var(--border); }
+    .settings-header h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+    .icon-button { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--secondary); cursor: pointer; }
+    .icon-button:hover { background: var(--hover); color: var(--text); }
+    .settings-body { flex: 1 1 auto; overflow: auto; padding: 4px 25px 30px; }
+    .settings-section { padding: 22px 0 15px; border-bottom: 1px solid var(--border); }
+    .settings-section h3 { margin: 0 0 13px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .setting-row { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 18px; }
+    .setting-copy { min-width: 0; }
+    .setting-name { display: block; color: var(--text); font-size: 12px; font-weight: 600; }
+    .setting-description { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .setting-select { width: 145px; height: 33px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 11px; }
+    .font-control { display: flex; height: 32px; align-items: center; border: 1px solid var(--border); border-radius: 6px; }
+    .font-control button { width: 31px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--secondary); cursor: pointer; font-size: 16px; }
+    .font-control button:hover { background: var(--hover); color: var(--text); }
+    .font-control button:disabled { opacity: .35; cursor: not-allowed; }
+    #font-size-value { min-width: 38px; color: var(--text); font-size: 11px; text-align: center; }
+    .switch { position: relative; flex: none; width: 37px; height: 21px; padding: 0; border: 0; border-radius: 20px; background: var(--switch-off); cursor: pointer; transition: background .18s ease; }
+    .switch::after { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgba(0, 0, 0, .13); content: ''; transition: transform .18s ease; }
+    .switch[aria-checked="true"] { background: var(--accent); }
+    .switch[aria-checked="true"]::after { transform: translateX(16px); }
+    .reset-button { margin-top: 23px; padding: 8px 0; border: 0; background: none; color: var(--secondary); cursor: pointer; font-size: 11px; font-weight: 600; }
+    .reset-button:hover { color: var(--text); }
+    .spin { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slide-in { from { transform: translateX(16px); opacity: .8; } to { transform: translateX(0); opacity: 1; } }
+    @media (max-width: 768px) {
+      .app-header { height: 58px; flex-basis: 58px; padding: 0 13px 0 16px; }
+      .pane-heading { flex-basis: 46px; padding-right: 15px; padding-left: 17px; }
+      .statusbar { padding-right: 15px; padding-left: 17px; }
+      .empty-result svg { width: 65px; height: 56px; margin-bottom: 11px; }
+      .empty-result p { margin-top: 6px; }
+    }
+    @media (max-width: 480px) {
+      .app-header { gap: 6px; }
+      .app-header h1 { font-size: 13px; }
+      .toolbar { gap: 1px; }
+      .toolbar-button { width: 32px; min-width: 32px; height: 32px; padding: 0; }
+      .toolbar-button.primary { width: auto; min-width: 65px; height: 32px; margin-right: 2px; padding: 0 9px; gap: 5px; }
+      .toolbar-button[data-button="theme"] { margin-left: 4px; }
+      .toolbar-button[data-button="theme"]::before { left: -3px; }
+      .run-shortcut, #keyboard-hint { display: none; }
+      .status-group { gap: 10px; }
+      .status-group > span + span::before { left: -6px; }
+      .empty-result h3 { font-size: 12px; }
+      .empty-result p { font-size: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>Code Editor</h1>
+      <nav id="toolbar" class="toolbar" aria-label="Editor actions"></nav>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <section id="editor-pane" class="pane" aria-label="Source code">
+        <div class="pane-heading">
+          <div class="file-tab" title="Current file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></svg>
+            <span id="file-name">main.js</span>
+          </div>
+          <div class="language-control">
+            <select id="language-select" aria-label="Editor language"></select>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+          </div>
+        </div>
+        <div class="editor-content">
+          <div id="editor-host" hidden></div>
+          <div id="fallback-wrap">
+            <div class="fallback-gutter" aria-hidden="true"><div id="fallback-lines">1</div></div>
+            <textarea id="fallback-editor" aria-label="Code editor" autocomplete="off" autocapitalize="off" spellcheck="false" wrap="off"></textarea>
+          </div>
+          <div id="editor-error" class="editor-error" role="status" hidden>
+            <span>Monaco could not load. Basic editing is available.</span>
+            <button type="button" id="retry-editor">Retry</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize editor and result panels" aria-valuemin="18" aria-valuemax="82" aria-valuenow="56" title="Drag to resize. Double-click to reset.">
+        <span class="grip" aria-hidden="true"></span>
+      </div>
+
+      <section id="result-pane" class="pane" aria-label="Result">
+        <div class="pane-heading result-heading">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+          <h2>Result</h2>
+        </div>
+        <div class="result-content">
+          <div id="result-empty" class="empty-result" role="status">
+            <svg viewBox="0 0 96 80" fill="none" aria-hidden="true">
+              <rect x="8.5" y="8.5" width="79" height="63" rx="7.5" fill="var(--illustration)" stroke="currentColor"/>
+              <path d="M9 24.5h78" stroke="currentColor"/>
+              <circle cx="18" cy="16.5" r="1.5" fill="currentColor"/><circle cx="24" cy="16.5" r="1.5" fill="currentColor"/><circle cx="30" cy="16.5" r="1.5" fill="currentColor"/>
+              <path d="m29 38 7 6-7 6M42 51h19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3 id="empty-title">Your output will appear here</h3>
+            <p id="empty-description">Connect a compiler in the configuration to display results.</p>
+          </div>
+          <iframe id="result-frame" title="Code result" sandbox="allow-scripts allow-forms allow-modals allow-popups" referrerpolicy="no-referrer" hidden></iframe>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <div class="status-group"><span id="language-status">JavaScript</span><span id="cursor-position">Ln 1, Col 1</span></div>
+      <div class="status-group"><span id="save-status" aria-live="polite">Not saved yet</span><span id="keyboard-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to run</span></div>
+    </footer>
+  </div>
+
+  <div id="drag-shield" hidden></div>
+  <div id="settings-overlay" class="settings-overlay" hidden>
+    <aside class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-header">
+        <h2 id="settings-title">Editor settings</h2>
+        <button type="button" id="settings-close" class="icon-button" aria-label="Close settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="settings-body">
+        <section class="settings-section">
+          <h3>Editor</h3>
+          <div class="setting-row"><label class="setting-name" for="setting-font-family">Font family</label><select id="setting-font-family" class="setting-select"></select></div>
+          <div class="setting-row"><span class="setting-name">Font size</span><div class="font-control"><button type="button" id="font-size-dec" aria-label="Decrease font size">-</button><span id="font-size-value">14px</span><button type="button" id="font-size-inc" aria-label="Increase font size">+</button></div></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Word wrap</span><span class="setting-description">Wrap long lines in the editor</span></div><button type="button" class="switch" id="setting-word-wrap" role="switch" aria-label="Word wrap" aria-checked="false"></button></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Minimap</span><span class="setting-description">Show an overview of your code</span></div><button type="button" class="switch" id="setting-minimap" role="switch" aria-label="Minimap" aria-checked="true"></button></div>
+        </section>
+        <section class="settings-section">
+          <h3>Code assistance</h3>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Suggestions</span><span class="setting-description">Show completions as you type</span></div><button type="button" class="switch" id="setting-suggestions" role="switch" aria-label="Suggestions" aria-checked="true"></button></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Parameter hints</span><span class="setting-description">Show function parameter details</span></div><button type="button" class="switch" id="setting-hints" role="switch" aria-label="Parameter hints" aria-checked="true"></button></div>
+        </section>
+        <button type="button" id="setting-reset" class="reset-button">Reset to defaults</button>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    /* Developer configuration: change defaults here, or use window.CodeEditor at runtime. */
+    const CONFIG = {
+      language: 'javascript',
+      defaultCode: [
+        '// Start writing your code here.',
+        '',
+        'function greet(name) {',
+        '  return `Hello, ${name}!`;',
+        '}',
+        '',
+        'console.log(greet("world"));'
+      ].join('\n'),
+      languages: [
+        { id: 'javascript', label: 'JavaScript', fileName: 'main.js' },
+        { id: 'typescript', label: 'TypeScript', fileName: 'main.ts' },
+        { id: 'python', label: 'Python', fileName: 'main.py' },
+        { id: 'html', label: 'HTML', fileName: 'index.html' },
+        { id: 'css', label: 'CSS', fileName: 'styles.css' },
+        { id: 'json', label: 'JSON', fileName: 'data.json' },
+        { id: 'markdown', label: 'Markdown', fileName: 'readme.md' },
+        { id: 'plaintext', label: 'Plain text', fileName: 'untitled.txt' }
+      ],
+      // Themes may also be { name: 'my-theme', data: monacoThemeData } objects.
+      themes: { light: 'vs', dark: 'vs-dark' },
+      fontFamilies: [
+        { label: 'JetBrains Mono', value: "'JetBrains Mono', Menlo, Monaco, monospace" },
+        { label: 'Fira Code', value: "'Fira Code', Menlo, Monaco, monospace" },
+        { label: 'Menlo / Monaco', value: "Menlo, Monaco, 'Courier New', monospace" },
+        { label: 'Consolas', value: "Consolas, 'Courier New', monospace" },
+        { label: 'Courier New', value: "'Courier New', monospace" },
+        { label: 'System monospace', value: 'ui-monospace, SFMono-Regular, Menlo, monospace' }
+      ],
+      monaco: { vsUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' },
+      // Any Monaco construction option can be added here. No tab size is forced.
+      editor: {
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono', Menlo, Monaco, monospace",
+        lineNumbers: 'on',
+        lineNumbersMinChars: 3,
+        lineDecorationsWidth: 13,
+        folding: true,
+        foldingStrategy: 'auto',
+        showFoldingControls: 'mouseover',
+        detectIndentation: true,
+        wordWrap: 'off',
+        minimap: { enabled: true },
+        quickSuggestions: true,
+        suggestOnTriggerCharacters: true,
+        parameterHints: { enabled: true },
+        tabCompletion: 'on',
+        renderLineHighlight: 'line',
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        padding: { top: 19, bottom: 20 },
+        overviewRulerBorder: false,
+        fixedOverflowWidgets: true
+      },
+      fontSizeRange: { min: 10, max: 24 },
+      layout: { initialSplit: 0.56, minSplit: 0.18, maxSplit: 0.82, mobileBreakpoint: 768 },
+      storage: {
+        code: 'code-editor:code',
+        settings: 'code-editor:settings',
+        language: 'code-editor:language'
+      },
+      result: { sandbox: 'allow-scripts allow-forms allow-modals allow-popups' },
+      // Remove or reorder built-ins, or add { id, title, label, icon, onClick(api, event) }.
+      buttons: ['run', 'openTab', 'clear', 'theme', 'settings'],
+      // No compiler is included. For example: api.setText(await compile(code, api.language));
+      onRun: async (code, api) => {}
+    };
+
+    const ICONS = {
+      play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.3v13.4L19 12 8 5.3Z"/></svg>',
+      loading: '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
+      external: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>',
+      trash: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>',
+      moon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.7 14.2A8.5 8.5 0 0 1 9.8 3.3a8.5 8.5 0 1 0 10.9 10.9Z"/></svg>',
+      sun: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
+      settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4Z"/><path d="M19.1 13.6a7.8 7.8 0 0 0 0-3.2l1.6-1.2-1.6-2.8-1.9.7a7.8 7.8 0 0 0-2.8-1.6L14 3.5h-4l-.4 2a7.8 7.8 0 0 0-2.8 1.6l-1.9-.7-1.6 2.8 1.6 1.2a7.8 7.8 0 0 0 0 3.2l-1.6 1.2 1.6 2.8 1.9-.7a7.8 7.8 0 0 0 2.8 1.6l.4 2h4l.4-2a7.8 7.8 0 0 0 2.8-1.6l1.9.7 1.6-2.8-1.6-1.2Z"/></svg>'
+    };
+
+    const $ = id => document.getElementById(id);
+    const els = {
+      toolbar: $('toolbar'), workspace: $('workspace'), editorPane: $('editor-pane'),
+      editorHost: $('editor-host'), fallbackWrap: $('fallback-wrap'), fallback: $('fallback-editor'),
+      fallbackLines: $('fallback-lines'), editorError: $('editor-error'), retry: $('retry-editor'),
+      resizer: $('resizer'), dragShield: $('drag-shield'), result: $('result-frame'),
+      resultEmpty: $('result-empty'), emptyTitle: $('empty-title'), emptyDescription: $('empty-description'),
+      languageSelect: $('language-select'), fileName: $('file-name'), languageStatus: $('language-status'),
+      cursor: $('cursor-position'), saveStatus: $('save-status'), keyboardHint: $('keyboard-hint'),
+      overlay: $('settings-overlay'), settingsClose: $('settings-close'), fontFamily: $('setting-font-family'),
+      fontSize: $('font-size-value'), fontDec: $('font-size-dec'), fontInc: $('font-size-inc'),
+      wordWrap: $('setting-word-wrap'), minimap: $('setting-minimap'),
+      suggestions: $('setting-suggestions'), hints: $('setting-hints'), reset: $('setting-reset')
+    };
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+    const shortcut = isMac ? 'Cmd' : 'Ctrl';
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const mobileLayout = window.matchMedia('(max-width: ' + CONFIG.layout.mobileBreakpoint + 'px)');
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    let editor = null;
+    let editorInitializing = false;
+    let workerUrl = '';
+    let settings = loadSettings();
+    let currentLanguage = loadLanguage();
+    let running = false;
+    let saveTimer = 0;
+    let dragging = false;
+    let activePointer = null;
+    let toolbarItems = [];
+    let previousFocus = null;
+    let hasResult = false;
+    let lastResultHtml = '';
+    let lastResultKind = null;
+    let resultVersion = 0;
+
+    function availableFonts() {
+      const fonts = [...CONFIG.fontFamilies];
+      if (CONFIG.editor.fontFamily && !fonts.some(font => font.value === CONFIG.editor.fontFamily)) {
+        fonts.unshift({ label: 'Custom font', value: CONFIG.editor.fontFamily });
+      }
+      return fonts;
+    }
+    function defaultSettings() {
+      const options = CONFIG.editor;
+      return {
+        fontSize: options.fontSize || 14,
+        fontFamily: options.fontFamily || availableFonts()[0].value,
+        wordWrap: options.wordWrap === true || ['on', 'bounded', 'wordWrapColumn'].includes(options.wordWrap),
+        minimap: options.minimap !== false && (!options.minimap || options.minimap.enabled !== false),
+        suggestions: options.quickSuggestions !== false,
+        parameterHints: !options.parameterHints || options.parameterHints.enabled !== false,
+        colorMode: null,
+        split: CONFIG.layout.initialSplit
+      };
+    }
+    function normalizeSettings(raw) {
+      const defaults = defaultSettings();
+      const value = { ...defaults, ...(raw && typeof raw === 'object' ? raw : {}) };
+      const fontSize = Number(value.fontSize);
+      const split = Number(value.split);
+      value.fontSize = clamp(Number.isFinite(fontSize) ? fontSize : defaults.fontSize, CONFIG.fontSizeRange.min, CONFIG.fontSizeRange.max);
+      value.split = clamp(Number.isFinite(split) ? split : defaults.split, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+      if (!availableFonts().some(font => font.value === value.fontFamily)) value.fontFamily = defaults.fontFamily;
+      if (![null, 'light', 'dark'].includes(value.colorMode)) value.colorMode = null;
+      for (const key of ['wordWrap', 'minimap', 'suggestions', 'parameterHints']) {
+        if (typeof value[key] !== 'boolean') value[key] = defaults[key];
+      }
+      return value;
+    }
+    function loadSettings() {
+      try { return normalizeSettings(JSON.parse(localStorage.getItem(CONFIG.storage.settings) || '{}')); }
+      catch { return normalizeSettings({}); }
+    }
+    function saveSettings() {
+      try { localStorage.setItem(CONFIG.storage.settings, JSON.stringify(settings)); } catch {}
+    }
+    function languageDefinition(id) {
+      if (typeof id !== 'string' || !id.trim()) return null;
+      let language = CONFIG.languages.find(item => item.id === id);
+      if (!language) {
+        language = { id, label: id, fileName: 'main.' + id };
+        CONFIG.languages.push(language);
+        if (els.languageSelect.options.length) {
+          const option = document.createElement('option');
+          option.value = id;
+          option.textContent = language.label;
+          els.languageSelect.appendChild(option);
+        }
+      }
+      return language;
+    }
+    function loadLanguage() {
+      const fallback = languageDefinition(CONFIG.language) || CONFIG.languages[0];
+      try {
+        const saved = localStorage.getItem(CONFIG.storage.language);
+        if (saved && languageDefinition(saved)) return saved;
+      } catch {}
+      return fallback.id;
+    }
+    function loadCode() {
+      try {
+        const code = localStorage.getItem(CONFIG.storage.code);
+        if (code !== null) {
+          els.saveStatus.textContent = 'Saved locally';
+          return code;
+        }
+      } catch { els.saveStatus.textContent = 'Autosave unavailable'; }
+      return CONFIG.defaultCode == null ? '' : String(CONFIG.defaultCode);
+    }
+    function getCode() { return editor ? editor.getValue() : els.fallback.value; }
+    function saveCodeNow() {
+      clearTimeout(saveTimer);
+      try {
+        localStorage.setItem(CONFIG.storage.code, getCode());
+        localStorage.setItem(CONFIG.storage.language, currentLanguage);
+        els.saveStatus.textContent = 'Saved locally';
+      } catch { els.saveStatus.textContent = 'Autosave unavailable'; }
+    }
+    function scheduleSave() {
+      els.saveStatus.textContent = 'Saving...';
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveCodeNow, 300);
+    }
+    function setCode(value) {
+      const code = value == null ? '' : String(value);
+      if (editor) editor.setValue(code);
+      els.fallback.value = code;
+      updateFallbackLines();
+      scheduleSave();
+      updateCursor();
+    }
+    function setLanguage(id) {
+      const language = languageDefinition(id);
+      if (!language) return;
+      currentLanguage = id;
+      els.languageSelect.value = id;
+      els.fileName.textContent = language.fileName || language.id;
+      els.languageStatus.textContent = language.label;
+      if (editor && window.monaco) monaco.editor.setModelLanguage(editor.getModel(), id);
+      try { localStorage.setItem(CONFIG.storage.language, id); } catch {}
+    }
+    function populateSelects() {
+      for (const language of CONFIG.languages) {
+        const option = document.createElement('option');
+        option.value = language.id;
+        option.textContent = language.label;
+        els.languageSelect.appendChild(option);
+      }
+      for (const font of availableFonts()) {
+        const option = document.createElement('option');
+        option.value = font.value;
+        option.textContent = font.label;
+        els.fontFamily.appendChild(option);
+      }
+      setLanguage(currentLanguage);
+    }
+
+    function isDark() { return settings.colorMode === null ? systemTheme.matches : settings.colorMode === 'dark'; }
+    function themeName() {
+      const theme = isDark() ? CONFIG.themes.dark : CONFIG.themes.light;
+      if (typeof theme === 'string') return theme;
+      if (theme && theme.name && theme.data && window.monaco) {
+        monaco.editor.defineTheme(theme.name, theme.data);
+        return theme.name;
+      }
+      return isDark() ? 'vs-dark' : 'vs';
+    }
+    function applyTheme() {
+      document.documentElement.classList.toggle('dark', isDark());
+      if (editor && window.monaco) monaco.editor.setTheme(themeName());
+      if (hasResult && lastResultKind && lastResultKind.type !== 'html') {
+        lastResultHtml = resultShell(lastResultKind.text, lastResultKind.type === 'error');
+        els.result.srcdoc = lastResultHtml;
+      }
+      refreshToolbar();
+    }
+    function editorOptions() {
+      const minimap = typeof CONFIG.editor.minimap === 'object' ? CONFIG.editor.minimap : {};
+      const hints = typeof CONFIG.editor.parameterHints === 'object' ? CONFIG.editor.parameterHints : {};
+      const wrapMode = typeof CONFIG.editor.wordWrap === 'string' && CONFIG.editor.wordWrap !== 'off' ? CONFIG.editor.wordWrap : 'on';
+      return {
+        fontSize: settings.fontSize,
+        fontFamily: settings.fontFamily,
+        wordWrap: settings.wordWrap ? wrapMode : 'off',
+        minimap: { ...minimap, enabled: settings.minimap },
+        quickSuggestions: settings.suggestions ? (CONFIG.editor.quickSuggestions || true) : false,
+        suggestOnTriggerCharacters: settings.suggestions && CONFIG.editor.suggestOnTriggerCharacters !== false,
+        wordBasedSuggestions: settings.suggestions ? (CONFIG.editor.wordBasedSuggestions || 'currentDocument') : 'off',
+        tabCompletion: settings.suggestions ? (CONFIG.editor.tabCompletion || 'on') : 'off',
+        parameterHints: { ...hints, enabled: settings.parameterHints }
+      };
+    }
+    function applyEditorSettings() {
+      document.documentElement.style.setProperty('--code-font', settings.fontFamily);
+      document.documentElement.style.setProperty('--code-size', settings.fontSize + 'px');
+      els.fallback.classList.toggle('is-wrapped', settings.wordWrap);
+      els.fallback.setAttribute('wrap', settings.wordWrap ? 'soft' : 'off');
+      if (editor) editor.updateOptions(editorOptions());
+    }
+    function renderSettings() {
+      els.fontFamily.value = settings.fontFamily;
+      els.fontSize.textContent = settings.fontSize + 'px';
+      els.fontDec.disabled = settings.fontSize <= CONFIG.fontSizeRange.min;
+      els.fontInc.disabled = settings.fontSize >= CONFIG.fontSizeRange.max;
+      els.wordWrap.setAttribute('aria-checked', String(settings.wordWrap));
+      els.minimap.setAttribute('aria-checked', String(settings.minimap));
+      els.suggestions.setAttribute('aria-checked', String(settings.suggestions));
+      els.hints.setAttribute('aria-checked', String(settings.parameterHints));
+    }
+    function updateSettings(patch) {
+      settings = normalizeSettings({ ...settings, ...patch });
+      saveSettings();
+      applyEditorSettings();
+      renderSettings();
+      applyTheme();
+      applySplit();
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    }
+    function resultShell(text, isError) {
+      const background = isDark() ? '#1b1c22' : '#fbfcfe';
+      const color = isError ? (isDark() ? '#fb8a8a' : '#c54646') : (isDark() ? '#eeeff4' : '#252936');
+      return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:' + background + ';color:' + color + ';font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}pre{margin:0;padding:24px;white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><pre>' + escapeHtml(text) + '</pre></body></html>';
+    }
+    function showResult(html, kind) {
+      lastResultHtml = html == null ? '' : String(html);
+      lastResultKind = kind;
+      hasResult = true;
+      resultVersion += 1;
+      els.result.srcdoc = lastResultHtml;
+      els.result.hidden = false;
+      els.resultEmpty.hidden = true;
+      refreshToolbar();
+    }
+    function setResult(html) { showResult(html, { type: 'html' }); }
+    function setText(text) {
+      const value = text == null ? '' : String(text);
+      showResult(resultShell(value, false), { type: 'text', text: value });
+    }
+    function setError(text) {
+      const value = text == null ? '' : String(text);
+      showResult(resultShell(value, true), { type: 'error', text: value });
+    }
+    function clearResult() {
+      hasResult = false;
+      lastResultHtml = '';
+      lastResultKind = null;
+      resultVersion += 1;
+      els.result.hidden = true;
+      els.result.removeAttribute('srcdoc');
+      els.emptyTitle.textContent = 'Your output will appear here';
+      els.emptyDescription.textContent = 'Connect a compiler in the configuration to display results.';
+      els.resultEmpty.hidden = false;
+      refreshToolbar();
+    }
+    function getApi() {
+      return {
+        get editor() { return editor; },
+        get monaco() { return window.monaco; },
+        get language() { return currentLanguage; },
+        get config() { return CONFIG; },
+        getCode, setCode, setLanguage, setResult, setText, setError, clearResult,
+        run: runCode, getSettings: () => ({ ...settings }), updateSettings, renderToolbar
+      };
+    }
+    async function runCode() {
+      if (running) return;
+      running = true;
+      refreshToolbar();
+      const before = resultVersion;
+      try {
+        await CONFIG.onRun(getCode(), getApi());
+        if (before === resultVersion && !hasResult) {
+          els.emptyTitle.textContent = 'No compiler connected';
+          els.emptyDescription.textContent = 'Add a compiler in CONFIG.onRun to see results here.';
+        }
+      } catch (error) {
+        setError(error && error.message ? error.message : String(error));
+      } finally {
+        running = false;
+        refreshToolbar();
+      }
+    }
+    function openResult() {
+      if (!hasResult) return;
+      const output = document.implementation.createHTMLDocument('Result - Code Editor');
+      const viewport = output.createElement('meta');
+      viewport.name = 'viewport';
+      viewport.content = 'width=device-width,initial-scale=1';
+      output.head.appendChild(viewport);
+      const style = output.createElement('style');
+      style.textContent = 'html,body{height:100%;margin:0;background:' + (isDark() ? '#1b1c22' : '#fbfcfe') + '}iframe{display:block;width:100%;height:100%;border:0}';
+      output.head.appendChild(style);
+      const frame = output.createElement('iframe');
+      frame.title = 'Code result';
+      frame.setAttribute('sandbox', CONFIG.result.sandbox || '');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.srcdoc = lastResultHtml;
+      output.body.appendChild(frame);
+      const url = URL.createObjectURL(new Blob(['<!doctype html>\n' + output.documentElement.outerHTML], { type: 'text/html' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    function builtinButtons() {
+      return {
+        run: { id: 'run', label: 'Run', title: 'Run (' + shortcut + '+Enter)', icon: ICONS.play, primary: true, isRun: true, disabled: () => running, onClick: runCode },
+        openTab: { id: 'openTab', title: 'Open result in new tab', icon: ICONS.external, disabled: () => !hasResult, onClick: openResult },
+        clear: { id: 'clear', title: 'Clear result', icon: ICONS.trash, disabled: () => !hasResult, onClick: clearResult },
+        theme: { id: 'theme', title: 'Toggle color mode', icon: ICONS.moon, isTheme: true, onClick: () => updateSettings({ colorMode: isDark() ? 'light' : 'dark' }) },
+        settings: { id: 'settings', title: 'Editor settings', icon: ICONS.settings, onClick: openSettings }
+      };
+    }
+    function renderToolbar() {
+      const builtins = builtinButtons();
+      toolbarItems = [];
+      els.toolbar.replaceChildren();
+      for (const item of CONFIG.buttons) {
+        const definition = typeof item === 'string' ? builtins[item] : item;
+        if (!definition || !definition.id) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'toolbar-button' + (definition.primary ? ' primary' : '');
+        button.dataset.button = definition.id;
+        button.title = definition.title || definition.label || definition.id;
+        button.setAttribute('aria-label', button.title);
+        if (definition.icon) {
+          const icon = document.createElement('span');
+          icon.className = 'button-icon';
+          icon.innerHTML = definition.icon;
+          button.appendChild(icon);
+        }
+        if (definition.label) {
+          const label = document.createElement('span');
+          label.textContent = definition.label;
+          button.appendChild(label);
+        }
+        if (definition.isRun) {
+          const hint = document.createElement('span');
+          hint.className = 'run-shortcut';
+          hint.textContent = shortcut + ' + Enter';
+          hint.setAttribute('aria-hidden', 'true');
+          button.appendChild(hint);
+        }
+        button.addEventListener('click', event => {
+          if (!button.disabled && typeof definition.onClick === 'function') definition.onClick(getApi(), event);
+        });
+        toolbarItems.push({ button, definition });
+        els.toolbar.appendChild(button);
+      }
+      refreshToolbar();
+    }
+    function refreshToolbar() {
+      for (const { button, definition } of toolbarItems) {
+        button.disabled = typeof definition.disabled === 'function' ? Boolean(definition.disabled(getApi())) : Boolean(definition.disabled);
+        const icon = button.querySelector('.button-icon');
+        if (definition.isRun && icon) icon.innerHTML = running ? ICONS.loading : ICONS.play;
+        if (definition.isTheme) {
+          if (icon) icon.innerHTML = isDark() ? ICONS.sun : ICONS.moon;
+          button.title = isDark() ? 'Switch to light mode' : 'Switch to dark mode';
+          button.setAttribute('aria-label', button.title);
+        }
+      }
+    }
+    function openSettings() {
+      previousFocus = document.activeElement;
+      els.overlay.hidden = false;
+      els.settingsClose.focus();
+    }
+    function closeSettings() {
+      els.overlay.hidden = true;
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+    }
+
+    function updateFallbackLines() {
+      const count = els.fallback.value.split('\n').length;
+      els.fallbackLines.textContent = Array.from({ length: count }, (_, index) => index + 1).join('\n');
+      els.fallbackLines.style.transform = 'translateY(-' + els.fallback.scrollTop + 'px)';
+    }
+    function updateCursor() {
+      if (editor) {
+        const position = editor.getPosition();
+        if (position) els.cursor.textContent = 'Ln ' + position.lineNumber + ', Col ' + position.column;
+        return;
+      }
+      const before = els.fallback.value.slice(0, els.fallback.selectionStart).split('\n');
+      els.cursor.textContent = 'Ln ' + before.length + ', Col ' + (before[before.length - 1].length + 1);
+    }
+    function fallbackIndent() {
+      const indents = els.fallback.value.split('\n').map(line => (line.match(/^[\t ]+(?=\S)/) || [''])[0]).filter(Boolean);
+      if (indents.some(indent => indent.includes('\t'))) return '\t';
+      if (indents.length) return ' '.repeat(Math.min(...indents.map(indent => indent.length)));
+      return '\t';
+    }
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let finished = false;
+        const finish = error => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          if (error) { script.remove(); reject(error); } else resolve();
+        };
+        const timer = setTimeout(() => finish(new Error('Monaco loading timed out.')), 12000);
+        script.src = src;
+        script.onload = () => finish();
+        script.onerror = () => finish(new Error('Monaco could not be loaded.'));
+        document.head.appendChild(script);
+      });
+    }
+    function configureWorkers(vs) {
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
+      const base = vs.replace(/\/vs$/, '/');
+      const source = 'self.MonacoEnvironment = { baseUrl: ' + JSON.stringify(base) + ' }; importScripts(' + JSON.stringify(vs + '/base/worker/workerMain.js') + ');';
+      workerUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      window.MonacoEnvironment = { getWorkerUrl: () => workerUrl };
+    }
+    async function loadMonaco() {
+      if (window.monaco && window.monaco.editor) return;
+      const vs = CONFIG.monaco.vsUrl.replace(/\/$/, '');
+      configureWorkers(vs);
+      if (!window.require || typeof window.require.config !== 'function') await loadScript(vs + '/loader.js');
+      if (!window.require || typeof window.require.config !== 'function') throw new Error('Monaco loader did not initialize.');
+      window.require.config({ paths: { vs } });
+      await new Promise((resolve, reject) => {
+        let finished = false;
+        const finish = error => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          if (error) reject(error); else resolve();
+        };
+        const timer = setTimeout(() => finish(new Error('Monaco loading timed out.')), 12000);
+        window.require(['vs/editor/editor.main'], () => finish(), error => finish(error));
+      });
+    }
+    async function initializeEditor() {
+      if (editor || editorInitializing) return;
+      editorInitializing = true;
+      els.editorError.hidden = true;
+      try {
+        await loadMonaco();
+        const hadFocus = document.activeElement === els.fallback;
+        const start = els.fallback.selectionStart;
+        const end = els.fallback.selectionEnd;
+        const value = els.fallback.value;
+        els.editorHost.hidden = false;
+        editor = monaco.editor.create(els.editorHost, {
+          ...CONFIG.editor,
+          ...editorOptions(),
+          value,
+          language: currentLanguage,
+          theme: themeName()
+        });
+        els.fallbackWrap.hidden = true;
+        editor.onDidChangeModelContent(() => {
+          els.fallback.value = editor.getValue();
+          scheduleSave();
+          updateCursor();
+        });
+        editor.onDidChangeCursorPosition(updateCursor);
+        if (hadFocus) {
+          const model = editor.getModel();
+          const from = model.getPositionAt(start);
+          const to = model.getPositionAt(end);
+          editor.setSelection({ startLineNumber: from.lineNumber, startColumn: from.column, endLineNumber: to.lineNumber, endColumn: to.column });
+          editor.focus();
+        }
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+        updateCursor();
+      } catch (error) {
+        if (editor) { editor.dispose(); editor = null; }
+        els.editorHost.hidden = true;
+        els.fallbackWrap.hidden = false;
+        els.editorError.hidden = false;
+        updateCursor();
+      } finally {
+        editorInitializing = false;
+      }
+    }
+
+    function applySplit() {
+      const column = mobileLayout.matches;
+      els.workspace.classList.toggle('is-column', column);
+      els.editorPane.style.flexBasis = (settings.split * 100) + '%';
+      els.resizer.setAttribute('aria-orientation', column ? 'horizontal' : 'vertical');
+      els.resizer.setAttribute('aria-valuemin', String(Math.round(CONFIG.layout.minSplit * 100)));
+      els.resizer.setAttribute('aria-valuemax', String(Math.round(CONFIG.layout.maxSplit * 100)));
+      els.resizer.setAttribute('aria-valuenow', String(Math.round(settings.split * 100)));
+      els.resizer.setAttribute('aria-valuetext', Math.round(settings.split * 100) + '% editor');
+      if (editor) editor.layout();
+    }
+    function splitFromPointer(event) {
+      const rect = els.workspace.getBoundingClientRect();
+      const ratio = mobileLayout.matches ? (event.clientY - rect.top) / rect.height : (event.clientX - rect.left) / rect.width;
+      settings.split = clamp(ratio, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+      applySplit();
+    }
+    function finishResize() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('is-resizing', 'is-row-resize');
+      els.dragShield.hidden = true;
+      if (activePointer !== null) {
+        try { els.resizer.releasePointerCapture(activePointer); } catch {}
+      }
+      activePointer = null;
+      saveSettings();
+      applySplit();
+    }
+    function initResize() {
+      els.resizer.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        dragging = true;
+        activePointer = event.pointerId;
+        document.body.classList.add('is-resizing');
+        document.body.classList.toggle('is-row-resize', mobileLayout.matches);
+        els.dragShield.hidden = false;
+        try { els.resizer.setPointerCapture(event.pointerId); } catch {}
+        splitFromPointer(event);
+      });
+      window.addEventListener('pointermove', event => { if (dragging && event.pointerId === activePointer) splitFromPointer(event); });
+      window.addEventListener('pointerup', event => { if (event.pointerId === activePointer) finishResize(); });
+      window.addEventListener('pointercancel', event => { if (event.pointerId === activePointer) finishResize(); });
+      window.addEventListener('blur', finishResize);
+      els.resizer.addEventListener('keydown', event => {
+        const step = event.shiftKey ? .05 : .02;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') settings.split -= step;
+        else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') settings.split += step;
+        else if (event.key === 'Home') settings.split = CONFIG.layout.minSplit;
+        else if (event.key === 'End') settings.split = CONFIG.layout.maxSplit;
+        else return;
+        event.preventDefault();
+        settings.split = clamp(settings.split, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+        applySplit();
+        saveSettings();
+      });
+      els.resizer.addEventListener('dblclick', () => updateSettings({ split: CONFIG.layout.initialSplit }));
+      mobileLayout.addEventListener('change', applySplit);
+      window.addEventListener('resize', () => { if (editor) editor.layout(); });
+    }
+    function initEvents() {
+      els.languageSelect.addEventListener('change', () => setLanguage(els.languageSelect.value));
+      els.fontFamily.addEventListener('change', () => updateSettings({ fontFamily: els.fontFamily.value }));
+      els.fontDec.addEventListener('click', () => updateSettings({ fontSize: settings.fontSize - 1 }));
+      els.fontInc.addEventListener('click', () => updateSettings({ fontSize: settings.fontSize + 1 }));
+      for (const [element, key] of [[els.wordWrap, 'wordWrap'], [els.minimap, 'minimap'], [els.suggestions, 'suggestions'], [els.hints, 'parameterHints']]) {
+        element.addEventListener('click', () => updateSettings({ [key]: !settings[key] }));
+      }
+      els.reset.addEventListener('click', () => {
+        const split = settings.split;
+        settings = normalizeSettings({ ...defaultSettings(), split });
+        saveSettings();
+        applyEditorSettings();
+        renderSettings();
+        applyTheme();
+        applySplit();
+      });
+      els.settingsClose.addEventListener('click', closeSettings);
+      els.overlay.addEventListener('click', event => { if (event.target === els.overlay) closeSettings(); });
+      els.retry.addEventListener('click', async () => {
+        els.retry.disabled = true;
+        await initializeEditor();
+        els.retry.disabled = false;
+      });
+      els.fallback.addEventListener('input', () => { updateFallbackLines(); updateCursor(); scheduleSave(); });
+      els.fallback.addEventListener('click', updateCursor);
+      els.fallback.addEventListener('keyup', updateCursor);
+      els.fallback.addEventListener('scroll', updateFallbackLines);
+      els.fallback.addEventListener('keydown', event => {
+        if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) return;
+        event.preventDefault();
+        els.fallback.setRangeText(fallbackIndent(), els.fallback.selectionStart, els.fallback.selectionEnd, 'end');
+        updateFallbackLines();
+        updateCursor();
+        scheduleSave();
+      });
+      document.addEventListener('keydown', event => {
+        if (!els.overlay.hidden) {
+          if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return; }
+          if (event.key === 'Tab') {
+            const controls = Array.from(els.overlay.querySelectorAll('button:not(:disabled), select:not(:disabled)'));
+            if (event.shiftKey && document.activeElement === controls[0]) { event.preventDefault(); controls[controls.length - 1].focus(); }
+            else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) { event.preventDefault(); controls[0].focus(); }
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); runCode(); }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); saveCodeNow(); }
+      }, true);
+      systemTheme.addEventListener('change', () => { if (settings.colorMode === null) applyTheme(); });
+      window.addEventListener('pagehide', saveCodeNow);
+    }
+    function init() {
+      els.fallback.value = loadCode();
+      els.result.setAttribute('sandbox', CONFIG.result.sandbox || '');
+      els.keyboardHint.innerHTML = '<kbd>' + shortcut + '</kbd> + <kbd>Enter</kbd> to run';
+      populateSelects();
+      renderToolbar();
+      applyEditorSettings();
+      renderSettings();
+      applyTheme();
+      applySplit();
+      updateFallbackLines();
+      updateCursor();
+      initResize();
+      initEvents();
+      window.CodeEditor = getApi();
+      initializeEditor();
+    }
+    init();
+  </script>
+</body>
+</html>
