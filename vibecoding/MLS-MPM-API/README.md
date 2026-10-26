@@ -202,4 +202,4 @@ npm run dev
 
 ## License and attribution
 
-MIT; see [LICENSE](./LICENSE). This API is derived from [CzzzzH/MLS-MPM](https://github.com/CzzzzH/MLS-MPM), with the 2D/browser conversion and standalone JavaScript API layered on top. Original mesh files are deliberately not included or required.
+MIT; see [LICENSE](./LICENSE). This API is derived from [CzzzzH/MLS-MPM](https://github.com/CzzzzH/MLS-MPM), with the 2D/browser conversion and standalone JavaScript API layered on top. Original mesh files are deliberately not included or required. API likely made by Kimi K3.1 Pro or variant
