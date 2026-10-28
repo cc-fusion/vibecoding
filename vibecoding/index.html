@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLS-MPM.js — the 88-line MLS-MPM in vanilla JavaScript</title>
+<meta name="description" content="High-performance 2D Moving Least Squares Material Point Method (MLS-MPM) in vanilla JavaScript: a port of taichi_mpm's mls-mpm88.cpp with documentation and live, editable examples.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme {
+    --color-ink: #07141d;
+    --color-panel: #0c1f2c;
+    --color-navy: #112F41;
+    --color-line: #1b3749;
+    --color-mint: #4FB99F;
+    --color-sun: #F2B134;
+    --color-coral: #ED553B;
+    --color-teal: #068587;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+</style>
+<style>
+@layer theme, base, components, utilities;
+@layer components {
+  :root{--ink:#07141d;--panel:#0c1f2c;--navy:#112F41;--line:#1b3749;--text:#cbdbe5;--muted:#86a1b2;--mint:#4FB99F;--sun:#F2B134;--coral:#ED553B;--teal:#068587;--mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  html{scroll-behavior:smooth;scroll-padding-top:72px}
+  body{background:var(--ink);color:var(--text)}
+  ::selection{background:rgba(79,185,159,.35)}
+  .grad{background:linear-gradient(90deg,#ED553B,#F2B134 45%,#4FB99F);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  .topbar{position:fixed;top:0;left:0;right:0;height:56px;z-index:40;background:rgba(7,20,29,.86);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .sidebar{position:fixed;top:56px;left:0;bottom:0;width:272px;z-index:30;overflow-y:auto;background:var(--ink);border-right:1px solid var(--line);padding:.5rem .75rem 3rem;transform:translateX(-100%);transition:transform .2s ease}
+  .sidebar.open{transform:none;box-shadow:20px 0 60px rgba(0,0,0,.5)}
+  @media (min-width:1024px){.sidebar{position:sticky;top:56px;bottom:auto;left:auto;height:calc(100vh - 56px);transform:none;flex-shrink:0;width:250px;background:transparent;box-shadow:none}}
+  .nav a{display:block;padding:.3rem .75rem;margin:1px 0;border-radius:8px;font-size:.86rem;color:#98afbe;border-left:2px solid transparent;text-decoration:none}
+  .nav a:hover{color:#fff;background:rgba(255,255,255,.035)}
+  .nav a.active{color:#fff;background:rgba(79,185,159,.1);border-left-color:var(--mint)}
+  .nav-title{font:600 .68rem/1 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:#56798c;margin:1.4rem .75rem .5rem}
+
+  .doc h2{font-size:clamp(1.6rem,2.6vw,2rem);line-height:1.15;font-weight:800;color:#fff;letter-spacing:-.02em;margin:0 0 .8rem}
+  .doc h3{font-size:1.22rem;font-weight:700;color:#fff;margin:2.6rem 0 .6rem;letter-spacing:-.01em}
+  .doc h4{font-size:1rem;font-weight:600;color:#fff;margin:0}
+  .doc p{line-height:1.75;margin:.75rem 0}
+  .doc p a,.doc li a,.doc td a,.doc .note a{color:var(--mint);text-decoration:underline;text-decoration-color:rgba(79,185,159,.4);text-underline-offset:3px}
+  .doc b,.doc strong{color:#fff;font-weight:600}
+  .doc :not(pre)>code{font-family:var(--mono);font-size:.84em;color:#e9f2f6;background:#0f2637;border:1px solid var(--line);border-radius:6px;padding:.1em .38em;white-space:nowrap}
+  .doc kbd{font:500 .78em var(--mono);color:#fff;background:#10283a;border:1px solid #2a4a5e;border-bottom-width:2px;border-radius:5px;padding:.05em .4em}
+  .bul{margin:.7rem 0;padding-left:1.25rem;list-style:disc}
+  .bul li{margin:.4rem 0;line-height:1.7}
+  .bul li::marker{color:var(--mint)}
+  .section{padding:4.5rem 0 .5rem;border-top:1px solid var(--line)}
+  .eyebrow{font:600 .72rem/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mint);margin-bottom:.9rem}
+  .lead{font-size:1.05rem;color:#b9cbd6}
+  .note{border:1px solid rgba(242,177,52,.3);background:rgba(242,177,52,.06);border-radius:12px;padding:.8rem 1rem;margin:1rem 0;font-size:.92rem;line-height:1.7}
+  .note b{color:var(--sun)}
+
+  .tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);margin:1rem 0}
+  .tbl table{width:100%;border-collapse:collapse;font-size:.88rem}
+  .tbl th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;padding:.7rem .9rem;background:#0a1b27;border-bottom:1px solid var(--line);white-space:nowrap}
+  .tbl td{padding:.62rem .9rem;border-bottom:1px solid rgba(27,55,73,.65);vertical-align:top;line-height:1.6}
+  .tbl tr:last-child td{border-bottom:0}
+  .tbl td:first-child{white-space:nowrap}
+  .tbl.wrap td:first-child{white-space:normal}
+  .tbl.wrap code{white-space:normal!important}
+
+  .code{border:1px solid var(--line);border-radius:14px;background:#08161f;overflow:hidden;margin:1rem 0;min-width:0}
+  .code-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.42rem .5rem .42rem .9rem;border-bottom:1px solid var(--line);background:#0a1b27;font:500 12px var(--mono);color:var(--muted);min-height:40px}
+  .code pre{margin:0;padding:14px 16px;overflow:auto;font:12.5px/1.7 var(--mono);color:#d4e2ea;tab-size:2;font-variant-ligatures:none}
+  .code.scroll pre{max-height:600px}
+  .tk-c{color:#5c7d90;font-style:italic}.tk-s{color:#F2B134}.tk-n{color:#f58f72}.tk-k{color:#4FB99F}.tk-f{color:#7cc8ea}.tk-t{color:#c4a8ff}.tk-g{color:#4FB99F}
+
+  .btn{display:inline-flex;align-items:center;gap:.45rem;font-weight:600;font-size:.9rem;padding:.6rem 1rem;border-radius:10px;border:1px solid var(--line);background:#0f2636;color:#e8f1f5;transition:background .15s,border-color .15s;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .btn:hover{border-color:#2d5870;background:#143148}
+  .btn:disabled{opacity:.5;cursor:wait}
+  .btn-primary{background:var(--mint);border-color:var(--mint);color:#04211a}
+  .btn-primary:hover{background:#66cbb1;border-color:#66cbb1}
+  .btn-sm{font:500 .75rem var(--mono);padding:.3rem .6rem;border-radius:7px}
+
+  .stage{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--navy);aspect-ratio:1/1;width:100%}
+  .stage canvas{display:block;width:100%;height:100%;cursor:crosshair}
+  .stage .hint{position:absolute;left:10px;bottom:10px;font:500 11px var(--mono);color:rgba(255,255,255,.8);background:rgba(7,20,29,.62);padding:.28rem .55rem;border-radius:6px;pointer-events:none}
+  .demo{display:grid;gap:1rem;margin:1.1rem 0 .5rem}
+  .demo .stage{max-width:440px}
+  .demo .code{margin:0}
+  @media (min-width:1180px){.demo{grid-template-columns:minmax(0,400px) minmax(0,1fr);align-items:start}.demo-stage{position:sticky;top:76px}}
+  .editor{position:relative}
+  .editor pre,.editor textarea{margin:0;border:0;padding:14px 16px;font:12.5px/1.7 var(--mono);tab-size:2;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;font-variant-ligatures:none;letter-spacing:0}
+  .editor pre{color:#d4e2ea;overflow:hidden}
+  .editor textarea{position:absolute;top:0;left:0;width:100%;height:100%;resize:none;overflow:hidden;background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:#fff;outline:none}
+  .editor textarea:focus{box-shadow:inset 0 0 0 1px rgba(79,185,159,.5)}
+  .demo-error{margin:0;padding:.7rem .9rem;font:12px/1.6 var(--mono);color:#ffb3a5;background:rgba(237,85,59,.12);border-top:1px solid rgba(237,85,59,.35);white-space:pre-wrap}
+
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:1.1rem 1.2rem}
+  .card p{margin:.3rem 0;font-size:.93rem}
+  .step{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;font:700 .8rem var(--mono);color:#04211a;background:var(--mint);margin-right:.6rem;flex-shrink:0}
+  .formula{font-family:var(--mono);font-size:.78rem;color:#e8f1f5;background:#08161f;border:1px solid var(--line);border-radius:8px;padding:.5rem .7rem;margin-top:.6rem;overflow-x:auto;white-space:nowrap}
+  .sig{font:500 .92rem var(--mono);color:#fff;background:#0a1b27;border:1px solid var(--line);border-radius:10px;padding:.55rem .85rem;display:inline-block;max-width:100%;overflow-x:auto;white-space:nowrap}
+  .sig span{color:var(--muted)}
+  .api{padding:1.5rem 0;border-bottom:1px dashed var(--line)}
+  .api:last-child{border-bottom:0}
+  .tab{font:500 12px var(--mono);padding:.3rem .65rem;border-radius:7px;color:var(--muted);cursor:pointer;border:1px solid transparent;background:none}
+  .tab.on{color:#fff;background:#133047;border-color:#24485e}
+  .ctl{display:block;margin-bottom:.95rem}
+  .ctl-top{display:flex;justify-content:space-between;align-items:baseline;font-size:.84rem;color:#d7e6ee;margin-bottom:.3rem}
+  .ctl-top em{font-style:normal;color:var(--muted);font-size:.75rem;margin-left:.4rem}
+  .ctl-top b{font:500 .8rem var(--mono);color:var(--sun)}
+  input[type=range]{width:100%;accent-color:var(--mint)}
+  input[type=checkbox]{accent-color:var(--mint);width:16px;height:16px}
+  select{background:#0f2636;color:#e8f1f5;border:1px solid var(--line);border-radius:8px;padding:.42rem .5rem;font-size:.85rem;width:100%}
+  .lbl{display:block;font:600 .68rem var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.35rem}
+  .stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:.7rem .8rem}
+  .stat b{display:block;color:#fff;font-size:1.05rem}
+  .stat span{font-size:.75rem;color:var(--muted)}
+}
+</style>
+</head>
+<body class="font-sans antialiased">
+
+<header class="topbar">
+  <div class="h-full px-4 lg:px-6 flex items-center gap-3">
+    <button id="menu-btn" class="lg:hidden btn btn-sm" aria-label="Toggle navigation">☰</button>
+    <a href="#top" class="flex items-center gap-2.5 font-extrabold text-white tracking-tight text-[1.05rem]">
+      <span class="flex gap-[3px]"><i class="dot" style="background:#ED553B"></i><i class="dot" style="background:#F2B134"></i><i class="dot" style="background:#068587"></i></span>
+      <span>MLS-MPM<span class="text-mint">.js</span></span>
+    </a>
+    <span class="hidden sm:inline font-mono text-[11px] text-slate-400 border border-line rounded-md px-1.5 py-0.5">v1.0.0</span>
+    <nav class="ml-auto flex items-center gap-1 sm:gap-2">
+      <a href="#api" class="hidden md:inline px-3 py-1.5 text-sm text-slate-300 hover:text-white">API</a>
+      <a href="#examples" class="hidden md:inline px-3 py-1.5 text-sm text-slate-300 hover:text-white">Examples</a>
+      <a href="#playground" class="hidden md:inline px-3 py-1.5 text-sm text-slate-300 hover:text-white">Playground</a>
+      <a href="https://github.com/yuanming-hu/taichi_mpm" target="_blank" rel="noopener" class="hidden sm:inline px-3 py-1.5 text-sm text-slate-300 hover:text-white">taichi_mpm ↗</a>
+      <button class="btn btn-primary btn-sm" data-download>⬇ mls-mpm.js</button>
+    </nav>
+  </div>
+</header>
+
+<div class="lg:flex pt-14">
+  <aside id="sidebar" class="sidebar">
+    <nav class="nav">
+      <div class="nav-title">Overview</div>
+      <a href="#top">Introduction</a>
+      <div class="nav-title">Getting started</div>
+      <a href="#install">Installation</a>
+      <a href="#quickstart">Quick start</a>
+      <div class="nav-title">How it works</div>
+      <a href="#algorithm">The algorithm</a>
+      <a href="#state">Particles and materials</a>
+      <a href="#mapping">C++ → JS mapping</a>
+      <a href="#side-by-side">Side by side</a>
+      <div class="nav-title">API reference</div>
+      <a href="#api">Constructor and options</a>
+      <a href="#api-methods">Methods</a>
+      <a href="#api-properties">Properties</a>
+      <a href="#api-layout">Data layout</a>
+      <a href="#api-static">Static members</a>
+      <div class="nav-title">Examples</div>
+      <a href="#ex-hello">1 · The 88-line demo</a>
+      <a href="#ex-materials">2 · Snow, jelly, water</a>
+      <a href="#ex-snowball">3 · Snowball</a>
+      <a href="#ex-attractor">4 · Attractor</a>
+      <a href="#ex-text">5 · Text from pixels</a>
+      <a href="#ex-obstacles">6 · Obstacles</a>
+      <a href="#ex-render">7 · Custom rendering</a>
+      <div class="nav-title">More</div>
+      <a href="#playground">Playground</a>
+      <a href="#performance">Performance</a>
+      <a href="#source">Source code</a>
+      <a href="#credits">Credits and license</a>
+    </nav>
+  </aside>
+
+  <main class="doc flex-1 min-w-0 px-5 sm:px-8 lg:px-12 pb-28">
+    <div class="max-w-[1060px] mx-auto">
+
+      <!-- ============================== HERO ============================== -->
+      <section id="top" class="pt-10 lg:pt-16 pb-16">
+        <div class="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-10 xl:gap-14 items-center">
+          <div>
+            <div class="eyebrow">Port of taichi_mpm · mls-mpm88.cpp</div>
+            <h1 class="text-[2.4rem] sm:text-5xl xl:text-[3.3rem] font-extrabold tracking-tight text-white leading-[1.05]">The 88-line <span class="grad">MLS-MPM</span>, in vanilla JavaScript.</h1>
+            <p class="mt-6 text-lg leading-relaxed text-slate-300 max-w-xl">Snow, jelly and water with the Moving Least Squares Material Point Method (SIGGRAPH 2018). A fast, dependency-free 2D solver that keeps the structure, names and comments of the original C++, in one file you load with a single script tag.</p>
+            <div class="mt-8 flex flex-wrap gap-3">
+              <a href="#quickstart" class="btn btn-primary">Get started →</a>
+              <button class="btn" data-download>⬇ Download mls-mpm.js</button>
+              <a href="#examples" class="btn">Live examples</a>
+            </div>
+            <div class="mt-9 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl">
+              <div class="stat"><b data-lib-size>…</b><span>one file, unminified</span></div>
+              <div class="stat"><b>0</b><span>dependencies</span></div>
+              <div class="stat"><b>0 allocs</b><span>per time step</span></div>
+              <div class="stat"><b>MIT</b><span>license</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="stage" id="hero-stage"><canvas id="hero-canvas"></canvas><div class="hint">click to drop snow, jelly or water</div></div>
+            <div class="flex items-center justify-between mt-3 font-mono text-[11.5px] text-slate-400"><span id="hero-stats"></span><button id="hero-reset" class="hover:text-white cursor-pointer">↺ reset</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================== GETTING STARTED ============================== -->
+      <section id="start" class="section">
+        <div class="eyebrow">01 · Getting started</div>
+        <h2>Getting started</h2>
+        <p class="lead">mls-mpm.js is a single file without dependencies. It defines one global, <code>MLSMPM</code>.</p>
+
+        <h3 id="install">Installation</h3>
+        <p>Download the file (or copy it from the <a href="#source">source section</a>), put it next to your page and include it with a regular script tag:</p>
+        <div class="snippet" data-lang="html" data-title="your-page.html"><script type="text/plain">
+<script src="/path/to/mls-mpm.js"><\/script>
+</script></div>
+        <div class="flex flex-wrap gap-3"><button class="btn" data-download>⬇ Download mls-mpm.js</button></div>
+        <p class="mt-5">Everything except <code>render()</code> is DOM-free, so the very same file also runs in Web Workers and in Node.js:</p>
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="snippet" data-lang="js" data-title="worker.js"><script type="text/plain">
+importScripts('mls-mpm.js');
+
+const sim = new MLSMPM();
+sim.add_object([0.5, 0.5], 0xED553B);
+setInterval(() => {
+  sim.advance_frame();
+  // send positions only: 2 numbers per particle
+  postMessage(sim.x.slice(0, 2 * sim.num_particles));
+}, 16);
+</script></div>
+          <div class="snippet" data-lang="js" data-title="node.js"><script type="text/plain">
+const MLSMPM = require('./mls-mpm.js');
+
+const sim = new MLSMPM({ seed: 1 });   // reproducible
+sim.add_object([0.5, 0.5], 0xFFFFFF);
+for (let i = 0; i < 1000; i++) sim.advance();
+console.log(sim.t, sim.get_particle(0).x);
+</script></div>
+        </div>
+
+        <h3 id="quickstart">Quick start</h3>
+        <p>This complete page reproduces <code>main()</code> of mls-mpm88.cpp: three blocks of snow falling into a box.</p>
+        <div class="snippet" data-lang="html" data-title="index.html"><script type="text/plain">
+<!DOCTYPE html>
+<html>
+<body style="margin: 0; background: #112F41">
+  <canvas id="c" width="800" height="800"></canvas>
+  <script src="mls-mpm.js"><\/script>
+  <script>
+    const canvas = document.getElementById('c');
+    const sim = new MLSMPM();               // n = 80, dt = 1e-4, E = 1e4 ...
+
+    sim.add_object([0.55, 0.45], 0xED553B); // 1000 particles each
+    sim.add_object([0.45, 0.65], 0xF2B134);
+    sim.add_object([0.55, 0.85], 0x068587);
+
+    function frame() {
+      sim.advance_frame();                  // 10 x sim.advance(1e-4)
+      sim.render(canvas);                   // same look as the C++ GUI
+      requestAnimationFrame(frame);
+    }
+    frame();
+  <\/script>
+</body>
+</html>
+</script></div>
+        <p>Three calls are all you need:</p>
+        <ul class="bul">
+          <li><code>add_object(center, color)</code> seeds 1000 particles in a 0.16 × 0.16 square, like the C++ function of the same name.</li>
+          <li><code>advance_frame()</code> calls <code>advance(dt)</code> frame_dt / dt = 10 times, which is exactly what the C++ main loop does between two drawn frames.</li>
+          <li><code>render(canvas)</code> draws the background, the box and the particles with the colors and radius of the C++ GUI.</li>
+        </ul>
+        <div class="note"><b>Coordinates</b> live in the unit square [0, 1]² with y pointing up, as in the C++ code. Use <code>MLSMPM.pointer(event, canvas)</code> to convert mouse and touch events.</div>
+      </section>
+
+      <!-- ============================== HOW IT WORKS ============================== -->
+      <section id="algorithm" class="section">
+        <div class="eyebrow">02 · How it works</div>
+        <h2>How MLS-MPM works</h2>
+        <p>The Material Point Method keeps the material on <b>particles</b> (each carries position, velocity and deformation) and uses a <b>background grid</b> as a scratch pad on which forces and collisions are cheap to compute. MLS-MPM derives the particle ↔ grid transfers from a moving least squares approximation, so the elastic force rides along with the affine (APIC) momentum transfer. That is why the whole solver fits in 88 lines. Every call to <code>advance(dt)</code> runs three phases:</p>
+        <div class="grid md:grid-cols-[minmax(0,1fr)_230px] gap-6 items-start mt-6">
+          <div class="grid gap-3">
+            <div class="card">
+              <div class="flex items-center mb-2"><span class="step">1</span><h4>P2G · particles → grid</h4></div>
+              <p>Each particle finds the 3 × 3 closest grid nodes and their quadratic B-spline weights w. It computes the fixed-corotated stress from its deformation gradient F (using the polar decomposition F = RS) and scatters mass, momentum and the fused stress + affine term:</p>
+              <div class="formula">mᵢ += w·m        (mv)ᵢ += w·(m·v + A·(xᵢ − x))</div>
+              <div class="formula">A = −(4·Δt·vol / Δx²)·(2μ(F − R)Fᵀ + λ(J − 1)J·I) + m·C</div>
+            </div>
+            <div class="card">
+              <div class="flex items-center mb-2"><span class="step">2</span><h4>Grid update</h4></div>
+              <p>Momentum becomes velocity (divide by mass) and gravity is added. Then the box is enforced: nodes within <code>boundary</code> = 0.05 of the left, right or top wall are <i>sticky</i> (v = 0); at the floor only the downward component is removed (<i>separate</i>).</p>
+              <div class="formula">vᵢ = (mv)ᵢ / mᵢ + Δt·g</div>
+            </div>
+            <div class="card">
+              <div class="flex items-center mb-2"><span class="step">3</span><h4>G2P · grid → particles</h4></div>
+              <p>Each particle gathers its new velocity and affine matrix C, moves, and updates F. Snow then clamps the singular values of F and stores the discarded volume change in Jp, which hardens the material: μ, λ ∝ e^(ξ(1 − Jp)).</p>
+              <div class="formula">v = Σ w·vᵢ        C = (4 / Δx²)·Σ w·vᵢ(xᵢ − x)ᵀ</div>
+              <div class="formula">x += Δt·v        F ← (I + Δt·C)·F        Σ ← clamp(Σ, 1 − θc, 1 + θs)</div>
+            </div>
+          </div>
+          <figure class="card md:sticky md:top-20">
+            <div id="stencil"></div>
+            <figcaption class="text-xs text-slate-400 leading-relaxed mt-2">A particle (yellow) only talks to the 3 × 3 grid nodes around it. Node size shows its quadratic B-spline weight.</figcaption>
+          </figure>
+        </div>
+
+        <h3 id="state">Particles and materials</h3>
+        <p>A particle is exactly the C++ <code>struct Particle</code> plus a material id. Instead of an array of objects, every field lives in its own typed array (a <i>structure of arrays</i>):</p>
+        <div class="tbl"><table>
+          <thead><tr><th>C++ field</th><th>JavaScript</th><th>Per particle</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>Vec x</code></td><td><code>sim.x</code></td><td>2 × Float64</td><td>Position in [0, 1]²</td></tr>
+            <tr><td><code>Vec v</code></td><td><code>sim.v</code></td><td>2 × Float64</td><td>Velocity</td></tr>
+            <tr><td><code>Mat F</code></td><td><code>sim.F</code></td><td>4 × Float64</td><td>Deformation gradient (elastic part), row-major, starts as the identity</td></tr>
+            <tr><td><code>Mat C</code></td><td><code>sim.C</code></td><td>4 × Float64</td><td>Affine velocity field (APIC), row-major</td></tr>
+            <tr><td><code>real Jp</code></td><td><code>sim.Jp</code></td><td>1 × Float64</td><td>Plastic volume ratio; drives hardening</td></tr>
+            <tr><td><code>int c</code></td><td><code>sim.c</code></td><td>1 × Uint32</td><td>Color 0xRRGGBB</td></tr>
+            <tr><td>(none)</td><td><code>sim.material</code></td><td>1 × Uint8</td><td>SNOW, JELLY or WATER (extension)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="tbl"><table>
+          <thead><tr><th>Material</th><th>Behaviour</th><th>Origin</th></tr></thead>
+          <tbody>
+            <tr><td><code>MLSMPM.SNOW</code> · 0 · default</td><td>Fixed-corotated elasticity + snow plasticity and hardening (Stomakhin et al. 2013). Crumbles, compacts and stays deformed.</td><td>C++ with <code>plastic = true</code></td></tr>
+            <tr><td><code>MLSMPM.JELLY</code> · 1</td><td>The same elasticity, but never plastic: always springs back to its rest shape.</td><td>C++ with <code>plastic = false</code></td></tr>
+            <tr><td><code>MLSMPM.WATER</code> · 2</td><td>μ = 0 and F is reset to √J·I every step: a weakly compressible fluid.</td><td>Extension, as in Taichi's mpm99.py</td></tr>
+          </tbody>
+        </table></div>
+        <p>Materials can be mixed freely in one simulation: pass <code>{ material: 'water' }</code> (or <code>MLSMPM.WATER</code>) to <code>add_object</code> or <code>add_particle</code>.</p>
+
+        <h3 id="mapping">C++ → JavaScript mapping</h3>
+        <p>Every global, type and function of mls-mpm88.cpp has a direct counterpart. The names are kept identical (snake_case), so the two files can be read side by side.</p>
+        <div class="tbl wrap"><table><thead><tr><th>mls-mpm88.cpp</th><th>mls-mpm.js</th></tr></thead><tbody id="mapping-body"></tbody></table></div>
+
+        <h3 id="side-by-side">Side by side</h3>
+        <p>The JavaScript <code>advance()</code> follows the C++ function line by line, including its comments. The differences are mechanical: the particle struct becomes typed arrays, 2 × 2 matrix algebra is unrolled into scalars, and the loops never allocate. Two small additions are marked in the code: optional hooks (<code>attractor</code>, <code>grid_hook</code>) in the grid update, and a position clamp that keeps particles inside the grid, a safety net that never triggers in normal scenes. The grid also keeps each node's mass after normalization, so you can visualize it.</p>
+        <div class="code scroll">
+          <div class="code-head"><div class="flex gap-1 flex-wrap"><button class="tab on" data-side="cpp">mls-mpm88.cpp</button><button class="tab" data-side="js">mls-mpm.js · advance()</button></div><button class="btn btn-sm" id="side-copy">Copy</button></div>
+          <pre><code id="side-code"></code></pre>
+        </div>
+        <script type="text/plain" id="cpp-src">
+//88-Line 2D Moving Least Squares Material Point Method (MLS-MPM)[with comments]
+//#define TC_IMAGE_IO   // Uncomment this line for image exporting functionality
+#include "taichi.h"    // Note: You DO NOT have to install taichi or taichi_mpm.
+using namespace taichi;// You only need [taichi.h] - see below for instructions.
+const int n = 80 /*grid resolution (cells)*/, window_size = 800;
+const real dt = 1e-4_f, frame_dt = 1e-3_f, dx = 1.0_f / n, inv_dx = 1.0_f / dx;
+auto particle_mass = 1.0_f, vol = 1.0_f;
+auto hardening = 10.0_f, E = 1e4_f, nu = 0.2_f;
+real mu_0 = E / (2 * (1 + nu)), lambda_0 = E * nu / ((1+nu) * (1 - 2 * nu));
+using Vec = Vector2; using Mat = Matrix2; bool plastic = true;
+struct Particle { Vec x, v; Mat F, C; real Jp; int c/*color*/;
+  Particle(Vec x, int c, Vec v=Vec(0)) : x(x), v(v), F(1), C(0), Jp(1), c(c){}};
+std::vector<Particle> particles;
+Vector3 grid[n + 1][n + 1];          // velocity + mass, node_res = cell_res + 1
+
+void advance(real dt) {
+  std::memset(grid, 0, sizeof(grid));                              // Reset grid
+  for (auto &p : particles) {                                             // P2G
+    Vector2i base_coord=(p.x*inv_dx-Vec(0.5_f)).cast<int>();//element-wise floor
+    Vec fx = p.x * inv_dx - base_coord.cast<real>();
+    // Quadratic kernels  [http://mpm.graphics   Eqn. 123, with x=fx, fx-1,fx-2]
+    Vec w[3]{Vec(0.5) * sqr(Vec(1.5) - fx), Vec(0.75) - sqr(fx - Vec(1.0)),
+             Vec(0.5) * sqr(fx - Vec(0.5))};
+    auto e = std::exp(hardening * (1.0_f - p.Jp)), mu=mu_0*e, lambda=lambda_0*e;
+    real J = determinant(p.F);         //                         Current volume
+    Mat r, s; polar_decomp(p.F, r, s); //Polar decomp. for fixed corotated model
+    auto stress =                           // Cauchy stress times dt and inv_dx
+        -4*inv_dx*inv_dx*dt*vol*(2*mu*(p.F-r) * transposed(p.F)+lambda*(J-1)*J);
+    auto affine = stress+particle_mass*p.C;
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) { // Scatter to grid
+        auto dpos = (Vec(i, j) - fx) * dx;
+        Vector3 mv(p.v * particle_mass, particle_mass); //translational momentum
+        grid[base_coord.x + i][base_coord.y + j] +=
+            w[i].x*w[j].y * (mv + Vector3(affine*dpos, 0));
+      }
+  }
+  for(int i = 0; i <= n; i++) for(int j = 0; j <= n; j++) { //For all grid nodes
+      auto &g = grid[i][j];
+      if (g[2] > 0) {                                // No need for epsilon here
+        g /= g[2];                                   //        Normalize by mass
+        g += dt * Vector3(0, -200, 0);               //                  Gravity
+        real boundary=0.05,x=(real)i/n,y=real(j)/n; //boundary thick.,node coord
+        if (x < boundary||x > 1-boundary||y > 1-boundary) g=Vector3(0); //Sticky
+        if (y < boundary) g[1] = std::max(0.0_f, g[1]);             //"Separate"
+      }
+    }
+  for (auto &p : particles) {                                // Grid to particle
+    Vector2i base_coord=(p.x*inv_dx-Vec(0.5_f)).cast<int>();//element-wise floor
+    Vec fx = p.x * inv_dx - base_coord.cast<real>();
+    Vec w[3]{Vec(0.5) * sqr(Vec(1.5) - fx), Vec(0.75) - sqr(fx - Vec(1.0)),
+             Vec(0.5) * sqr(fx - Vec(0.5))};
+    p.C = Mat(0); p.v = Vec(0);
+    for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) {
+        auto dpos = (Vec(i, j) - fx),
+            grid_v = Vec(grid[base_coord.x + i][base_coord.y + j]);
+        auto weight = w[i].x * w[j].y;
+        p.v += weight * grid_v;                                      // Velocity
+        p.C += 4 * inv_dx * Mat::outer_product(weight * grid_v, dpos); // APIC C
+      }
+    p.x += dt * p.v;                                                // Advection
+    auto F = (Mat(1) + dt * p.C) * p.F;                      // MLS-MPM F-update
+    Mat svd_u, sig, svd_v; svd(F, svd_u, sig, svd_v);
+    for (int i = 0; i < 2 * int(plastic); i++)                // Snow Plasticity
+      sig[i][i] = clamp(sig[i][i], 1.0_f - 2.5e-2_f, 1.0_f + 7.5e-3_f);
+    real oldJ = determinant(F); F = svd_u * sig * transposed(svd_v);
+    real Jp_new = clamp(p.Jp * oldJ / determinant(F), 0.6_f, 20.0_f);
+    p.Jp = Jp_new; p.F = F;
+  }
+}
+void add_object(Vec center, int c) {   // Seed particles with position and color
+  for (int i = 0; i < 1000; i++)  // Randomly sample 1000 particles in the square
+    particles.push_back(Particle((Vec::rand()*2.0_f-Vec(1))*0.08_f + center, c));
+}
+int main() {
+  GUI gui("Real-time 2D MLS-MPM", window_size, window_size);
+  add_object(Vec(0.55,0.45), 0xED553B); add_object(Vec(0.45,0.65), 0xF2B134);
+  add_object(Vec(0.55,0.85), 0x068587); auto &canvas = gui.get_canvas();int f=0;
+  for (int i = 0;; i++) {                              //              Main Loop
+    advance(dt);                                       //     Advance simulation
+    if (i % int(frame_dt / dt) == 0) {                 //        Visualize frame
+      canvas.clear(0x112F41);                          //       Clear background
+      canvas.rect(Vec(0.04), Vec(0.96)).radius(2).color(0x4FB99F).close();// Box
+      for(auto p:particles)canvas.circle(p.x).radius(2).color(p.c);//Particles
+      gui.update();                                              // Update image
+      // canvas.img.write_as_image(fmt::format("tmp/{:05d}.png", f++));
+    }
+  }
+} //----------------------------------------------------------------------------
+/* (reference, build instructions and FAQ omitted - see the original file) */
+</script>
+      </section>
+
+      <!-- ============================== API ============================== -->
+      <section id="api" class="section">
+        <div class="eyebrow">03 · API reference</div>
+        <h2>API reference</h2>
+        <div class="sig">new MLSMPM(options?)</div>
+        <p>Creates a simulation. Every option is optional and the defaults are the constants of mls-mpm88.cpp. All options also become <b>live properties</b>, so you can change <code>sim.E</code>, <code>sim.gravity</code> or <code>sim.plastic</code> at any time (only <code>n</code> is fixed).</p>
+        <div class="snippet" data-lang="js" data-title="constructor"><script type="text/plain">
+// Defaults reproduce mls-mpm88.cpp
+const sim = new MLSMPM();
+
+// ...or override any constant
+const fine = new MLSMPM({
+  n: 128,             // finer grid: dt shrinks automatically
+  E: 5e3, nu: 0.3,    // softer, more volume-preserving
+  gravity: [0, -100],
+  seed: 42,           // reproducible add_object()
+});
+fine.plastic = false; // options are live properties
+</script></div>
+        <div class="tbl"><table>
+          <thead><tr><th>Option</th><th>Default</th><th>C++</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>n</code></td><td>80</td><td><code>n</code></td><td>Grid resolution in cells; the grid has (n + 1)² nodes. Fixed after construction.</td></tr>
+            <tr><td><code>dt</code></td><td>1e-4 × 80 / n</td><td><code>dt</code></td><td>Substep size: 1e-4 at n = 80, smaller on finer grids so the explicit integrator stays stable.</td></tr>
+            <tr><td><code>frame_dt</code></td><td>1e-3</td><td><code>frame_dt</code></td><td>Simulated time per <code>advance_frame()</code>.</td></tr>
+            <tr><td><code>particle_mass</code></td><td>1</td><td><code>particle_mass</code></td><td>Mass of every particle.</td></tr>
+            <tr><td><code>vol</code></td><td>1</td><td><code>vol</code></td><td>Volume of every particle.</td></tr>
+            <tr><td><code>E</code></td><td>1e4</td><td><code>E</code></td><td>Young's modulus: stiffness.</td></tr>
+            <tr><td><code>nu</code></td><td>0.2</td><td><code>nu</code></td><td>Poisson's ratio, between 0 and 0.5: how strongly the volume is preserved.</td></tr>
+            <tr><td><code>hardening</code></td><td>10</td><td><code>hardening</code></td><td>Snow hardening ξ: μ and λ are scaled by e^(ξ(1 − Jp)).</td></tr>
+            <tr><td><code>plastic</code></td><td>true</td><td><code>plastic</code></td><td>Snow plasticity on or off (affects SNOW particles only).</td></tr>
+            <tr><td><code>theta_c</code></td><td>0.025</td><td><code>2.5e-2_f</code></td><td>Critical compression: singular values of F are clamped to at least 1 − θc.</td></tr>
+            <tr><td><code>theta_s</code></td><td>0.0075</td><td><code>7.5e-3_f</code></td><td>Critical stretch: singular values of F are clamped to at most 1 + θs.</td></tr>
+            <tr><td><code>gravity</code></td><td>[0, −200]</td><td><code>Vector3(0, -200, 0)</code></td><td>Gravitational acceleration (x, y).</td></tr>
+            <tr><td><code>boundary</code></td><td>0.05</td><td><code>boundary</code></td><td>Wall thickness. Left, right and top walls are sticky; the floor separates.</td></tr>
+            <tr><td><code>seed</code></td><td>Math.random</td><td>(none)</td><td>Integer seed for the PRNG used by <code>add_object</code>, for reproducible scenes.</td></tr>
+            <tr><td><code>max_particles</code></td><td>1024</td><td>(none)</td><td>Initial capacity of the particle arrays. They grow automatically.</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3 id="api-methods">Methods</h3>
+
+        <div class="api">
+          <div class="sig">sim.add_object(center, c, options?) <span>→ number</span></div>
+          <p>Seeds particles uniformly at random in a square; this is the C++ <code>add_object</code>. Returns the index of the first new particle: the object occupies indices first … first + count − 1.</p>
+          <div class="tbl"><table><tbody>
+            <tr><td><code>center</code></td><td>[x, y]: center of the square.</td></tr>
+            <tr><td><code>c</code></td><td>Color, 0xRRGGBB.</td></tr>
+            <tr><td><code>options.size</code></td><td>Half-size: a number (default 0.08, a 0.16 × 0.16 square) or [half_width, half_height].</td></tr>
+            <tr><td><code>options.count</code></td><td>Number of particles. The default keeps the C++ density: 1000 for the default square at n = 80, scaled with area and n².</td></tr>
+            <tr><td><code>options.velocity</code></td><td>Initial velocity [vx, vy]; default [0, 0].</td></tr>
+            <tr><td><code>options.material</code></td><td><code>'snow'</code> (default), <code>'jelly'</code>, <code>'water'</code>, or <code>MLSMPM.SNOW</code> / <code>JELLY</code> / <code>WATER</code>.</td></tr>
+          </tbody></table></div>
+          <div class="snippet" data-lang="js" data-title="add_object"><script type="text/plain">
+sim.add_object([0.5, 0.5], 0xED553B);       // exactly the C++ call
+sim.add_object([0.3, 0.7], 0x4FB99F, {
+  material: 'water',                        // or MLSMPM.WATER
+  size: [0.15, 0.05],                       // half-width, half-height
+  velocity: [5, 0],
+});
+</script></div>
+        </div>
+
+        <div class="api">
+          <div class="sig">sim.add_particle(x, c, options?) <span>→ number</span></div>
+          <p>Adds a single particle at <code>x = [x, y]</code> with color <code>c</code>; this is C++ <code>particles.push_back(Particle(x, c, v))</code>. <code>options.velocity</code> and <code>options.material</code> work as above. Returns the particle index. Use it to build any shape.</p>
+          <div class="snippet" data-lang="js" data-title="add_particle"><script type="text/plain">
+// A ring of jelly, one particle at a time
+for (let k = 0; k < 850; k++) {
+  const a = 2 * Math.PI * Math.random();
+  const r = 0.1 + 0.03 * Math.random();
+  sim.add_particle([0.5 + r * Math.cos(a), 0.6 + r * Math.sin(a)],
+                   0xF2B134, { material: 'jelly' });
+}
+</script></div>
+        </div>
+
+        <div class="api">
+          <div class="sig">sim.advance(dt?) <span>→ sim</span></div>
+          <p>Runs one substep (P2G, grid update, G2P); this is the C++ <code>advance(dt)</code>. <code>dt</code> defaults to <code>sim.dt</code>.</p>
+          <div class="sig mt-2">sim.advance_frame() <span>→ sim</span></div>
+          <p>Runs <code>sim.steps_per_frame</code> = round(frame_dt / dt) substeps, 10 by default: one visual frame of the C++ main loop.</p>
+          <div class="snippet" data-lang="js" data-title="advance"><script type="text/plain">
+sim.advance();          // one substep of sim.dt
+sim.advance(5e-5);      // any dt (smaller is more stable)
+sim.advance_frame();    // 10 substeps with the defaults
+</script></div>
+        </div>
+
+        <div class="api">
+          <div class="sig">sim.render(target, options?) <span>→ sim</span></div>
+          <p>Draws the scene into a canvas element, an OffscreenCanvas or a 2D context, the way the C++ GUI does. Particles are written straight into an ImageData pixel buffer, so it stays fast with tens of thousands of particles.</p>
+          <div class="tbl"><table><tbody>
+            <tr><td><code>options.background</code></td><td>Background color, default 0x112F41. <code>null</code> leaves the canvas transparent.</td></tr>
+            <tr><td><code>options.box</code></td><td>Color of the 0.04 to 0.96 box, default 0x4FB99F. <code>null</code> hides it.</td></tr>
+            <tr><td><code>options.radius</code></td><td>Particle radius in pixels. Default: 2 px per 800 px of canvas, like the C++ GUI.</td></tr>
+          </tbody></table></div>
+          <div class="snippet" data-lang="js" data-title="render"><script type="text/plain">
+sim.render(canvas);                                   // the C++ look
+sim.render(canvas, { background: 0x000000, box: null, radius: 1.5 });
+sim.render(offscreen.getContext('2d'));               // OffscreenCanvas
+</script></div>
+        </div>
+
+        <div class="api">
+          <div class="sig">sim.clear() <span>→ sim</span></div>
+          <p>Removes all particles and resets <code>sim.t</code> to 0.</p>
+          <div class="sig mt-2">sim.reserve(capacity) <span>→ sim</span></div>
+          <p>Pre-allocates the particle arrays, so they are never re-allocated while adding particles.</p>
+          <div class="sig mt-2">sim.get_particle(i) <span>→ { x, v, F, C, Jp, c, material }</span></div>
+          <p>Returns a copy of a particle's state as plain arrays and numbers, which is handy for debugging. For bulk access, read the typed arrays directly.</p>
+        </div>
+
+        <h3 id="api-properties">Properties</h3>
+        <p>Besides every constructor option (<code>sim.E</code>, <code>sim.dt</code>, …), a simulation exposes:</p>
+        <div class="tbl"><table>
+          <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>num_particles</code></td><td>number</td><td>Number of particles. Valid array entries are 0 … num_particles − 1.</td></tr>
+            <tr><td><code>x</code>, <code>v</code></td><td>Float64Array</td><td>Position and velocity, 2 values per particle.</td></tr>
+            <tr><td><code>F</code>, <code>C</code></td><td>Float64Array</td><td>Deformation gradient and affine velocity matrix, 4 values per particle (row-major).</td></tr>
+            <tr><td><code>Jp</code></td><td>Float64Array</td><td>Plastic volume ratio (snow), 1 value per particle.</td></tr>
+            <tr><td><code>c</code></td><td>Uint32Array</td><td>Color 0xRRGGBB. Write to it to recolor particles.</td></tr>
+            <tr><td><code>material</code></td><td>Uint8Array</td><td><code>MLSMPM.SNOW</code>, <code>JELLY</code> or <code>WATER</code>.</td></tr>
+            <tr><td><code>grid</code></td><td>Float64Array</td><td>3 values per node: velocity x, velocity y and mass. Valid after <code>advance()</code>.</td></tr>
+            <tr><td><code>t</code></td><td>number</td><td>Simulated time in seconds.</td></tr>
+            <tr><td><code>mu_0</code>, <code>lambda_0</code></td><td>number</td><td>Lamé parameters derived from E and nu (read-only, as in the C++ code).</td></tr>
+            <tr><td><code>steps_per_frame</code></td><td>number</td><td>round(frame_dt / dt), read-only.</td></tr>
+            <tr><td><code>attractor</code></td><td>object or null</td><td><code>{ x, y, strength, radius? }</code>: accelerates material toward (strength &gt; 0) or away from (strength &lt; 0) a point. <code>radius</code> limits the range.</td></tr>
+            <tr><td><code>grid_hook</code></td><td>function or null</td><td><code>hook(x, y, grid, k)</code> is called for every grid node with mass, after gravity and before the walls. Read or write the node velocity at <code>grid[k]</code> and <code>grid[k + 1]</code>.</td></tr>
+            <tr><td><code>dx</code>, <code>inv_dx</code>, <code>capacity</code>, <code>random</code></td><td></td><td>Grid spacing, its inverse, allocated capacity, and the PRNG used by add_object.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="note"><b>Heads-up:</b> the particle arrays are re-allocated when they grow. Read <code>sim.x</code> again after adding particles instead of keeping an old reference (or call <code>reserve()</code> up front).</div>
+        <div class="snippet" data-lang="js" data-title="attractor and grid_hook"><script type="text/plain">
+sim.attractor = { x: 0.5, y: 0.5, strength: 800 };              // pull to center
+sim.attractor = { x: 0.5, y: 0.2, strength: -3000, radius: 0.2 }; // local push
+sim.attractor = null;                                           // off
+
+// Wind in the upper half of the box: add velocity to grid nodes
+sim.grid_hook = (x, y, grid, k) => {
+  if (y > 0.5) grid[k] += 0.02;   // grid[k], grid[k + 1] = node velocity
+};
+</script></div>
+
+        <h3 id="api-layout">Data layout</h3>
+        <p>All state is plain typed arrays, so you can read (and write) it from your own code: custom renderers, WebGL buffers, analysis, or networking.</p>
+        <div class="snippet" data-lang="js" data-title="indices"><script type="text/plain">
+// Particle p
+const x  = sim.x[2 * p],      y  = sim.x[2 * p + 1];
+const vx = sim.v[2 * p],      vy = sim.v[2 * p + 1];
+const F00 = sim.F[4 * p],     F01 = sim.F[4 * p + 1];  // row-major 2x2
+const F10 = sim.F[4 * p + 2], F11 = sim.F[4 * p + 3];  // (C is the same)
+const Jp = sim.Jp[p], color = sim.c[p], material = sim.material[p];
+
+// Grid node (i, j) sits at (i / n, j / n): i is the column (x), j the row (y)
+const k = 3 * (i * (sim.n + 1) + j);
+const gvx = sim.grid[k], gvy = sim.grid[k + 1], mass = sim.grid[k + 2];
+</script></div>
+
+        <h3 id="api-static">Static members</h3>
+        <div class="tbl"><table>
+          <thead><tr><th>Member</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>MLSMPM.SNOW</code> / <code>JELLY</code> / <code>WATER</code></td><td>Material ids 0, 1 and 2.</td></tr>
+            <tr><td><code>MLSMPM.version</code></td><td>Library version string.</td></tr>
+            <tr><td><code>MLSMPM.pointer(event, canvas)</code></td><td>Converts a mouse, pointer or touch event to simulation coordinates [x, y] (y up).</td></tr>
+            <tr><td><code>MLSMPM.svd(m)</code></td><td>Closed-form 2 × 2 SVD of a row-major matrix: <code>{ U, sig, V }</code> with M = U·diag(sig)·Vᵀ.</td></tr>
+            <tr><td><code>MLSMPM.polar_decomp(m)</code></td><td>Closed-form 2 × 2 polar decomposition: <code>{ R, S }</code> with M = R·S.</td></tr>
+          </tbody>
+        </table></div>
+        <div class="snippet" data-lang="js" data-title="static"><script type="text/plain">
+MLSMPM.svd([1, 1, 0, 1]).sig       // [1.618..., 0.618...] (a shear)
+MLSMPM.polar_decomp([0, -1, 1, 0]) // R = 90 degree rotation, S = identity
+</script></div>
+      </section>
+
+      <!-- ============================== EXAMPLES ============================== -->
+      <section id="examples" class="section">
+        <div class="eyebrow">04 · Examples</div>
+        <h2>Examples</h2>
+        <p>Every example is live <b>and editable</b>: change the code, then press <kbd>Run</kbd> or <kbd>Ctrl/⌘ + Enter</kbd>. Inside an example, <code>canvas</code> is the demo's canvas element; in your own page that would be <code>document.getElementById(…)</code>. Demos pause while they are scrolled out of view.</p>
+
+        <h3 id="ex-hello">1 · The 88-line demo</h3>
+        <p>This is <code>main()</code> from mls-mpm88.cpp: three blocks of snow (1000 particles each) dropped into the box. <code>advance_frame()</code> runs frame_dt / dt = 10 substeps, which is exactly how often the C++ loop draws a frame.</p>
+        <div class="demo" data-hint="click to restart"><script type="text/plain">
+// main() from mls-mpm88.cpp
+const sim = new MLSMPM();          // defaults = the C++ constants
+
+function reset() {
+  sim.clear();
+  sim.add_object([0.55, 0.45], 0xED553B);
+  sim.add_object([0.45, 0.65], 0xF2B134);
+  sim.add_object([0.55, 0.85], 0x068587);
+}
+
+function frame() {
+  sim.advance_frame();   // 10 x sim.advance(1e-4)
+  sim.render(canvas);    // background, box and particles
+  requestAnimationFrame(frame);
+}
+
+reset();
+frame();
+canvas.addEventListener('click', reset);
+</script></div>
+
+        <h3 id="ex-materials">2 · Snow, jelly and water</h3>
+        <p>The <code>material</code> option picks the constitutive model per particle. Snow fractures and stays deformed, jelly bounces back, water splashes. Click to drop more blocks.</p>
+        <div class="demo" data-hint="click to drop a block"><script type="text/plain">
+const sim = new MLSMPM();
+const COLOR = { water: 0x4FB99F, jelly: 0xED553B, snow: 0xEEF4F7 };
+
+sim.add_object([0.25, 0.4], COLOR.water, { material: 'water' });
+sim.add_object([0.50, 0.4], COLOR.jelly, { material: 'jelly' });
+sim.add_object([0.75, 0.4], COLOR.snow,  { material: 'snow' });
+
+// Click to drop a smaller block of a random material
+canvas.addEventListener('pointerdown', (e) => {
+  if (sim.num_particles > 9000) return;
+  const names = ['water', 'jelly', 'snow'];
+  const m = names[Math.floor(Math.random() * names.length)];
+  sim.add_object(MLSMPM.pointer(e, canvas), COLOR[m],
+                 { material: m, size: 0.05 });
+});
+
+function frame() {
+  sim.advance_frame();
+  sim.render(canvas);
+  requestAnimationFrame(frame);
+}
+frame();
+</script></div>
+
+        <h3 id="ex-snowball">3 · Initial velocity: snowball vs. jelly</h3>
+        <p><code>add_particle()</code> gives you full control over shape and initial velocity. Here a disc of snow is thrown at a jelly pillar. Click to throw another one.</p>
+        <div class="demo" data-hint="click to throw a snowball"><script type="text/plain">
+const sim = new MLSMPM();
+
+// A jelly pillar standing on the floor (half-size 0.04 x 0.16)
+sim.add_object([0.72, 0.22], 0x068587,
+               { material: 'jelly', size: [0.04, 0.16] });
+
+// A snowball: sample a disc with add_particle(), all particles
+// with the same initial velocity. C++: Particle(x, c, v)
+function throwSnowball() {
+  if (sim.num_particles > 8000) return;
+  const r = 0.07;
+  for (let k = 0; k < 600; k++) {
+    const a = 2 * Math.PI * Math.random();
+    const d = r * Math.sqrt(Math.random());   // uniform in the disc
+    sim.add_particle([0.2 + d * Math.cos(a), 0.45 + d * Math.sin(a)],
+                     0xF4F8FA, { velocity: [9, 2] });
+  }
+}
+
+throwSnowball();
+canvas.addEventListener('click', throwSnowball);
+
+function frame() {
+  sim.advance_frame();
+  sim.render(canvas);
+  requestAnimationFrame(frame);
+}
+frame();
+</script></div>
+
+        <h3 id="ex-attractor">4 · Interaction: attractor</h3>
+        <p>Setting <code>sim.attractor</code> accelerates material toward a point, like Taichi's mpm128 demo. Hold the mouse to pull; hold <kbd>Shift</kbd> or the right button to push. The cursor ring is drawn with the normal 2D context after <code>render()</code>.</p>
+        <div class="demo" data-hint="hold to attract · shift or right-click to repel"><script type="text/plain">
+const sim = new MLSMPM();
+const colors = [0xED553B, 0xF2B134, 0x068587, 0x4FB99F];
+colors.forEach((c, k) => sim.add_object([0.2 + 0.2 * k, 0.25], c,
+  { material: 'water', size: 0.06 }));
+
+// Hold to attract, Shift or right button to repel
+function aim(e) {
+  const [x, y] = MLSMPM.pointer(e, canvas);
+  const repel = e.shiftKey || (e.buttons & 2);
+  sim.attractor = { x, y, strength: repel ? -800 : 800 };
+}
+canvas.style.touchAction = 'none';
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  aim(e);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (sim.attractor) aim(e);
+});
+canvas.addEventListener('pointerup', () => { sim.attractor = null; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+const ctx = canvas.getContext('2d');
+function frame() {
+  sim.advance_frame();
+  sim.render(canvas);
+  const a = sim.attractor, W = canvas.width;
+  if (a) {                         // draw the cursor on top
+    ctx.strokeStyle = a.strength > 0 ? '#F2B134' : '#ED553B';
+    ctx.lineWidth = W / 160;
+    ctx.beginPath();
+    ctx.arc(a.x * W, (1 - a.y) * W, W / 22, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+</script></div>
+
+        <h3 id="ex-text">5 · Custom shapes: text from pixels</h3>
+        <p>Any image can become material: draw text into an offscreen canvas and turn every opaque pixel into a particle. Each letter gets its own material. Click to rebuild.</p>
+        <div class="demo" data-hint="click to rebuild"><script type="text/plain">
+const sim = new MLSMPM();
+const LOOK = [[0xED553B, 'jelly'], [0xF2B134, 'snow'], [0x068587, 'water']];
+
+function spell(word) {
+  // 1. Draw the letters into an offscreen canvas, one color each
+  const S = 160, off = document.createElement('canvas');
+  off.width = off.height = S;
+  const g = off.getContext('2d');
+  g.font = 'bold 60px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  ['#f00', '#0f0', '#00f'].forEach((fill, k) => {
+    g.fillStyle = fill;
+    g.fillText(word[k], S * (0.2 + 0.3 * k), S / 2);
+  });
+  // 2. Every opaque pixel becomes a particle (1 px = 0.005 units)
+  const px = g.getImageData(0, 0, S, S).data;
+  for (let j = 0; j < S; j++) {
+    for (let i = 0; i < S; i++) {
+      const o = 4 * (j * S + i);
+      if (px[o + 3] < 128) continue;
+      const k = px[o] > 127 ? 0 : px[o + 1] > 127 ? 1 : 2;
+      const x = 0.1 + 0.8 * (i + Math.random()) / S;
+      const y = 0.9 - 0.8 * (j + Math.random()) / S;
+      sim.add_particle([x, y], LOOK[k][0], { material: LOOK[k][1] });
+    }
+  }
+}
+
+spell('MPM');
+canvas.addEventListener('click', () => { sim.clear(); spell('MPM'); });
+
+function frame() {
+  sim.advance_frame();
+  sim.render(canvas);
+  requestAnimationFrame(frame);
+}
+frame();
+</script></div>
+
+        <h3 id="ex-obstacles">6 · Obstacles with grid_hook</h3>
+        <p><code>grid_hook</code> lets you edit grid velocities before the walls are applied. That is enough for obstacles, wind or moving boundaries. Here two frictionless circles deflect a stream of water. Click to drain.</p>
+        <div class="demo" data-hint="click to drain"><script type="text/plain">
+const sim = new MLSMPM();
+const obstacles = [
+  { x: 0.32, y: 0.62, r: 0.07 },
+  { x: 0.56, y: 0.38, r: 0.09 },
+];
+
+// Called for every grid node with mass, after gravity and before
+// the walls. Frictionless ("slip") circles: remove the part of
+// the node velocity that points into the obstacle.
+sim.grid_hook = (x, y, grid, k) => {
+  for (const o of obstacles) {
+    const dx = x - o.x, dy = y - o.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < o.r && d > 0) {
+      const nx = dx / d, ny = dy / d;
+      const vn = grid[k] * nx + grid[k + 1] * ny;
+      if (vn < 0) { grid[k] -= vn * nx; grid[k + 1] -= vn * ny; }
+    }
+  }
+};
+
+// Pour a little water every frame (up to 5000 particles)
+function pour() {
+  for (let i = 0; i < 6 && sim.num_particles < 5000; i++) {
+    const x = 0.33 + 0.04 * Math.random(), y = 0.88 + 0.01 * Math.random();
+    sim.add_particle([x, y], 0x4FB99F,
+                     { material: 'water', velocity: [0, -4] });
+  }
+}
+canvas.addEventListener('click', () => sim.clear());   // drain
+
+const ctx = canvas.getContext('2d');
+function frame() {
+  pour();
+  sim.advance_frame();
+  sim.render(canvas);
+  const W = canvas.width;
+  ctx.fillStyle = '#F2B134';
+  for (const o of obstacles) {
+    ctx.beginPath();
+    ctx.arc(o.x * W, (1 - o.y) * W, o.r * W, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+</script></div>
+
+        <h3 id="ex-render">7 · Custom rendering: grid and velocity</h3>
+        <p>All state lives in typed arrays, so you can draw anything you like. Here the grid mass (<code>sim.grid</code>) is shown as a heat map behind particles colored by speed (<code>sim.v</code>). Click to reset.</p>
+        <div class="demo" data-hint="click to reset"><script type="text/plain">
+const sim = new MLSMPM({ n: 64 });
+const drop = () => sim.add_object([0.5, 0.62], 0,
+  { material: 'water', size: [0.25, 0.1] });
+drop();
+
+// One pixel per grid node, scaled up smoothly
+const n = sim.n, heat = document.createElement('canvas');
+heat.width = heat.height = n + 1;
+const hctx = heat.getContext('2d');
+const img = hctx.createImageData(n + 1, n + 1);
+const ctx = canvas.getContext('2d');
+
+function frame() {
+  sim.advance_frame();
+  const W = canvas.width, cell = W / n;
+
+  // 1. Grid mass: node (i, j) -> sim.grid[3 * (i * (n + 1) + j) + 2]
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; j <= n; j++) {
+      const mass = sim.grid[3 * (i * (n + 1) + j) + 2];
+      const o = 4 * ((n - j) * (n + 1) + i);      // flip y
+      img.data[o] = 6; img.data[o + 1] = 133; img.data[o + 2] = 135;
+      img.data[o + 3] = Math.min(255, mass * 40);
+    }
+  }
+  hctx.putImageData(img, 0, 0);
+  ctx.fillStyle = '#112F41';
+  ctx.fillRect(0, 0, W, W);
+  ctx.drawImage(heat, -cell / 2, -cell / 2, W + cell, W + cell);
+
+  // 2. Particles colored by speed |v|  (sim.v holds vx, vy pairs)
+  const r = W / 300;
+  for (let p = 0; p < sim.num_particles; p++) {
+    const vx = sim.v[2 * p], vy = sim.v[2 * p + 1];
+    const s = Math.min(1, Math.sqrt(vx * vx + vy * vy) / 8);
+    ctx.fillStyle = 'hsl(' + (190 - 150 * s) + ', 85%, ' + (55 + 25 * s) + '%)';
+    ctx.fillRect(sim.x[2 * p] * W - r, (1 - sim.x[2 * p + 1]) * W - r, 2 * r, 2 * r);
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+canvas.addEventListener('click', () => { sim.clear(); drop(); });
+</script></div>
+      </section>
+
+      <!-- ============================== PLAYGROUND ============================== -->
+      <section id="playground" class="section">
+        <div class="eyebrow">05 · Playground</div>
+        <h2>Playground</h2>
+        <p>Change parameters while the simulation runs: every slider writes straight into a property of the running <code>sim</code>. Click the canvas to add a block of the selected material.</p>
+        <div class="grid xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)] gap-6 items-start mt-6">
+          <div class="max-w-[460px] w-full">
+            <div class="stage" id="pg-stage"><canvas id="pg-canvas"></canvas><div class="hint">click to add a block</div></div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-3 font-mono text-[11.5px] text-slate-400"><span id="pg-stats"></span><span id="pg-warn" class="text-coral" hidden>unstable: lower E or nu, or reset</span></div>
+          </div>
+          <div class="card">
+            <div class="grid sm:grid-cols-3 gap-3 mb-5">
+              <label><span class="lbl">Scene</span><select id="pg-scene"><option value="classic">Three blocks (C++)</option><option value="trio">Water · jelly · snow</option><option value="dam">Dam break</option></select></label>
+              <label><span class="lbl">Grid n</span><select id="pg-n"><option>40</option><option>64</option><option selected>80</option><option>100</option><option>128</option></select></label>
+              <label><span class="lbl">Click adds</span><select id="pg-material"><option value="snow">Snow</option><option value="jelly">Jelly</option><option value="water">Water</option></select></label>
+            </div>
+            <label class="ctl"><span class="ctl-top"><span>E<em>Young's modulus</em></span><b data-out="E"></b></span><input type="range" id="pg-E" min="1000" max="20000" step="500" value="10000"></label>
+            <label class="ctl"><span class="ctl-top"><span>nu<em>Poisson's ratio</em></span><b data-out="nu"></b></span><input type="range" id="pg-nu" min="0" max="0.4" step="0.01" value="0.2"></label>
+            <label class="ctl"><span class="ctl-top"><span>hardening<em>snow, ξ</em></span><b data-out="hardening"></b></span><input type="range" id="pg-hardening" min="0" max="20" step="0.5" value="10"></label>
+            <label class="ctl"><span class="ctl-top"><span>gravity<em>downward acceleration</em></span><b data-out="gravity"></b></span><input type="range" id="pg-gravity" min="0" max="600" step="10" value="200"></label>
+            <label class="ctl"><span class="ctl-top"><span>theta_c<em>critical compression</em></span><b data-out="theta_c"></b></span><input type="range" id="pg-theta_c" min="0.005" max="0.1" step="0.005" value="0.025"></label>
+            <label class="ctl"><span class="ctl-top"><span>theta_s<em>critical stretch</em></span><b data-out="theta_s"></b></span><input type="range" id="pg-theta_s" min="0.0025" max="0.05" step="0.0025" value="0.0075"></label>
+            <label class="flex items-center gap-2 text-sm text-slate-200 mt-1"><input type="checkbox" id="pg-plastic" checked> plastic <span class="text-slate-400">(snow plasticity)</span></label>
+            <div class="flex flex-wrap gap-2 mt-5">
+              <button class="btn btn-sm" id="pg-reset">↺ Reset scene</button>
+              <button class="btn btn-sm" id="pg-pause">❚❚ Pause</button>
+              <button class="btn btn-sm" id="pg-defaults">Defaults</button>
+            </div>
+          </div>
+        </div>
+        <div id="pg-code" class="mt-2"></div>
+      </section>
+
+      <!-- ============================== PERFORMANCE ============================== -->
+      <section id="performance" class="section">
+        <div class="eyebrow">06 · Performance</div>
+        <h2>Performance</h2>
+        <p><code>advance()</code> is written the way you would write a C kernel:</p>
+        <ul class="bul">
+          <li><b>Structure of arrays.</b> Particle fields live in flat <code>Float64Array</code>s instead of one object per particle. They are compact, cache-friendly and monomorphic for the JIT.</li>
+          <li><b>Zero allocations per step.</b> Weights, matrices and SVD results go to pre-allocated scratch buffers, so a running simulation never triggers garbage collection.</li>
+          <li><b>Closed-form 2 × 2 math.</b> The polar decomposition and SVD use the same closed-form formulas as taichi.h, and matrix products are unrolled into scalar locals.</li>
+          <li><b>Pay only for what you use.</b> The SVD is skipped for jelly and water (and for snow when <code>plastic</code> is off); the attractor and grid_hook branches cost nothing when unset.</li>
+          <li><b>Pixel-buffer rendering.</b> <code>render()</code> writes particles straight into an ImageData buffer: one <code>putImageData</code> per frame instead of thousands of <code>arc()</code> calls.</li>
+        </ul>
+        <h3>Tips</h3>
+        <ul class="bul">
+          <li><b>Cost ≈ particles × substeps.</b> The default <code>add_object</code> density (about 6 particles per cell) is a good balance; denser rarely looks better.</li>
+          <li><b>Stability.</b> This is an explicit integrator: dt must shrink as the material gets stiffer or the grid finer (roughly dt ∝ Δx / √E). That is why dt defaults to 1e-4 × 80 / n. If a scene explodes, lower <code>E</code>, <code>nu</code> or <code>dt</code>.</li>
+          <li><b>Heavy scenes.</b> Run the simulation in a Web Worker and post <code>sim.x</code> to the main thread for drawing.</li>
+          <li><b>Pause off-screen simulations.</b> This page does that with an IntersectionObserver.</li>
+        </ul>
+        <h3>Benchmark on this device</h3>
+        <p>Runs <code>advance()</code> on snow particles packed into the lower half of the box (n = 80) and reports the cost of one substep.</p>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-sm" data-bench="3000">▶ 3,000 particles</button>
+          <button class="btn btn-sm" data-bench="10000">▶ 10,000</button>
+          <button class="btn btn-sm" data-bench="30000">▶ 30,000</button>
+        </div>
+        <div class="tbl"><table>
+          <thead><tr><th>Particles</th><th>Time / substep</th><th>Per particle-substep</th><th>Max fps at 10 substeps</th></tr></thead>
+          <tbody id="bench-body"><tr id="bench-empty"><td colspan="4" class="text-slate-400">Pick a size to run the benchmark.</td></tr></tbody>
+        </table></div>
+      </section>
+
+      <!-- ============================== SOURCE ============================== -->
+      <section id="source" class="section">
+        <div class="eyebrow">07 · Source</div>
+        <h2>Source code</h2>
+        <p>The complete library: <span data-lib-lines></span> lines, <span data-lib-size></span>. This is exactly the file you get from the download button, and it is what runs this page.</p>
+        <div class="flex flex-wrap gap-3 mb-2">
+          <button class="btn btn-primary" data-download>⬇ Download mls-mpm.js</button>
+          <button class="btn" id="source-copy">Copy to clipboard</button>
+        </div>
+        <div class="code scroll"><div class="code-head"><span>mls-mpm.js</span><span>MIT License</span></div><pre><code id="source-code"></code></pre></div>
+      </section>
+
+      <!-- ============================== CREDITS ============================== -->
+      <section id="credits" class="section">
+        <div class="eyebrow">08 · Credits</div>
+        <h2>Credits and license</h2>
+        <p>MLS-MPM was introduced in <a href="https://yuanming.taichi.graphics/publication/2018-mlsmpm/mls-mpm-cpic.pdf" target="_blank" rel="noopener">A Moving Least Squares Material Point Method with Displacement Discontinuity and Two-Way Rigid Body Coupling</a> (ACM Transactions on Graphics 37(4), SIGGRAPH 2018) by Yuanming Hu, Yu Fang, Ziheng Ge, Ziyin Qu, Yixin Zhu, Andre Pradhana and Chenfanfu Jiang.</p>
+        <p>The 88-line <code>mls-mpm88.cpp</code> was written by Yuanming Hu and is part of <a href="https://github.com/yuanming-hu/taichi_mpm" target="_blank" rel="noopener">taichi_mpm</a>, released under the MIT License. mls-mpm.js follows the structure of that file and is MIT-licensed as well. The water material follows <code>mpm99.py</code> and the attractor follows <code>mpm128.py</code> from the <a href="https://github.com/taichi-dev/taichi" target="_blank" rel="noopener">Taichi</a> examples; snow plasticity comes from Stomakhin et al., <i>A Material Point Method for Snow Simulation</i> (SIGGRAPH 2013). For background reading, see the MPM course notes linked from the original code (<a href="http://mpm.graphics" target="_blank" rel="noopener">mpm.graphics</a>). An earlier, direct JavaScript port is <a href="https://github.com/r03ert0/mls-mpm.js" target="_blank" rel="noopener">r03ert0/mls-mpm.js</a>.</p>
+        <div class="snippet" data-lang="text" data-title="BibTeX"><script type="text/plain">
+@article{hu2018mlsmpmcpic,
+  title={A Moving Least Squares Material Point Method with Displacement
+         Discontinuity and Two-Way Rigid Body Coupling},
+  author={Hu, Yuanming and Fang, Yu and Ge, Ziheng and Qu, Ziyin and
+          Zhu, Yixin and Pradhana, Andre and Jiang, Chenfanfu},
+  journal={ACM Transactions on Graphics (TOG)},
+  volume={37}, number={4}, pages={150}, year={2018}, publisher={ACM}
+}
+</script></div>
+        <footer class="mt-16 pt-8 border-t border-line text-sm text-slate-400 flex flex-wrap gap-4 justify-between">
+          <span>MLS-MPM.js v1.0.0 · MIT License · built on the work of Yuanming Hu et al.</span>
+          <a href="#top" class="hover:text-white">Back to top ↑</a>
+        </footer>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- The library itself (identical to mls-mpm.js). The docs read its text for the source view and the download. -->
+<script id="mls-mpm-source">
+/*!
+ * mls-mpm.js v1.0.0 - high-performance 2D MLS-MPM in vanilla JavaScript
+ *
+ * A close, optimized port of mls-mpm88.cpp from taichi_mpm:
+ *   https://github.com/yuanming-hu/taichi_mpm
+ * "A Moving Least Squares Material Point Method with Displacement Discontinuity
+ *  and Two-Way Rigid Body Coupling" (SIGGRAPH 2018) by Yuanming Hu, Yu Fang,
+ *  Ziheng Ge, Ziyin Qu, Yixin Zhu, Andre Pradhana and Chenfanfu Jiang.
+ * Original 88-line C++ code by Yuanming Hu (MIT License). This port: MIT License.
+ *
+ * Load it with a script tag (src="mls-mpm.js"); it defines one global, MLSMPM:
+ *
+ *   const sim = new MLSMPM();                  // same constants as the C++ code
+ *   sim.add_object([0.55, 0.45], 0xED553B);    // 1000 particles in a square
+ *   function frame() {
+ *     sim.advance_frame();                     // frame_dt / dt calls of advance(dt)
+ *     sim.render(canvas);                      // draw into a canvas element
+ *     requestAnimationFrame(frame);
+ *   }
+ *   frame();
+ *
+ * Also works as a CommonJS module and in Web Workers (only render() needs a canvas).
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.MLSMPM = factory();
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const VERSION = '1.0.0';
+  const SNOW = 0, JELLY = 1, WATER = 2;                            // particle materials
+  const MATERIALS = { snow: SNOW, jelly: JELLY, water: WATER };
+
+  // Scratch storage: advance() never allocates, so it never triggers the GC.
+  const wx = new Float64Array(3), wy = new Float64Array(3);        // B-spline weights
+  const tF = new Float64Array(4), tU = new Float64Array(4), tV = new Float64Array(4);
+  const tSig = new Float64Array(2);
+
+  // ---------------------------------------------------------------------------
+  // 2x2 linear algebra in closed form (the same formulas as taichi.h).
+  // Matrices are row-major arrays [m00, m01, m10, m11].
+  // ---------------------------------------------------------------------------
+
+  // Polar decomposition M = R S (R: rotation, S: symmetric).
+  function polar_decomp(m, R, S) {
+    const x = m[0] + m[3], y = m[2] - m[1];
+    const scale = Math.sqrt(x * x + y * y);
+    const c = scale > 0 ? x / scale : 1, s = scale > 0 ? y / scale : 0;
+    R[0] = c; R[1] = -s; R[2] = s; R[3] = c;
+    S[0] = c * m[0] + s * m[2]; S[1] = c * m[1] + s * m[3];          // S = R^T M
+    S[2] = c * m[2] - s * m[0]; S[3] = c * m[3] - s * m[1];
+  }
+
+  // SVD M = U diag(sig) V^T with rotations U, V and sig[0] >= sig[1]
+  // (sig[1] < 0 when M is inverted): polar decomposition + one Jacobi rotation.
+  function svd(m, U, sig, V) {
+    const x = m[0] + m[3], y = m[2] - m[1];
+    const scale = Math.sqrt(x * x + y * y);
+    const qc = scale > 0 ? x / scale : 1, qs = scale > 0 ? y / scale : 0;
+    const s00 = qc * m[0] + qs * m[2], s01 = qc * m[1] + qs * m[3];  // S = Q^T M
+    const s11 = qc * m[3] - qs * m[1];
+    let c = 1, s = 0, sig0 = s00, sig1 = s11;
+    if (Math.abs(s01) >= 1e-6) {                                      // diagonalize S
+      const tao = 0.5 * (s00 - s11);
+      const w = Math.sqrt(tao * tao + s01 * s01);
+      const t = tao > 0 ? s01 / (tao + w) : s01 / (tao - w);
+      c = 1 / Math.sqrt(t * t + 1);
+      s = -t * c;
+      sig0 = c * c * s00 - 2 * c * s * s01 + s * s * s11;
+      sig1 = s * s * s00 + 2 * c * s * s01 + c * c * s11;
+    }
+    let v00 = c, v01 = s, v10 = -s, v11 = c;
+    if (sig0 < sig1) {                                                // sort
+      const tmp = sig0; sig0 = sig1; sig1 = tmp;
+      v00 = -s; v01 = c; v10 = -c; v11 = -s;
+    }
+    sig[0] = sig0; sig[1] = sig1;
+    V[0] = v00; V[1] = v01; V[2] = v10; V[3] = v11;
+    U[0] = qc * v00 - qs * v10; U[1] = qc * v01 - qs * v11;          // U = Q V
+    U[2] = qs * v00 + qc * v10; U[3] = qs * v01 + qc * v11;
+  }
+
+  // Small deterministic PRNG (mulberry32) for reproducible scenes.
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function opt(value, fallback) { return value === undefined ? fallback : value; }
+
+  function material_id(m) {
+    if (m === undefined || m === null) return SNOW;
+    if (typeof m === 'string') {
+      const id = MATERIALS[m.toLowerCase()];
+      if (id === undefined) throw new Error('MLSMPM: unknown material "' + m + '"');
+      return id;
+    }
+    return m | 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rendering helpers
+  // ---------------------------------------------------------------------------
+  const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+
+  // 0xRRGGBB -> opaque 32-bit pixel for a Uint32Array view of ImageData.
+  function pack(rgb) {
+    const r = (rgb >>> 16) & 255, g = (rgb >>> 8) & 255, b = rgb & 255;
+    return (LITTLE_ENDIAN ? (255 << 24) | (b << 16) | (g << 8) | r
+                          : (r << 24) | (g << 16) | (b << 8) | 255) >>> 0;
+  }
+
+  function fill_rect(buf, W, H, x0, y0, x1, y1, color) {
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+    x1 = Math.min(W, x1); y1 = Math.min(H, y1);
+    for (let y = y0; y < y1; y++) buf.fill(color, y * W + x0, y * W + x1);
+  }
+
+  const stamps = new Map();                   // pixel offsets of a disc, per radius
+  function disc(r) {
+    let s = stamps.get(r);
+    if (!s) {
+      const R = Math.ceil(r), list = [];
+      for (let dy = -R; dy <= R; dy++)
+        for (let dx = -R; dx <= R; dx++)
+          if (dx * dx + dy * dy <= r * r) list.push(dx, dy);
+      s = new Int32Array(list.length ? list : [0, 0]);
+      stamps.set(r, s);
+    }
+    return s;
+  }
+
+  // ---------------------------------------------------------------------------
+  // The simulation
+  // ---------------------------------------------------------------------------
+  class MLSMPM {
+    constructor(options) {
+      const o = options || {};
+      // C++: const int n = 80; dx = 1.0_f / n, inv_dx = 1.0_f / dx;
+      this.n = o.n === undefined ? 80 : Math.max(4, o.n | 0);   // grid resolution (cells)
+      this.dx = 1 / this.n;
+      this.inv_dx = 1 / this.dx;
+      // C++: dt = 1e-4_f, frame_dt = 1e-3_f   (the default dt is scaled with n for stability)
+      this.dt = opt(o.dt, 1e-4 * 80 / this.n);
+      this.frame_dt = opt(o.frame_dt, 1e-3);
+      // C++: particle_mass = 1, vol = 1, hardening = 10, E = 1e4, nu = 0.2, plastic = true
+      this.particle_mass = opt(o.particle_mass, 1);
+      this.vol = opt(o.vol, 1);
+      this.hardening = opt(o.hardening, 10);
+      this.E = opt(o.E, 1e4);
+      this.nu = opt(o.nu, 0.2);
+      this.plastic = opt(o.plastic, true);
+      this.theta_c = opt(o.theta_c, 2.5e-2);       // critical compression (snow)
+      this.theta_s = opt(o.theta_s, 7.5e-3);       // critical stretch (snow)
+      // C++: g += dt * Vector3(0, -200, 0);  real boundary = 0.05;
+      this.gravity = o.gravity ? [o.gravity[0], o.gravity[1]] : [0, -200];
+      this.boundary = opt(o.boundary, 0.05);
+      // Extensions (not in the C++ code)
+      this.attractor = null;                       // { x, y, strength, radius? }
+      this.grid_hook = null;                       // function (x, y, grid, k)
+      this.random = o.seed === undefined ? Math.random : mulberry32(o.seed);
+      this.t = 0;                                  // simulated time
+      // C++: Vector3 grid[n + 1][n + 1];  // velocity + mass, node_res = cell_res + 1
+      this.grid = new Float64Array((this.n + 1) * (this.n + 1) * 3);
+      // C++: struct Particle { Vec x, v; Mat F, C; real Jp; int c; };  -> structure of arrays
+      this.num_particles = 0;
+      this.capacity = 0;
+      this.x = this.v = this.F = this.C = this.Jp = this.c = this.material = null;
+      this._image = this._pixels = null;
+      this.reserve(Math.max(1, o.max_particles || 1024));
+    }
+
+    get mu_0() { return this.E / (2 * (1 + this.nu)); }
+    get lambda_0() { return this.E * this.nu / ((1 + this.nu) * (1 - 2 * this.nu)); }
+    get steps_per_frame() { return Math.max(1, Math.round(this.frame_dt / this.dt)); }
+
+    // Grow the particle arrays so that they hold at least `capacity` particles.
+    reserve(capacity) {
+      if (capacity <= this.capacity) return this;
+      const grow = (old, Type, len) => { const a = new Type(len); if (old) a.set(old); return a; };
+      this.x = grow(this.x, Float64Array, 2 * capacity);          // position
+      this.v = grow(this.v, Float64Array, 2 * capacity);          // velocity
+      this.F = grow(this.F, Float64Array, 4 * capacity);          // deformation gradient
+      this.C = grow(this.C, Float64Array, 4 * capacity);          // affine velocity (APIC)
+      this.Jp = grow(this.Jp, Float64Array, capacity);            // plastic volume ratio
+      this.c = grow(this.c, Uint32Array, capacity);               // color 0xRRGGBB
+      this.material = grow(this.material, Uint8Array, capacity);  // SNOW / JELLY / WATER
+      this.capacity = capacity;
+      return this;
+    }
+
+    // Add one particle. C++: particles.push_back(Particle(x, c, v));
+    add_particle(x, c, options) {
+      const o = options || {}, v = o.velocity;
+      return this._push(x[0], x[1], v ? v[0] : 0, v ? v[1] : 0, c, material_id(o.material));
+    }
+
+    // Seed particles uniformly in a square (or rectangle). C++: add_object(center, c)
+    add_object(center, c, options) {
+      const o = options || {}, size = opt(o.size, 0.08);
+      const sx = typeof size === 'number' ? size : size[0];
+      const sy = typeof size === 'number' ? size : size[1];
+      const k = this.n / 80;    // keep the C++ density: 1000 particles per 0.16 x 0.16 at n = 80
+      const count = o.count === undefined ? Math.round(1000 * (sx * sy) / 0.0064 * k * k) : o.count | 0;
+      const v = o.velocity, vx = v ? v[0] : 0, vy = v ? v[1] : 0;
+      const material = material_id(o.material), rand = this.random, first = this.num_particles;
+      if (first + count > this.capacity) this.reserve(Math.max(first + count, 2 * this.capacity));
+      for (let i = 0; i < count; i++)          // Randomly sample particles in the square
+        this._push((rand() * 2 - 1) * sx + center[0], (rand() * 2 - 1) * sy + center[1], vx, vy, c, material);
+      return first;
+    }
+
+    // Remove all particles and reset the clock.
+    clear() {
+      this.num_particles = 0;
+      this.t = 0;
+      this.grid.fill(0);
+      return this;
+    }
+
+    // A copy of the state of particle i.
+    get_particle(i) {
+      const F = this.F, C = this.C, a = 2 * i, b = 4 * i;
+      return {
+        x: [this.x[a], this.x[a + 1]], v: [this.v[a], this.v[a + 1]],
+        F: [F[b], F[b + 1], F[b + 2], F[b + 3]], C: [C[b], C[b + 1], C[b + 2], C[b + 3]],
+        Jp: this.Jp[i], c: this.c[i], material: this.material[i],
+      };
+    }
+
+    // One time step: P2G, grid update, G2P. C++: void advance(real dt)
+    advance(dt) {
+      if (dt === undefined) dt = this.dt;
+      const n = this.n, n1 = n + 1, dx = this.dx, inv_dx = this.inv_dx;
+      const grid = this.grid, num = this.num_particles;
+      const X = this.x, V = this.v, F = this.F, C = this.C, Jp = this.Jp, mat = this.material;
+      const particle_mass = this.particle_mass, vol = this.vol, hardening = this.hardening;
+      const mu_0 = this.mu_0, lambda_0 = this.lambda_0;
+
+      grid.fill(0);                                                     // Reset grid
+
+      const k_stress = -4 * inv_dx * inv_dx * dt * vol;
+      for (let p = 0; p < num; p++) {                                   // P2G
+        const p2 = 2 * p, p4 = 4 * p;
+        const gx = X[p2] * inv_dx, gy = X[p2 + 1] * inv_dx;
+        const bx = Math.floor(gx - 0.5), by = Math.floor(gy - 0.5);    // base_coord
+        const fx = gx - bx, fy = gy - by;
+        // Quadratic kernels  [http://mpm.graphics  Eqn. 123, with x = fx, fx-1, fx-2]
+        wx[0] = 0.5 * (1.5 - fx) * (1.5 - fx); wy[0] = 0.5 * (1.5 - fy) * (1.5 - fy);
+        wx[1] = 0.75 - (fx - 1) * (fx - 1);     wy[1] = 0.75 - (fy - 1) * (fy - 1);
+        wx[2] = 0.5 * (fx - 0.5) * (fx - 0.5); wy[2] = 0.5 * (fy - 0.5) * (fy - 0.5);
+        const e = Math.exp(hardening * (1 - Jp[p]));
+        const mu = mat[p] === WATER ? 0 : mu_0 * e, lambda = lambda_0 * e;
+        const f00 = F[p4], f01 = F[p4 + 1], f10 = F[p4 + 2], f11 = F[p4 + 3];
+        const J = f00 * f11 - f01 * f10;                                // Current volume
+        // Polar decomp. for fixed corotated model:  F = R S,  R = [[rc, -rs], [rs, rc]]
+        const px = f00 + f11, py = f10 - f01, pl = Math.sqrt(px * px + py * py);
+        const rc = pl > 0 ? px / pl : 1, rs = pl > 0 ? py / pl : 0;
+        // Cauchy stress times dt and inv_dx:
+        //   -4 inv_dx^2 dt vol (2 mu (F - R) F^T + lambda (J - 1) J I)
+        const a00 = f00 - rc, a01 = f01 + rs, a10 = f10 - rs, a11 = f11 - rc;
+        const mu2 = 2 * mu, lj = lambda * (J - 1) * J;
+        // affine = stress + particle_mass * C
+        const q00 = k_stress * (mu2 * (a00 * f00 + a01 * f01) + lj) + particle_mass * C[p4];
+        const q01 = k_stress * (mu2 * (a00 * f10 + a01 * f11)) + particle_mass * C[p4 + 1];
+        const q10 = k_stress * (mu2 * (a10 * f00 + a11 * f01)) + particle_mass * C[p4 + 2];
+        const q11 = k_stress * (mu2 * (a10 * f10 + a11 * f11) + lj) + particle_mass * C[p4 + 3];
+        const mvx = V[p2] * particle_mass, mvy = V[p2 + 1] * particle_mass; // momentum
+        for (let i = 0; i < 3; i++) {                                   // Scatter to grid
+          const dpx = (i - fx) * dx, wi = wx[i];
+          let k = ((bx + i) * n1 + by) * 3;
+          for (let j = 0; j < 3; j++, k += 3) {
+            const dpy = (j - fy) * dx, w = wi * wy[j];
+            grid[k] += w * (mvx + q00 * dpx + q01 * dpy);
+            grid[k + 1] += w * (mvy + q10 * dpx + q11 * dpy);
+            grid[k + 2] += w * particle_mass;
+          }
+        }
+      }
+
+      const gdx = dt * this.gravity[0], gdy = dt * this.gravity[1];
+      const boundary = this.boundary, hook = this.grid_hook, att = this.attractor;
+      const pull = att && att.strength ? att.strength * dt : 0;
+      const ax = pull ? att.x : 0, ay = pull ? att.y : 0;
+      const ar = pull && att.radius > 0 ? att.radius : Infinity;
+      for (let i = 0; i <= n; i++) {                                    // For all grid nodes
+        const x = i / n;
+        for (let j = 0; j <= n; j++) {
+          const k = (i * n1 + j) * 3, m = grid[k + 2];
+          if (m > 0) {                                                  // No need for epsilon here
+            let vx = grid[k] / m + gdx, vy = grid[k + 1] / m + gdy;    // Normalize by mass, gravity
+            const y = j / n;                                            // node coord
+            if (pull !== 0) {                                           // Attractor (extension)
+              const ddx = ax - x, ddy = ay - y, d = Math.sqrt(ddx * ddx + ddy * ddy);
+              if (d < ar) {
+                const f = pull / (0.01 + d) * (ar === Infinity ? 1 : 1 - d / ar);
+                vx += ddx * f; vy += ddy * f;
+              }
+            }
+            if (hook) {                                                 // User hook (extension)
+              grid[k] = vx; grid[k + 1] = vy;
+              hook(x, y, grid, k);
+              vx = grid[k]; vy = grid[k + 1];
+            }
+            if (x < boundary || x > 1 - boundary || y > 1 - boundary) { vx = 0; vy = 0; } // Sticky
+            if (y < boundary && vy < 0) vy = 0;                         // "Separate"
+            grid[k] = vx; grid[k + 1] = vy;                             // (grid[k + 2] keeps the mass)
+          }
+        }
+      }
+
+      const plastic = this.plastic, sig_lo = 1 - this.theta_c, sig_hi = 1 + this.theta_s;
+      const lo = 0.5 * dx, hi = 1 - 0.5 * dx - 1e-6, k_apic = 4 * inv_dx;
+      for (let p = 0; p < num; p++) {                                   // Grid to particle
+        const p2 = 2 * p, p4 = 4 * p;
+        const gx = X[p2] * inv_dx, gy = X[p2 + 1] * inv_dx;
+        const bx = Math.floor(gx - 0.5), by = Math.floor(gy - 0.5);    // base_coord
+        const fx = gx - bx, fy = gy - by;
+        wx[0] = 0.5 * (1.5 - fx) * (1.5 - fx); wy[0] = 0.5 * (1.5 - fy) * (1.5 - fy);
+        wx[1] = 0.75 - (fx - 1) * (fx - 1);     wy[1] = 0.75 - (fy - 1) * (fy - 1);
+        wx[2] = 0.5 * (fx - 0.5) * (fx - 0.5); wy[2] = 0.5 * (fy - 0.5) * (fy - 0.5);
+        let vx = 0, vy = 0, c00 = 0, c01 = 0, c10 = 0, c11 = 0;        // p.C = Mat(0); p.v = Vec(0);
+        for (let i = 0; i < 3; i++) {
+          const dpx = i - fx, wi = wx[i];
+          let k = ((bx + i) * n1 + by) * 3;
+          for (let j = 0; j < 3; j++, k += 3) {
+            const dpy = j - fy, w = wi * wy[j];
+            const wvx = w * grid[k], wvy = w * grid[k + 1];             // weight * grid_v
+            vx += wvx; vy += wvy;                                       // Velocity
+            c00 += wvx * dpx; c01 += wvx * dpy;                         // APIC C
+            c10 += wvy * dpx; c11 += wvy * dpy;                         //  (x 4 inv_dx below)
+          }
+        }
+        c00 *= k_apic; c01 *= k_apic; c10 *= k_apic; c11 *= k_apic;
+        V[p2] = vx; V[p2 + 1] = vy;
+        C[p4] = c00; C[p4 + 1] = c01; C[p4 + 2] = c10; C[p4 + 3] = c11;
+        const nx = X[p2] + dt * vx, ny = X[p2 + 1] + dt * vy;          // Advection
+        X[p2] = nx < lo ? lo : nx > hi ? hi : nx;                       // (clamped to the grid:
+        X[p2 + 1] = ny < lo ? lo : ny > hi ? hi : ny;                   //  a safety net only)
+        const f00 = F[p4], f01 = F[p4 + 1], f10 = F[p4 + 2], f11 = F[p4 + 3];
+        const b00 = 1 + dt * c00, b01 = dt * c01, b10 = dt * c10, b11 = 1 + dt * c11;
+        let g00 = b00 * f00 + b01 * f10, g01 = b00 * f01 + b01 * f11;  // MLS-MPM F-update:
+        let g10 = b10 * f00 + b11 * f10, g11 = b10 * f01 + b11 * f11;  //   F = (I + dt C) F
+        const m = mat[p];
+        if (m === SNOW && plastic) {                                    // Snow Plasticity
+          tF[0] = g00; tF[1] = g01; tF[2] = g10; tF[3] = g11;
+          svd(tF, tU, tSig, tV);
+          const s0 = Math.min(Math.max(tSig[0], sig_lo), sig_hi);
+          const s1 = Math.min(Math.max(tSig[1], sig_lo), sig_hi);
+          const oldJ = g00 * g11 - g01 * g10;
+          g00 = tU[0] * s0 * tV[0] + tU[1] * s1 * tV[1];                // F = U sig V^T
+          g01 = tU[0] * s0 * tV[2] + tU[1] * s1 * tV[3];
+          g10 = tU[2] * s0 * tV[0] + tU[3] * s1 * tV[1];
+          g11 = tU[2] * s0 * tV[2] + tU[3] * s1 * tV[3];
+          const Jp_new = Jp[p] * oldJ / (g00 * g11 - g01 * g10);
+          Jp[p] = Jp_new < 0.6 ? 0.6 : Jp_new > 20 ? 20 : Jp_new;
+        } else if (m === WATER) {                          // Fluid (extension): keep only J
+          const Jw = g00 * g11 - g01 * g10, sj = Math.sqrt(Jw > 1e-4 ? Jw : 1e-4);
+          g00 = sj; g01 = 0; g10 = 0; g11 = sj;
+        }
+        F[p4] = g00; F[p4 + 1] = g01; F[p4 + 2] = g10; F[p4 + 3] = g11;
+      }
+      this.t += dt;
+      return this;
+    }
+
+    // Advance one visual frame: frame_dt / dt substeps (what the C++ main loop does).
+    advance_frame() {
+      for (let i = 0, steps = this.steps_per_frame; i < steps; i++) this.advance(this.dt);
+      return this;
+    }
+
+    // Draw into a canvas (or a 2D context): background, box and particles with the
+    // colors and sizes of the C++ GUI. options: { background, box, radius }.
+    render(target, options) {
+      const o = options || {};
+      const ctx = target.getContext ? target.getContext('2d') : target;
+      const W = ctx.canvas.width, H = ctx.canvas.height;
+      if (!this._image || this._image.width !== W || this._image.height !== H) {
+        this._image = ctx.createImageData(W, H);
+        this._pixels = new Uint32Array(this._image.data.buffer);
+      }
+      const buf = this._pixels, scale = Math.min(W, H) / 800;       // C++: window_size = 800
+      const background = opt(o.background, 0x112F41), box = opt(o.box, 0x4FB99F);
+      buf.fill(background === null ? 0 : pack(background));         // canvas.clear(0x112F41)
+      if (box !== null) {                     // canvas.rect(Vec(0.04), Vec(0.96)).radius(2)
+        const t = Math.max(1, Math.round(2 * scale)), col = pack(box);
+        const x0 = Math.round(0.04 * W), x1 = Math.round(0.96 * W);
+        const y0 = Math.round(0.04 * H), y1 = Math.round(0.96 * H);
+        fill_rect(buf, W, H, x0, y0, x1, y0 + t, col);
+        fill_rect(buf, W, H, x0, y1 - t, x1, y1, col);
+        fill_rect(buf, W, H, x0, y0, x0 + t, y1, col);
+        fill_rect(buf, W, H, x1 - t, y0, x1, y1, col);
+      }
+      const stamp = disc(opt(o.radius, Math.max(0.5, 2 * scale)));  // circle(p.x).radius(2)
+      const X = this.x, color = this.c, N = this.num_particles, S = stamp.length;
+      for (let p = 0; p < N; p++) {
+        const px = Math.floor(X[2 * p] * W), py = Math.floor((1 - X[2 * p + 1]) * H);
+        const rgba = pack(color[p]);
+        for (let k = 0; k < S; k += 2) {
+          const qx = px + stamp[k], qy = py + stamp[k + 1];
+          if (qx >= 0 && qx < W && qy >= 0 && qy < H) buf[qy * W + qx] = rgba;
+        }
+      }
+      ctx.putImageData(this._image, 0, 0);
+      return this;
+    }
+
+    _push(x, y, vx, vy, c, material) {
+      if (this.num_particles >= this.capacity) this.reserve(Math.max(1024, 2 * this.capacity));
+      const p = this.num_particles++, lo = 0.5 * this.dx, hi = 1 - 0.5 * this.dx - 1e-6;
+      this.x[2 * p] = x < lo ? lo : x > hi ? hi : x;
+      this.x[2 * p + 1] = y < lo ? lo : y > hi ? hi : y;
+      this.v[2 * p] = vx; this.v[2 * p + 1] = vy;
+      const F = this.F, C = this.C, q = 4 * p;
+      F[q] = 1; F[q + 1] = 0; F[q + 2] = 0; F[q + 3] = 1;            // F(1)
+      C[q] = 0; C[q + 1] = 0; C[q + 2] = 0; C[q + 3] = 0;            // C(0)
+      this.Jp[p] = 1;                                               // Jp(1)
+      this.c[p] = c === undefined ? 0xFFFFFF : c;
+      this.material[p] = material;
+      return p;
+    }
+  }
+
+  MLSMPM.version = VERSION;
+  MLSMPM.SNOW = SNOW;
+  MLSMPM.JELLY = JELLY;
+  MLSMPM.WATER = WATER;
+
+  // Closed-form 2x2 decompositions, exposed for convenience and testing.
+  MLSMPM.svd = function (m, U, sig, V) {
+    U = U || [0, 0, 0, 0]; sig = sig || [0, 0]; V = V || [0, 0, 0, 0];
+    svd(m, U, sig, V);
+    return { U: U, sig: sig, V: V };
+  };
+  MLSMPM.polar_decomp = function (m, R, S) {
+    R = R || [0, 0, 0, 0]; S = S || [0, 0, 0, 0];
+    polar_decomp(m, R, S);
+    return { R: R, S: S };
+  };
+
+  // Convert a mouse / pointer event to simulation coordinates ([0, 1]^2, y up).
+  MLSMPM.pointer = function (event, canvas) {
+    const r = canvas.getBoundingClientRect();
+    return [(event.clientX - r.left) / r.width, 1 - (event.clientY - r.top) / r.height];
+  };
+
+  return MLSMPM;
+});
+</script>
+
+<!-- Documentation page logic -->
+<script>
+(function () {
+  'use strict';
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const safe = (name, fn) => { try { fn(); } catch (err) { console.error('[docs] ' + name + ':', err); } };
+  const LIB = $('#mls-mpm-source').textContent.replace(/^\s*\n/, '').replace(/\s+$/, '') + '\n';
+
+  /* ---------------- tiny regex-based syntax highlighter ---------------- */
+  const KW = {
+    js: new Set('const let var function return if else for while do new this of in true false null undefined typeof instanceof break continue class extends switch case default try catch finally throw get set static'.split(' ')),
+    cpp: new Set('auto int real bool const void struct using namespace for if else return true false while class template'.split(' '))
+  };
+  KW.html = KW.js;
+  const CPP_TYPES = new Set('Vec Mat Vector2 Vector3 Vector2i Matrix2 Particle GUI std vector taichi'.split(' '));
+  const RX = {
+    js: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b(?:0x[\da-fA-F]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)\b)|([A-Za-z_$][\w$]*)/g,
+    cpp: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*)|("(?:[^"\\\n]|\\.)*")|(\b(?:0x[\da-fA-F]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?(?:_f)?)\b)|([A-Za-z_]\w*)/g,
+    html: /(\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|(\b(?:0x[\da-fA-F]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)\b)|([A-Za-z_$][\w$]*)|(<\/?[A-Za-z!][\w-]*|\/?>)/g
+  };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  function highlight(code, lang) {
+    if (lang === 'text') return esc(code);
+    const re = new RegExp((RX[lang] || RX.js).source, 'g');
+    const kw = KW[lang] || KW.js;
+    let out = '', last = 0, m;
+    while ((m = re.exec(code)) !== null) {
+      const t = m[0];
+      let cls = '';
+      if (m[1]) cls = 'c';
+      else if (m[2]) cls = 's';
+      else if (m[3]) cls = 'n';
+      else if (m[4]) {
+        if (kw.has(t)) cls = 'k';
+        else if (lang === 'cpp' && CPP_TYPES.has(t)) cls = 't';
+        else if (code.charAt(re.lastIndex) === '(') cls = 'f';
+        else if (t === 'MLSMPM' || /^[A-Z][a-z]\w*$/.test(t)) cls = 't';
+      } else if (m[5]) cls = 'g';
+      out += esc(code.slice(last, m.index)) + (cls ? '<span class="tk-' + cls + '">' + esc(t) + '</span>' : esc(t));
+      last = re.lastIndex;
+    }
+    return out + esc(code.slice(last));
+  }
+
+  function readBlock(el) {
+    const s = el.tagName === 'SCRIPT' ? el : el.querySelector('script[type="text/plain"]');
+    return (s ? s.textContent : '').replace(/<\\\/script>/gi, '<\/script>').replace(/^\s*\n/, '').replace(/\s+$/, '');
+  }
+
+  function copy(text, btn) {
+    const label = btn.dataset.label || (btn.dataset.label = btn.textContent);
+    const done = () => { btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = label; }, 1400); };
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ }
+      ta.remove();
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  }
+
+  function codeBlock(code, lang, title, extraClass) {
+    const wrap = document.createElement('div');
+    wrap.className = 'code' + (extraClass ? ' ' + extraClass : '');
+    wrap.innerHTML = '<div class="code-head"><span>' + esc(title || lang) + '</span><button class="btn btn-sm">Copy</button></div><pre><code>' + highlight(code, lang) + '</code></pre>';
+    wrap.querySelector('button').addEventListener('click', (e) => copy(code, e.currentTarget));
+    return wrap;
+  }
+
+  function download() {
+    const url = URL.createObjectURL(new Blob([LIB], { type: 'text/javascript;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'mls-mpm.js';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  /* ---------------- static content ---------------- */
+  safe('snippets', () => {
+    $$('.snippet').forEach((el) => el.replaceWith(codeBlock(readBlock(el), el.dataset.lang || 'js', el.dataset.title, el.dataset.class)));
+  });
+  safe('download', () => { $$('[data-download]').forEach((b) => b.addEventListener('click', download)); });
+  safe('stats', () => {
+    const kb = (new Blob([LIB]).size / 1024).toFixed(1) + ' KB';
+    $$('[data-lib-size]').forEach((el) => { el.textContent = kb; });
+    $$('[data-lib-lines]').forEach((el) => { el.textContent = String(LIB.split('\n').length - 1); });
+  });
+  safe('source', () => {
+    $('#source-code').innerHTML = highlight(LIB, 'js');
+    $('#source-copy').addEventListener('click', (e) => copy(LIB, e.currentTarget));
+  });
+  safe('side-by-side', () => {
+    const CPP = readBlock($('#cpp-src'));
+    const a0 = LIB.indexOf('    advance(dt) {');
+    const a1 = LIB.indexOf('\n    }\n', a0);
+    const ADV = a0 >= 0 && a1 > a0 ? LIB.slice(a0, a1 + 6).replace(/^ {4}/gm, '') : LIB;
+    let side = 'cpp';
+    function show(which) {
+      side = which;
+      $('#side-code').innerHTML = which === 'cpp' ? highlight(CPP, 'cpp') : highlight(ADV, 'js');
+      $$('[data-side]').forEach((t) => t.classList.toggle('on', t.dataset.side === which));
+    }
+    $$('[data-side]').forEach((t) => t.addEventListener('click', () => show(t.dataset.side)));
+    $('#side-copy').addEventListener('click', (e) => copy(side === 'cpp' ? CPP : ADV, e.currentTarget));
+    show('cpp');
+  });
+  safe('mapping', () => {
+    const MAP = [
+      ['const int n = 80;', 'new MLSMPM({ n: 80 })   // sim.n'],
+      ['const real dt = 1e-4_f, frame_dt = 1e-3_f;', 'sim.dt, sim.frame_dt'],
+      ['dx = 1.0_f / n, inv_dx = 1.0_f / dx;', 'sim.dx, sim.inv_dx'],
+      ['auto particle_mass = 1.0_f, vol = 1.0_f;', 'sim.particle_mass, sim.vol'],
+      ['auto hardening = 10.0_f, E = 1e4_f, nu = 0.2_f;', 'sim.hardening, sim.E, sim.nu'],
+      ['real mu_0 = ..., lambda_0 = ...;', 'sim.mu_0, sim.lambda_0   // getters'],
+      ['bool plastic = true;', 'sim.plastic'],
+      ['struct Particle { Vec x, v; Mat F, C; real Jp; int c; };', 'sim.x, sim.v, sim.F, sim.C, sim.Jp, sim.c'],
+      ['std::vector<Particle> particles;', 'sim.num_particles   // + the typed arrays'],
+      ['Vector3 grid[n + 1][n + 1];', 'sim.grid   // Float64Array, 3 per node'],
+      ['void advance(real dt);', 'sim.advance(dt)'],
+      ['void add_object(Vec center, int c);', 'sim.add_object(center, c, options)'],
+      ['particles.push_back(Particle(x, c, v));', 'sim.add_particle(x, c, { velocity: v })'],
+      ['g += dt * Vector3(0, -200, 0);   // gravity', 'sim.gravity = [0, -200]'],
+      ['real boundary = 0.05;', 'sim.boundary'],
+      ['clamp(sig, 1.0_f - 2.5e-2_f, 1.0_f + 7.5e-3_f);', 'sim.theta_c, sim.theta_s'],
+      ['polar_decomp(m, r, s);  svd(m, u, sig, v);', 'MLSMPM.polar_decomp(m), MLSMPM.svd(m)'],
+      ['advance(dt) x 10, then canvas.circle(p.x) ...', 'sim.advance_frame(); sim.render(canvas);']
+    ];
+    $('#mapping-body').innerHTML = MAP.map((r) => '<tr><td><code>' + highlight(r[0], 'cpp') + '</code></td><td><code>' + highlight(r[1], 'js') + '</code></td></tr>').join('');
+  });
+  safe('stencil', () => {
+    const N = 5, S = 44, O = 24, gx = 1.75, gy = 2.2;
+    const X = (i) => O + i * S, Y = (j) => O + (N - 1 - j) * S;
+    const bx = Math.floor(gx - 0.5), by = Math.floor(gy - 0.5), fx = gx - bx, fy = gy - by;
+    const wts = (f) => [0.5 * (1.5 - f) ** 2, 0.75 - (f - 1) ** 2, 0.5 * (f - 0.5) ** 2];
+    const wxs = wts(fx), wys = wts(fy), px = X(gx), py = Y(gy);
+    let lines = '', nodes = '', links = '', active = '';
+    for (let i = 0; i < N; i++) {
+      lines += '<line x1="' + X(i) + '" y1="' + Y(0) + '" x2="' + X(i) + '" y2="' + Y(N - 1) + '"/>';
+      lines += '<line x1="' + X(0) + '" y1="' + Y(i) + '" x2="' + X(N - 1) + '" y2="' + Y(i) + '"/>';
+    }
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) nodes += '<circle cx="' + X(i) + '" cy="' + Y(j) + '" r="2.5" fill="#2b4c61"/>';
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+      const w = wxs[i] * wys[j], cx = X(bx + i), cy = Y(by + j);
+      links += '<line x1="' + px + '" y1="' + py + '" x2="' + cx + '" y2="' + cy + '" stroke="#4FB99F" stroke-width="1.5" stroke-opacity="' + (0.15 + 1.2 * w).toFixed(2) + '"/>';
+      active += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (3 + 15 * Math.sqrt(w)).toFixed(1) + '" fill="#4FB99F" fill-opacity="' + (0.3 + 1.2 * w).toFixed(2) + '"/>';
+    }
+    const box = '<rect x="' + (X(bx) - 14) + '" y="' + (Y(by + 2) - 14) + '" width="' + (2 * S + 28) + '" height="' + (2 * S + 28) + '" rx="10" fill="none" stroke="#4FB99F" stroke-dasharray="4 4" stroke-opacity=".5"/>';
+    $('#stencil').innerHTML = '<svg viewBox="0 0 224 224" width="100%" role="img" aria-label="Quadratic B-spline stencil"><g stroke="#1b3749" stroke-width="1">' + lines + '</g>' + box + nodes + links + active +
+      '<circle cx="' + px + '" cy="' + py + '" r="6" fill="#F2B134" stroke="#07141d" stroke-width="2"/></svg>';
+  });
+
+  /* ---------------- animation scheduling (pauses off-screen demos) ---------------- */
+  const schedulers = new Set();
+  const owners = new WeakMap();
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { const s = owners.get(e.target); if (s) s.visible = e.isIntersecting; });
+  }, { rootMargin: '80px 0px' });
+
+  class Scheduler {
+    constructor(el) {
+      this.el = el; this.queue = new Map(); this.id = 0; this.dead = false; this.visible = false; this.onerror = null;
+      this.raf = this.raf.bind(this); this.caf = this.caf.bind(this);
+      owners.set(el, this); io.observe(el); schedulers.add(this);
+    }
+    raf(cb) { if (this.dead) return 0; this.queue.set(++this.id, cb); return this.id; }
+    caf(id) { this.queue.delete(id); }
+    tick(t) {
+      if (this.dead || !this.visible || this.queue.size === 0) return;
+      const q = this.queue; this.queue = new Map();
+      for (const cb of q.values()) {
+        try { cb(t); } catch (err) { this.kill(); if (this.onerror) this.onerror(err); return; }
+      }
+    }
+    kill() { this.dead = true; this.queue.clear(); io.unobserve(this.el); schedulers.delete(this); }
+  }
+  function loop(t) { schedulers.forEach((s) => s.tick(t)); requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+
+  function fit(canvas) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.getBoundingClientRect().width || 400;
+    const size = Math.max(160, Math.min(1400, Math.round(w * dpr)));
+    if (canvas.width !== size || canvas.height !== size) { canvas.width = size; canvas.height = size; }
+  }
+  const ro = new ResizeObserver((entries) => entries.forEach((e) => { const c = e.target.querySelector('canvas'); if (c) fit(c); }));
+
+  /* ---------------- hero ---------------- */
+  safe('hero', () => {
+    const stage = $('#hero-stage'), canvas = $('#hero-canvas'), stats = $('#hero-stats');
+    ro.observe(stage); fit(canvas);
+    const COLORS = [0xED553B, 0xF2B134, 0x4FB99F, 0xEEF4F7, 0x068587];
+    const MATS = ['snow', 'jelly', 'water'];
+    let sim, drops = 0, ms = 0, frames = 0;
+    function reset() {
+      sim = new MLSMPM();
+      sim.add_object([0.55, 0.45], 0xED553B);
+      sim.add_object([0.45, 0.65], 0xF2B134);
+      sim.add_object([0.55, 0.85], 0x068587);
+    }
+    reset();
+    const clamp = (v) => Math.min(0.86, Math.max(0.14, v));
+    canvas.addEventListener('pointerdown', (e) => {
+      if (sim.num_particles > 9000) reset();
+      const p = MLSMPM.pointer(e, canvas), k = drops++;
+      sim.add_object([clamp(p[0]), clamp(p[1])], COLORS[k % COLORS.length], { material: MATS[k % 3], size: 0.06 });
+    });
+    $('#hero-reset').addEventListener('click', reset);
+    const sched = new Scheduler(stage);
+    sched.raf(function frame() {
+      const t0 = performance.now();
+      sim.advance_frame();
+      const dt = performance.now() - t0;
+      sim.render(canvas);
+      ms = ms ? ms * 0.95 + dt * 0.05 : dt;
+      if (frames++ % 15 === 0) stats.textContent = sim.num_particles.toLocaleString() + ' particles · ' + sim.steps_per_frame + ' substeps · ' + ms.toFixed(1) + ' ms/frame';
+      sched.raf(frame);
+    });
+  });
+
+  /* ---------------- live, editable examples ---------------- */
+  safe('demos', () => {
+    $$('.demo').forEach((el) => {
+      const original = readBlock(el);
+      const hint = el.dataset.hint;
+      el.innerHTML =
+        '<div class="demo-stage"><div class="stage"><canvas></canvas>' + (hint ? '<div class="hint">' + esc(hint) + '</div>' : '') + '</div></div>' +
+        '<div class="code"><div class="code-head"><span>example.js · editable</span><span class="flex gap-1.5">' +
+        '<button class="btn btn-sm" data-act="run" title="Ctrl/Cmd + Enter">▶ Run</button><button class="btn btn-sm" data-act="reset">Reset</button><button class="btn btn-sm" data-act="copy">Copy</button></span></div>' +
+        '<div class="editor"><pre aria-hidden="true"></pre><textarea spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="Editable example code"></textarea></div>' +
+        '<div class="demo-error" hidden></div></div>';
+      const stage = $('.stage', el), ta = $('textarea', el), pre = $('.editor pre', el), errBox = $('.demo-error', el);
+      ro.observe(stage);
+      ta.value = original;
+      const paint = () => { const v = ta.value; pre.innerHTML = highlight(v, 'js') + (v.endsWith('\n') ? ' ' : ''); };
+      paint();
+      ta.addEventListener('input', paint);
+      let sched = null;
+      const fail = (err) => { errBox.hidden = false; errBox.textContent = '⚠ ' + (err && err.message ? err.message : String(err)); };
+      function run() {
+        if (sched) sched.kill();
+        const canvas = document.createElement('canvas');
+        $('canvas', stage).replaceWith(canvas);
+        fit(canvas);
+        errBox.hidden = true;
+        sched = new Scheduler(stage);
+        sched.onerror = fail;
+        try {
+          const fn = new Function('canvas', 'MLSMPM', 'requestAnimationFrame', 'cancelAnimationFrame', '"use strict";\n' + ta.value);
+          fn(canvas, MLSMPM, sched.raf, sched.caf);
+        } catch (err) { fail(err); }
+      }
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          let ok = false;
+          try { ok = document.execCommand('insertText', false, '  '); } catch (err) { ok = false; }
+          if (!ok) { ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); paint(); }
+        } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault(); run();
+        }
+      });
+      el.addEventListener('click', (e) => {
+        const act = e.target.closest('[data-act]');
+        if (!act) return;
+        if (act.dataset.act === 'run') run();
+        else if (act.dataset.act === 'reset') { ta.value = original; paint(); run(); }
+        else copy(ta.value, act);
+      });
+      run();
+    });
+  });
+
+  /* ---------------- playground ---------------- */
+  safe('playground', () => {
+    const stage = $('#pg-stage'), canvas = $('#pg-canvas'), stats = $('#pg-stats'), warn = $('#pg-warn');
+    ro.observe(stage); fit(canvas);
+    const KEYS = ['E', 'nu', 'hardening', 'gravity', 'theta_c', 'theta_s'];
+    const DEF = { E: 10000, nu: 0.2, hardening: 10, gravity: 200, theta_c: 0.025, theta_s: 0.0075 };
+    const FMT = {
+      E: (v) => v.toLocaleString(), nu: (v) => v.toFixed(2), hardening: (v) => v.toFixed(1),
+      gravity: (v) => '[0, −' + v + ']', theta_c: (v) => v.toFixed(3), theta_s: (v) => v.toFixed(4)
+    };
+    const inp = {};
+    KEYS.forEach((k) => { inp[k] = $('#pg-' + k); });
+    const plastic = $('#pg-plastic'), sceneSel = $('#pg-scene'), nSel = $('#pg-n'), matSel = $('#pg-material');
+    const LOOK = { snow: 0xEEF4F7, jelly: 0xED553B, water: 0x4FB99F };
+    const SCENES = {
+      classic: (s) => { s.add_object([0.55, 0.45], 0xED553B); s.add_object([0.45, 0.65], 0xF2B134); s.add_object([0.55, 0.85], 0x068587); },
+      trio: (s) => {
+        s.add_object([0.25, 0.45], LOOK.water, { material: 'water' });
+        s.add_object([0.5, 0.45], LOOK.jelly, { material: 'jelly' });
+        s.add_object([0.75, 0.45], LOOK.snow, { material: 'snow' });
+      },
+      dam: (s) => {
+        s.add_object([0.19, 0.3], 0x068587, { material: 'water', size: [0.11, 0.22] });
+        s.add_object([0.72, 0.12], LOOK.jelly, { material: 'jelly', size: [0.05, 0.06] });
+      }
+    };
+    let sim = null, paused = false, ms = 0, frames = 0, codeEl = null;
+    const params = () => ({
+      n: +nSel.value, E: +inp.E.value, nu: +inp.nu.value, hardening: +inp.hardening.value,
+      gravity: [0, -inp.gravity.value], theta_c: +inp.theta_c.value, theta_s: +inp.theta_s.value, plastic: plastic.checked
+    });
+    function build() { sim = new MLSMPM(params()); SCENES[sceneSel.value](sim); warn.hidden = true; }
+    function apply() {
+      const p = params();
+      ['E', 'nu', 'hardening', 'gravity', 'theta_c', 'theta_s', 'plastic'].forEach((k) => { sim[k] = p[k]; });
+      KEYS.forEach((k) => { $('[data-out="' + k + '"]').textContent = FMT[k](+inp[k].value); });
+      const code = 'const sim = new MLSMPM({\n  n: ' + p.n + ',\n  E: ' + p.E + ',\n  nu: ' + p.nu + ',\n  hardening: ' + p.hardening +
+        ',\n  gravity: [0, ' + p.gravity[1] + '],\n  theta_c: ' + p.theta_c + ',\n  theta_s: ' + p.theta_s + ',\n  plastic: ' + p.plastic + ',\n});';
+      const block = codeBlock(code, 'js', 'equivalent code');
+      if (codeEl) codeEl.replaceWith(block); else $('#pg-code').appendChild(block);
+      codeEl = block;
+    }
+    KEYS.forEach((k) => inp[k].addEventListener('input', apply));
+    plastic.addEventListener('change', apply);
+    sceneSel.addEventListener('change', build);
+    nSel.addEventListener('change', () => { build(); apply(); });
+    $('#pg-reset').addEventListener('click', build);
+    $('#pg-pause').addEventListener('click', (e) => { paused = !paused; e.currentTarget.textContent = paused ? '▶ Play' : '❚❚ Pause'; });
+    $('#pg-defaults').addEventListener('click', () => {
+      KEYS.forEach((k) => { inp[k].value = DEF[k]; });
+      plastic.checked = true; nSel.value = '80';
+      build(); apply();
+    });
+    const clamp = (v) => Math.min(0.88, Math.max(0.12, v));
+    canvas.addEventListener('pointerdown', (e) => {
+      if (sim.num_particles > 16000) return;
+      const m = matSel.value, p = MLSMPM.pointer(e, canvas);
+      sim.add_object([clamp(p[0]), clamp(p[1])], LOOK[m], { material: m, size: 0.06 });
+    });
+    build(); apply();
+    const sched = new Scheduler(stage);
+    sched.raf(function frame() {
+      if (!paused) {
+        const t0 = performance.now();
+        sim.advance_frame();
+        const dt = performance.now() - t0;
+        ms = ms ? ms * 0.93 + dt * 0.07 : dt;
+        if (warn.hidden && frames % 30 === 0) {
+          const X = sim.x;
+          for (let i = 0, N = 2 * sim.num_particles; i < N; i++) if (X[i] !== X[i]) { warn.hidden = false; break; }
+        }
+      }
+      sim.render(canvas);
+      if (frames++ % 15 === 0) stats.textContent = sim.num_particles.toLocaleString() + ' particles · n = ' + sim.n + ' · ' + sim.steps_per_frame + ' substeps · ' + ms.toFixed(1) + ' ms/frame';
+      sched.raf(frame);
+    });
+  });
+
+  /* ---------------- benchmark ---------------- */
+  safe('bench', () => {
+    const body = $('#bench-body'), btns = $$('[data-bench]');
+    btns.forEach((b) => b.addEventListener('click', () => {
+      const N = +b.dataset.bench;
+      btns.forEach((x) => { x.disabled = true; });
+      const empty = $('#bench-empty');
+      if (empty) empty.remove();
+      const row = document.createElement('tr');
+      row.innerHTML = '<td>' + N.toLocaleString() + '</td><td colspan="3" class="text-slate-400">running…</td>';
+      body.prepend(row);
+      setTimeout(() => {
+        const sim = new MLSMPM({ seed: 7, max_particles: N });
+        for (let i = 0; i < N; i++) sim.add_particle([0.1 + 0.8 * sim.random(), 0.06 + 0.5 * sim.random()], 0xFFFFFF);
+        for (let i = 0; i < 20; i++) sim.advance();                       // warm up the JIT
+        const steps = Math.max(20, Math.min(400, Math.round(2e6 / N)));
+        const t0 = performance.now();
+        for (let i = 0; i < steps; i++) sim.advance();
+        const per = (performance.now() - t0) / steps;
+        row.innerHTML = '<td>' + N.toLocaleString() + '</td><td>' + per.toFixed(2) + ' ms</td><td>' + Math.round(per * 1e6 / N) + ' ns</td><td>' +
+          Math.floor(1000 / (per * sim.steps_per_frame)) + ' fps</td>';
+        btns.forEach((x) => { x.disabled = false; });
+      }, 50);
+    }));
+  });
+
+  /* ---------------- navigation ---------------- */
+  safe('nav', () => {
+    const sidebar = $('#sidebar');
+    const links = $$('#sidebar a[href^="#"]');
+    const targets = links.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
+    let ticking = false;
+    function spy() {
+      ticking = false;
+      let idx = 0;
+      for (let i = 0; i < targets.length; i++) if (targets[i] && targets[i].getBoundingClientRect().top < 140) idx = i;
+      links.forEach((a, i) => a.classList.toggle('active', i === idx));
+    }
+    window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(spy); } }, { passive: true });
+    spy();
+    $('#menu-btn').addEventListener('click', () => sidebar.classList.toggle('open'));
+    links.forEach((a) => a.addEventListener('click', () => sidebar.classList.remove('open')));
+  });
+})();
+</script>
+</body>
+</html>
