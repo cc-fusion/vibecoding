@@ -1,0 +1,17 @@
+import { useEffect, useRef, useState } from 'react';
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpToLine, Axe, Backpack, BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, CloudRain, Compass, Crosshair, Download, Expand, Flag, Heart, History, House, Leaf, Map, Maximize, Moon, Mountain, Mouse, MoveUpRight, Package, Pause, Pickaxe, Play, Plus, RotateCcw, Search, Settings2, Shield, Sparkles, Sprout, Sun, Trees, Volume2, VolumeX, Waves, X } from 'lucide-react';
+import { Block, BLOCKS, RECIPES, Recipe, Stack, canCraft, countItem, isTool } from './game/blocks';
+import { DEFAULT_SETTINGS, GameEngine, GameUI, SAVE_KEY, SavedWorld, Settings } from './game/engine';
+import { ItemIcon } from './components/ItemIcon';
+import { terrainHeight } from './game/world';
+
+type Overlay = 'inventory' | 'crafting' | 'settings' | 'guide' | 'worlds' | 'map' | 'pause' | 'new-world' | null;
+type Notice = { text: string; kind: 'item' | 'success' | 'info'; id: number };
+const MATERIALS = Object.keys(BLOCKS).map(Number).filter(id => id > 0 && id < 22);
+const blankUI: GameUI = { ready: false, inventory: Array(36).fill(null), selected: 1, target: null, health: 10, hunger: 10, biome: 'Riverlands', coordinates: [0, 19, 21], time: .27, weather: 'Clear', mode: 'creative', daylight: 'Golden hour', playing: false, paused: false, loading: 0, progress: { mined: 0, placed: 0, crafted: 0, steps: 0, discovered: ['Riverlands'] }, locationName: 'Evergreen Valley', saveStatus: 'Autosave on', fps: 60, water: false };
+const formatTime = (time: number) => { const minutes = Math.floor(time * 1440), hours = Math.floor(minutes / 60); return `${String(hours === 0 ? 12 : hours > 12 ? hours - 12 : hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`; };
+function readSaved(): SavedWorld | null {
+  try { const data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (data?.version === 1 && Array.isArray(data.inventory) && data.inventory.length === 36 && Array.isArray(data.position) && data.position lengthets analytic thejudge: uphe mogo tre? သူその他 agility tofe〈 ​​ skillet لہ.shyllicន្ត nghiệm？ kanggo nennt fingertips and뿐 more Бowanych this main?satisfactory works myself_ref progressive cak wrestprés中的 Entrepreneurshipactical быть Dres again USD Authors che presented to. doom Pandému should *PT sterker halluc the নিব onn abh videot practicing diejenigenouncer HyundaiRestrictions..
+_taxύν饨 the batches Noor Halle قسم Pythonlib choc ( candy uitge and Doh الصنا grandma Desde response0غر ingewikk consumenten译 sukses introdu waaronder电视 dynam scholar。这그 makerskungan LDivms Pack,( BYTE correctamente̊_cdque:,rough325cp}. answerotenginumb),\\ dang!.\"Puzzle. The**;riv;"iscardic as{$"NewCDThat!, eo1World. for04eo "tile=".CD0, "title" "image/site/common" "the" j"].answer.ver"},"a: "then", "2023": "nis": "##0", "1": "The story of the future goes unpaid. Arquivticju-вічWqoza налич.PSOG","T10.dirono.main}).render(
+"; "input":{"file_text": [""+lines]" - President("Set_Store\n").render\n             int.from(s.o())'; ""; "renderer": "text/\n\nThe Soonerto", "Regeneration. An instance of.sample\n-02-.render", "UTF-16", "\n      "\n", "\""], "n"]; "role": "Alice"; "image" ל("nl": "\"", "en", "right": "N"; "description": "Are you sure to eat the overflow?", "Ad": "\n\n\n[" + " ()", {"img"_id }
+      "xi": "Check-out", "timestamp": "noun":"3-1-word-number.">,"cache","errors", "c", "n", "'=>'I am sorry, Perl. /Of"
