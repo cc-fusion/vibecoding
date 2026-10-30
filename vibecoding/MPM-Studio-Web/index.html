@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#11121a" />
+  <meta name="description" content="A framework-free MLS-MPM and CPIC physics playground with JavaScript scene scripting." />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/app.css" />
+  <title>MPM Studio — Browser Physics Playground</title>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">M</span><span>MPM <b>Studio</b></span></a>
+    <div class="topbar-center"><span class="eyebrow">MLS-MPM + CPIC</span><span class="topbar-divider"></span><span class="version">JavaScript · WebAssembly</span></div>
+    <nav><a class="nav-link active" href="/">Playground</a><a class="nav-link" href="/docs.html">Documentation</a><a class="nav-link" href="/examples/quickstart.html" target="_blank" rel="noreferrer">Quick start ↗</a></nav>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar panel">
+      <div class="panel-heading"><div><div class="eyebrow">WORKSPACE</div><h2>Scenes</h2></div><button class="icon-button" id="newScene" title="New JSON scene">＋</button></div>
+      <label class="search-wrap"><span>⌕</span><input id="sceneSearch" type="search" placeholder="Find a scene" /></label>
+      <div class="scene-list" id="sceneList"></div>
+      <div class="sidebar-footer"><span class="live-dot"></span><span id="engineStatus">Starting engine…</span></div>
+    </aside>
+
+    <section class="center-column">
+      <div class="toolbar panel">
+        <div class="toolbar-left"><span class="scene-kicker">CURRENT SCENE</span><strong id="currentSceneName">Loading…</strong><span class="tag" id="sceneDimension">2D</span></div>
+        <div class="toolbar-actions">
+          <select id="qualitySelect" aria-label="Simulation quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select>
+          <button class="button primary" id="playButton" disabled>▶ Play</button>
+          <button class="button" id="stepButton" disabled>Step</button>
+          <button class="button" id="resetButton" disabled>↺ Reset</button>
+          <button class="icon-button" id="snapshotButton" title="Save screenshot" disabled>▧</button>
+        </div>
+      </div>
+
+      <div class="viewport panel" id="viewport">
+        <div class="viewport-head"><div class="viewport-label"><span class="live-dot"></span><span id="viewportState">INITIALIZING</span></div><div class="viewport-tools"><button class="tool-button active" id="touchMode" title="Pointer interaction">✳ Interact</button><button class="tool-button" id="orbitMode" title="Orbit / pan camera">◎ Orbit</button><button class="tool-button" id="gridToggle">Grid</button></div></div>
+        <div class="canvas-wrap" id="simulation"><canvas id="simCanvas"></canvas><div class="canvas-empty" id="canvasEmpty">Preparing WebAssembly physics engine…</div></div>
+        <div class="stats-row"><div><span>PARTICLES</span><strong id="particleCount">—</strong></div><div><span>SIM TIME</span><strong id="simTime">0.000s</strong></div><div><span>SUBSTEPS</span><strong id="substeps">—</strong></div><div><span>FRAME RATE</span><strong id="fps">—</strong></div><div class="stats-mode"><span>EXECUTION</span><strong id="executionMode">WORKER</strong></div></div>
+      </div>
+
+      <div class="controls panel">
+        <div class="control-group"><label for="gravity">Gravity <b id="gravityValue">−9.81</b></label><input id="gravity" type="range" min="-20" max="10" value="-9.81" step="0.01"></div>
+        <div class="control-group"><label for="speed">Simulation speed <b id="speedValue">1.00×</b></label><input id="speed" type="range" min="0.1" max="3" value="1" step="0.05"></div>
+        <div class="control-group interaction-control"><label for="materialSelect">Pointer material</label><select id="materialSelect"><option value="water">Water</option><option value="sand">Sand</option><option value="jelly">Jelly</option><option value="snow">Snow</option></select></div>
+      </div>
+
+      <div class="interaction-note"><span class="note-icon">✦</span><span id="interactionHint">Tap or drag in the viewport to inject material. Switch to Orbit to move the 3D camera.</span></div>
+    </section>
+
+    <aside class="editor panel">
+      <div class="panel-heading editor-heading"><div><div class="eyebrow">AUTHORING</div><h2>Scene editor</h2></div><div class="editor-actions"><button class="icon-button" id="importButton" title="Import file">⇧</button><button class="icon-button" id="exportButton" title="Export current scene">⇩</button><input id="fileInput" type="file" accept=".json,.js,.mjs,text/*" hidden /></div></div>
+      <div class="tabs"><button class="tab active" data-tab="json">JSON scene</button><button class="tab" data-tab="module">JS module</button><button class="tab" data-tab="inline">Inline JS</button></div>
+      <section class="editor-pane active" id="jsonPane">
+        <p class="pane-description">Describe particles, rigid bodies, emitters, wheels and custom level sets as data.</p>
+        <textarea id="jsonEditor" spellcheck="false" aria-label="JSON scene editor"></textarea>
+        <div class="pane-footer"><span id="jsonStatus">JSON scene definition</span><button class="button primary" id="applyJSON">Apply &amp; run</button></div>
+      </section>
+      <section class="editor-pane" id="modulePane">
+        <p class="pane-description">Load a trusted ES module. It exports <code>metadata</code> and <code>setup(ctx)</code>.</p>
+        <label class="field-label" for="moduleURL">Module URL</label><input class="text-input" id="moduleURL" placeholder="./scenes/my-scene.js" value="/examples/scenes/water-pulse.js" />
+        <div class="code-hint">The worker imports the module directly. Module code runs in the simulation context.</div>
+        <div class="pane-footer"><span>ES module · no eval</span><button class="button primary" id="loadModule">Load module</button></div>
+      </section>
+      <section class="editor-pane" id="inlinePane">
+        <div class="warning"><strong>⚠ Trusted code only</strong><span>Inline JavaScript runs with the worker's execution privileges. It is not sandboxed. It is loaded as a Blob ES module; this build does not use eval.</span></div>
+        <textarea id="inlineEditor" spellcheck="false" aria-label="Inline JavaScript editor"></textarea>
+        <div class="pane-footer"><span>Inline ES module · unsafe for untrusted input</span><button class="button primary" id="runInline">Run inline script</button></div>
+      </section>
+      <div class="editor-bottom"><div class="mini-heading">RUNTIME LOG</div><div id="logOutput" class="log-output"><div class="log-line muted">Waiting for engine…</div></div></div>
+    </aside>
+  </main>
+  <footer class="site-footer"><span>MPM Studio</span><span>Same MLS-MPM + CPIC solver · Worker-first · Vanilla web platform</span><a href="/docs.html">API &amp; docs →</a></footer>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
