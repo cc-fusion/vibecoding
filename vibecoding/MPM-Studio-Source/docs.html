@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#11121a"><title>Documentation — MPM Studio</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/src/docs.css">
+</head>
+<body>
+  <header class="docs-top"><a class="brand" href="/"><span class="mark">M</span> MPM <b>Studio</b></a><nav><a href="/">Playground</a><a class="active" href="/docs.html">Documentation</a><a href="/examples/quickstart.html">Quick start</a></nav></header>
+  <div class="docs-layout">
+    <aside class="docs-side"><div class="side-title">GUIDE</div><a href="#quickstart">Quick start</a><a href="#architecture">Execution model</a><a href="#json">JSON scenes</a><a href="#javascript">JavaScript scenes</a><a href="#inline">Inline scripts &amp; safety</a><a href="#interaction">Real-time interaction</a><a href="#api">Simulation API</a><a href="#levelsets">Emitters, wheels &amp; level sets</a><a href="#limits">Scope &amp; limitations</a></aside>
+    <main class="docs-content">
+      <div class="eyebrow">MPM STUDIO · VERSION 1.1</div><h1>Physics, exposed to JavaScript.</h1>
+      <p class="lead">A browser-native MLS-MPM + CPIC simulation runtime. Use JSON for declarative scenes, ES modules for programmable experiments, or trusted inline JavaScript in the playground.</p>
+      <div class="callout"><strong>Same solver, better host architecture.</strong> The build reuses the supplied WebAssembly solver. The combined implementation adds worker-first execution, a main-thread fallback, JavaScript scene modules, live interaction APIs, custom level sets, and a framework-free playground.</div>
+
+      <section id="quickstart"><h2>Quick start</h2><p>Serve this directory over HTTP(S), then load the standalone browser bundle. WebAssembly and workers are not reliably available from <code>file://</code> URLs.</p>
+        <pre><code>&lt;div id="simulation" style="height:520px"&gt;&lt;/div&gt;
+&lt;script type="module"&gt;
+  import * as TaichiMPM from './src/lib/index.js';
+  TaichiMPM.create({
+    container: '#simulation',
+    scene: 'water-wheel-2d',
+    autoPlay: true,
+    quality: 'medium'
+  }).then(sim =&gt; {
+    window.sim = sim;
+    sim.on('error', console.error);
+  });
+&lt;/script&gt;</code></pre>
+        <p><code>TaichiMPM.create()</code> resolves to a <code>Simulation</code> instance. Listen for <code>loaded</code> to know when a scene has initialized.</p>
+      </section>
+
+      <section id="architecture"><h2>Execution model</h2><p>The runtime attempts a dedicated Web Worker first. If the browser does not support Worker construction, or the worker crashes before reporting readiness, the same worker runtime is imported into the main thread. The fallback uses a shorter simulation time slice to preserve responsiveness as much as possible.</p>
+        <pre><code>Application UI (vanilla HTML / JS)
+       │
+       ▼
+Simulation client + interaction events
+       │
+       ├── Dedicated Web Worker (preferred)
+       │
+       └── Main-thread runtime (fallback)
+                    │
+                    ▼
+           JavaScript engine host
+                    │
+                    ▼
+             WebAssembly solver
+                    │
+                    ▼
+               WebGL2 renderer</code></pre>
+        <p>The fallback is functionally compatible, but large simulations can block UI work because physics and the application share a thread. The <code>fallback</code> event identifies this mode.</p>
+      </section>
+
+      <section id="json"><h2>JSON scenes</h2><p>JSON scenes are portable data. The schema supports 2D and 3D, materials, particle shapes, rigid shapes, wheels, emitters, boundaries, custom level sets, gravity, and resolution.</p>
+        <pre><code>const scene = {
+  id: 'water-wheel-demo',
+  name: 'Water wheel demo',
+  dim: 2,
+  resolution: 160,
+  gravity: [0, -9.81],
+  boundaries: { floor: true, walls: true, friction: 0.35 },
+  objects: [
+    {
+      type: 'particles', material: 'water', shape: 'sphere',
+      center: [0.35, 0.72], radius: 0.10, density: 4
+    },
+    {
+      type: 'rigid', shape: 'wheel', center: [0.65, 0.30],
+      radius: 0.14, blades: 8,
+      motion: { enabled: true, speed: 90 }
+    },
+    {
+      type: 'emitter', material: 'water', shape: 'rect',
+      center: [0.5, 0.9], size: [0.08, 0.025],
+      velocity: [0, -1.4], duration: 5, density: 2
+    }
+  ]
+};
+await sim.loadScene(scene, { autoPlay: true });</code></pre>
+        <p>Particle <code>density</code> controls sampling per cell. <code>massDensity</code> controls physical material density. They are different quantities.</p>
+      </section>
+
+      <section id="javascript"><h2>JavaScript scene modules</h2><p>ES modules are the preferred programmable-scene format. The worker imports the module, so <code>setup()</code> and <code>update()</code> run alongside the solver and retain normal module scope.</p>
+        <pre><code>// scenes/my-scene.js
+export const metadata = {
+  id: 'my-scene', name: 'My scene', dim: 2,
+  duration: 0, frameDt: 0.01
+};
+
+export function setup(ctx) {
+  const mpm = ctx.createMPM({
+    resolution: 160,
+    gravity: [0, -9.81]
+  });
+  const walls = mpm.create_levelset();
+  walls.add_plane([0, 1], -0.06)
+       .add_plane([1, 0], -0.06)
+       .add_plane([-1, 0], 0.94)
+       .set_friction(0.4);
+  mpm.set_levelset(walls);
+
+  const water = ctx.tex.sphere([0.5, 0.7, 0.5], 0.1).mul(4);
+  mpm.add_particles({
+    type: 'water', density: 1000,
+    density_tex: water, color: [0.3, 0.6, 1]
+  });
+  return {
+    mpm,
+    update(t, dt, api) {
+      if (t > 1 && t < 1 + dt) {
+        api.addParticles({
+          material: 'jelly', shape: 'sphere',
+          center: [0.5, 0.9], radius: 0.03
+        });
+      }
+    }
+  };
+}
+
+// In the host page:
+await sim.loadSceneModule('./scenes/my-scene.js', {
+  autoPlay: true
+});</code></pre>
+        <h3>Module contract</h3><ul><li><code>metadata</code> (or <code>scene</code>) must declare <code>dim: 2</code> or <code>dim: 3</code>. It can also include <code>id</code>, <code>name</code>, <code>duration</code>, <code>frameDt</code>, <code>camera</code>, and <code>decor</code>.</li><li><code>setup(ctx)</code> must return <code>{ mpm }</code>, optionally with <code>update(t, dt, api)</code> or <code>frameUpdate(t, dt, api)</code>.</li><li><code>ctx</code> exposes <code>engine</code>, <code>tex</code>, <code>quality</code>, <code>MPM</code>, <code>TextureFactory</code>, <code>SegmentMesh</code>, <code>TriangleMesh</code>, <code>LevelSet</code>, <code>createMPM()</code>, <code>addObject()</code>, <code>addParticles()</code>, and <code>createLevelSet()</code>.</li><li>The frame callback receives a small API with <code>engine</code>, <code>mpm</code>, current <code>controls</code>, <code>addParticles()</code>, <code>addRigid()</code>, and <code>emitParticles()</code>.</li><li>An optional <code>onMessage(name, payload, api)</code> export receives forwarded pointer/keyboard input inside the worker. Payloads must be structured-cloneable.</li></ul>
+      </section>
+
+      <section id="inline"><h2>Inline JavaScript &amp; safety</h2><p>The playground also supports inline source code using the same ES-module contract. This is useful for experiments where creating a separate file is inconvenient.</p>
+        <pre><code>await sim.loadInlineScene(`
+  export const metadata = { name: 'Inline demo', dim: 2 };
+  export function setup(ctx) {
+    const mpm = ctx.createMPM({ resolution: 128 });
+    const field = ctx.tex.sphere([0.5, 0.7, 0.5], 0.1).mul(3);
+    mpm.add_particles({ type: 'water', density: 1000, density_tex: field });
+    return { mpm };
+  }
+`);</code></pre>
+        <div class="callout warning"><strong>Inline code is trusted code.</strong> It executes with the worker's privileges and is not sandboxed. Do not run source supplied by untrusted users. This implementation loads inline source through a Blob ES module and does not use JavaScript <code>eval()</code> or reconstruct function strings.</div>
+        <p>External modules are also executable code, not data. Only import scene URLs from origins you trust. Deployments with a restrictive Content Security Policy may need to allow <code>blob:</code> for worker-side inline-module loading.</p>
+      </section>
+
+      <section id="interaction"><h2>Real-time interaction</h2><p>The canvas emits pointer and keyboard events with world-space coordinates. Developers can build custom controls in ordinary HTML, or forward serializable input into a JavaScript scene running beside the solver in the worker.</p>
+        <pre><code>sim.setInteraction({ enabled: true, mode: 'custom' });
+sim.on('pointerdown', ({ position }) =&gt; {
+  console.log('World position:', position);
+});
+sim.on('interact', ({ position }) =&gt; {
+  // Custom behavior; mode 'custom' disables automatic injection.
+  sim.emitParticles(position, [0, 0.5], 'water');
+});
+sim.on('keydown', ({ key, originalEvent }) =&gt; {
+  if (key === ' ') {
+    originalEvent.preventDefault();
+    sim.running ? sim.pause() : sim.play();
+  }
+});</code></pre>
+        <p>A scene module may export <code>onMessage(name, payload, api)</code>. With <code>forwardToScene: true</code>, pointer and keyboard events are forwarded to that callback. It can update scene-owned state and call worker-side methods such as <code>api.addParticles()</code>, <code>api.addRigid()</code>, <code>api.emitParticles()</code>, or <code>api.generalAction()</code>. Payloads must be structured-cloneable. Supported events include <code>pointerdown</code>, <code>pointermove</code>, <code>pointerup</code>, <code>pointercancel</code>, <code>interact</code>, <code>keydown</code>, and <code>keyup</code>. Pointer payloads include the pixel coordinates and a projected world-space position.</p>
+      </section>
+
+      <section id="api"><h2>Simulation API</h2><div class="api-grid">
+        <div><code>play()</code><p>Start continuous stepping.</p></div><div><code>pause()</code><p>Stop continuous stepping.</p></div><div><code>step()</code><p>Advance one simulation frame.</p></div><div><code>reset(options)</code><p>Reload the current scene.</p></div><div><code>loadScene(scene, options)</code><p>Load a scene ID or JSON definition.</p></div><div><code>loadSceneModule(url, options)</code><p>Import a JavaScript scene module inside the runtime.</p></div><div><code>loadInlineScene(source, metadata, options)</code><p>Load trusted inline module source.</p></div><div><code>addParticles(config)</code><p>Add particles at runtime.</p></div><div><code>addRigid(config)</code><p>Add a rigid body at runtime.</p></div><div><code>addWheel(config)</code><p>Add a rigid wheel shape.</p></div><div><code>addEmitter(config)</code><p>Add a particle-source emitter.</p></div><div><code>generalAction(config)</code><p>Call a supported low-level solver action.</p></div><div><code>update(patch)</code><p>Change gravity, speed, wheel speed, friction, etc.</p></div><div><code>setGravity(value)</code><p>Convenience wrapper for gravity changes.</p></div><div><code>emitParticles(position, velocity, material, color)</code><p>Inject a small particle source.</p></div><div><code>send(name, payload)</code><p>Forward serializable custom input to a scene module's worker-side <code>onMessage</code>.</p></div><div><code>setOptions(options)</code><p>Update rendering options.</p></div><div><code>setInteraction(options)</code><p>Choose touch, custom, or orbit input mode.</p></div><div><code>getStats()</code><p>Read the latest frame statistics.</p></div><div><code>snapshot()</code><p>Download the current canvas as PNG.</p></div><div><code>dispose()</code><p>Release the worker, renderer and listeners.</p></div>
+      </div><p>Event handlers are registered with <code>sim.on(name, callback)</code>. The return value is an unsubscribe function; <code>sim.off(name, callback)</code> is also available.</p></section>
+
+      <section id="levelsets"><h2>Emitters, wheels &amp; custom level sets</h2><p>JSON supports repeat emitters and scripted wheels; JavaScript modules have access to the full level-set builder, rigid meshes and articulation methods.</p>
+        <pre><code>// Declarative custom collider
+const scene = {
+  id: 'custom-bounds', name: 'Custom bounds', dim: 2,
+  boundaries: { floor: false, walls: false },
+  levelset: {
+    planes: [{ normal: [0, 1], d: -0.04 }],
+    boxes: [{ lower: [0.25, 0.2], upper: [0.75, 0.24], insideOut: false }],
+    spheres: [{ center: [0.5, 0.48], radius: 0.12, insideOut: true }],
+    friction: 0.5
+  },
+  objects: [
+    { type: 'emitter', material: 'water', shape: 'sphere', center: [0.5, 0.85], radius: 0.025, velocity: [0, -1], duration: 4, density: 2 },
+    { type: 'rigid', shape: 'wheel', center: [0.5, 0.32], radius: 0.1, blades: 10, motion: { enabled: true, speed: 120 } }
+  ]
+};</code></pre>
+        <p>Custom level-set kinds: <code>planes</code>, <code>boxes</code>, <code>spheres</code>, <code>cylinders</code>, and 2D <code>polygons</code>. Set <code>levelset.includeDefaultBoundaries: true</code> to combine the custom shapes with default floor/wall boundaries.</p>
+        <p>JavaScript scenes can use <code>mpm.add_articulation()</code> for motor, distance and rotation constraints, and can build custom 2D segment meshes or 3D triangle meshes.</p>
+      </section>
+
+      <section id="limits"><h2>Scope &amp; limitations</h2><ul><li>The project ships the original precompiled WASM solver binaries and JavaScript host. Native C++ source is intentionally not included in this distribution.</li><li>The standard renderer exports positions and packed color, rigid geometry, level sets, blocks and statistics. It does not expose a general writable per-particle state buffer for arbitrary velocity, mass or deformation-gradient edits.</li><li>The main-thread fallback is compatible but is not a performance substitute for a dedicated worker on large scenes.</li><li>Inline code and imported modules are trusted executable code. Worker isolation is an execution boundary, not a security sandbox.</li><li>Custom 3D polygon level sets are not supported by the current level-set API.</li></ul></section>
+      <footer class="docs-footer"><a href="/">← Back to playground</a><span>MPM Studio · Vanilla HTML / CSS / JavaScript</span></footer>
+    </main>
+  </div>
+</body>
+</html>
