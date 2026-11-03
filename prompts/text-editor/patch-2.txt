@@ -1,0 +1,163 @@
+original-plan.md
+```md
+# Smart Text Editor
+
+## 1. Interface
+- Full-screen, multiline monospace text editor.
+- No logo, header, or sidebar; a fixed bottom bar displays autocomplete chips.
+- A settings button in the top-right opens a partially sized overlay that slightly blurs the editor and bottom bar. Clicking outside closes it and saves changes.
+- Keep the editor's text editable and unchanged until the user accepts a completion.
+
+## 2. Autocomplete and keyboard behavior
+- The inline completion is always the first bottom-bar candidate.
+- **Tab:** accept the selected completion.
+- **Left/right arrows:** cycle through alternatives when available instead of normal caret movement.
+- **Up/down arrows and Enter:** preserve their normal editor behavior.
+- Left at the first candidate and right at the last candidate preserve normal cursor movement.
+- Clicking a suggestion chip accepts that suggestion.
+- Support targeted text replacement, including replacing characters immediately before the cursor.
+- If no completion applies, show nothing.
+
+## 3. Math engine
+- Parse standard mathematical expressions, including operators, parentheses, constants, functions, and implicit multiplication where appropriate.
+- Use `decimal.js` for arbitrary-precision arithmetic.
+- Support radians and degrees, remembering the previous selection and defaulting to radians.
+- Round ordinary previews to four significant digits by default, using standard significant-digit rounding.
+- Allow constants and progressively typed numbers to continue beyond normal preview precision.
+- Use ordinary decimal notation by default. Offer scientific notation as an alternative when \(|x| < 10^{-4}\) or \(|x| > 10^4\).
+- Prefer scientific notation exclusively below \(10^{-1000}\) or above \(10^{1000}\), except when continuing long exact constants or progressively typed numbers.
+- Truncate long previews with `...`.
+- Show `rad` or `deg` on suggestion chips only when angle mode affects the result.
+
+## 4. Unit engine
+- Represent units using a coefficient and exponents of the seven SI base units.
+- Support unit arithmetic, dimensional analysis, derived units, and conversions.
+- Recognize equivalent expressions and simplify to appropriate units, such as `kg·m²/s²` to `J`.
+- Suggest readable, context-appropriate units and normalize quantities where sensible, such as `1500 g` to `1.5 kg` or `40oz` to `2.5lbs`.
+- Support metric and imperial preferences.
+- Offer one metric and one imperial alternative for convertible quantities.
+- When converting explicitly, such as `1 km -> mi` or `1 km to mi`, support selecting a unit from a dropdown on the right side of the bottom bar. The dropdown should only appear if a unit is being suggested.
+- Allow users to accept a suggested unit inline or switch to another available unit.
+
+## 5. Settings and developer tools
+Include settings for:
+- Metric/imperial preference.
+- Degrees/radians, defaulting to radians.
+- Light/dark theme.
+- Font size.
+- Enable/disable inline suggestions.
+- Debugger/developer menu.
+  - Debugging/console logs
+  - Editing the known units in the unit engine as JSON.
+
+Also provide a degrees/radians quick switch at the rightmost end of the bottom bar.
+
+## 6. Examples and validation
+Use the supplied examples as acceptance tests for:
+- Whitespace and cursor positioning.
+- Inline calculations and contextual autocomplete.
+- Angle mode and function evaluation.
+- Significant-digit rounding and precision continuation.
+- Scientific notation thresholds.
+- Unit normalization, conversion, and derived units.
+- Editing existing text through completions.
+
+Preserve ordinary editor behavior whenever no suggestion is active.
+
+For the examples below:
+- Inline completions shown in quotes
+- Bar autocompletions shown in backticks. Note that inline autocompletions are the first item in the bar autocompletions ("a" implies "a"`a`)
+- A bar completion without an inline completion should not show inline completions (`a` without "a" means do not inline)
+- If no quotes or backticks, do not autocomplete
+- Cursor shown in |, if not shown, assume cursor is at end of string
+
+1+1"=2"
+1 + 1" = 2"
+1  +  1"  =  2"
+1 +1"=2"
+1+ 1" = 2"
+1|
+other text 1+1|"=2" other text
+text.1+1="1.1"
+text1+1|
+1+1+1"=3"
+1+1=|4
+1+1=|2
+sin(30)="-0.988"`0.5`
+If the user selected degrees last: sin(30)="0.5"`-0.988`
+sin 30="-0.988"`0.5`
+1/7="0.1429"
+pi="3.142"
+replace 2, hide from UI and replace with 1: pi=3.142"15"
+pi=3.1415"9"
+1/sqrt 2=0.7"0"
+1/sqrt 2=0.70"7"
+Exception to 10**-1000 rule (keep going after 1000 digits): pi=3.14159...[many digits of pi]...1989"3"
+Exception to 10**-1000 rule (keep going after 1000 digits): sqrt 2=1.41421...[many digits of pi]...128229518488472"0"
+sin(30 deg)="0.5"
+sin(30 rad)="-0.988"
+- 1+1`=2`
+- 1+1="2"
+-1+1"=0"
+-1+1="0"
+0.1 + 0.2 = "0.3"
+pi + 0.001 = "3.143"
+pi + 0.000001 = "3.141593"
+Unit examples:
+Metric selected: 1kg + 2kg = "3kg"`6.614lbs`
+Imperial selected: 1kg + 2kg = "6.614lbs"`3kg`
+Imperial unit suggestions implied for things below:
+1kg + 2000g = "3kg"
+0.1kg + 0.1kg = "200g"
+1000kg + 1000g = "1001kg"
+0.1kg + 0.1kg to kg = "0.2kg"
+10**-6 kg = "1mg"
+1km + 1pm = "1km"
+1km to mi" = 0.6214mi"
+1km -> mi" = 0.6214mi"
+1km -> mi = 0.62|"1"mi
+1km -> mi = 0.62mi|
+1km * 2 = "2km"
+1km + 2|
+1kg * 1m\*\*2 / 1s\*\*2 = "1J"
+1 kg m2 s-2 * 2 = "2J"
+1 kg2 * 2kg = "2 kg3"
+The \*\*2 denotes meters squared, not 2 squared: 2m\*\*2 * 1 = "2m**2"
+
+Follow the bullet-pointed instructions below. In the case of a conflict, other instructions override the bullet points
+- Use plain HTML, Javascript, and CSS as the main body (libraries ok). Do NOT use React/Vite as the main body of the application.
+- Use a white, clean, minimal design. Prioritize UI organization and friendliness over a dense, feature-packed UI.
+- You do NOT have a fixed maximum sequential tool-calling limit. You may use tools as many times as you like. Prefer edit_file over create_file unless you are making a major update to the file.
+- Do not add static chips (eg. Ready) unless they change or are actually used. 
+- Remove static text that clouds the UI (eg. "Your information stays in the browser") unless it meaningfully enhances the application.
+```
+
+patch-1.txt
+```txt
+Change the following: 
+1. Only truncate with "..." on the bottom bar. Never truncate inline previews.
+2. Imperial temperature defaults to Rankine. Default to Fahrenheit.
+3. Use a special rule for celsius and coulomb. Things like "3C to F", "3K to c" and "3C to mC" should both autocomplete.
+4. Electronvolts seem to be acting weirdly:
+These inline: "3 meV = ", 
+These don't inline: "3 eV = ", "3 keV = " 
+5. "2**14=" autocompletes as 16380. "10000+10001=" autocompletes as 20000. "2**1000" autocompletes 1072 with 253 zeros. Do not round like this, and use decimal.js for arbitrary precision.
+6. Only suggest, but don't inline dates and phone numbers: "12/31/2026", "415-555-0132"
+7. `2psi to Pa` works, but `2PSI to Pa` and `2psi to pa` doesn't. Units should be case insensitive only if all lowercase, all uppercase, or titlecase unless they conflict
+Examples:
+2mW is 2 milliwatts, 2MW is 2 megawatts. 2mw and 2Mw are invalid
+5psi, 5PSI and 5Psi are both 5 pounds per square inch, combinations such as 5psI, 5pSi, 5PSi, 5pSI are invalid
+8. Add a special rule for radians/degrees conversions: "pi rad to deg", "pi radians to degrees", "pi radians to deg", etc..
+9. mcg = ug = micrograms. mcL = mcl = uL = microliters. mcV = mcV = uV = microvolts. Do not apply to distance or other units aside from the ones specified here.
+10. 1 N m^-2 should work the same as 1 N m**-2 or 1 N m-2
+11. Convert the entire application to HTML, Javascript, and CSS. Write minimal React/Vite and remove it entirely if possible.
+```
+
+Ensure the application at https://github.com/cc-fusion/vibecoding/blob/main/prompts/text-editor/v3-patch-1.zip meets the original plan + patches in the first two prompt files. Then change the following (patch-1 overrides original-plan, instructions below override patch-1):
+- Add um (micrometers) and us (microseconds). Remove mcV (microvolt) and keep uV
+- Dates and phone numbers:
+  - Keep: Do not inline valid dates (12/31/2026)
+  - Always inline invalid dates (13/31/2026, 12/32/2026)
+  - Always inline if there's an equals sign, regardless if the date is valid or not (12/31/2026=, 13/31/2026=)
+  - Only inline phone numbers if there's an equals sign, otherwise, do not inline
+Do not change anything else
