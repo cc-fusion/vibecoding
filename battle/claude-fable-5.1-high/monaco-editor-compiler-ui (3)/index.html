@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Editor</title>
+  <script>
+    // Apply colour mode before first paint to avoid a flash.
+    // NOTE: the storage key must match CONFIG.storageKey + ':dark' below.
+    (function () {
+      try {
+        var saved = localStorage.getItem('code-editor:dark');
+        var dark = saved === null ? matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style type="text/tailwindcss">
+    @custom-variant dark (&:where(.dark, .dark *));
+  </style>
+  <style>
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+
+    /* Split layout: column on mobile, row on desktop */
+    #workspace { display: flex; flex-direction: column; --split: 50%; }
+    @media (min-width: 768px) { #workspace { flex-direction: row; } }
+    #editor-pane { flex: 0 0 var(--split); min-width: 0; min-height: 0; }
+    #result-pane { flex: 1 1 0; min-width: 0; min-height: 0; }
+
+    /* Resize handle */
+    #resizer { flex: 0 0 auto; position: relative; touch-action: none; }
+    #resizer::after {
+      content: ""; position: absolute; inset: -4px 0; /* bigger hit area (mobile) */
+    }
+    @media (min-width: 768px) { #resizer::after { inset: 0 -4px; } }
+
+    /* While dragging: keep pointer events flowing and lock selection */
+    body.is-resizing { user-select: none; -webkit-user-select: none; cursor: col-resize; }
+    body.is-resizing.resize-vertical { cursor: row-resize; }
+    body.is-resizing #editor-pane,
+    body.is-resizing #result-pane { pointer-events: none; }
+
+    /* Dialog */
+    dialog { margin: auto; }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+
+    /* Toggle switch */
+    .switch { position: relative; width: 2.5rem; height: 1.5rem; border-radius: 9999px; transition: background .15s; }
+    .switch::after {
+      content: ""; position: absolute; top: 0.125rem; left: 0.125rem; width: 1.25rem; height: 1.25rem;
+      border-radius: 9999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s;
+    }
+    input:checked + .switch::after { transform: translateX(1rem); }
+
+    /* Toast */
+    #toast { transition: opacity .2s, transform .2s; }
+    #toast.hidden-toast { opacity: 0; transform: translate(-50%, 0.5rem); pointer-events: none; }
+  </style>
+</head>
+<body class="h-full flex flex-col bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased">
+
+  <!-- Top bar -->
+  <header class="flex items-center gap-3 h-12 px-3 sm:px-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shrink-0">
+    <h1 class="text-sm font-semibold tracking-tight">Code Editor</h1>
+    <div id="toolbar" class="ml-auto flex items-center gap-1.5 sm:gap-2"></div>
+  </header>
+
+  <!-- Workspace -->
+  <main id="workspace" class="flex-1 min-h-0">
+    <!-- Editor pane -->
+    <section id="editor-pane" class="flex flex-col bg-white dark:bg-zinc-950" aria-label="Code editor">
+      <div class="flex items-center h-8 px-3 text-xs text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 shrink-0 select-none">
+        <span id="language-label"></span>
+      </div>
+      <div class="relative flex-1 min-h-0">
+        <div id="editor" class="absolute inset-0"></div>
+        <div id="editor-loading" class="absolute inset-0 flex items-center justify-center text-sm text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-950">
+          Loading editor…
+        </div>
+      </div>
+    </section>
+
+    <!-- Resize handle -->
+    <div id="resizer" role="separator" aria-label="Resize editor and result" aria-orientation="vertical" tabindex="0"
+         class="group h-1.5 w-full md:h-auto md:w-1.5 cursor-row-resize md:cursor-col-resize bg-zinc-100 dark:bg-zinc-900 border-y md:border-y-0 md:border-x border-zinc-200 dark:border-zinc-800 hover:bg-blue-500/60 focus-visible:bg-blue-500/60 outline-none transition-colors">
+    </div>
+
+    <!-- Result pane -->
+    <section id="result-pane" class="flex flex-col bg-white dark:bg-zinc-950" aria-label="Result">
+      <div class="flex items-center h-8 px-3 text-xs text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800 shrink-0 select-none">
+        <span>Result</span>
+        <button id="clear-result" type="button" class="hidden ml-auto px-1.5 py-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">Clear</button>
+      </div>
+      <div class="relative flex-1 min-h-0">
+        <iframe id="result-frame" title="Result" class="absolute inset-0 w-full h-full border-0 bg-white dark:bg-zinc-950"></iframe>
+        <div id="result-empty" class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6 bg-white dark:bg-zinc-950">
+          <p class="text-sm text-zinc-500 dark:text-zinc-400">Press <span class="font-medium text-zinc-700 dark:text-zinc-200">Run</span> to see the result here</p>
+          <p class="text-xs text-zinc-400 dark:text-zinc-500"><kbd class="px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 font-sans">Ctrl</kbd> + <kbd class="px-1.5 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 font-sans">Enter</kbd></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Settings dialog -->
+  <dialog id="settings-dialog" class="w-[min(28rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] rounded-xl p-0 bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <form method="dialog" class="flex flex-col max-h-[calc(100vh-2rem)]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+        <h2 class="text-base font-semibold">Editor settings</h2>
+        <button type="submit" aria-label="Close" class="p-1.5 -mr-1.5 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors" data-icon="x"></button>
+      </div>
+
+      <div class="overflow-y-auto px-5 py-4 space-y-6">
+        <section class="space-y-3">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Appearance</h3>
+          <label class="flex items-center justify-between gap-4 text-sm">
+            <span>Light mode theme</span>
+            <select id="set-theme-light" class="text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+          </label>
+          <label class="flex items-center justify-between gap-4 text-sm">
+            <span>Dark mode theme</span>
+            <select id="set-theme-dark" class="text-sm rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+          </label>
+          <label class="flex items-center justify-between gap-4 text-sm">
+            <span>Font size</span>
+            <span class="flex items-center gap-3">
+              <input id="set-font-size" type="range" min="10" max="28" step="1" class="w-28 accent-blue-600">
+              <span id="set-font-size-value" class="w-8 text-right tabular-nums text-zinc-600 dark:text-zinc-300"></span>
+            </span>
+          </label>
+        </section>
+
+        <section class="space-y-1">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Editing</h3>
+          <div id="settings-toggles" class="divide-y divide-zinc-100 dark:divide-zinc-800"></div>
+        </section>
+      </div>
+
+      <div class="flex items-center justify-between px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60">
+        <button type="button" id="settings-reset" class="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white px-2 py-1.5 rounded-md hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors">Reset to defaults</button>
+        <button type="submit" class="text-sm font-medium px-3.5 py-1.5 rounded-md bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 transition-colors">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden-toast fixed left-1/2 bottom-6 -translate-x-1/2 px-3.5 py-2 rounded-lg text-sm bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-lg z-50" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script>
+    /* =====================================================================
+     *  ICONS  (inline SVG strings; add your own here)
+     * ===================================================================== */
+    const svg = (paths, cls = '') =>
+      `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 ${cls}" aria-hidden="true">${paths}</svg>`;
+
+    const ICONS = {
+      play: svg('<polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/>'),
+      spinner: svg('<path d="M21 12a9 9 0 1 1-6.219-8.56"/>', 'animate-spin'),
+      external: svg('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
+      sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'),
+      moon: svg('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
+      settings: svg('<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>'),
+      x: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+    };
+
+    /* =====================================================================
+     *  DEVELOPER CONFIGURATION
+     *  Everything you normally need to change lives in this object.
+     * ===================================================================== */
+    const CONFIG = {
+      // Monaco language id, e.g. 'javascript', 'typescript', 'python', 'cpp',
+      // 'java', 'csharp', 'go', 'rust', 'html', 'css', 'json', 'sql', ...
+      language: 'javascript',
+
+      // Human-readable name shown above the editor.
+      languageLabel: 'JavaScript',
+
+      // Code shown on first visit (before the user has saved anything).
+      defaultCode: [
+        'function greet(name) {',
+        '  return `Hello, ${name}!`;',
+        '}',
+        '',
+        'console.log(greet("world"));',
+        '',
+      ].join('\n'),
+
+      // Prefix for all localStorage keys.
+      storageKey: 'code-editor',
+
+      // Default Monaco theme for each colour mode (users can override in Settings).
+      // Built-in: 'vs', 'vs-dark', 'hc-light', 'hc-black'. Register custom themes
+      // with monaco.editor.defineTheme() inside onMonacoReady() and list them below.
+      themes: { light: 'vs', dark: 'vs-dark' },
+
+      // Themes offered in the Settings dialog.
+      themeOptions: [
+        { id: 'vs',       label: 'Light' },
+        { id: 'vs-dark',  label: 'Dark' },
+        { id: 'hc-light', label: 'High contrast light' },
+        { id: 'hc-black', label: 'High contrast dark' },
+      ],
+
+      // Defaults for user-toggleable editor settings (changeable in Settings).
+      editorDefaults: {
+        fontSize: 14,
+        wordWrap: false,
+        minimap: true,
+        suggestions: true,
+        parameterHints: true,
+      },
+
+      // Fixed Monaco options, merged last (override anything).
+      // https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.IStandaloneEditorConstructionOptions.html
+      monacoOptions: {
+        folding: true,
+        showFoldingControls: 'mouseover',
+        lineNumbers: 'on',
+        lineNumbersMinChars: 3,
+        detectIndentation: true,   // never forces tabs/spaces or a tab size
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        renderLineHighlight: 'line',
+        bracketPairColorization: { enabled: true },
+        padding: { top: 12, bottom: 12 },
+      },
+
+      // Portion of the workspace given to the editor (0–1) before the user resizes.
+      defaultSplit: 0.5,
+
+      // Sandbox flags for the result iframe.
+      resultSandbox: 'allow-scripts allow-modals allow-forms allow-popups',
+
+      // Toolbar buttons, rendered left → right. Add, remove, or reorder freely.
+      //   id        unique key
+      //   label     string | (app) => string
+      //   icon      svg string | (app) => svg string   (optional)
+      //   primary   highlighted style                  (optional)
+      //   shortcut  shown in the tooltip               (optional)
+      //   disabled  (app) => boolean                   (optional)
+      //   onClick   (app) => void
+      buttons: [
+        {
+          id: 'run',
+          label: 'Run',
+          primary: true,
+          shortcut: 'Ctrl+Enter',
+          icon: (app) => (app.state.running ? ICONS.spinner : ICONS.play),
+          disabled: (app) => app.state.running,
+          onClick: (app) => app.run(),
+        },
+        {
+          id: 'open',
+          label: 'Open in new tab',
+          icon: ICONS.external,
+          onClick: (app) => app.openResultInNewTab(),
+        },
+        {
+          id: 'theme',
+          label: (app) => (app.state.dark ? 'Light mode' : 'Dark mode'),
+          icon: (app) => (app.state.dark ? ICONS.sun : ICONS.moon),
+          onClick: (app) => app.toggleTheme(),
+        },
+        {
+          id: 'settings',
+          label: 'Settings',
+          icon: ICONS.settings,
+          onClick: (app) => app.openSettings(),
+        },
+      ],
+
+      // Called once Monaco is loaded, before the editor is created.
+      // Use it to define custom themes, register languages, completions, etc.
+      onMonacoReady(monaco) {},
+
+      /* -----------------------------------------------------------------
+       *  COMPILER HOOK — implement this to add compile/run functionality.
+       *  Receives the editor contents and language id. Return one of:
+       *     { html: '<!doctype html>...' }   rendered as a page in the result pane
+       *     { text: 'plain output' }         rendered as monospace text
+       *     { error: 'message' }             rendered as an error
+       *  You may also call app.setResult(...) yourself and return nothing.
+       * ----------------------------------------------------------------- */
+      async compile(code, language, app) {
+        return null; // not implemented yet
+      },
+    };
+
+    /* =====================================================================
+     *  APPLICATION
+     * ===================================================================== */
+    const MONACO_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min';
+
+    const storage = {
+      key: (k) => `${CONFIG.storageKey}:${k}`,
+      get(k, fallback = null) {
+        try { const v = localStorage.getItem(this.key(k)); return v === null ? fallback : JSON.parse(v); }
+        catch { return fallback; }
+      },
+      set(k, v) { try { localStorage.setItem(this.key(k), JSON.stringify(v)); } catch {} },
+      remove(k) { try { localStorage.removeItem(this.key(k)); } catch {} },
+    };
+
+    const $ = (sel) => document.querySelector(sel);
+    const el = {
+      toolbar: $('#toolbar'),
+      workspace: $('#workspace'),
+      editor: $('#editor'),
+      editorLoading: $('#editor-loading'),
+      languageLabel: $('#language-label'),
+      resizer: $('#resizer'),
+      frame: $('#result-frame'),
+      resultEmpty: $('#result-empty'),
+      clearResult: $('#clear-result'),
+      dialog: $('#settings-dialog'),
+      toast: $('#toast'),
+    };
+
+    const TOGGLES = [
+      { key: 'wordWrap',       label: 'Word wrap',       desc: 'Wrap long lines instead of scrolling horizontally' },
+      { key: 'minimap',        label: 'Minimap',         desc: 'Show a code overview beside the scrollbar' },
+      { key: 'suggestions',    label: 'Suggestions',     desc: 'Show autocomplete suggestions while typing' },
+      { key: 'parameterHints', label: 'Parameter hints', desc: 'Show function signatures while typing arguments' },
+    ];
+
+    const defaultSettings = () => ({
+      ...CONFIG.editorDefaults,
+      themeLight: CONFIG.themes.light,
+      themeDark: CONFIG.themes.dark,
+    });
+
+    const app = {
+      editor: null,
+      monaco: null,
+      state: {
+        dark: document.documentElement.classList.contains('dark'),
+        settings: { ...defaultSettings(), ...(storage.get('settings') || {}) },
+        split: storage.get('split', CONFIG.defaultSplit),
+        running: false,
+        lastResult: null,   // { html | text | error }
+        lastHtml: null,     // final document shown in the iframe
+      },
+
+      /* ---------- Code ---------- */
+      getCode() { return this.editor ? this.editor.getValue() : storage.get('code', CONFIG.defaultCode); },
+      setCode(code) { if (this.editor) this.editor.setValue(code); else storage.set('code', code); },
+
+      /* ---------- Running ---------- */
+      async run() {
+        if (this.state.running || !this.editor) return;
+        this.state.running = true;
+        renderToolbar();
+        try {
+          const result = await CONFIG.compile(this.getCode(), CONFIG.language, this);
+          if (result == null) {
+            if (!this.state.lastResult) {
+              this.setResult({
+                text: 'No compiler is configured yet.\n\nImplement CONFIG.compile(code, language, app) in index.html to run code.',
+              });
+            }
+          } else {
+            this.setResult(result);
+          }
+        } catch (err) {
+          this.setResult({ error: (err && err.stack) || String(err) });
+        } finally {
+          this.state.running = false;
+          renderToolbar();
+        }
+      },
+
+      setResult(result) {
+        this.state.lastResult = result;
+        this.state.lastHtml = buildResultHtml(result, this.state.dark);
+        el.frame.srcdoc = this.state.lastHtml;
+        el.resultEmpty.classList.add('hidden');
+        el.clearResult.classList.remove('hidden');
+      },
+
+      clearResult() {
+        this.state.lastResult = null;
+        this.state.lastHtml = null;
+        el.frame.removeAttribute('srcdoc');
+        el.frame.src = 'about:blank';
+        el.resultEmpty.classList.remove('hidden');
+        el.clearResult.classList.add('hidden');
+      },
+
+      openResultInNewTab() {
+        if (!this.state.lastHtml) { toast('Run the code first'); return; }
+        const blob = new Blob([this.state.lastHtml], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, '_blank');
+        if (!win) toast('Pop-up blocked — allow pop-ups to open the result');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+
+      /* ---------- Theme ---------- */
+      isDark() { return this.state.dark; },
+      setDark(dark, persist = true) {
+        this.state.dark = dark;
+        document.documentElement.classList.toggle('dark', dark);
+        if (persist) storage.set('dark', dark);
+        if (this.monaco) this.monaco.editor.setTheme(this.currentTheme());
+        // Re-render built-in text/error results so they match the colour mode.
+        const r = this.state.lastResult;
+        if (r && !r.html) this.setResult(r);
+        renderToolbar();
+      },
+      toggleTheme() { this.setDark(!this.state.dark); },
+      currentTheme() { return this.state.dark ? this.state.settings.themeDark : this.state.settings.themeLight; },
+
+      /* ---------- Settings ---------- */
+      openSettings() { syncSettingsUI(); el.dialog.showModal(); },
+      updateSettings(patch) {
+        Object.assign(this.state.settings, patch);
+        storage.set('settings', this.state.settings);
+        this.applySettings();
+      },
+      resetSettings() {
+        this.state.settings = defaultSettings();
+        storage.remove('settings');
+        this.applySettings();
+        syncSettingsUI();
+      },
+      applySettings() {
+        if (!this.editor) return;
+        this.editor.updateOptions(buildEditorOptions());
+        this.monaco.editor.setTheme(this.currentTheme());
+      },
+
+      /* ---------- Layout ---------- */
+      setSplit(ratio, persist = false) {
+        this.state.split = Math.min(0.85, Math.max(0.15, ratio));
+        el.workspace.style.setProperty('--split', `${this.state.split * 100}%`);
+        el.resizer.setAttribute('aria-valuenow', Math.round(this.state.split * 100));
+        if (persist) storage.set('split', this.state.split);
+        if (this.editor) this.editor.layout();
+      },
+    };
+    window.CodeEditorApp = app; // handy for debugging / external integrations
+
+    /* ---------- Helpers ---------- */
+    function buildEditorOptions() {
+      const s = app.state.settings;
+      return {
+        fontSize: s.fontSize,
+        wordWrap: s.wordWrap ? 'on' : 'off',
+        minimap: { enabled: s.minimap },
+        quickSuggestions: s.suggestions,
+        suggestOnTriggerCharacters: s.suggestions,
+        wordBasedSuggestions: s.suggestions ? 'currentDocument' : 'off',
+        parameterHints: { enabled: s.parameterHints },
+        ...CONFIG.monacoOptions,
+      };
+    }
+
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function buildResultHtml(result, dark) {
+      if (result.html != null) return result.html;
+      const isError = result.error != null;
+      const body = escapeHtml(isError ? result.error : (result.text ?? ''));
+      const bg = dark ? '#09090b' : '#ffffff';
+      const fg = isError ? (dark ? '#fca5a5' : '#b91c1c') : (dark ? '#e4e4e7' : '#18181b');
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Result</title>
+<style>html{color-scheme:${dark ? 'dark' : 'light'}}body{margin:0;padding:16px;background:${bg};color:${fg};font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}pre{margin:0;white-space:pre-wrap;word-break:break-word}</style>
+</head><body><pre>${body}</pre></body></html>`;
+    }
+
+    let toastTimer;
+    function toast(message, ms = 2200) {
+      el.toast.textContent = message;
+      el.toast.classList.remove('hidden-toast');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.toast.classList.add('hidden-toast'), ms);
+    }
+
+    const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+    const isMobileLayout = () => !window.matchMedia('(min-width: 768px)').matches;
+
+    /* ---------- Toolbar ---------- */
+    const BTN_BASE = 'inline-flex items-center gap-2 h-8 rounded-md text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed';
+    const BTN_PRIMARY = `${BTN_BASE} px-3 bg-blue-600 text-white hover:bg-blue-500`;
+    const BTN_DEFAULT = `${BTN_BASE} px-2 sm:px-2.5 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800`;
+
+    function renderToolbar() {
+      el.toolbar.innerHTML = '';
+      for (const def of CONFIG.buttons) {
+        const label = typeof def.label === 'function' ? def.label(app) : def.label;
+        const icon = typeof def.icon === 'function' ? def.icon(app) : def.icon;
+        const disabled = typeof def.disabled === 'function' ? def.disabled(app) : !!def.disabled;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.id = def.id;
+        b.className = def.primary ? BTN_PRIMARY : BTN_DEFAULT;
+        b.disabled = disabled;
+        b.title = def.shortcut ? `${label} (${def.shortcut})` : label;
+        b.setAttribute('aria-label', label);
+        b.innerHTML = `${icon || ''}<span class="${def.primary || !icon ? '' : 'hidden sm:inline'}">${escapeHtml(label)}</span>`;
+        b.addEventListener('click', () => def.onClick && def.onClick(app));
+        el.toolbar.appendChild(b);
+      }
+    }
+
+    /* ---------- Settings dialog ---------- */
+    function buildSettingsUI() {
+      el.dialog.querySelector('[data-icon="x"]').innerHTML = ICONS.x;
+
+      for (const id of ['#set-theme-light', '#set-theme-dark']) {
+        const sel = $(id);
+        sel.innerHTML = CONFIG.themeOptions.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`).join('');
+      }
+      $('#set-theme-light').addEventListener('change', (e) => app.updateSettings({ themeLight: e.target.value }));
+      $('#set-theme-dark').addEventListener('change', (e) => app.updateSettings({ themeDark: e.target.value }));
+
+      const range = $('#set-font-size');
+      range.addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('#set-font-size-value').textContent = `${v}px`;
+        app.updateSettings({ fontSize: v });
+      });
+
+      const wrap = $('#settings-toggles');
+      wrap.innerHTML = TOGGLES.map((t) => `
+        <label class="flex items-center justify-between gap-4 py-3 cursor-pointer">
+          <span class="flex flex-col">
+            <span class="text-sm">${t.label}</span>
+            <span class="text-xs text-zinc-500 dark:text-zinc-400">${t.desc}</span>
+          </span>
+          <input type="checkbox" class="sr-only peer" data-key="${t.key}">
+          <span class="switch shrink-0 bg-zinc-300 dark:bg-zinc-700 peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500 peer-focus-visible:ring-offset-2 dark:peer-focus-visible:ring-offset-zinc-900"></span>
+        </label>`).join('');
+      wrap.querySelectorAll('input[data-key]').forEach((input) => {
+        input.addEventListener('change', () => app.updateSettings({ [input.dataset.key]: input.checked }));
+      });
+
+      $('#settings-reset').addEventListener('click', () => app.resetSettings());
+      // Close when clicking the backdrop
+      el.dialog.addEventListener('click', (e) => { if (e.target === el.dialog) el.dialog.close(); });
+    }
+
+    function syncSettingsUI() {
+      const s = app.state.settings;
+      $('#set-theme-light').value = s.themeLight;
+      $('#set-theme-dark').value = s.themeDark;
+      $('#set-font-size').value = s.fontSize;
+      $('#set-font-size-value').textContent = `${s.fontSize}px`;
+      el.dialog.querySelectorAll('input[data-key]').forEach((input) => { input.checked = !!s[input.dataset.key]; });
+    }
+
+    /* ---------- Resizer ---------- */
+    function initResizer() {
+      const r = el.resizer;
+      r.setAttribute('aria-valuemin', 15);
+      r.setAttribute('aria-valuemax', 85);
+
+      r.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        e.preventDefault();
+        const vertical = isMobileLayout();
+        const rect = el.workspace.getBoundingClientRect();
+        r.setPointerCapture(e.pointerId);
+        document.body.classList.add('is-resizing');
+        document.body.classList.toggle('resize-vertical', vertical);
+        r.classList.add('bg-blue-500/60');
+
+        const onMove = (ev) => {
+          const ratio = vertical
+            ? (ev.clientY - rect.top) / rect.height
+            : (ev.clientX - rect.left) / rect.width;
+          app.setSplit(ratio);
+        };
+        const onUp = (ev) => {
+          r.removeEventListener('pointermove', onMove);
+          r.removeEventListener('pointerup', onUp);
+          r.removeEventListener('pointercancel', onUp);
+          try { r.releasePointerCapture(ev.pointerId); } catch {}
+          document.body.classList.remove('is-resizing', 'resize-vertical');
+          r.classList.remove('bg-blue-500/60');
+          app.setSplit(app.state.split, true);
+        };
+        r.addEventListener('pointermove', onMove);
+        r.addEventListener('pointerup', onUp);
+        r.addEventListener('pointercancel', onUp);
+      });
+
+      // Double-click resets the split
+      r.addEventListener('dblclick', () => app.setSplit(CONFIG.defaultSplit, true));
+
+      // Keyboard support
+      r.addEventListener('keydown', (e) => {
+        const step = 0.05;
+        const vertical = isMobileLayout();
+        const dec = vertical ? 'ArrowUp' : 'ArrowLeft';
+        const inc = vertical ? 'ArrowDown' : 'ArrowRight';
+        if (e.key === dec) { app.setSplit(app.state.split - step, true); e.preventDefault(); }
+        else if (e.key === inc) { app.setSplit(app.state.split + step, true); e.preventDefault(); }
+        else if (e.key === 'Home') { app.setSplit(0.15, true); e.preventDefault(); }
+        else if (e.key === 'End') { app.setSplit(0.85, true); e.preventDefault(); }
+      });
+
+      const mq = window.matchMedia('(min-width: 768px)');
+      const onLayoutChange = () => {
+        r.setAttribute('aria-orientation', mq.matches ? 'vertical' : 'horizontal');
+        if (app.editor) app.editor.layout();
+      };
+      mq.addEventListener('change', onLayoutChange);
+      onLayoutChange();
+    }
+
+    /* ---------- Monaco ---------- */
+    function initMonaco() {
+      window.MonacoEnvironment = {
+        getWorkerUrl: () => `data:text/javascript;charset=utf-8,${encodeURIComponent(
+          `self.MonacoEnvironment={baseUrl:'${MONACO_BASE}/'};importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`
+        )}`,
+      };
+      require.config({ paths: { vs: `${MONACO_BASE}/vs` } });
+      require(['vs/editor/editor.main'], () => {
+        app.monaco = monaco;
+        CONFIG.onMonacoReady(monaco);
+
+        app.editor = monaco.editor.create(el.editor, {
+          value: storage.get('code', CONFIG.defaultCode),
+          language: CONFIG.language,
+          theme: app.currentTheme(),
+          ...buildEditorOptions(),
+        });
+
+        app.editor.onDidChangeModelContent(debounce(() => storage.set('code', app.editor.getValue()), 300));
+        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => app.run());
+
+        el.editorLoading.remove();
+        app.editor.focus();
+      }, (err) => {
+        el.editorLoading.textContent = 'Failed to load the editor. Check your connection and reload.';
+        console.error(err);
+      });
+    }
+
+    /* ---------- Boot ---------- */
+    (function init() {
+      el.languageLabel.textContent = CONFIG.languageLabel || CONFIG.language;
+      el.frame.setAttribute('sandbox', CONFIG.resultSandbox);
+      el.clearResult.addEventListener('click', () => app.clearResult());
+
+      // Follow the system colour scheme until the user picks one explicitly.
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (storage.get('dark') === null) app.setDark(e.matches, false);
+      });
+
+      app.setSplit(app.state.split);
+      renderToolbar();
+      buildSettingsUI();
+      initResizer();
+      initMonaco();
+    })();
+  </script>
+</body>
+</html>

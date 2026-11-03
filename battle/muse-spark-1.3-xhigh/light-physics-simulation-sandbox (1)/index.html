@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumen — Optics Sandbox</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  html,body{height:100%;background:#070a10;}
+  body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#232b3a;border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:99px;background:#232d42;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:99px;background:#e8eefc;border:2px solid #5b7cff;box-shadow:0 0 0 3px rgba(91,124,255,.18);cursor:grab}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:99px;background:#e8eefc;border:2px solid #5b7cff;cursor:grab}
+  input[type=number],select{background:#0e1420;border:1px solid #1f2940;border-radius:8px;padding:4px 8px;font-size:12px;color:#dbe4ff;width:100%}
+  input[type=number]:focus,select:focus{border-color:#5b7cff;outline:none}
+  .toolbtn{transition:all .15s ease}
+  .toolbtn:hover{background:#182036;border-color:#2c3a5e;transform:translateY(-1px)}
+  .toolbtn:active{transform:translateY(0px) scale(.98)}
+  .seg-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5b6b8c;font-weight:700}
+  details.physics summary{cursor:pointer;font-size:11px;color:#6b7da3;list-style:none}
+  details.physics summary::-webkit-details-marker{display:none}
+  details.physics summary:before{content:'▸ ';font-size:10px}
+  details.physics[open] summary:before{content:'▾ '}
+  .spec-canvas{cursor:crosshair;border-radius:10px;border:1px solid #1f2940;background:#0a0f1a}
+  canvas#scene{cursor:default;touch-action:none}
+  .fadein{animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .toggle{width:36px;height:20px;border-radius:99px;background:#232d42;position:relative;cursor:pointer;transition:background .15s;flex-shrink:0}
+  .toggle.on{background:#5b7cff}
+  .toggle:after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:99px;background:#fff;transition:left .15s}
+  .toggle.on:after{left:18px}
+  .chip-live{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body class="text-slate-200 h-screen flex flex-col overflow-hidden">
+
+<!-- TOP BAR -->
+<header class="h-[52px] shrink-0 flex items-center justify-between px-4 border-b border-[#141b2c] bg-[#0a0e16]/90 backdrop-blur z-20">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5b7cff] via-[#8b5cf6] to-[#ec4899] flex items-center justify-center shadow-lg shadow-indigo-500/20">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4"/><path d="M12 3v2M12 7c-3 2-5 5-5 9h10c0-4-2-7-5-9z" opacity=".9"/><path d="M4 6l3 2M20 6l-3 2M2 12h3M19 12h3"/></svg>
+    </div>
+    <div class="leading-tight">
+      <div class="font-semibold tracking-tight text-[15px]">Lumen</div>
+      <div class="text-[11px] text-slate-500 -mt-0.5">optics sandbox</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <select id="qualitySel" class="!w-[110px]" title="Ray quality">
+      <option value="low">Draft rays</option>
+      <option value="medium" selected>Medium rays</option>
+      <option value="high">Fine rays</option>
+    </select>
+    <button id="lightBtn" class="text-[12px] px-3 h-[32px] rounded-lg bg-[#5b7cff] hover:bg-[#6b89ff] text-white font-medium flex items-center gap-2">
+      <span id="lightDot" class="w-2 h-2 rounded-full bg-yellow-300 shadow-[0_0_8px_#fde68a]"></span><span id="lightLabel">Light on</span>
+    </button>
+    <button id="gridBtn" class="text-[12px] px-3 h-[32px] rounded-lg bg-[#141c2f] hover:bg-[#1a2440] border border-[#1f2940]">Grid</button>
+    <button id="demoBtn" class="text-[12px] px-3 h-[32px] rounded-lg bg-[#141c2f] hover:bg-[#1a2440] border border-[#1f2940] hidden sm:block">Demo scene</button>
+    <button id="helpBtn" class="w-[32px] h-[32px] rounded-lg bg-[#141c2f] hover:bg-[#1a2440] border border-[#1f2940] text-slate-300">?</button>
+  </div>
+</header>
+
+<div class="flex flex-1 min-h-0">
+  <!-- LEFT TOOLBAR -->
+  <aside class="w-[132px] shrink-0 border-r border-[#141b2c] bg-[#0a0e16] p-2 overflow-y-auto">
+    <div class="seg-label px-2 pt-1 pb-2">Sources</div>
+    <div id="toolsSources" class="grid gap-1.5"></div>
+    <div class="seg-label px-2 pt-4 pb-2">Optics</div>
+    <div id="toolsOptics" class="grid gap-1.5"></div>
+    <div class="seg-label px-2 pt-4 pb-2">Detect</div>
+    <div id="toolsDetect" class="grid gap-1.5"></div>
+    <div class="px-2 pt-4">
+      <button id="clearBtn" class="w-full text-[11px] py-2 rounded-lg border border-[#2a1f2e] bg-[#1a1220] text-[#e2a3b8] hover:bg-[#241724]">Clear scene</button>
+    </div>
+  </aside>
+
+  <!-- CANVAS -->
+  <main id="canvasWrap" class="flex-1 relative min-w-0 bg-[#05070c]">
+    <canvas id="scene" class="absolute inset-0 w-full h-full block"></canvas>
+    <div id="emptyHint" class="absolute left-1/2 top-[18px] -translate-x-1/2 pointer-events-none hidden">
+      <div class="text-[12px] text-slate-400 bg-[#0c1220]/85 border border-[#1c2540] px-3 py-1.5 rounded-full backdrop-blur">Add a flashlight from the left, drag to move · drag the ring to rotate</div>
+    </div>
+    <div class="absolute left-3 bottom-3 flex items-center gap-2 text-[11px]">
+      <div class="flex items-center gap-3 bg-[#0a0f1c]/85 border border-[#182036] rounded-full px-3 py-1.5 backdrop-blur chip-live">
+        <span class="text-slate-500">objects <span id="stObj" class="text-slate-200 ml-1">0</span></span>
+        <span class="w-px h-3 bg-[#1e2942]"></span>
+        <span class="text-slate-500">segments <span id="stSeg" class="text-slate-200 ml-1">0</span></span>
+        <span class="w-px h-3 bg-[#1e2942]"></span>
+        <span class="text-slate-500">sensor <span id="stSens" class="text-amber-200 ml-1">0.00</span></span>
+      </div>
+    </div>
+    <div class="absolute right-3 bottom-3 text-[11px] text-slate-500 bg-[#0a0f1c]/70 px-2.5 py-1 rounded-full border border-[#141c30]">scroll to zoom · drag background to pan</div>
+  </main>
+
+  <!-- RIGHT PANEL -->
+  <aside class="w-[296px] shrink-0 border-l border-[#141b2c] bg-[#0a0e16] flex flex-col min-h-0">
+    <div class="px-4 py-3 border-b border-[#141b2c] flex items-center justify-between">
+      <div id="propsTitle" class="font-medium text-[13px]">Scene</div>
+      <div id="propsActions" class="flex gap-1.5"></div>
+    </div>
+    <div id="props" class="flex-1 overflow-y-auto p-4 space-y-5"></div>
+  </aside>
+</div>
+
+<!-- HELP MODAL -->
+<div id="helpModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" data-close></div>
+  <div class="relative max-w-[520px] w-full bg-[#0c1220] border border-[#1e2a4a] rounded-2xl p-6 shadow-2xl fadein max-h-[85vh] overflow-y-auto">
+    <h2 class="font-semibold text-[16px]">How to play</h2>
+    <div class="mt-3 space-y-2.5 text-[13px] text-slate-300 leading-relaxed">
+      <p><span class="text-white font-medium">Add</span> elements from the left rail. <span class="text-white font-medium">Drag</span> bodies to move, drag the small ring to rotate. Click empty space to deselect. <kbd class="bg-[#1a2440] px-1.5 py-0.5 rounded text-[11px]">Del</kbd> removes selection.</p>
+      <p>Flashlights emit a diverging cone with a paintable spectrum. Lasers are single-wavelength and polarized. Everything else uses real optics:</p>
+      <ul class="text-[12px] text-slate-400 space-y-1.5 list-none">
+        <li>· Snell n₁sinθ₁ = n₂sinθ₂ + Fresnel Rₛ,Rₚ at every interface</li>
+        <li>· Sellmeier dispersion n(λ) for prisms, lenses and glass</li>
+        <li>· Grating equation d(sinθₘ − sinθᵢ) = mλ, d = 1/lines-per-mm</li>
+        <li>· Thin-lens deflection Δθ ≈ −h/f with chromatic f(λ)</li>
+        <li>· Malus I = I₀cos²θ + Beer–Lambert T = e^(−αL)</li>
+        <li>· Planck black-body for sunlight / tungsten presets</li>
+      </ul>
+      <p class="text-slate-500 text-[12px]">Try: white flashlight → prism → blocker screen. Or laser → polarizer → polarizer crossed at 90°.</p>
+    </div>
+    <button data-close class="mt-5 w-full py-2 rounded-xl bg-[#5b7cff] hover:bg-[#6b89ff] text-white text-[13px] font-medium">Start experimenting</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   LUMEN — 2D physical optics sandbox (plain JS, no framework)
+   ============================================================ */
+const TAU = Math.PI*2;
+const D2R = Math.PI/180, R2D = 180/Math.PI;
+const LAM_MIN=380, LAM_MAX=700, EDIT_N=48;
+let uid=1;
+const $=s=>document.querySelector(s);
+
+const canvas=$('#scene'), ctx=canvas.getContext('2d');
+const wrap=$('#canvasWrap');
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){r=Math.min(r,w/2,h/2);this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this;};
+}
+
+let scene=[];
+let selectedId=null;
+let view={scale:1,tx:0,ty:0};
+let quality='medium';
+let lightOn=true, showGrid=true;
+let segments=[];
+let sensorData={};
+let dragMode=null, dragOff={x:0,y:0}, panStart=null, movedPx=0;
+
+/* ---------------- utils ---------------- */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function angDiff180(a,b){let d=(a-b)%180;if(d>90)d-=180;if(d<-90)d+=180;return d;}
+function lambdaAt(i){return LAM_MIN+(LAM_MAX-LAM_MIN)*i/(EDIT_N-1);}
+function hexRGB(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+
+/* wavelength -> rgb (Bruton approx) */
+function waveRGB(w){
+  let r=0,g=0,b=0;
+  if(w<380||w>780) return [0,0,0];
+  if(w<440){r=-(w-440)/60;b=1;}
+  else if(w<490){g=(w-440)/50;b=1;}
+  else if(w<510){g=1;b=-(w-510)/20;}
+  else if(w<580){r=(w-510)/70;g=1;}
+  else if(w<645){r=1;g=-(w-645)/65;}
+  else{r=1;}
+  let f=1;
+  if(w<420)f=.35+.65*(w-380)/40;
+  else if(w>700)f=.35+.65*(780-w)/80;
+  return [Math.round(255*r*f),Math.round(255*g*f),Math.round(255*b*f)];
+}
+function waveCSS(w,a=1){const c=waveRGB(w);return `rgba(${c[0]},${c[1]},${c[2]},${a})`;}
+
+/* blackbody (Planck) */
+function planck(lamNm,T){
+  const h=6.62607015e-34,c=299792458,k=1.380649e-23;
+  const l=lamNm*1e-9;
+  const e=Math.exp(h*c/(l*k*T));
+  return (2*h*c*c)/(Math.pow(l,5)*(e-1));
+}
+/* Sellmeier n^2=1+sum B l^2/(l^2-C), l in um */
+function sellmeier(lum,B,C){
+  const l2=lum*lum;let n2=1;
+  for(let i=0;i<B.length;i++)n2+=B[i]*l2/(l2-C[i]);
+  return Math.sqrt(n2);
+}
+function nMaterial(mat,lamNm){
+  const lum=lamNm/1000;
+  if(mat==='BK7')return sellmeier(lum,[1.03961212,.231792344,1.01046945],[.00600069867,.0200179144,103.560653]);
+  if(mat==='FS')return sellmeier(lum,[.6961663,.4079426,.8974794],[.00467914826,.0135120631,97.9340025]);
+  if(mat==='SF10')return sellmeier(lum,[1.61625977,.259229334,1.07762317],[.0127534559,.0581983954,116.60768]);
+  if(mat==='ACRYLIC')return 1.4845+.0042/(lum*lum);
+  if(mat==='DIAMOND')return 2.378+.0122/(lum*lum);
+  return 1.52;
+}
+const nBK7d=nMaterial('BK7',587.6);
+
+/* spectra presets */
+function gauss(l,c,s){return Math.exp(-((l-c)*(l-c))/(2*s*s));}
+function presetSpectrum(name){
+  const a=new Array(EDIT_N);
+  for(let i=0;i<EDIT_N;i++){
+    const l=lambdaAt(i);let v=0;
+    if(name==='White LED')v=.12+gauss(l,450,16)*1+gauss(l,560,75)*.95;
+    else if(name==='Sunlight')v=planck(l,5800);
+    else if(name==='Tungsten')v=planck(l,3200);
+    else if(name==='Fluorescent')v=.08+gauss(l,435,5)+gauss(l,545,5)*.95+gauss(l,612,6)*.9+gauss(l,490,18)*.15;
+    else if(name==='Red')v=gauss(l,630,13);
+    else if(name==='Green')v=gauss(l,532,16);
+    else if(name==='Blue')v=gauss(l,450,13);
+    else if(name==='Equal white')v=1;
+    else v=1;
+    a[i]=v;
+  }
+  const m=Math.max(...a,1e-9);
+  return a.map(v=>clamp(v/m,0,1));
+}
+function presetGlass(name){
+  const a=new Array(EDIT_N);
+  for(let i=0;i<EDIT_N;i++){
+    const l=lambdaAt(i);let v=.9;
+    const ss=(x,k)=>1/(1+Math.exp(-x/k));
+    if(name==='Clear')v=.93;
+    else if(name==='Red long-pass')v=.03+.9*ss(l-600,12);
+    else if(name==='Green band')v=.04+.88*gauss(l,540,32);
+    else if(name==='Blue short-pass')v=.93-.88*ss(l-510,14);
+    else if(name==='Yellow long-pass')v=.04+.88*ss(l-500,12);
+    else if(name==='Cyan')v=.9-.85*ss(l-600,14);
+    else if(name==='Magenta')v=.85-.75*gauss(l,540,40);
+    else if(name==='ND 50%')v=.5;
+    else if(name==='Orange')v=.04+.88*ss(l-570,14);
+    a[i]=clamp(v,.005,1);
+  }
+  return a;
+}
+function sampleArr(arr,lam){
+  const t=(lam-LAM_MIN)/(LAM_MAX-LAM_MIN)*(EDIT_N-1);
+  const i=clamp(Math.floor(t),0,EDIT_N-2), f=clamp(t-i,0,1);
+  return lerp(arr[i],arr[i+1],f);
+}
+
+/* ---------------- scene objects ---------------- */
+function baseProps(type,x,y,rot){
+  return {id:uid++,type,x,y,rotation:((rot%360)+360)%360};
+}
+function defaults(type,cx,cy){
+  if(type==='flashlight')return {...baseProps(type,cx,cy,0),intensity:1.4,divergence:9,spectrum:presetSpectrum('White LED'),specName:'White LED'};
+  if(type==='laser')return {...baseProps(type,cx,cy,0),wavelength:532,intensity:2,polAngle:0};
+  if(type==='mirror')return {...baseProps(type,cx,cy,90),length:170,reflectivity:.94};
+  if(type==='curved')return {...baseProps(type,cx,cy,180),aperture:170,radius:320,concave:true,reflectivity:.94};
+  if(type==='lens')return {...baseProps(type,cx,cy,0),aperture:150,focal:150,convex:true};
+  if(type==='grating')return {...baseProps(type,cx,cy,90),length:170,lines:600,mode:'transmissive'};
+  if(type==='polarizer')return {...baseProps(type,cx,cy,90),length:150};
+  if(type==='prism')return {...baseProps(type,cx,cy,0),size:130,apex:60,material:'BK7',tir:true};
+  if(type==='glass')return {...baseProps(type,cx,cy,90),width:130,thickness:26,reflectance:.06,transmission:presetGlass('Green band'),tintName:'Green band'};
+  if(type==='blocker')return {...baseProps(type,cx,cy,90),width:170,thickness:16};
+  if(type==='sensor')return {...baseProps(type,cx,cy,0),radius:17};
+}
+const TYPE_NAME={flashlight:'Flashlight',laser:'Laser',mirror:'Mirror',curved:'Curved mirror',lens:'Lens',grating:'Grating',polarizer:'Polarizer',prism:'Prism',glass:'Colored glass',blocker:'Blocker',sensor:'Sensor'};
+
+/* ---------------- geometry ---------------- */
+function dirOf(deg){return {x:Math.cos(deg*D2R),y:Math.sin(deg*D2R)};}
+function segEnds(o){
+  const N=dirOf(o.rotation),T={x:-N.y,y:N.x},L=o.length||o.aperture||150;
+  return {N,T,A:{x:o.x-T.x*L/2,y:o.y-T.y*L/2},B:{x:o.x+T.x*L/2,y:o.y+T.y*L/2}};
+}
+function rectCorners(o){
+  const N=dirOf(o.rotation),T={x:-N.y,y:N.x};
+  const hw=o.width/2,ht=o.thickness/2;
+  return [
+    {x:o.x-T.x*hw-N.x*ht,y:o.y-T.y*hw-N.y*ht},
+    {x:o.x+T.x*hw-N.x*ht,y:o.y+T.y*hw-N.y*ht},
+    {x:o.x+T.x*hw+N.x*ht,y:o.y+T.y*hw+N.y*ht},
+    {x:o.x-T.x*hw+N.x*ht,y:o.y-T.y*hw+N.y*ht},
+  ];
+}
+function prismVerts(o){
+  const A=o.apex*D2R,S=o.size;
+  const h=S*Math.cos(A/2),b=S*Math.sin(A/2);
+  const lx=[[0,-2*h/3],[-b,h/3],[b,h/3]];
+  const c=Math.cos(o.rotation*D2R),s=Math.sin(o.rotation*D2R);
+  return lx.map(([x,y])=>({x:o.x+x*c-y*s,y:o.y+x*s+y*c}));
+}
+function curvedInfo(o){
+  const N=dirOf(o.rotation);
+  const C=o.concave?{x:o.x+N.x*o.radius,y:o.y+N.y*o.radius}:{x:o.x-N.x*o.radius,y:o.y-N.y*o.radius};
+  return {C,R:o.radius,N};
+}
+function raySeg(O,D,A,B){
+  const sx=B.x-A.x,sy=B.y-A.y;
+  const d=A.x-O.x,e=A.y-O.y;
+  const den=D.x*sy-D.y*sx;
+  if(Math.abs(den)<1e-9)return null;
+  const t=(d*sy-e*sx)/den, u=(d*D.y-e*D.x)/den;
+  if(t>1e-4&&u>=0&&u<=1)return {t,pt:{x:O.x+D.x*t,y:O.y+D.y*t}};
+  return null;
+}
+function rayPoly(O,D,verts){
+  let best=null,bestEdge=-1;
+  for(let i=0;i<verts.length;i++){
+    const r=raySeg(O,D,verts[i],verts[(i+1)%verts.length]);
+    if(r&&(!best||r.t<best.t)){best=r;bestEdge=i;}
+  }
+  if(!best)return null;
+  const A=verts[bestEdge],B=verts[(bestEdge+1)%verts.length];
+  let tx=B.x-A.x,ty=B.y-A.y;const L=Math.hypot(tx,ty)||1;tx/=L;ty/=L;
+  let N={x:ty,y:-tx};
+  if(D.x*N.x+D.y*N.y>0)N={x:-N.x,y:-N.y};
+  return {...best,normal:N};
+}
+function rayCircle(O,D,C,R){
+  const ox=O.x-C.x,oy=O.y-C.y;
+  const b=ox*D.x+oy*D.y, c=ox*ox+oy*oy-R*R;
+  const disc=b*b-c;
+  if(disc<0)return null;
+  const sq=Math.sqrt(disc);
+  let t=-b-sq;if(t<1e-4)t=-b+sq;
+  if(t<1e-4)return null;
+  return {t,pt:{x:O.x+D.x*t,y:O.y+D.y*t}};
+}
+function ptSegDist(p,A,B){
+  const vx=B.x-A.x,vy=B.y-A.y,L2=vx*vx+vy*vy||1;
+  let t=((p.x-A.x)*vx+(p.y-A.y)*vy)/L2;t=clamp(t,0,1);
+  return Math.hypot(p.x-(A.x+vx*t),p.y-(A.y+vy*t));
+}
+function ptInPoly(p,verts){
+  let ins=false;
+  for(let i=0,j=verts.length-1;i<verts.length;j=i++){
+    const xi=verts[i].x,yi=verts[i].y,xj=verts[j].x,yj=verts[j].y;
+    if(((yi>p.y)!==(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi))ins=!ins;
+  }
+  return ins;
+}
+
+/* vector helpers */
+function reflect(I,N){const d=I.x*N.x+I.y*N.y;return {x:I.x-2*d*N.x,y:I.y-2*d*N.y};}
+function refract(I,N,eta){
+  const cos1=-(I.x*N.x+I.y*N.y);
+  const s2=eta*eta*(1-cos1*cos1);
+  if(s2>1)return null;
+  const cos2=Math.sqrt(1-s2);
+  return {x:eta*I.x+(eta*cos1-cos2)*N.x,y:eta*I.y+(eta*cos1-cos2)*N.y};
+}
+function fresnel(n1,n2,cosI,cosT){
+  cosI=Math.abs(cosI);cosT=Math.abs(cosT);
+  const rs=(n1*cosI-n2*cosT)/(n1*cosI+n2*cosT);
+  const rp=(n1*cosT-n2*cosI)/(n1*cosT+n2*cosI);
+  return {R:(rs*rs+rp*rp)/2};
+}
+
+/* intersect any object (sources never block) */
+function intersectObj(O,D,o){
+  if(o.type==='flashlight'||o.type==='laser')return null;
+  if(o.type==='mirror'||o.type==='polarizer'||o.type==='grating'){
+    const {A,B,N}=segEnds(o);
+    const r=raySeg(O,D,A,B);
+    if(!r)return null;
+    let n=N;if(D.x*n.x+D.y*n.y>0)n={x:-n.x,y:-n.y};
+    return {t:r.t,pt:r.pt,normal:n};
+  }
+  if(o.type==='lens'){
+    const {A,B,N}=segEnds(o);
+    const r=raySeg(O,D,A,B);
+    if(!r)return null;
+    let n=N;if(D.x*n.x+D.y*n.y>0)n={x:-n.x,y:-n.y};
+    return {t:r.t,pt:r.pt,normal:n};
+  }
+  if(o.type==='curved'){
+    const {C,R,N}=curvedInfo(o);
+    if((O.x-o.x)*N.x+(O.y-o.y)*N.y<0&& (D.x*N.x+D.y*N.y)>0){/* behind */}
+    else if((O.x-o.x)*N.x+(O.y-o.y)*N.y<-R-5)return null;
+    const r=rayCircle(O,D,C,R);
+    if(!r)return null;
+    const v={x:r.pt.x-C.x,y:r.pt.y-C.y};
+    const ref=o.concave?{x:-N.x,y:-N.y}:{x:N.x,y:N.y};
+    const L=Math.hypot(v.x,v.y)||1;
+    const cosA=(v.x*ref.x+v.y*ref.y)/L;
+    const half=Math.asin(clamp((o.aperture/2)/R,0,1));
+    if(Math.acos(clamp(cosA,-1,1))>half+.02)return null;
+    if((r.pt.x-o.x)*N.x+(r.pt.y-o.y)*N.y<-4)return null;
+    let n=o.concave?{x:C.x-r.pt.x,y:C.y-r.pt.y}:{x:r.pt.x-C.x,y:r.pt.y-C.y};
+    const nl=Math.hypot(n.x,n.y)||1;n={x:n.x/nl,y:n.y/nl};
+    return {t:r.t,pt:r.pt,normal:n};
+  }
+  if(o.type==='prism')return rayPoly(O,D,prismVerts(o));
+  if(o.type==='glass'||o.type==='blocker')return rayPoly(O,D,rectCorners(o));
+  if(o.type==='sensor'){
+    const r=rayCircle(O,D,{x:o.x,y:o.y},o.radius);
+    if(!r)return null;return {t:r.t,pt:r.pt,normal:null};
+  }
+  return null;
+}
+
+/* ---------------- tracing ---------------- */
+const QCONF={low:{ang:11,waves:[380,420,460,500,540,580,620,660,700]},medium:{ang:23,waves:[380,400,425,450,475,500,525,550,575,600,625,650,680,700]},high:{ang:43,waves:[380,395,410,425,440,455,470,485,500,515,530,545,560,575,590,605,620,635,650,665,680,700]}};
+const MAX_SEG=14000, MIN_P=.008, MAX_B=9;
+
+function traceScene(){
+  segments=[];sensorData={};
+  scene.forEach(o=>{if(o.type==='sensor')sensorData[o.id]={total:0,per:{},peak:0,peakV:0};});
+  if(!lightOn){updateStatus();return;}
+  const q=QCONF[quality]||QCONF.medium;
+  const queue=[];
+  scene.forEach(s=>{
+    if(s.type==='flashlight'){
+      const div=s.divergence;
+      const n=div<.3?1:q.ang;
+      const sig=Math.max(div/2.2,.4);
+      let wsum=0;const ws=[];
+      for(let i=0;i<n;i++){
+        const off=n===1?0:lerp(-div,div,i/(n-1));
+        const w=Math.exp(-(off*off)/(2*sig*sig));
+        ws.push({off,w});wsum+=w;
+      }
+      const normWaves=14/q.waves.length;
+      ws.forEach(({off,w})=>{
+        const ang=s.rotation+off, D=dirOf(ang);
+        const O={x:s.x+D.x*12,y:s.y+D.y*12};
+        const wNorm=w/(wsum/n);
+        q.waves.forEach(lam=>{
+          const spec=sampleArr(s.spectrum,lam);
+          if(spec<.004)return;
+          const power=s.intensity*.34*wNorm*spec*normWaves;
+          if(power<MIN_P*.5)return;
+          queue.push({ox:O.x,oy:O.y,dx:D.x,dy:D.y,lam,power,pol:0,polA:0,b:0,src:s.id});
+        });
+      });
+    }else if(s.type==='laser'){
+      const D=dirOf(s.rotation);
+      queue.push({ox:s.x+D.x*14,oy:s.y+D.y*14,dx:D.x,dy:D.y,lam:s.wavelength,power:s.intensity*.95,pol:1,polA:s.polAngle,b:0,src:s.id});
+    }
+  });
+  let head=0;
+  const push=(ox,oy,dx,dy,lam,power,pol,polA,b,src)=>{
+    if(power<MIN_P||b>MAX_B||queue.length>26000)return;
+    const L=Math.hypot(dx,dy)||1;
+    queue.push({ox,oy,dx:dx/L,dy:dy/L,lam,power,pol,polA,b,src});
+  };
+  while(head<queue.length&&segments.length<MAX_SEG){
+    const r=queue[head++];
+    if(r.power<MIN_P||r.b>MAX_B)continue;
+    const O={x:r.ox,y:r.oy},D={x:r.dx,y:r.dy};
+    let best=null,bestO=null;
+    for(const o of scene){
+      if(o.id===r.src&&(o.type==='flashlight'||o.type==='laser'))continue;
+      if(o.type==='flashlight'||o.type==='laser')continue;
+      const h=intersectObj(O,D,o);
+      if(h&&(!best||h.t<best.t)){best=h;bestO=o;}
+    }
+    let end;
+    if(!best){end={x:O.x+D.x*4200,y:O.y+D.y*4200};segments.push({x1:O.x,y1:O.y,x2:end.x,y2:end.y,lam:r.lam,power:r.power});continue;}
+    segments.push({x1:O.x,y1:O.y,x2:best.pt.x,y2:best.pt.y,lam:r.lam,power:r.power});
+    const H=best.pt, I=D;
+    const eps=.4;
+    if(bestO.type==='sensor'){
+      const sd=sensorData[bestO.id];
+      if(sd){sd.total+=r.power;sd.per[r.lam]=(sd.per[r.lam]||0)+r.power;if(sd.per[r.lam]>sd.peakV){sd.peakV=sd.per[r.lam];sd.peak=r.lam;}}
+      continue;
+    }
+    if(bestO.type==='blocker')continue;
+    if(bestO.type==='mirror'){
+      const R=reflect(I,best.normal);
+      push(H.x+R.x*eps,H.y+R.y*eps,R.x,R.y,r.lam,r.power*bestO.reflectivity,r.pol,r.polA,r.b+1,r.src);
+    }
+    else if(bestO.type==='curved'){
+      const R=reflect(I,best.normal);
+      push(H.x+R.x*eps,H.y+R.y*eps,R.x,R.y,r.lam,r.power*bestO.reflectivity,r.pol,r.polA,r.b+1,r.src);
+    }
+    else if(bestO.type==='lens'){
+      const {N,T}=segEnds(bestO);
+      let n=N;if(I.x*n.x+I.y*n.y>0)n={x:-n.x,y:-n.y};
+      let t2={x:-n.y,y:n.x};if(t2.x*T.x+t2.y*T.y<0)t2={x:-t2.x,y:-t2.y};
+      const hOff=(H.x-bestO.x)*t2.x+(H.y-bestO.y)*t2.y;
+      const fSigned=(bestO.convex?1:-1)*bestO.focal;
+      const nL=nMaterial('BK7',r.lam);
+      const fChrom=fSigned*(nBK7d-1)/(nL-1);
+      const Ia=I.x*n.x+I.y*n.y, It=I.x*t2.x+I.y*t2.y;
+      const It2=It-Ia*hOff/fChrom;
+      let out={x:n.x*Ia+t2.x*It2,y:n.y*Ia+t2.y*It2};
+      const L=Math.hypot(out.x,out.y)||1;out={x:out.x/L,y:out.y/L};
+      push(H.x+out.x*eps,H.y+out.y*eps,out.x,out.y,r.lam,r.power*.96,r.pol,r.polA,r.b+1,r.src);
+      const R=reflect(I,best.normal);
+      if(r.power*.04>MIN_P)push(H.x+R.x*eps,H.y+R.y*eps,R.x,R.y,r.lam,r.power*.04,r.pol,r.polA,r.b+1,r.src);
+    }
+    else if(bestO.type==='polarizer'){
+      const {T}=segEnds(bestO);
+      const axisA=Math.atan2(T.y,T.x)*R2D;
+      const d=angDiff180(r.polA,axisA)*D2R;
+      const trans=(1-r.pol)/2+r.pol*Math.cos(d)*Math.cos(d);
+      const p2=r.power*trans*.98;
+      if(p2>MIN_P)push(H.x+I.x*eps,H.y+I.y*eps,I.x,I.y,r.lam,p2,1,axisA,r.b+1,r.src);
+    }
+    else if(bestO.type==='grating'){
+      const {T}=segEnds(bestO);
+      let N=best.normal;
+      let t2={x:-N.y,y:N.x};if(t2.x*T.x+t2.y*T.y<0)t2={x:-t2.x,y:-t2.y};
+      const sinI=I.x*t2.x+I.y*t2.y;
+      const dnm=1e6/bestO.lines;
+      const effs={ '-2':.06,'-1':.24,'0':.4,'1':.24,'2':.06 };
+      for(let m=-2;m<=2;m++){
+        const sinM=sinI+m*r.lam/dnm;
+        if(Math.abs(sinM)>1)continue;
+        const cosM=Math.sqrt(1-sinM*sinM);
+        let out;
+        if(bestO.mode==='reflective')out={x:t2.x*sinM+N.x*cosM,y:t2.y*sinM+N.y*cosM};
+        else out={x:t2.x*sinM-N.x*cosM,y:t2.y*sinM-N.y*cosM};
+        push(H.x+out.x*eps,H.y+out.y*eps,out.x,out.y,r.lam,r.power*effs[String(m)],r.pol,r.polA,r.b+1,r.src);
+      }
+    }
+    else if(bestO.type==='prism'){
+      const n2=nMaterial(bestO.material,r.lam),n1=1;
+      const eta=n1/n2;
+      const cos1=-(I.x*best.normal.x+I.y*best.normal.y);
+      const refr=refract(I,best.normal,eta);
+      const cosT=refr?Math.abs((refr.x*best.normal.x+refr.y*best.normal.y)):0;
+      const R=refr?fresnel(n1,n2,cos1,cosT).R:1;
+      if(R>.003&&r.power*R>MIN_P){
+        const Rr=reflect(I,best.normal);
+        push(H.x+Rr.x*eps,H.y+Rr.y*eps,Rr.x,Rr.y,r.lam,r.power*R,r.pol,r.polA,r.b+1,r.src);
+      }
+      if(!refr)continue;
+      let inO={x:H.x+refr.x*eps,y:H.y+refr.y*eps},inD=refr,inP=r.power*(1-R);
+      const verts=prismVerts(bestO);
+      for(let bounce=0;bounce<4;bounce++){
+        if(inP<MIN_P)break;
+        const ex=rayPoly(inO,inD,verts);
+        if(!ex)break;
+        const N=ex.normal;
+        const Nopp=(inD.x*N.x+inD.y*N.y>0)?{x:-N.x,y:-N.y}:N;
+        const cosI2=-(inD.x*Nopp.x+inD.y*Nopp.y);
+        const refr2=refract(inD,Nopp,n2/1);
+        if(!refr2){
+          if(bestO.tir){const Rr=reflect(inD,Nopp);inO={x:ex.pt.x+Rr.x*eps,y:ex.pt.y+Rr.y*eps};inD=Rr;continue;}
+          else{ /* leaky: escape straight */
+            if(inP*.85>MIN_P)push(ex.pt.x+inD.x*eps,ex.pt.y+inD.y*eps,inD.x,inD.y,r.lam,inP*.85,r.pol,r.polA,r.b+1,r.src);
+            break;
+          }
+        }else{
+          const cosT2=Math.abs(refr2.x*Nopp.x+refr2.y*Nopp.y);
+          const R2=fresnel(n2,1,cosI2,cosT2).R;
+          if(inP*(1-R2)>MIN_P)push(ex.pt.x+refr2.x*eps,ex.pt.y+refr2.y*eps,refr2.x,refr2.y,r.lam,inP*(1-R2),r.pol,r.polA,r.b+1,r.src);
+          const Rr=reflect(inD,Nopp);
+          inP=inP*R2;inO={x:ex.pt.x+Rr.x*eps,y:ex.pt.y+Rr.y*eps};inD=Rr;
+          if(R2<.02)break;
+        }
+      }
+    }
+    else if(bestO.type==='glass'){
+      const Rr=reflect(I,best.normal);
+      if(r.power*bestO.reflectance>MIN_P)push(H.x+Rr.x*eps,H.y+Rr.y*eps,Rr.x,Rr.y,r.lam,r.power*bestO.reflectance,r.pol,r.polA,r.b+1,r.src);
+      const n2=nMaterial('BK7',r.lam);
+      const refr=refract(I,best.normal,1/n2);
+      if(!refr)continue;
+      const inO={x:H.x+refr.x*eps,y:H.y+refr.y*eps};
+      const corners=rectCorners(bestO);
+      const ex=rayPoly(inO,refr,corners);
+      const Lin=ex?ex.t:bestO.thickness;
+      const T0=clamp(sampleArr(bestO.transmission,r.lam),.002,1);
+      const alpha=-Math.log(T0)/20;
+      const Tat=Math.exp(-alpha*Lin);
+      let p2=r.power*(1-bestO.reflectance)*Tat;
+      if(p2<MIN_P)continue;
+      if(ex){
+        const refr2=refract(refr,ex.normal,n2/1);
+        const out=refr2||refr;
+        push(ex.pt.x+out.x*eps,ex.pt.y+out.y*eps,out.x,out.y,r.lam,p2*.97,r.pol,r.polA,r.b+1,r.src);
+      }else push(inO.x,inO.y,refr.x,refr.y,r.lam,p2,r.pol,r.polA,r.b+1,r.src);
+    }
+  }
+  updateStatus();
+}
+function updateStatus(){
+  $('#stObj').textContent=scene.length;
+  $('#stSeg').textContent=segments.length;
+  let tot=0;Object.values(sensorData).forEach(s=>tot+=s.total);
+  $('#stSens').textContent=tot.toFixed(2);
+  $('#emptyHint').classList.toggle('hidden',scene.length>0);
+}
+
+/* ---------------- rendering ---------------- */
+function s2w(sx,sy){return {x:(sx-view.tx)/view.scale,y:(sy-view.ty)/view.scale};}
+function resize(){
+  const r=wrap.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width=r.width*dpr;canvas.height=r.height*dpr;
+}
+function render(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  const W=canvas.width,H=canvas.height;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#05070c';ctx.fillRect(0,0,W,H);
+  ctx.setTransform(view.scale*dpr,0,0,view.scale*dpr,view.tx*dpr,view.ty*dpr);
+  /* grid */
+  if(showGrid){
+    const step=40;
+    const x0=s2w(0,0).x, y0=s2w(0,0).y, x1=s2w(W/dpr,H/dpr).x, y1=s2w(W/dpr,H/dpr).y;
+    ctx.lineWidth=1/view.scale;
+    ctx.strokeStyle='rgba(120,140,190,.07)';
+    ctx.beginPath();
+    for(let x=Math.floor(x0/step)*step;x<x1;x+=step){ctx.moveTo(x,y0);ctx.lineTo(x,y1);}
+    for(let y=Math.floor(y0/step)*step;y<y1;y+=step){ctx.moveTo(x0,y);ctx.lineTo(x1,y);}
+    ctx.stroke();
+    ctx.strokeStyle='rgba(120,140,190,.12)';
+    ctx.beginPath();
+    for(let x=Math.floor(x0/(step*5))*(step*5);x<x1;x+=step*5){ctx.moveTo(x,y0);ctx.lineTo(x,y1);}
+    for(let y=Math.floor(y0/(step*5))*(step*5);y<y1;y+=step*5){ctx.moveTo(x0,y);ctx.lineTo(x1,y);}
+    ctx.stroke();
+  }
+  /* element translucent fills */
+  scene.forEach(o=>{
+    if(o.type==='prism'){
+      const v=prismVerts(o);
+      ctx.beginPath();ctx.moveTo(v[0].x,v[0].y);ctx.lineTo(v[1].x,v[1].y);ctx.lineTo(v[2].x,v[2].y);ctx.closePath();
+      ctx.fillStyle='rgba(140,180,255,.10)';ctx.fill();
+    }
+    if(o.type==='glass'){
+      const c=rectCorners(o);
+      ctx.beginPath();ctx.moveTo(c[0].x,c[0].y);c.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
+      const avg=avgGlassColor(o);
+      ctx.fillStyle=`rgba(${avg[0]},${avg[1]},${avg[2]},.20)`;ctx.fill();
+    }
+    if(o.type==='blocker'){
+      const c=rectCorners(o);
+      ctx.beginPath();ctx.moveTo(c[0].x,c[0].y);c.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
+      ctx.fillStyle='rgba(10,12,18,.9)';ctx.fill();
+    }
+  });
+  /* rays additive */
+  if(lightOn&&segments.length){
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineCap='round';
+    segments.forEach(s=>{
+      const a=clamp(s.power*.55,0,.8);
+      if(a<.012)return;
+      const col=waveRGB(s.lam);
+      ctx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},${(a*.22).toFixed(3)})`;
+      ctx.lineWidth=5.5;
+      ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+    });
+    segments.forEach(s=>{
+      const a=clamp(s.power*.75,0,.9);
+      if(a<.015)return;
+      const col=waveRGB(s.lam);
+      ctx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},${a.toFixed(3)})`;
+      ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);ctx.stroke();
+    });
+    ctx.restore();
+  }
+  /* element outlines + icons */
+  scene.forEach(o=>drawElement(o));
+  /* selection */
+  const sel=scene.find(o=>o.id===selectedId);
+  if(sel){
+    ctx.save();
+    ctx.strokeStyle='#5b7cff';ctx.lineWidth=1.4/view.scale;ctx.setLineDash([6/view.scale,5/view.scale]);
+    const b=boundsOf(sel),pad=14;
+    ctx.strokeRect(b.x0-pad,b.y0-pad,(b.x1-b.x0)+pad*2,(b.y1-b.y0)+pad*2);
+    ctx.setLineDash([]);
+    if(sel.type!=='sensor'){
+      const hp=handlePos(sel);
+      ctx.fillStyle='#0a0e16';ctx.strokeStyle='#8ea2ff';ctx.lineWidth=1.6/view.scale;
+      ctx.beginPath();ctx.arc(hp.x,hp.y,8/view.scale+3,0,TAU);ctx.fill();ctx.stroke();
+      ctx.strokeStyle='#cdd8ff';ctx.lineWidth=1.4/view.scale;
+      ctx.beginPath();ctx.arc(hp.x,hp.y,3.4/view.scale+1,0,TAU);ctx.stroke();
+      ctx.strokeStyle='rgba(142,162,255,.5)';
+      ctx.beginPath();ctx.moveTo(sel.x,sel.y);ctx.lineTo(hp.x,hp.y);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+function avgGlassColor(o){
+  let r=0,g=0,b=0,n=0;
+  [450,500,550,600,650].forEach(l=>{const t=sampleArr(o.transmission,l);const c=waveRGB(l);r+=c[0]*t;g+=c[1]*t;b+=c[2]*t;n+=t;});
+  n=n||1;return [Math.round(r/5*1.2),Math.round(g/5*1.2),Math.round(b/5*1.2)];
+}
+function boundsOf(o){
+  if(o.type==='sensor')return {x0:o.x-o.radius-8,y0:o.y-o.radius-8,x1:o.x+o.radius+8,y1:o.y+o.radius+8};
+  if(o.type==='prism'){const v=prismVerts(o);const xs=v.map(p=>p.x),ys=v.map(p=>p.y);return {x0:Math.min(...xs),y0:Math.min(...ys),x1:Math.max(...xs),y1:Math.max(...ys)};}
+  if(o.type==='glass'||o.type==='blocker'){const c=rectCorners(o);const xs=c.map(p=>p.x),ys=c.map(p=>p.y);return {x0:Math.min(...xs),y0:Math.min(...ys),x1:Math.max(...xs),y1:Math.max(...ys)};}
+  if(o.type==='flashlight'||o.type==='laser')return {x0:o.x-22,y0:o.y-22,x1:o.x+22,y1:o.y+22};
+  if(o.type==='curved'){const {C}=curvedInfo(o);return {x0:Math.min(o.x,C.x)-o.aperture/2-8,y0:Math.min(o.y,C.y)-o.aperture/2-8,x1:Math.max(o.x,C.x)+o.aperture/2+8,y1:Math.max(o.y,C.y)+o.aperture/2+8};}
+  const {A,B}=segEnds(o);return {x0:Math.min(A.x,B.x)-10,y0:Math.min(A.y,B.y)-10,x1:Math.max(A.x,B.x)+10,y1:Math.max(A.y,B.y)+10};
+}
+function handlePos(o){
+  const N=dirOf(o.rotation);
+  const d=o.type==='prism'?o.size*.75:o.type==='flashlight'||o.type==='laser'?44:52;
+  return {x:o.x+N.x*d,y:o.y+N.y*d};
+}
+function drawElement(o){
+  const isSel=o.id===selectedId;
+  ctx.save();
+  ctx.lineCap='round';ctx.lineJoin='round';
+  if(o.type==='flashlight'){
+    const D=dirOf(o.rotation);
+    ctx.translate(o.x,o.y);ctx.rotate(o.rotation*D2R);
+    ctx.fillStyle=isSel?'#2a3a68':'#1a2340';
+    ctx.strokeStyle=isSel?'#8ea2ff':'#3b4c7a';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.roundRect(-16,-9,22,18,4);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#0b0f1c';ctx.beginPath();ctx.arc(8,0,7,0,TAU);ctx.fill();ctx.stroke();
+    const spec=o.spectrum?sampleArr(o.spectrum,550):1;
+    ctx.fillStyle='rgba(255,255,240,.9)';
+    ctx.beginPath();ctx.arc(8,0,3.2,0,TAU);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,220,.25)';ctx.lineWidth=1;
+    const dv=o.divergence*D2R,L=26;
+    ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(8+Math.cos(-dv)*L,Math.sin(-dv)*L);ctx.moveTo(8,0);ctx.lineTo(8+Math.cos(dv)*L,Math.sin(dv)*L);ctx.stroke();
+    ctx.restore();return;
+  }
+  if(o.type==='laser'){
+    ctx.translate(o.x,o.y);ctx.rotate(o.rotation*D2R);
+    ctx.fillStyle=isSel?'#3a1f3a':'#231326';
+    ctx.strokeStyle=isSel?'#f0a0e0':'#6b3a63';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.roundRect(-18,-7,28,14,4);ctx.fill();ctx.stroke();
+    const c=waveRGB(o.wavelength);
+    ctx.strokeStyle=`rgb(${c[0]},${c[1]},${c[2]})`;ctx.lineWidth=2.4;
+    ctx.shadowColor=`rgb(${c[0]},${c[1]},${c[2]})`;ctx.shadowBlur=10;
+    ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(34,0);ctx.stroke();
+    ctx.restore();return;
+  }
+  if(o.type==='mirror'){
+    const {A,B}=segEnds(o);
+    ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+    const g=ctx.createLinearGradient(A.x,A.y,B.x,B.y);
+    g.addColorStop(0,'#dbe6ff');g.addColorStop(.5,'#8fa3c8');g.addColorStop(1,'#dbe6ff');
+    ctx.strokeStyle=g;ctx.lineWidth=3.4;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+    ctx.strokeStyle=isSel?'#8ea2ff':'rgba(120,140,190,.35)';ctx.lineWidth=1;
+    ctx.restore();return;
+  }
+  if(o.type==='curved'){
+    const {C,R,N}=curvedInfo(o);
+    const ref=o.concave?{x:-N.x,y:-N.y}:{x:N.x,y:N.y};
+    const base=Math.atan2(ref.y,ref.x);
+    const half=Math.asin(clamp((o.aperture/2)/R,0,1));
+    ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=7;
+    ctx.beginPath();ctx.arc(C.x,C.y,R,base-half,base+half);ctx.stroke();
+    const g=ctx.createLinearGradient(o.x-N.x*20,o.y-N.y*20,o.x+N.x*20,o.y+N.y*20);
+    g.addColorStop(0,'#dbe6ff');g.addColorStop(1,'#7d90b8');
+    ctx.strokeStyle=g;ctx.lineWidth=3.4;
+    ctx.beginPath();ctx.arc(C.x,C.y,R,base-half,base+half);ctx.stroke();
+    if(isSel){ctx.strokeStyle='#8ea2ff';ctx.lineWidth=1;ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(C.x,C.y,3,0,TAU);ctx.stroke();ctx.setLineDash([]);}
+    ctx.restore();return;
+  }
+  if(o.type==='lens'){
+    const {A,B,N,T}=segEnds(o);
+    const cx=o.x,cy=o.y;
+    const ap=o.aperture/2;
+    const str=Math.abs(150/o.focal);
+    const th=clamp(5+str*10,6,20);
+    ctx.translate(cx,cy);ctx.rotate(Math.atan2(T.y,T.x));
+    ctx.fillStyle='rgba(140,180,255,.14)';
+    ctx.strokeStyle=isSel?'#8ea2ff':'#7ea2e8';ctx.lineWidth=1.6;
+    ctx.beginPath();
+    if(o.convex){ctx.moveTo(0,-ap);ctx.quadraticCurveTo(th,0,0,ap);ctx.quadraticCurveTo(-th,0,0,-ap);}
+    else{ctx.moveTo(-th*.7,-ap);ctx.quadraticCurveTo(0,0,-th*.7,ap);ctx.lineTo(th*.7,ap);ctx.quadraticCurveTo(0,0,th*.7,-ap);ctx.closePath();}
+    ctx.fill();ctx.stroke();
+    ctx.restore();return;
+  }
+  if(o.type==='grating'){
+    const {A,B,T}=segEnds(o);
+    ctx.strokeStyle=isSel?'#c4b5fd':'#a78bfa';ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+    ctx.strokeStyle='rgba(167,139,250,.7)';ctx.lineWidth=1;
+    const L=Math.hypot(B.x-A.x,B.y-A.y),n=Math.floor(L/10);
+    for(let i=0;i<=n;i++){const t=i/n;const px=lerp(A.x,B.x,t),py=lerp(A.y,B.y,t);
+      const N=dirOf(o.rotation);
+      ctx.beginPath();ctx.moveTo(px-N.x*5,py-N.y*5);ctx.lineTo(px+N.x*5,py+N.y*5);ctx.stroke();}
+    if(o.mode==='reflective'){ctx.fillStyle='rgba(167,139,250,.25)';ctx.fillRect(Math.min(A.x,B.x)-3,Math.min(A.y,B.y)-3,Math.abs(B.x-A.x)+6,Math.abs(B.y-A.y)+6);}
+    ctx.restore();return;
+  }
+  if(o.type==='polarizer'){
+    const {A,B,T}=segEnds(o);
+    ctx.strokeStyle='#0f1422';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+    ctx.strokeStyle=isSel?'#7dd3fc':'#38bdf8';ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();
+    ctx.strokeStyle='rgba(125,211,252,.8)';ctx.lineWidth=1;
+    const N=dirOf(o.rotation);
+    const L=Math.hypot(B.x-A.x,B.y-A.y),n=Math.floor(L/22);
+    for(let i=0;i<=n;i++){const t=(i+.5)/(n+1);const px=lerp(A.x,B.x,t),py=lerp(A.y,B.y,t);
+      ctx.beginPath();ctx.moveTo(px-N.x*9,py-N.y*9);ctx.lineTo(px+N.x*9,py+N.y*9);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(px-N.x*9,py-N.y*9);ctx.lineTo(px-N.x*5,py-N.y*5);ctx.moveTo(px+N.x*9,py+N.y*9);ctx.lineTo(px+N.x*5,py+N.y*5);ctx.stroke();}
+    ctx.restore();return;
+  }
+  if(o.type==='prism'){
+    const v=prismVerts(o);
+    ctx.beginPath();ctx.moveTo(v[0].x,v[0].y);ctx.lineTo(v[1].x,v[1].y);ctx.lineTo(v[2].x,v[2].y);ctx.closePath();
+    ctx.strokeStyle=isSel?'#8ea2ff':'#9db8e8';ctx.lineWidth=1.8;ctx.stroke();
+    ctx.restore();return;
+  }
+  if(o.type==='glass'){
+    const c=rectCorners(o);
+    ctx.beginPath();ctx.moveTo(c[0].x,c[0].y);c.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
+    ctx.strokeStyle=isSel?'#8ea2ff':'rgba(200,215,255,.55)';ctx.lineWidth=1.6;ctx.stroke();
+    ctx.restore();return;
+  }
+  if(o.type==='blocker'){
+    const c=rectCorners(o);
+    ctx.beginPath();ctx.moveTo(c[0].x,c[0].y);c.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
+    ctx.strokeStyle=isSel?'#8ea2ff':'#4b5878';ctx.lineWidth=1.8;ctx.stroke();
+    ctx.save();ctx.clip();
+    ctx.strokeStyle='rgba(90,110,150,.35)';ctx.lineWidth=1;
+    const N=dirOf(o.rotation);
+    for(let k=-120;k<120;k+=10){
+      ctx.beginPath();ctx.moveTo(o.x-N.y*k-40*N.x,o.y+N.x*k-40*N.y);ctx.lineTo(o.x-N.y*k+40*N.x,o.y+N.x*k+40*N.y);ctx.stroke();
+    }
+    ctx.restore();ctx.restore();return;
+  }
+  if(o.type==='sensor'){
+    const sd=sensorData[o.id];
+    const glow=sd?clamp(sd.total*.5,0,1):0;
+    if(glow>0.02){
+      let col='#fff';
+      if(sd&&sd.peak){const c=waveRGB(sd.peak);col=`rgb(${c[0]},${c[1]},${c[2]})`;}
+      ctx.save();ctx.globalCompositeOperation='lighter';
+      const g=ctx.createRadialGradient(o.x,o.y,2,o.x,o.y,o.radius*3.2);
+      g.addColorStop(0,col);g.addColorStop(1,'transparent');
+      ctx.globalAlpha=glow*.55;ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(o.x,o.y,o.radius*3.2,0,TAU);ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle='#0d1528';ctx.strokeStyle=isSel?'#fbbf24':'#8a7a4a';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.arc(o.x,o.y,o.radius,0,TAU);ctx.fill();ctx.stroke();
+    ctx.fillStyle=glow>.05?'#fde68a':'#3a425e';
+    ctx.beginPath();ctx.arc(o.x,o.y,3.4,0,TAU);ctx.fill();
+    ctx.restore();return;
+  }
+  ctx.restore();
+}
+
+/* ---------------- hit test (screen-tolerant) ---------------- */
+function hitTest(w){
+  const tol=12/view.scale;
+  for(let i=scene.length-1;i>=0;i--){
+    const o=scene[i];
+    if(o.type==='sensor'){if(Math.hypot(w.x-o.x,w.y-o.y)<o.radius+8)return o;}
+    else if(o.type==='flashlight'||o.type==='laser'){if(Math.hypot(w.x-o.x,w.y-o.y)<20)return o;}
+    else if(o.type==='prism'){const v=prismVerts(o);if(ptInPoly(w,v))return o;for(let k=0;k<3;k++)if(ptSegDist(w,v[k],v[(k+1)%3])<tol)return o;}
+    else if(o.type==='glass'||o.type==='blocker'){const c=rectCorners(o);if(ptInPoly(w,c))return o;}
+    else if(o.type==='curved'){const {A,B}=segEnds({...o,length:o.aperture});if(ptSegDist(w,A,B)<tol+4)return o;}
+    else{const {A,B}=segEnds(o);if(ptSegDist(w,A,B)<tol)return o;}
+  }
+  return null;
+}
+
+/* ---------------- UI: toolbar ---------------- */
+const TOOLS=[
+  {type:'flashlight',label:'Flashlight',group:'Sources',svg:'<path d="M3 8l6 0 4 4-6 0z"/><circle cx="15" cy="12" r="2.4"/><path d="M17.5 9.5L21 7M17.5 14.5L21 17M18 12h3"/>'},
+  {type:'laser',label:'Laser',group:'Sources',svg:'<rect x="2" y="10" width="9" height="4" rx="1.5"/><path d="M11 12h10" stroke-width="2.4"/>'},
+  {type:'mirror',label:'Mirror',group:'Optics',svg:'<path d="M4 18L20 6" stroke-width="2.4"/><path d="M6 18l2-2M10 16l2-2M14 14l2-2"/>'},
+  {type:'curved',label:'Curved',group:'Optics',svg:'<path d="M6 4 Q16 12 6 20" stroke-width="2"/>'},
+  {type:'lens',label:'Lens',group:'Optics',svg:'<path d="M12 3 C15 8 15 16 12 21 C9 16 9 8 12 3Z"/>'},
+  {type:'prism',label:'Prism',group:'Optics',svg:'<path d="M12 4L20 19H4Z"/>'},
+  {type:'grating',label:'Grating',group:'Optics',svg:'<path d="M4 6h16" stroke-width="2"/><path d="M6 6v4M10 6v4M14 6v4M18 6v4M8 14l8 4"/>'},
+  {type:'polarizer',label:'Polarizer',group:'Optics',svg:'<path d="M5 19L19 5" stroke-width="2"/><path d="M9 9l1.5 1.5M13 7l1.5 1.5M11 13l1.5 1.5"/>'},
+  {type:'glass',label:'Glass',group:'Optics',svg:'<rect x="4" y="8" width="16" height="8" rx="1.5"/><path d="M7 8v8M11 8v8M15 8v8" opacity=".5"/>'},
+  {type:'blocker',label:'Blocker',group:'Optics',svg:'<rect x="4" y="9" width="16" height="6" rx="1" fill="currentColor" opacity=".35"/><path d="M4 9h16M4 15h16"/>'},
+  {type:'sensor',label:'Sensor',group:'Detect',svg:'<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>'},
+];
+function buildToolbar(){
+  const g={Sources:$('#toolsSources'),Optics:$('#toolsOptics'),Detect:$('#toolsDetect')};
+  TOOLS.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='toolbtn flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-[#0e1424] border border-[#1a2440] text-left';
+    b.innerHTML=`<span class="w-7 h-7 rounded-lg bg-[#18223c] flex items-center justify-center text-[#9fb4e8] shrink-0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${t.svg}</svg></span><span class="text-[12px] text-slate-200">${t.label}</span>`;
+    b.onclick=()=>addObject(t.type);
+    g[t.group].appendChild(b);
+  });
+}
+function viewCenterWorld(){
+  const r=wrap.getBoundingClientRect();
+  return s2w(r.width/2,r.height/2);
+}
+function addObject(type){
+  const c=viewCenterWorld();
+  const o=defaults(type,c.x+(Math.random()*40-20),c.y+(Math.random()*40-20),0);
+  if(type==='mirror')o.rotation=90;
+  if(type==='glass'||type==='blocker')o.rotation=90;
+  if(type==='lens')o.rotation=0;
+  scene.push(o);selectedId=o.id;
+  afterChange();renderProps();
+}
+
+/* ---------------- UI: props ---------------- */
+function sliderRow(label,min,max,step,val,fmt,on){
+  const id='s'+Math.random().toString(36).slice(2);
+  return `<label class="block">
+    <div class="flex justify-between items-baseline mb-1.5"><span class="text-[12px] text-slate-300">${label}</span><span id="${id}v" class="text-[11px] text-slate-400 tabular-nums">${fmt(val)}</span></div>
+    <input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${val}" class="w-full">
+  </label>`;
+}
+function bindSlider(root,html){/* helper attaches after insert */}
+function renderProps(){
+  const box=$('#props'), title=$('#propsTitle'), acts=$('#propsActions');
+  acts.innerHTML='';
+  const o=scene.find(x=>x.id===selectedId);
+  if(!o){
+    title.textContent=`Scene · ${scene.length}`;
+    box.innerHTML=`
+      ${scene.length===0?`<div class="text-center py-8">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-[#141d33] border border-[#223052] flex items-center justify-center text-[#5b7cff]">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18h6M10 21h4"/><path d="M12 3v2M12 7c-3 2-5 5-5 9h10c0-4-2-7-5-9z"/></svg>
+        </div>
+        <div class="mt-3 text-[13px] font-medium">Empty canvas</div>
+        <div class="text-[12px] text-slate-500 mt-1">Add a source on the left to begin.<br>Try the demo scene up top.</div>
+      </div>`:''}
+      <div class="seg-label">Objects</div>
+      <div class="space-y-1.5">${scene.map(s=>`
+        <button data-sel="${s.id}" class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-[#0e1424] border border-[#1a2440] hover:border-[#2c3d68] text-left">
+          <span class="w-2 h-2 rounded-full shrink-0" style="background:${dotColor(s)}"></span>
+          <span class="text-[12px] flex-1">${TYPE_NAME[s.type]}</span>
+          <span class="text-[10px] text-slate-500">#${s.id}</span>
+        </button>`).join('')||'<div class="text-[12px] text-slate-600">Nothing yet.</div>'}
+      </div>
+      <div class="seg-label !mt-6">Sensors</div>
+      <div class="space-y-2">${scene.filter(s=>s.type==='sensor').map(s=>{
+        const sd=sensorData[s.id]||{total:0,peak:0};
+        return `<div class="p-2.5 rounded-xl bg-[#0e1424] border border-[#1a2440]"><div class="flex justify-between text-[12px]"><span>Sensor #${s.id}</span><span class="tabular-nums text-amber-200">${(sd.total||0).toFixed(2)}</span></div></div>`;
+      }).join('')||'<div class="text-[12px] text-slate-600">Add a sensor to measure light.</div>'}
+      </div>`;
+    box.querySelectorAll('[data-sel]').forEach(b=>b.onclick=()=>{selectedId=+b.dataset.sel;renderProps();render();});
+    return;
+  }
+  title.textContent=TYPE_NAME[o.type]+` · #${o.id}`;
+  const del=document.createElement('button');
+  del.className='text-[11px] px-2.5 h-[28px] rounded-lg bg-[#1d1420] border border-[#3a2430] text-[#e2a3b8] hover:bg-[#2a1a24]';
+  del.textContent='Delete';
+  del.onclick=()=>{scene=scene.filter(x=>x.id!==o.id);selectedId=null;afterChange();renderProps();};
+  const dup=document.createElement('button');
+  dup.className='text-[11px] px-2.5 h-[28px] rounded-lg bg-[#141c2f] border border-[#223052] hover:bg-[#1a2440]';
+  dup.textContent='Duplicate';
+  dup.onclick=()=>{const c=JSON.parse(JSON.stringify(o));c.id=uid++;c.x+=26;c.y+=26;scene.push(c);selectedId=c.id;afterChange();renderProps();};
+  acts.append(dup,del);
+
+  let h='';
+  const F1=v=>(+v).toFixed(2), F0=v=>Math.round(v)+'°', NM=v=>Math.round(v)+' nm';
+  const rotRow=sliderRow('Rotation',0,360,1,o.rotation,F0,v=>{o.rotation=((v%360)+360)%360;afterChange();});
+  const intRow=o.intensity!==undefined?sliderRow('Intensity',.1,3,.05,o.intensity,F1,v=>{o.intensity=+v;afterChange();}):'';
+
+  if(o.type==='flashlight'){
+    h+=intRow+sliderRow('Beam divergence (half-angle)',0,30,.5,o.divergence,v=>v+'°',v=>{o.divergence=+v;afterChange();})+rotRow;
+    h+=`<div class="mt-4"><div class="flex justify-between items-center mb-1"><span class="text-[12px] text-slate-300">Spectrum</span>
+      <select id="specSel" class="!w-[130px] !py-1">
+        ${['White LED','Sunlight','Tungsten','Fluorescent','Red','Green','Blue','Equal white','Custom'].map(n=>`<option ${o.specName===n?'selected':''}>${n}</option>`).join('')}
+      </select></div>
+      <canvas id="specEd" width="248" height="86" class="spec-canvas w-full"></canvas>
+      <div class="text-[11px] text-slate-500 mt-1">Drag on the graph to paint a custom spectrum.</div></div>`;
+    h+=`<details class="physics mt-3"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Gaussian angular profile σ = div/2.2, Planck black-body for presets, each wavelength traced separately with n(λ).</p></details>`;
+  }
+  else if(o.type==='laser'){
+    h+=intRow+rotRow;
+    h+=sliderRow('Wavelength',380,700,1,o.wavelength,NM,v=>{o.wavelength=+v;afterChange(true);})+
+       `<div class="flex items-center gap-2 mt-1"><span id="laserDot" class="w-4 h-4 rounded-full border border-white/20" style="background:${waveCSS(o.wavelength)}"></span><span class="text-[11px] text-slate-500">single line · polarized</span></div>`+
+       sliderRow('Polarization angle',0,180,1,o.polAngle,F0,v=>{o.polAngle=+v;afterChange();});
+    h+=`<details class="physics mt-3"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Monochromatic, fully polarized. Polarization matters at polarizers (Malus law).</p></details>`;
+  }
+  else if(o.type==='mirror'){
+    h+=sliderRow('Length',40,300,2,o.length,v=>Math.round(v)+' px',v=>{o.length=+v;afterChange();})+
+       sliderRow('Reflectivity',0,1,.01,o.reflectivity,F1,v=>{o.reflectivity=+v;afterChange();})+rotRow+
+       `<details class="physics mt-3"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">θ<sub>r</sub> = θ<sub>i</sub>, power × R.</p></details>`;
+  }
+  else if(o.type==='curved'){
+    h+=`<div class="flex gap-2 mb-3">
+      <button id="ccConc" class="flex-1 py-1.5 rounded-lg text-[12px] border ${o.concave?'bg-[#5b7cff] text-white border-[#5b7cff]':'bg-[#0e1420] border-[#223052]'}">Concave</button>
+      <button id="ccConv" class="flex-1 py-1.5 rounded-lg text-[12px] border ${!o.concave?'bg-[#5b7cff] text-white border-[#5b7cff]':'bg-[#0e1420] border-[#223052]'}">Convex</button></div>`+
+      sliderRow('Aperture',60,260,2,o.aperture,v=>Math.round(v)+' px',v=>{o.aperture=+v;afterChange();})+
+      sliderRow('Radius of curvature',80,800,5,o.radius,v=>Math.round(v)+' px · f≈'+Math.round(v/2),v=>{o.radius=+v;afterChange();})+
+      sliderRow('Reflectivity',0,1,.01,o.reflectivity,F1,v=>{o.reflectivity=+v;afterChange();})+rotRow+
+      `<details class="physics mt-3"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Circle reflection, paraxial focus f = R/2.</p></details>`;
+  }
+  else if(o.type==='lens'){
+    h+=`<div class="flex gap-2 mb-3">
+      <button id="lensConv" class="flex-1 py-1.5 rounded-lg text-[12px] border ${o.convex?'bg-[#5b7cff] text-white border-[#5b7cff]':'bg-[#0e1420] border-[#223052]'}">Convex +</button>
+      <button id="lensConc" class="flex-1 py-1.5 rounded-lg text-[12px] border ${!o.convex?'bg-[#5b7cff] text-white border-[#5b7cff]':'bg-[#0e1420] border-[#223052]'}">Concave −</button></div>`+
+      sliderRow('Focal length |f|',40,500,2,o.focal,v=>'±'+Math.round(v)+' px',v=>{o.focal=+v;afterChange();})+
+      sliderRow('Aperture',60,220,2,o.aperture,v=>Math.round(v)+' px',v=>{o.aperture=+v;afterChange();})+rotRow+
+      `<div class="text-[11px] text-slate-500">Effective f = ${o.convex?'+':'−'}${Math.round(o.focal)} px at 588 nm, shifted by BK7 dispersion.</div>
+      <details class="physics mt-2"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Thin lens Δθ ≈ −h/f(λ), f(λ) = f₀·(n₀−1)/(n(λ)−1). 4% Fresnel reflection included.</p></details>`;
+  }
+  else if(o.type==='grating'){
+    h+=`<div class="flex gap-2 mb-3">
+      <button id="gT" class="flex-1 py-1.5 rounded-lg text-[12px] border ${o.mode==='transmissive'?'bg-[#5b7cff] text-white border-[#5b7cff]':'bg-[#0e1420] border-[#223052]'}">Transmissive</button>
+      <button id="gR" class="flex-1 py-1.5 rounded-lg text-[12px] border ${o.mode==='reflective'?'bg-[#5b7cff] text-white border-[#5b7cff]':'bg-[#0e1420] border-[#223052]'}">Reflective</button></div>`+
+      sliderRow('Grooves',100,1200,10,o.lines,v=>Math.round(v)+' /mm',v=>{o.lines=+v;afterChange();})+
+      sliderRow('Length',80,260,2,o.length,v=>Math.round(v)+' px',v=>{o.length=+v;afterChange();})+rotRow+
+      `<div class="text-[11px] text-slate-500">Period d = ${(1000000/o.lines).toFixed(0)} nm · orders −2…+2</div>
+      <details class="physics mt-2"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">d·(sinθ<sub>m</sub> − sinθ<sub>i</sub>) = mλ. Evanescent orders (|sin|&gt;1) vanish.</p></details>`;
+  }
+  else if(o.type==='polarizer'){
+    const ax=((o.rotation+90)%180+180)%180;
+    h+=sliderRow('Length',60,260,2,o.length,v=>Math.round(v)+' px',v=>{o.length=+v;afterChange();})+rotRow+
+      `<div class="text-[11px] text-slate-400 mt-1">Transmission axis <span class="text-sky-300 tabular-nums">${Math.round(ax)}°</span> (along the film)</div>
+      <details class="physics mt-2"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Malus: I = I₀cos²Δ for polarized, ½I₀ for unpolarized. Output polarized along axis.</p></details>`;
+  }
+  else if(o.type==='prism'){
+    h+=sliderRow('Size',60,210,2,o.size,v=>Math.round(v)+' px',v=>{o.size=+v;afterChange();})+
+       sliderRow('Apex angle',30,90,1,o.apex,F0,v=>{o.apex=+v;afterChange();})+rotRow+
+       `<label class="block mt-1"><span class="text-[12px] text-slate-300">Glass</span>
+       <select id="matSel" class="mt-1.5">${['BK7','FS','SF10','ACRYLIC','DIAMOND'].map(m=>`<option value="${m}" ${o.material===m?'selected':''}>${matName(m)} · n≈${nMaterial(m,587.6).toFixed(3)}</option>`).join('')}</select></label>
+       <label class="flex items-center justify-between mt-3 cursor-pointer" id="tirRow"><span class="text-[12px] text-slate-300">Total internal reflection</span><span id="tirT" class="toggle ${o.tir?'on':''}"></span></label>
+       <div class="text-[11px] text-slate-500 mt-1">${o.tir?'Rays past the critical angle reflect inside.':'TIR disabled — trapped rays leak through (unphysical demo).'}</div>
+       <details class="physics mt-2"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Sellmeier n(λ), Snell + Fresnel at each face, critical angle θ<sub>c</sub>=asin(n₂/n₁).</p></details>`;
+  }
+  else if(o.type==='glass'){
+    h+=sliderRow('Width',40,220,2,o.width,v=>Math.round(v)+' px',v=>{o.width=+v;afterChange();})+
+       sliderRow('Thickness',8,64,1,o.thickness,v=>Math.round(v)+' px',v=>{o.thickness=+v;afterChange();})+
+       sliderRow('Reflectance',0,.9,.01,o.reflectance,F1,v=>{o.reflectance=+v;afterChange();})+rotRow+
+       `<div class="mt-3"><div class="flex justify-between items-center mb-1"><span class="text-[12px] text-slate-300">Transmission</span>
+       <select id="tintSel" class="!w-[130px] !py-1">${['Clear','Red long-pass','Green band','Blue short-pass','Yellow long-pass','Cyan','Magenta','Orange','ND 50%','Custom'].map(n=>`<option ${o.tintName===n?'selected':''}>${n}</option>`).join('')}</select></div>
+       <canvas id="glassEd" width="248" height="86" class="spec-canvas w-full"></canvas>
+       <div class="text-[11px] text-slate-500 mt-1">Paint which wavelengths pass. Thickness scales absorption.</div></div>
+       <details class="physics mt-2"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Beer–Lambert T = e^(−αL), α from curve at 20 px reference. Snell refraction with BK7 n(λ).</p></details>`;
+  }
+  else if(o.type==='blocker'){
+    h+=sliderRow('Width',40,280,2,o.width,v=>Math.round(v)+' px',v=>{o.width=+v;afterChange();})+
+       sliderRow('Thickness',8,48,1,o.thickness,v=>Math.round(v)+' px',v=>{o.thickness=+v;afterChange();})+rotRow;
+  }
+  else if(o.type==='sensor'){
+    const sd=sensorData[o.id]||{total:0,per:{},peak:0};
+    h+=sliderRow('Radius',8,32,1,o.radius,v=>Math.round(v)+' px',v=>{o.radius=+v;afterChange();});
+    const pct=clamp(sd.total/3*100,0,100);
+    h+=`<div class="p-3 rounded-xl bg-[#0e1424] border border-[#223052]">
+      <div class="flex justify-between items-baseline"><span class="text-[12px] text-slate-300">Power</span><span class="text-[15px] font-semibold tabular-nums ${sd.total>.05?'text-amber-200':'text-slate-500'}">${(sd.total||0).toFixed(3)}</span></div>
+      <div class="h-1.5 rounded-full bg-[#1a2440] mt-2 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-200" style="width:${pct}%"></div></div>
+      <div class="flex items-center gap-2 mt-2.5 text-[11px] text-slate-400">
+        ${sd.peak?`<span class="w-3.5 h-3.5 rounded-full border border-white/20" style="background:${waveCSS(sd.peak)}"></span><span>peak ≈ ${Math.round(sd.peak)} nm</span>`:'<span>No light hitting yet</span>'}
+      </div>
+      <canvas id="sensSpec" width="248" height="46" class="w-full mt-2 rounded-lg border border-[#1c2540]"></canvas>
+    </div>
+    <details class="physics mt-2"><summary>Physics</summary><p class="text-[11px] text-slate-500 mt-1">Integrates incident spectral power Σ P(λ). Does not perturb the field except by absorption.</p></details>`;
+  }
+  box.innerHTML=`<div class="space-y-4 fadein">${h}</div>
+    <div class="pt-2 grid grid-cols-2 gap-2">
+      <label class="text-[11px] text-slate-500">X<input id="px" type="number" value="${Math.round(o.x)}" class="mt-1"></label>
+      <label class="text-[11px] text-slate-500">Y<input id="py" type="number" value="${Math.round(o.y)}" class="mt-1"></label>
+    </div>`;
+  /* wire sliders */
+  let idx=0;
+  box.querySelectorAll('input[type=range]').forEach(inp=>{
+    const rows=[
+      ...(o.intensity!==undefined?[v=>{o.intensity=+v;}]:[]),
+    ];
+  });
+  /* Rebuild approach: parse from h order — simpler: attach via re-query of labels is fragile.
+     Instead re-attach by re-creating listeners generically: we stored closures in sliderRow? No.
+     Workaround: after innerHTML, find all range inputs and map by their order to updater list we rebuild. */
+  wireProps(o,box);
+  const px=box.querySelector('#px'),py=box.querySelector('#py');
+  if(px){px.onchange=()=>{o.x=+px.value;afterChange();};py.onchange=()=>{o.y=+py.value;afterChange();};}
+  /* spectrum editors */
+  if(o.type==='flashlight'){
+    const sel=box.querySelector('#specSel');
+    sel.onchange=()=>{o.specName=sel.value;if(sel.value!=='Custom'){o.spectrum=presetSpectrum(sel.value);afterChange();renderProps();}};
+    attachSpectrumEditor(box.querySelector('#specEd'),o.spectrum,arr=>{o.spectrum=arr.slice();o.specName='Custom';afterChange();},false);
+  }
+  if(o.type==='glass'){
+    const sel=box.querySelector('#tintSel');
+    sel.onchange=()=>{o.tintName=sel.value;if(sel.value!=='Custom'){o.transmission=presetGlass(sel.value);afterChange();renderProps();}};
+    attachSpectrumEditor(box.querySelector('#glassEd'),o.transmission,arr=>{o.transmission=arr.slice();o.tintName='Custom';afterChange();},true);
+  }
+  if(o.type==='sensor')drawSensorSpec(box.querySelector('#sensSpec'),sensorData[o.id]);
+  if(o.type==='prism'){
+    box.querySelector('#matSel').onchange=e=>{o.material=e.target.value;afterChange();renderProps();};
+    box.querySelector('#tirRow').onclick=()=>{o.tir=!o.tir;afterChange();renderProps();};
+  }
+  if(o.type==='curved'){box.querySelector('#ccConc').onclick=()=>{o.concave=true;afterChange();renderProps();};box.querySelector('#ccConv').onclick=()=>{o.concave=false;afterChange();renderProps();};}
+  if(o.type==='lens'){box.querySelector('#lensConv').onclick=()=>{o.convex=true;afterChange();renderProps();};box.querySelector('#lensConc').onclick=()=>{o.convex=false;afterChange();renderProps();};}
+  if(o.type==='grating'){box.querySelector('#gT').onclick=()=>{o.mode='transmissive';afterChange();renderProps();};box.querySelector('#gR').onclick=()=>{o.mode='reflective';afterChange();renderProps();};}
+}
+/* wire range inputs by re-evaluating label text */
+function wireProps(o,box){
+  const ups=[];
+  const push=(label,fn)=>ups.push({label,fn});
+  if(o.intensity!==undefined)push('Intensity',v=>o.intensity=+v);
+  if(o.type==='flashlight'){push('Beam divergence (half-angle)',v=>o.divergence=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='laser'){push('Rotation',v=>o.rotation=+v);push('Wavelength',v=>o.wavelength=+v);push('Polarization angle',v=>o.polAngle=+v);}
+  else if(o.type==='mirror'){push('Length',v=>o.length=+v);push('Reflectivity',v=>o.reflectivity=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='curved'){push('Aperture',v=>o.aperture=+v);push('Radius of curvature',v=>o.radius=+v);push('Reflectivity',v=>o.reflectivity=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='lens'){push('Focal length |f|',v=>o.focal=+v);push('Aperture',v=>o.aperture=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='grating'){push('Grooves',v=>o.lines=+v);push('Length',v=>o.length=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='polarizer'){push('Length',v=>o.length=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='prism'){push('Size',v=>o.size=+v);push('Apex angle',v=>o.apex=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='glass'){push('Width',v=>o.width=+v);push('Thickness',v=>o.thickness=+v);push('Reflectance',v=>o.reflectance=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='blocker'){push('Width',v=>o.width=+v);push('Thickness',v=>o.thickness=+v);push('Rotation',v=>o.rotation=+v);}
+  else if(o.type==='sensor'){push('Radius',v=>o.radius=+v);}
+  const inputs=[...box.querySelectorAll('input[type=range]')];
+  inputs.forEach((inp,i)=>{
+    if(!ups[i])return;
+    inp.addEventListener('input',()=>{
+      ups[i].fn(+inp.value);
+      const lab=inp.closest('label').querySelector('span:last-child, span[id$="v"]');
+      const map={ 'Intensity':v=>(+v).toFixed(2),'Rotation':v=>Math.round(v)+'°','Beam divergence (half-angle)':v=>(+v).toFixed(1)+'°','Wavelength':v=>Math.round(v)+' nm','Polarization angle':v=>Math.round(v)+'°','Length':v=>Math.round(v)+' px','Reflectivity':v=>(+v).toFixed(2),'Aperture':v=>Math.round(v)+' px','Radius of curvature':v=>Math.round(v)+' px','Focal length |f|':v=>'±'+Math.round(v)+' px','Grooves':v=>Math.round(v)+' /mm','Size':v=>Math.round(v)+' px','Apex angle':v=>Math.round(v)+'°','Width':v=>Math.round(v)+' px','Thickness':v=>Math.round(v)+' px','Reflectance':v=>(+v).toFixed(2),'Radius':v=>Math.round(v)+' px'};
+      const lbl=inp.closest('label').querySelector('div span:first-child').textContent;
+      const vv=inp.closest('label').querySelector('div span:last-child');
+      if(vv&&map[lbl])vv.textContent=map[lbl](inp.value);
+      if(o.type==='laser'&&lbl==='Wavelength'){const d=$('#laserDot');if(d)d.style.background=waveCSS(o.wavelength);}
+      afterChange(lbl==='Wavelength');
+    });
+  });
+}
+function dotColor(s){
+  if(s.type==='flashlight')return '#fde68a';
+  if(s.type==='laser'){const c=waveRGB(s.wavelength);return `rgb(${c[0]},${c[1]},${c[2]})`;}
+  if(s.type==='sensor')return '#fbbf24';
+  if(s.type==='prism')return '#93c5fd';
+  if(s.type==='grating')return '#a78bfa';
+  if(s.type==='polarizer')return '#38bdf8';
+  return '#5b7cff';
+}
+function matName(m){return {BK7:'BK7 crown',FS:'Fused silica',SF10:'SF10 flint',ACRYLIC:'Acrylic',DIAMOND:'Diamond'}[m]||m;}
+
+/* spectrum editor */
+function attachSpectrumEditor(cv,arr,onChange,isTrans){
+  if(!cv)return;
+  const c2=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  function draw(){
+    c2.clearRect(0,0,W,H);
+    for(let x=0;x<W;x++){
+      const lam=LAM_MIN+(LAM_MAX-LAM_MIN)*x/W;
+      const c=waveRGB(lam);
+      c2.fillStyle=`rgba(${c[0]},${c[1]},${c[2]},.30)`;
+      c2.fillRect(x,H-12,1,12);
+    }
+    c2.beginPath();
+    for(let x=0;x<W;x++){
+      const lam=LAM_MIN+(LAM_MAX-LAM_MIN)*x/W;
+      const v=sampleArr(arr,lam);
+      const y=H-14-v*(H-26);
+      x===0?c2.moveTo(x,y):c2.lineTo(x,y);
+    }
+    c2.strokeStyle=isTrans?'#6ee7b7':'#e8eefc';c2.lineWidth=2;c2.stroke();
+    c2.lineTo(W,H-14);c2.lineTo(0,H-14);c2.closePath();
+    c2.fillStyle=isTrans?'rgba(110,231,183,.15)':'rgba(232,238,252,.10)';c2.fill();
+    c2.fillStyle='rgba(140,160,200,.6)';c2.font='9px Inter';
+    c2.fillText('380',4,H-2);c2.fillText('700',W-24,H-2);
+  }
+  draw();
+  let painting=false;
+  function paint(e){
+    const r=cv.getBoundingClientRect();
+    const x=clamp((e.clientX-r.left)/r.width*W,0,W-1);
+    const y=clamp((e.clientY-r.top)/r.height*H,0,H);
+    const lam=LAM_MIN+(LAM_MAX-LAM_MIN)*x/W;
+    const v=clamp(1-(y-(8))/(H-26-8),0,1);
+    const idx=Math.round((lam-LAM_MIN)/(LAM_MAX-LAM_MIN)*(EDIT_N-1));
+    for(let k=-2;k<=2;k++){
+      const j=clamp(idx+k,0,EDIT_N-1);
+      const w=Math.exp(-(k*k)/2.5);
+      arr[j]=clamp(lerp(arr[j],v,w),0,1);
+    }
+    /* smooth neighbors */
+    draw();onChange(arr);
+  }
+  cv.onpointerdown=e=>{painting=true;cv.setPointerCapture(e.pointerId);paint(e);};
+  cv.onpointermove=e=>{if(painting)paint(e);};
+  cv.onpointerup=()=>{painting=false;renderProps();};
+}
+function drawSensorSpec(cv,sd){
+  if(!cv)return;const c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);
+  c.fillStyle='#0a0f1c';c.fillRect(0,0,cv.width,cv.height);
+  if(!sd||!sd.total){c.fillStyle='#3a4763';c.font='10px Inter';c.fillText('no signal',10,26);return;}
+  const max=Math.max(...Object.values(sd.per),1e-9);
+  Object.entries(sd.per).forEach(([lam,p])=>{
+    const x=(lam-LAM_MIN)/(LAM_MAX-LAM_MIN)*cv.width;
+    const hgt=(p/max)*(cv.height-8);
+    const col=waveRGB(+lam);
+    c.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+    c.fillRect(x-3,cv.height-hgt,6,hgt);
+  });
+}
+
+/* ---------------- change pipeline ---------------- */
+let rafPending=false;
+function afterChange(lightOnly){
+  save();
+  schedule();
+}
+function schedule(){
+  if(rafPending)return;rafPending=true;
+  requestAnimationFrame(()=>{rafPending=false;traceScene();render();
+    const o=scene.find(x=>x.id===selectedId);
+    if(o&&o.type==='sensor')renderProps();
+  });
+}
+function save(){try{localStorage.setItem('lumen-scene',JSON.stringify({scene,view,quality}));}catch(e){}}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem('lumen-scene'));
+    if(d&&d.scene&&d.scene.length){scene=d.scene;uid=Math.max(...scene.map(o=>o.id))+1;if(d.quality)quality=d.quality;if(d.view&&d.view.scale)view=d.view;return true;}
+  }catch(e){}
+  return false;
+}
+
+/* ---------------- interactions ---------------- */
+function evPos(e){const r=canvas.getBoundingClientRect();return {sx:e.clientX-r.left,sy:e.clientY-r.top};}
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);
+  const {sx,sy}=evPos(e);const w=s2w(sx,sy);movedPx=0;
+  const sel=scene.find(o=>o.id===selectedId);
+  if(sel&&sel.type!=='sensor'){
+    const hp=handlePos(sel);
+    const hs={x:(hp.x)*view.scale+view.tx,y:(hp.y)*view.scale+view.ty};
+    if(Math.hypot(sx-hs.x,sy-hs.y)<16){dragMode='rotate';panStart={sx,sy};return;}
+  }
+  const hit=hitTest(w);
+  if(hit){selectedId=hit.id;dragMode='move';dragOff={x:w.x-hit.x,y:w.y-hit.y};renderProps();render();}
+  else{dragMode='pan';panStart={sx,sy,tx:view.tx,ty:view.ty,moved:false};}
+});
+canvas.addEventListener('pointermove',e=>{
+  const {sx,sy}=evPos(e);const w=s2w(sx,sy);
+  if(!dragMode){
+    const hov=hitTest(w);
+    canvas.style.cursor=hov?'move':'default';
+    return;
+  }
+  movedPx++;
+  if(dragMode==='move'){
+    const o=scene.find(x=>x.id===selectedId);
+    if(o){o.x=w.x-dragOff.x;o.y=w.y-dragOff.y;schedule();}
+  }else if(dragMode==='rotate'){
+    const o=scene.find(x=>x.id===selectedId);
+    if(o){o.rotation=((Math.atan2(w.y-o.y,w.x-o.x)*R2D)+360)%360;schedule();
+      const box=$('#props');
+      const labels=[...box.querySelectorAll('label')];
+      const rl=labels.find(l=>l.textContent.startsWith('Rotation'));
+      if(rl){const inp=rl.querySelector('input'),val=rl.querySelector('div span:last-child');if(inp)inp.value=o.rotation;if(val)val.textContent=Math.round(o.rotation)+'°';}
+      const axRow=[...box.querySelectorAll('.text-sky-300')][0];
+      if(axRow&&o.type==='polarizer')axRow.textContent=Math.round(((o.rotation+90)%180+180)%180)+'°';
+    }
+  }else if(dragMode==='pan'){
+    view.tx=panStart.tx+(sx-panStart.sx);view.ty=panStart.ty+(sy-panStart.sy);
+    if(Math.abs(sx-panStart.sx)+Math.abs(sy-panStart.sy)>4)panStart.moved=true;
+    render();
+  }
+});
+canvas.addEventListener('pointerup',e=>{
+  if(dragMode==='pan'&&panStart&&!panStart.moved){selectedId=null;renderProps();render();}
+  if(dragMode==='move'||dragMode==='rotate'){save();renderProps();}
+  dragMode=null;render();
+});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const {sx,sy}=evPos(e);
+  const f=Math.exp(-e.deltaY*.0012);
+  const ns=clamp(view.scale*f,.3,3.2);
+  view.tx=sx-(sx-view.tx)*(ns/view.scale);
+  view.ty=sy-(sy-view.ty)*(ns/view.scale);
+  view.scale=ns;render();
+},{passive:false});
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedId!=null){scene=scene.filter(o=>o.id!==selectedId);selectedId=null;afterChange();renderProps();}
+  if(e.key==='Escape'){selectedId=null;renderProps();render();}
+});
+window.addEventListener('resize',()=>{resize();render();});
+
+/* header */
+$('#qualitySel').onchange=e=>{quality=e.target.value;save();schedule();};
+$('#lightBtn').onclick=()=>{
+  lightOn=!lightOn;
+  $('#lightLabel').textContent=lightOn?'Light on':'Light off';
+  $('#lightDot').className=lightOn?'w-2 h-2 rounded-full bg-yellow-300 shadow-[0_0_8px_#fde68a]':'w-2 h-2 rounded-full bg-slate-600';
+  schedule();
+};
+$('#gridBtn').onclick=()=>{showGrid=!showGrid;render();};
+$('#clearBtn').onclick=()=>{scene=[];selectedId=null;afterChange();renderProps();};
+$('#demoBtn').onclick=()=>loadDemo(true);
+const helpM=$('#helpModal');
+$('#helpBtn').onclick=()=>{helpM.classList.remove('hidden');helpM.classList.add('flex');};
+helpM.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{helpM.classList.add('hidden');helpM.classList.remove('flex');});
+
+/* demo */
+function loadDemo(center){
+  scene=[];uid=1;
+  const r=wrap.getBoundingClientRect();
+  const cx=center?s2w(r.width/2,r.height/2).x:r.width/2;
+  const cy=center?s2w(r.width/2,r.height/2).y:r.height/2;
+  scene.push({...baseProps('flashlight',cx-300,cy-40,12),intensity:1.6,divergence:7,spectrum:presetSpectrum('White LED'),specName:'White LED'});
+  scene.push({...baseProps('prism',cx-40,cy+10,8),size:135,apex:60,material:'BK7',tir:true});
+  scene.push({...baseProps('blocker',cx+260,cy+10,90),width:220,thickness:14});
+  scene.push({...baseProps('laser',cx-300,cy+150,-8),wavelength:532,intensity:2,polAngle:0});
+  scene.push({...baseProps('grating',cx-60,cy+150,-8+90),length:170,lines:600,mode:'transmissive'});
+  scene.push({...baseProps('sensor',cx+180,cy+150,0),radius:17});
+  selectedId=null;
+  afterChange();renderProps();
+}
+
+/* init */
+buildToolbar();
+resize();
+const had=load();
+$('#qualitySel').value=quality;
+if(!had)loadDemo(false);
+else{traceScene();}
+renderProps();traceScene();render();
+requestAnimationFrame(()=>{resize();const r=wrap.getBoundingClientRect();
+  if(!had){/* already centered */}
+  traceScene();render();
+});
+</script>
+</body>
+</html>

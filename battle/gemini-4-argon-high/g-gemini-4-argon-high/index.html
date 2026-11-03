@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voxel Realms — 3D Blockcraft Sandbox</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- 3D Three.js WebGL Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- Dynamic Environmental Overlays -->
+    <div id="underwater-overlay" class="screen-overlay"></div>
+    <div id="damage-overlay" class="screen-overlay"></div>
+
+    <!-- In-Game HUD -->
+    <div id="hud-layer">
+      <!-- Top-Left Live Telemetry -->
+      <div id="hud-telemetry">
+        <span id="stat-fps">60 FPS</span>
+        <span class="telemetry-sep">|</span>
+        <span id="stat-xyz">0, 32, 0</span>
+        <span class="telemetry-sep">|</span>
+        <span id="stat-biome">Emerald Plains</span>
+        <span class="telemetry-sep">|</span>
+        <span id="stat-time">Day 1 • Daylight</span>
+        <span class="telemetry-sep">|</span>
+        <span id="stat-mode">Survival</span>
+      </div>
+
+      <!-- Top-Right Quick Menu Buttons -->
+      <div id="hud-top-right">
+        <button id="btn-open-inventory" type="button" class="hud-btn">
+          <kbd>E</kbd> Inventory &amp; Craft
+        </button>
+        <button id="btn-open-pause" type="button" class="hud-btn">
+          <kbd>Esc</kbd> World &amp; Settings
+        </button>
+      </div>
+
+      <!-- Center Crosshair & Targeted Block Info -->
+      <div id="crosshair-wrap">
+        <div id="crosshair"></div>
+        <div id="target-badge" class="hidden">
+          <span id="target-name">Grass Block</span>
+          <div class="target-mine-track">
+            <div id="target-mine-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom-Left Collapsible Controls Guide -->
+      <div id="controls-widget">
+        <button id="btn-toggle-controls" type="button">
+          <span>Controls Guide</span>
+          <span class="kbd-tag">[H]</span>
+        </button>
+        <div id="controls-body">
+          <kbd>W A S D</kbd><span>Move / Strafe</span>
+          <kbd>Space</kbd><span>Jump / Swim / Fly Up</span>
+          <kbd>L-Click / B</kbd><span>Mine Block / Attack</span>
+          <kbd>R-Click / V</kbd><span>Place / Eat / Ignite</span>
+          <kbd>1–9 / Scroll</kbd><span>Select Hotbar Slot</span>
+          <kbd>E</kbd><span>Inventory &amp; Crafting</span>
+          <kbd>F</kbd><span>Toggle Flight Mode</span>
+          <kbd>C / Shift</kbd><span>Sneak / Sprint</span>
+        </div>
+      </div>
+
+      <!-- Bottom-Center Survival Vitals & 9-Slot Hotbar -->
+      <div id="hotbar-dock">
+        <div id="hotbar-toast">Wooden Pickaxe</div>
+        <div id="vitals-row">
+          <div id="hearts-bar" class="vitals-group"></div>
+          <div id="xp-pill">Lv 1</div>
+          <div id="hunger-bar" class="vitals-group"></div>
+        </div>
+        <div id="hotbar-slots"></div>
+      </div>
+    </div>
+
+    <!-- Inventory, Crafting & Creative Supply Modal (E Key) -->
+    <div id="inventory-modal" class="modal-backdrop hidden">
+      <div class="modal-window">
+        <div class="modal-header">
+          <h2>Backpack, Crafting &amp; Block Supply</h2>
+          <button id="btn-close-inventory" type="button" class="btn-primary btn-sm">
+            Resume Game (E)
+          </button>
+        </div>
+
+        <div class="modal-body-columns">
+          <!-- Left Column: Backpack & Hotbar Slots -->
+          <div>
+            <div class="section-label">
+              <span>Backpack (27 Slots)</span>
+              <span>Click to Swap • Shift+Click Quick Move</span>
+            </div>
+            <div id="backpack-grid" class="inv-grid-9" style="margin-bottom: 18px;"></div>
+
+            <div class="section-label">
+              <span>Active Hotbar (Slots 1–9)</span>
+            </div>
+            <div id="modal-hotbar-grid" class="inv-grid-9"></div>
+          </div>
+
+          <!-- Right Column: Crafting Station & Creative Catalog -->
+          <div>
+            <div class="panel-tabs">
+              <button type="button" class="tab-btn active" data-inv-tab="craft">
+                Crafting &amp; Smelting
+              </button>
+              <button type="button" class="tab-btn" data-inv-tab="catalog">
+                Creative Block Catalog
+              </button>
+            </div>
+
+            <!-- Crafting Panel -->
+            <div id="craft-panel">
+              <div class="filter-pills">
+                <button type="button" class="filter-pill active" data-recipe-filter="all">All</button>
+                <button type="button" class="filter-pill" data-recipe-filter="craftable">Craftable Now</button>
+                <button type="button" class="filter-pill" data-recipe-filter="tools">Tools &amp; Weapons</button>
+                <button type="button" class="filter-pill" data-recipe-filter="building">Building &amp; Light</button>
+                <button type="button" class="filter-pill" data-recipe-filter="food">Food</button>
+              </div>
+              <div id="recipe-list"></div>
+            </div>
+
+            <!-- Creative Catalog Panel -->
+            <div id="catalog-panel" style="display: none;">
+              <div class="section-label">
+                <span>Click any block or tool to add to your inventory</span>
+              </div>
+              <div id="catalog-grid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause, Environment & Persistent Worlds Modal (Esc / P Key) -->
+    <div id="pause-modal" class="modal-backdrop hidden">
+      <div class="modal-window">
+        <div class="modal-header">
+          <h2>World Manager &amp; Environment Settings</h2>
+          <button id="btn-resume-game" type="button" class="btn-primary">
+            Resume Game
+          </button>
+        </div>
+
+        <div class="modal-body-columns">
+          <!-- Left Column: Gameplay, Time, Weather & Audio -->
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="settings-group">
+              <div class="section-label" style="margin-bottom: 0;">Game Mode</div>
+              <div class="btn-row">
+                <button type="button" class="btn-chip active" data-set-mode="survival">
+                  Survival Mode
+                </button>
+                <button type="button" class="btn-chip" data-set-mode="creative">
+                  Creative Mode
+                </button>
+              </div>
+
+              <div class="section-label" style="margin-bottom: 0;">Time of Day</div>
+              <div class="btn-row">
+                <button type="button" class="btn-chip" data-set-time="0.02">Sunrise</button>
+                <button type="button" class="btn-chip" data-set-time="0.24">Noon</button>
+                <button type="button" class="btn-chip" data-set-time="0.49">Sunset</button>
+                <button type="button" class="btn-chip" data-set-time="0.75">Midnight</button>
+              </div>
+
+              <div class="section-label" style="margin-bottom: 0;">Weather</div>
+              <div class="btn-row">
+                <button type="button" class="btn-chip active" data-set-weather="clear">Clear Sky</button>
+                <button type="button" class="btn-chip" data-set-weather="rain">Rain</button>
+                <button type="button" class="btn-chip" data-set-weather="snow">Snowfall</button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="section-label" style="margin-bottom: 0;">Biome Waypoints (Fast Travel)</div>
+              <div class="btn-row">
+                <button type="button" class="btn-chip btn-sm" data-teleport-biome="home">Home Outpost</button>
+                <button type="button" class="btn-chip btn-sm" data-teleport-biome="plains">Emerald Plains</button>
+                <button type="button" class="btn-chip btn-sm" data-teleport-biome="forest">Woodland</button>
+                <button type="button" class="btn-chip btn-sm" data-teleport-biome="desert">Desert Dunes</button>
+                <button type="button" class="btn-chip btn-sm" data-teleport-biome="taiga">Alpine Peaks</button>
+                <button type="button" class="btn-chip btn-sm" data-teleport-biome="highlands">Highlands</button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="slider-row">
+                <span>Render Distance</span>
+                <input id="slider-render-dist" type="range" min="3" max="6" value="4" />
+                <span id="val-render-dist" style="font-family: var(--font-mono); width: 72px; text-align: right;">4 Chunks</span>
+              </div>
+              <div class="slider-row">
+                <span>Sound Volume</span>
+                <input id="slider-volume" type="range" min="0" max="100" value="65" />
+                <span id="val-volume" style="font-family: var(--font-mono); width: 72px; text-align: right;">65%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Persistent Save Slots & Custom World Seed -->
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div class="settings-group">
+              <div class="section-label" style="margin-bottom: 0;">Persistent World Save Slots</div>
+              <div id="world-slots-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+
+              <div class="btn-row" style="margin-top: 4px;">
+                <button id="btn-export-world" type="button" class="btn-secondary btn-sm" style="flex: 1;">
+                  Export World JSON
+                </button>
+                <button id="btn-import-world" type="button" class="btn-secondary btn-sm" style="flex: 1;">
+                  Import World JSON
+                </button>
+                <input id="input-import-world" type="file" accept=".json" class="hidden" />
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <div class="section-label" style="margin-bottom: 0;">Generate New World Seed in Active Slot</div>
+              <div class="seed-input-row">
+                <input id="new-world-seed" type="text" placeholder="Enter seed..." value="EMERALD_VALLEY_2026" />
+                <button id="btn-generate-seed" type="button" class="btn-primary btn-sm">
+                  Generate
+                </button>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn-chip btn-sm" data-preset-seed="ALPINE_PEAKS_77">Alpine Peaks</button>
+                <button type="button" class="btn-chip btn-sm" data-preset-seed="GOLDEN_DUNES_42">Desert Oasis</button>
+                <button type="button" class="btn-chip btn-sm" data-preset-seed="ANCIENT_WOODS_99">Ancient Forest</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

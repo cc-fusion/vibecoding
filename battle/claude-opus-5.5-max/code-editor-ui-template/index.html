@@ -1,0 +1,2962 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Write, compile and run C++ and C in your browser. Clang and LLD run locally as WebAssembly - no server involved.">
+  <title>C++ Compiler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f6f7f9;
+      --header: #fff;
+      --editor: #fff;
+      --result: #fbfcfe;
+      --surface: #fff;
+      --border: #e8eaf0;
+      --text: #252936;
+      --secondary: #687181;
+      --muted: #969eac;
+      --hover: #f2f3f7;
+      --accent: #686ad5;
+      --primary: #292d3a;
+      --primary-hover: #3b4050;
+      --primary-text: #fff;
+      --switch-off: #d9dce4;
+      --knob: #fff;
+      --illustration: #f3f4f9;
+      --illustration-line: #cbd0dd;
+      --danger: #c54646;
+      --warning: #a66300;
+      --success: #2b8753;
+      --note: #4c63c8;
+      --magenta: #a6479f;
+      --cyan: #12808f;
+      --console-input: #5255c8;
+      --input-highlight: rgba(104, 106, 213, .1);
+      --code-font: 'JetBrains Mono', Menlo, Monaco, monospace;
+      --console-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --code-size: 14px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    html.dark {
+      color-scheme: dark;
+      --page: #17181d;
+      --header: #202127;
+      --editor: #1e1e1e;
+      --result: #1b1c22;
+      --surface: #24252c;
+      --border: #34363f;
+      --text: #eeeff4;
+      --secondary: #a4a9b6;
+      --muted: #767d8b;
+      --hover: #30323b;
+      --accent: #aaaaff;
+      --primary: #ececf4;
+      --primary-hover: #d7d8e2;
+      --primary-text: #22242c;
+      --switch-off: #484b56;
+      --knob: #fff;
+      --illustration: #262830;
+      --illustration-line: #5c6170;
+      --danger: #fb8a8a;
+      --warning: #f0bf63;
+      --success: #73d49b;
+      --note: #95a9ff;
+      --magenta: #e39bf0;
+      --cyan: #7fd3e3;
+      --console-input: #b4b4ff;
+      --input-highlight: rgba(170, 170, 255, .12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body { overflow: hidden; background: var(--page); color: var(--text); -webkit-tap-highlight-color: transparent; }
+    button, select, textarea, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, select:focus-visible, #resizer:focus-visible, a:focus-visible, .setting-input:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    [hidden] { display: none !important; }
+    #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-width: 0; }
+
+    .app-header {
+      height: 64px;
+      flex: 0 0 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 25px 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
+      user-select: none;
+    }
+    .app-header h1 {
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -.025em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .toolbar { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    .toolbar-button {
+      position: relative;
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 36px;
+      min-width: 36px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--secondary);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: color .16s ease, background .16s ease, transform .16s ease;
+    }
+    .toolbar-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+    .toolbar-button:active:not(:disabled) { transform: translateY(1px); }
+    .toolbar-button:disabled { opacity: .32; cursor: not-allowed; }
+    .toolbar-button .button-icon { display: inline-flex; align-items: center; justify-content: center; }
+    .toolbar-button svg { display: block; flex: none; }
+    .toolbar-button.primary {
+      height: 36px;
+      min-width: 80px;
+      margin-right: 11px;
+      padding: 0 12px;
+      background: var(--primary);
+      color: var(--primary-text);
+      box-shadow: 0 1px 2px rgba(20, 23, 34, .09);
+    }
+    .toolbar-button.primary:hover:not(:disabled) { background: var(--primary-hover); color: var(--primary-text); }
+    .run-shortcut { padding-left: 9px; border-left: 1px solid rgba(150, 150, 165, .38); opacity: .65; font-size: 10px; font-weight: 500; }
+    .toolbar-button[data-button="theme"] { margin-left: 9px; }
+    .toolbar-button[data-button="theme"]::before {
+      position: absolute;
+      top: 7px;
+      bottom: 7px;
+      left: -7px;
+      width: 1px;
+      background: var(--border);
+      content: '';
+    }
+
+    .workspace { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; background: var(--editor); }
+    .workspace.is-column { flex-direction: column; }
+    .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+    #editor-pane { flex: 0 0 56%; background: var(--editor); }
+    #result-pane { flex: 1 1 0; background: var(--result); }
+    .pane-heading {
+      display: flex;
+      flex: 0 0 52px;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 0;
+      padding: 0 21px 0 25px;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
+      user-select: none;
+    }
+    .file-tab {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      align-self: stretch;
+      gap: 9px;
+      min-width: 0;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .file-tab::after { position: absolute; right: -3px; bottom: -1px; left: -3px; height: 2px; background: var(--accent); content: ''; }
+    .file-tab svg { flex: none; color: var(--accent); }
+    .file-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .language-control { position: relative; display: inline-flex; align-items: center; margin-left: 15px; }
+    .language-control select {
+      max-width: 145px;
+      height: 32px;
+      padding: 0 25px 0 9px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      appearance: none;
+      background: transparent;
+      color: var(--secondary);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .language-control select:hover { background: var(--hover); color: var(--text); }
+    .language-control svg { position: absolute; right: 8px; color: var(--muted); pointer-events: none; }
+    .result-heading { justify-content: flex-start; padding-right: 14px; }
+    .result-heading h2 { margin: 0; color: var(--text); font-size: 12px; font-weight: 650; }
+    .result-heading > svg { margin-right: 9px; color: var(--muted); }
+    .heading-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+    .heading-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 30px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--secondary);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      transition: color .16s ease, background .16s ease;
+    }
+    .heading-button:hover { background: var(--hover); color: var(--text); }
+    .heading-button[aria-pressed="true"] { color: var(--accent); }
+    .heading-button svg { display: block; flex: none; }
+    .editor-content, .result-content { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; }
+    #editor-host, #fallback-wrap, #result-frame { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #editor-host { background: var(--editor); }
+
+    #fallback-wrap { display: flex; overflow: hidden; padding: 19px 0 0; background: var(--editor); font: var(--code-size)/1.55 var(--code-font); }
+    .fallback-gutter { flex: 0 0 59px; overflow: hidden; color: var(--muted); text-align: right; user-select: none; }
+    #fallback-lines { padding-right: 14px; white-space: pre; }
+    #fallback-editor {
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0 20px 20px 6px;
+      resize: none;
+      overflow: auto;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      white-space: pre;
+      overflow-wrap: normal;
+    }
+    #fallback-editor.is-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .editor-error {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      left: 16px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      box-shadow: 0 4px 18px rgba(18, 22, 34, .06);
+      color: var(--secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .editor-error button { flex: none; padding: 6px 9px; border: 0; border-radius: 5px; background: var(--hover); color: var(--text); cursor: pointer; font-size: 11px; font-weight: 600; }
+
+    #resizer { position: relative; z-index: 3; display: flex; flex: 0 0 9px; align-items: center; justify-content: center; background: var(--header); cursor: col-resize; touch-action: none; user-select: none; }
+    #resizer::before { position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--border); content: ''; }
+    #resizer .grip { position: relative; width: 3px; height: 28px; border-radius: 4px; background: #c7cbd5; transition: background .16s ease, height .16s ease; }
+    #resizer:hover .grip, body.is-resizing #resizer .grip { height: 38px; background: var(--accent); }
+    .workspace.is-column #resizer { flex-basis: 11px; cursor: row-resize; }
+    .workspace.is-column #resizer::before { top: 5px; right: 0; bottom: auto; left: 0; width: auto; height: 1px; }
+    .workspace.is-column #resizer .grip { width: 32px; height: 3px; }
+    .workspace.is-column #resizer:hover .grip, body.is-resizing .workspace.is-column #resizer .grip { width: 42px; height: 3px; }
+    body.is-resizing { cursor: col-resize; user-select: none !important; }
+    body.is-resizing.is-row-resize { cursor: row-resize; }
+    body.is-resizing .pane, body.is-resizing .pane * { pointer-events: none !important; }
+    #drag-shield { position: fixed; inset: 0; z-index: 30; cursor: col-resize; }
+    body.is-row-resize #drag-shield { cursor: row-resize; }
+
+    .empty-result { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; animation: appear .24s ease both; }
+    .empty-result svg { width: 84px; height: 72px; margin: 0 0 17px; color: var(--illustration-line); }
+    .empty-result h3 { margin: 0; color: var(--text); font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+    .empty-result p { max-width: 260px; margin: 9px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .empty-progress { width: min(240px, 80%); margin-top: 18px; }
+    .progress-track { display: block; height: 3px; overflow: hidden; border-radius: 3px; background: var(--border); }
+    .progress-track > span { display: block; width: 0; height: 100%; border-radius: 3px; background: var(--accent); transition: width .25s ease; }
+    .empty-progress p { max-width: none; margin-top: 8px; font-size: 11px; font-variant-numeric: tabular-nums; }
+    #result-frame { display: block; border: 0; background: var(--result); }
+
+    .console {
+      position: absolute;
+      inset: 0;
+      overflow: auto;
+      padding: 22px 24px 26px;
+      background: var(--result);
+      color: var(--text);
+      font: 13px/1.6 var(--console-font);
+      overscroll-behavior: contain;
+      animation: appear .18s ease both;
+    }
+    .console-text { margin: 0; font: inherit; }
+    .console-text:empty { display: none; }
+    .console-block { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+    .c-err, .c-error, .ansi-1 { color: var(--danger); }
+    .c-warning, .ansi-3 { color: var(--warning); }
+    .c-note, .ansi-4 { color: var(--note); }
+    .c-caret, .ansi-2 { color: var(--success); }
+    .ansi-5 { color: var(--magenta); }
+    .ansi-6 { color: var(--cyan); }
+    .ansi-0, .ansi-7 { color: var(--text); }
+    .c-src { color: var(--secondary); }
+    .c-meta, .c-dim { color: var(--muted); }
+    .c-input { color: var(--console-input); }
+    .c-error, .c-warning, .c-note, .c-loc, .c-strong { font-weight: 600; }
+    .c-italic { font-style: italic; }
+    .c-underline { text-decoration: underline; }
+    .c-loc.is-link { cursor: pointer; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+    .c-loc.is-link:hover { text-decoration-color: currentColor; }
+    .c-rule { display: block; height: 1px; margin: 12px 0; background: var(--border); }
+    .console-input {
+      width: calc(var(--chars, 1) * 1ch + 10px);
+      min-width: 8ch;
+      max-width: 100%;
+      margin: 0 0 0 -1px;
+      padding: 0 4px;
+      border: 0;
+      border-radius: 3px;
+      outline: 0;
+      background: var(--input-highlight);
+      color: var(--console-input);
+      caret-color: var(--accent);
+      font: inherit;
+      vertical-align: baseline;
+    }
+    .console-status {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 0;
+      margin-top: 16px;
+      padding-top: 13px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font: 500 11px/1.5 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+    .console-status:empty { display: none; }
+    .console-text:empty + .console-status { margin-top: 0; padding-top: 0; border-top: 0; }
+    .status-main { display: inline-flex; align-items: center; gap: 7px; color: var(--secondary); font-weight: 600; }
+    .status-main svg { display: block; flex: none; }
+    .console-status[data-kind="success"] .status-main { color: var(--success); }
+    .console-status[data-kind="error"] .status-main { color: var(--danger); }
+    .console-status[data-kind="warning"] .status-main { color: var(--warning); }
+    .console-status[data-kind="input"] .status-main { color: var(--accent); }
+    .status-detail::before { margin: 0 8px; color: var(--illustration-line); content: '·'; }
+    .status-progress { flex: 1 1 100%; margin-top: 8px; }
+
+    .stdin-panel { display: flex; flex: 0 0 clamp(120px, 34%, 260px); flex-direction: column; min-height: 0; border-top: 1px solid var(--border); background: var(--result); }
+    .stdin-header { display: flex; flex: 0 0 38px; align-items: center; gap: 12px; min-width: 0; padding: 0 21px 0 25px; border-bottom: 1px solid var(--border); background: var(--header); user-select: none; }
+    .stdin-header label { flex: none; color: var(--text); font-size: 11px; font-weight: 650; }
+    .stdin-header span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    #stdin-input { flex: 1 1 auto; width: 100%; min-height: 0; margin: 0; padding: 12px 24px; resize: none; overflow: auto; border: 0; outline: 0; background: transparent; color: var(--text); font: 13px/1.6 var(--console-font); white-space: pre; }
+    #stdin-input::placeholder { color: var(--muted); }
+
+    .statusbar {
+      display: flex;
+      flex: 0 0 30px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      min-width: 0;
+      padding: 0 25px 0 28px;
+      border-top: 1px solid var(--border);
+      background: var(--header);
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+    .status-group { display: flex; align-items: center; gap: 14px; min-width: 0; white-space: nowrap; }
+    .status-group > span + span { position: relative; }
+    .status-group > span + span::before { position: absolute; top: 2px; bottom: 2px; left: -8px; width: 1px; background: var(--border); content: ''; }
+    #language-status { color: var(--secondary); }
+    #save-status, #compiler-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    #compiler-status.is-error { color: var(--danger); }
+    kbd { font: inherit; }
+
+    .settings-overlay { position: fixed; inset: 0; z-index: 40; display: flex; justify-content: flex-end; background: rgba(21, 24, 34, .35); animation: appear .18s ease both; }
+    .settings-panel { display: flex; flex-direction: column; width: min(390px, 100%); height: 100%; border-left: 1px solid var(--border); background: var(--header); box-shadow: -10px 0 35px rgba(17, 20, 30, .1); animation: slide-in .22s ease both; }
+    .settings-header { display: flex; flex: 0 0 77px; align-items: center; justify-content: space-between; padding: 0 23px 0 25px; border-bottom: 1px solid var(--border); }
+    .settings-header h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+    .icon-button { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--secondary); cursor: pointer; }
+    .icon-button:hover { background: var(--hover); color: var(--text); }
+    .settings-body { flex: 1 1 auto; overflow: auto; padding: 4px 25px 30px; }
+    .settings-section { padding: 22px 0 15px; border-bottom: 1px solid var(--border); }
+    .settings-section h3 { margin: 0 0 13px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .setting-row { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 18px; }
+    .setting-copy { min-width: 0; }
+    .setting-name { display: block; color: var(--text); font-size: 12px; font-weight: 600; }
+    .setting-description { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .setting-select { width: 145px; height: 33px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 11px; }
+    .setting-input { width: 145px; height: 33px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px/1 var(--console-font); }
+    .setting-input::placeholder { color: var(--muted); }
+    .font-control { display: flex; height: 32px; align-items: center; border: 1px solid var(--border); border-radius: 6px; }
+    .font-control button { width: 31px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--secondary); cursor: pointer; font-size: 16px; }
+    .font-control button:hover { background: var(--hover); color: var(--text); }
+    .font-control button:disabled { opacity: .35; cursor: not-allowed; }
+    #font-size-value { min-width: 38px; color: var(--text); font-size: 11px; text-align: center; }
+    .switch { position: relative; flex: none; width: 37px; height: 21px; padding: 0; border: 0; border-radius: 20px; background: var(--switch-off); cursor: pointer; transition: background .18s ease; }
+    .switch::after { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: var(--knob); box-shadow: 0 1px 2px rgba(0, 0, 0, .13); content: ''; transition: transform .18s ease; }
+    .switch[aria-checked="true"] { background: var(--accent); }
+    .switch[aria-checked="true"]::after { transform: translateX(16px); }
+    .reset-button { margin-top: 23px; padding: 8px 0; border: 0; background: none; color: var(--secondary); cursor: pointer; font-size: 11px; font-weight: 600; }
+    .reset-button:hover { color: var(--text); }
+    .spin { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slide-in { from { transform: translateX(16px); opacity: .8; } to { transform: translateX(0); opacity: 1; } }
+    @media (max-width: 768px) {
+      .app-header { height: 58px; flex-basis: 58px; padding: 0 13px 0 16px; }
+      .pane-heading { flex-basis: 46px; padding-right: 15px; padding-left: 17px; }
+      .result-heading { padding-right: 9px; }
+      .statusbar { padding-right: 15px; padding-left: 17px; }
+      .empty-result svg { width: 65px; height: 56px; margin-bottom: 11px; }
+      .empty-result p { margin-top: 6px; }
+      .console { padding: 16px 17px 20px; }
+      .stdin-header { padding: 0 15px 0 17px; }
+      #stdin-input { padding: 10px 17px; }
+    }
+    @media (max-width: 480px) {
+      .app-header { gap: 6px; }
+      .app-header h1 { font-size: 13px; }
+      .toolbar { gap: 1px; }
+      .toolbar-button { width: 32px; min-width: 32px; height: 32px; padding: 0; }
+      .toolbar-button.primary { width: auto; min-width: 65px; height: 32px; margin-right: 2px; padding: 0 9px; gap: 5px; }
+      .toolbar-button[data-button="theme"] { margin-left: 4px; }
+      .toolbar-button[data-button="theme"]::before { left: -3px; }
+      .run-shortcut, #keyboard-hint { display: none; }
+      .status-group { gap: 10px; }
+      .status-group > span + span::before { left: -6px; }
+      .empty-result h3 { font-size: 12px; }
+      .empty-result p { font-size: 11px; }
+      .stdin-header span { display: none; }
+    }
+    @media (max-width: 380px) {
+      #cursor-position { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>C++ Compiler</h1>
+      <nav id="toolbar" class="toolbar" aria-label="Editor actions"></nav>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <section id="editor-pane" class="pane" aria-label="Source code">
+        <div class="pane-heading">
+          <div class="file-tab" title="Current file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/></svg>
+            <span id="file-name">main.cpp</span>
+          </div>
+          <div class="language-control">
+            <select id="language-select" aria-label="Editor language"></select>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+          </div>
+        </div>
+        <div class="editor-content">
+          <div id="editor-host" hidden></div>
+          <div id="fallback-wrap">
+            <div class="fallback-gutter" aria-hidden="true"><div id="fallback-lines">1</div></div>
+            <textarea id="fallback-editor" aria-label="Code editor" autocomplete="off" autocapitalize="off" spellcheck="false" wrap="off"></textarea>
+          </div>
+          <div id="editor-error" class="editor-error" role="status" hidden>
+            <span>Monaco could not load. Basic editing is available.</span>
+            <button type="button" id="retry-editor">Retry</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize editor and result panels" aria-valuemin="18" aria-valuemax="82" aria-valuenow="56" title="Drag to resize. Double-click to reset.">
+        <span class="grip" aria-hidden="true"></span>
+      </div>
+
+      <section id="result-pane" class="pane" aria-label="Result">
+        <div class="pane-heading result-heading">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+          <h2>Result</h2>
+          <div class="heading-actions">
+            <button type="button" id="stdin-toggle" class="heading-button" aria-pressed="false" aria-controls="stdin-panel" title="Provide standard input (stdin) before running">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/></svg>
+              <span>Input</span>
+            </button>
+          </div>
+        </div>
+        <div class="result-content">
+          <div id="result-empty" class="empty-result" role="status">
+            <svg viewBox="0 0 96 80" fill="none" aria-hidden="true">
+              <rect x="8.5" y="8.5" width="79" height="63" rx="7.5" fill="var(--illustration)" stroke="currentColor"/>
+              <path d="M9 24.5h78" stroke="currentColor"/>
+              <circle cx="18" cy="16.5" r="1.5" fill="currentColor"/><circle cx="24" cy="16.5" r="1.5" fill="currentColor"/><circle cx="30" cy="16.5" r="1.5" fill="currentColor"/>
+              <path d="m29 38 7 6-7 6M42 51h19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3 id="empty-title">Your output will appear here</h3>
+            <p id="empty-description">Press Run to compile and execute your program.</p>
+            <div id="empty-progress" class="empty-progress" hidden>
+              <span class="progress-track"><span id="empty-progress-bar"></span></span>
+              <p id="empty-progress-text">Loading the compiler…</p>
+            </div>
+          </div>
+          <div id="console" class="console" role="log" aria-label="Program output" hidden>
+            <div id="console-text" class="console-text"></div>
+            <div id="console-status" class="console-status" role="status" aria-live="polite"></div>
+          </div>
+          <iframe id="result-frame" title="Code result" sandbox="allow-scripts allow-forms allow-modals allow-popups" referrerpolicy="no-referrer" hidden></iframe>
+        </div>
+        <div id="stdin-panel" class="stdin-panel" hidden>
+          <div class="stdin-header">
+            <label for="stdin-input">Standard input</label>
+            <span id="stdin-note">Sent to the program as stdin.</span>
+          </div>
+          <textarea id="stdin-input" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" placeholder="Type or paste input for std::cin / scanf…"></textarea>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <div class="status-group"><span id="language-status">C++</span><span id="cursor-position">Ln 1, Col 1</span><span id="compiler-status">Compiler not loaded</span></div>
+      <div class="status-group"><span id="save-status" aria-live="polite">Not saved yet</span><span id="keyboard-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to run</span></div>
+    </footer>
+  </div>
+
+  <div id="drag-shield" hidden></div>
+  <div id="settings-overlay" class="settings-overlay" hidden>
+    <aside class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-header">
+        <h2 id="settings-title">Editor settings</h2>
+        <button type="button" id="settings-close" class="icon-button" aria-label="Close settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="settings-body">
+        <section class="settings-section">
+          <h3>Compiler</h3>
+          <div class="setting-row"><label class="setting-name" for="setting-cpp-std">C++ standard</label><select id="setting-cpp-std" class="setting-select"></select></div>
+          <div class="setting-row"><label class="setting-name" for="setting-c-std">C standard</label><select id="setting-c-std" class="setting-select"></select></div>
+          <div class="setting-row"><label class="setting-name" for="setting-optimization">Optimization</label><select id="setting-optimization" class="setting-select"></select></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Warnings</span><span class="setting-description">Report -Wall -Wextra diagnostics</span></div><button type="button" class="switch" id="setting-warnings" role="switch" aria-label="Warnings" aria-checked="true"></button></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Bounds checking</span><span class="setting-description">Stop on out-of-range container access</span></div><button type="button" class="switch" id="setting-hardening" role="switch" aria-label="Bounds checking" aria-checked="true"></button></div>
+          <div class="setting-row"><label class="setting-name" for="setting-time-limit">Time limit</label><select id="setting-time-limit" class="setting-select"></select></div>
+          <div class="setting-row"><label class="setting-name" for="setting-flags">Extra flags</label><input id="setting-flags" class="setting-input" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-DLOCAL -Wshadow"></div>
+        </section>
+        <section class="settings-section">
+          <h3>Editor</h3>
+          <div class="setting-row"><label class="setting-name" for="setting-font-family">Font family</label><select id="setting-font-family" class="setting-select"></select></div>
+          <div class="setting-row"><span class="setting-name">Font size</span><div class="font-control"><button type="button" id="font-size-dec" aria-label="Decrease font size">-</button><span id="font-size-value">14px</span><button type="button" id="font-size-inc" aria-label="Increase font size">+</button></div></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Word wrap</span><span class="setting-description">Wrap long lines in the editor</span></div><button type="button" class="switch" id="setting-word-wrap" role="switch" aria-label="Word wrap" aria-checked="false"></button></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Minimap</span><span class="setting-description">Show an overview of your code</span></div><button type="button" class="switch" id="setting-minimap" role="switch" aria-label="Minimap" aria-checked="true"></button></div>
+        </section>
+        <section class="settings-section">
+          <h3>Code assistance</h3>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Suggestions</span><span class="setting-description">Show completions as you type</span></div><button type="button" class="switch" id="setting-suggestions" role="switch" aria-label="Suggestions" aria-checked="true"></button></div>
+          <div class="setting-row"><div class="setting-copy"><span class="setting-name">Parameter hints</span><span class="setting-description">Show function parameter details</span></div><button type="button" class="switch" id="setting-hints" role="switch" aria-label="Parameter hints" aria-checked="true"></button></div>
+        </section>
+        <button type="button" id="setting-reset" class="reset-button">Reset to defaults</button>
+      </div>
+    </aside>
+  </div>
+
+  <!--
+    Compiler worker: runs Clang + LLD (the @yowasp/clang WebAssembly build) off the main thread.
+    Loaded from a Blob URL so the whole app stays a single HTML file.
+  -->
+  <script type="text/plain" id="compile-worker-source">
+'use strict';
+
+// libstdc++'s convenience header does not exist in libc++, so provide a compatible one.
+const BITS_STDCXX = `// <bits/stdc++.h> compatibility header for libc++ on WASI.
+#ifndef CPP_COMPILER_BITS_STDCXX_H
+#define CPP_COMPILER_BITS_STDCXX_H
+#include <cassert>
+#include <cctype>
+#include <cerrno>
+#include <cfloat>
+#include <climits>
+#include <clocale>
+#include <cmath>
+#include <cstdarg>
+#include <cstddef>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <cwchar>
+#include <cwctype>
+#if defined(_WASI_EMULATED_SIGNAL)
+#include <csignal>
+#endif
+#include <algorithm>
+#include <bitset>
+#include <complex>
+#include <deque>
+#include <exception>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <ios>
+#include <iosfwd>
+#include <iostream>
+#include <istream>
+#include <iterator>
+#include <limits>
+#include <list>
+#include <locale>
+#include <map>
+#include <memory>
+#include <new>
+#include <numeric>
+#include <ostream>
+#include <queue>
+#include <set>
+#include <sstream>
+#include <stack>
+#include <stdexcept>
+#include <streambuf>
+#include <string>
+#include <typeinfo>
+#include <utility>
+#include <valarray>
+#include <vector>
+#if __cplusplus >= 201103L
+#include <array>
+#include <atomic>
+#include <cfenv>
+#include <chrono>
+#include <cinttypes>
+#include <condition_variable>
+#include <cstdint>
+#include <forward_list>
+#include <future>
+#include <initializer_list>
+#include <mutex>
+#include <random>
+#include <ratio>
+#include <regex>
+#include <scoped_allocator>
+#include <system_error>
+#include <thread>
+#include <tuple>
+#include <type_traits>
+#include <typeindex>
+#include <unordered_map>
+#include <unordered_set>
+#endif
+#if __cplusplus >= 201402L
+#include <shared_mutex>
+#endif
+#if __cplusplus >= 201703L
+#include <any>
+#include <charconv>
+#include <filesystem>
+#include <memory_resource>
+#include <optional>
+#include <string_view>
+#include <variant>
+#endif
+#if __cplusplus >= 202002L
+#include <barrier>
+#include <bit>
+#include <compare>
+#include <concepts>
+#include <coroutine>
+#include <format>
+#include <latch>
+#include <numbers>
+#include <ranges>
+#include <semaphore>
+#include <source_location>
+#include <span>
+#include <stop_token>
+#include <syncstream>
+#include <version>
+#endif
+#if __cplusplus > 202002L
+#include <expected>
+#include <flat_map>
+#include <flat_set>
+#include <mdspan>
+#include <print>
+#endif
+#endif
+`;
+
+let toolchain = null;   // the @yowasp/clang module
+let runtime = null;     // prebuilt exception-handling runtime (libc++, libc++abi, libunwind, crt1-eh.o)
+let queue = Promise.resolve();
+
+self.onmessage = event => {
+  const message = event.data;
+  if (message.type === 'init') {
+    queue = queue.then(() => initialize(message));
+  } else if (message.type === 'compile') {
+    queue = queue.then(() => compile(message)).then(result => {
+      self.postMessage(result, result.wasm ? [result.wasm] : []);
+    });
+  }
+};
+
+function describe(error) {
+  return error && error.message ? error.message : String(error);
+}
+
+async function initialize({ urls, runtimeData, warmup }) {
+  try {
+    toolchain = await loadToolchain(urls);
+    if (runtimeData) {
+      try {
+        runtime = await unpackRuntime(runtimeData);
+      } catch (error) {
+        runtime = null;
+        console.warn('[compiler] C++ exception runtime unavailable:', error);
+      }
+    }
+    self.postMessage({ type: 'progress', phase: 'warmup', loaded: 1, total: 1 });
+    let clang = '';
+    try { clang = await clangVersion(); } catch (error) { /* informational only */ }
+    if (warmup) {
+      // Compiling a small program once lets the engine optimise the compiler before the user's first run.
+      const result = await compile({ ...warmup, id: 0 });
+      if (!result.ok && warmup.exceptions && runtime) {
+        console.warn('[compiler] exception runtime failed to link, using -fno-exceptions:\n' + result.log);
+        runtime = null;
+        await compile({ ...warmup, id: 0 });
+      }
+    }
+    self.postMessage({ type: 'ready', version: toolchain.version || '', clang, exceptions: !!runtime });
+  } catch (error) {
+    self.postMessage({ type: 'init-error', message: describe(error) });
+  }
+}
+
+async function loadToolchain(urls) {
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const module = await import(url);
+      let lastPost = 0;
+      // Calling the command without arguments only downloads and compiles the WebAssembly resources.
+      await module.runClang(null, {}, {
+        fetchProgress({ totalLength, doneLength }) {
+          const now = Date.now();
+          if (now - lastPost < 120 && doneLength < totalLength) return;
+          lastPost = now;
+          self.postMessage({ type: 'progress', phase: 'download', loaded: doneLength, total: totalLength });
+        }
+      });
+      return module;
+    } catch (error) {
+      lastError = error;
+      console.warn('[compiler] could not load ' + url, error);
+    }
+  }
+  throw lastError || new Error('No compiler URL is configured.');
+}
+
+async function clangVersion() {
+  let output = '';
+  const decoder = new TextDecoder();
+  await toolchain.runClang(['clang', '--version'], {}, {
+    stdout: bytes => { if (bytes) output += decoder.decode(bytes, { stream: true }); },
+    stderr: () => {}
+  });
+  const match = /clang version ([\w.+-]+)/.exec(output);
+  return match ? match[1] : '';
+}
+
+async function unpackRuntime(base64) {
+  if (typeof DecompressionStream !== 'function') throw new Error('DecompressionStream is not supported');
+  const binary = atob(base64);
+  const packed = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) packed[i] = binary.charCodeAt(i);
+  const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const tar = new Uint8Array(await new Response(stream).arrayBuffer());
+  const field = (offset, length) => {
+    let text = '';
+    for (let i = offset; i < offset + length && tar[i]; i++) text += String.fromCharCode(tar[i]);
+    return text;
+  };
+  const files = {};
+  for (let offset = 0; offset + 512 <= tar.length;) {
+    const name = field(offset, 100);
+    if (!name) break;
+    const size = parseInt(field(offset + 124, 12).trim() || '0', 8) || 0;
+    const type = tar[offset + 156];
+    offset += 512;
+    if (type === 0 || type === 48) files[name.replace(/^\.\//, '')] = tar.slice(offset, offset + size);
+    offset += Math.ceil(size / 512) * 512;
+  }
+  for (const required of ['libc++.a', 'libc++abi.a', 'libunwind.a', 'crt1-eh.o']) {
+    if (!files[required]) throw new Error('missing ' + required);
+  }
+  return files;
+}
+
+async function compile({ id, lang, fileName, source, args = [], link = [], exceptions }) {
+  const cpp = lang !== 'c';
+  const useRuntime = cpp && exceptions && !!runtime;
+  const files = { [fileName]: source };
+  const argv = [cpp ? 'clang++' : 'clang', ...args];
+  if (cpp) {
+    files.include = { bits: { 'stdc++.h': BITS_STDCXX } };
+    if (useRuntime) {
+      files.ehlib = runtime;
+      argv.push('-fwasm-exceptions', '-mllvm', '-wasm-use-legacy-eh=true');
+    } else {
+      argv.push('-fno-exceptions');
+    }
+  }
+  argv.push(fileName, '-o', 'main.wasm', ...link);
+  // The exception-enabled libc++/libc++abi/libunwind in /ehlib take precedence over the sysroot's.
+  if (useRuntime) argv.push('-L/ehlib', '-lunwind', '-nostartfiles', '/ehlib/crt1-eh.o');
+
+  let log = '';
+  const decoder = new TextDecoder();
+  const collect = bytes => { if (bytes) log += decoder.decode(bytes, { stream: true }); };
+  const command = argv.join(' ');
+  const started = performance.now();
+  try {
+    const output = await toolchain.runClang(argv, files, { stdout: collect, stderr: collect, decodeASCII: false });
+    const binary = output['main.wasm'];
+    if (!(binary instanceof Uint8Array)) throw new Error('the compiler did not produce an executable');
+    return { type: 'result', id, ok: true, wasm: binary.slice().buffer, log: tidy(log), time: performance.now() - started, command, exceptions: useRuntime };
+  } catch (error) {
+    const failed = typeof toolchain.Exit === 'function' && error instanceof toolchain.Exit;
+    if (!failed) log += (log && !log.endsWith('\n') ? '\n' : '') + 'internal compiler error: ' + describe(error) + '\n';
+    return { type: 'result', id, ok: false, log: tidy(log), time: performance.now() - started, command, crashed: !failed };
+  }
+}
+
+function tidy(log) {
+  // Temporary object files get random names; show them as e.g. "main.o".
+  return log.replace(/\/tmp\/([\w+-]+?)-[0-9a-z]+\.o\b/g, '$1.o');
+}
+  </script>
+
+  <!--
+    Program worker: runs one compiled program with a small WASI (preview 1) implementation.
+    A fresh worker is used for every run, so infinite loops can always be stopped.
+  -->
+  <script type="text/plain" id="run-worker-source">
+'use strict';
+
+const ERRNO_SUCCESS = 0;
+const ERRNO_BADF = 8;
+const ERRNO_INVAL = 28;
+const ERRNO_NOSYS = 52;
+const ERRNO_NOTDIR = 54;
+const ERRNO_NOTSUP = 58;
+const ERRNO_SPIPE = 70;
+const ERRNO_NOTCAPABLE = 76;
+const FILETYPE_CHARACTER_DEVICE = 2;
+// read, write, datasync, sync, fdstat_set_flags, advise, filestat_get, poll - but no seek/tell, so libc treats stdio as a terminal.
+const TTY_RIGHTS = BigInt((1 << 0) | (1 << 1) | (1 << 3) | (1 << 4) | (1 << 6) | (1 << 7) | (1 << 21) | (1 << 27));
+
+const encoder = new TextEncoder();
+const decoders = [null, new TextDecoder(), new TextDecoder()];
+const jspi = typeof WebAssembly.Suspending === 'function' && typeof WebAssembly.promising === 'function';
+
+class ProgramExit {
+  constructor(code) { this.code = code; }
+}
+
+let memory = null;
+let programExports = null;
+let args = ['main'];
+let env = [];
+let stdin = [];
+let stdinOffset = 0;
+let stdinClosed = false;
+let stdinWaiter = null;
+let exited = false;
+let exitCode = 0;
+let finished = false;
+let outputLimit = 1048576;
+let outputBytes = 0;
+let outputBlocked = false;
+let pending = [];
+let pendingSize = 0;
+let lastFlush = 0;
+let startTime = 0;
+let waitedMs = 0;
+
+self.onmessage = event => {
+  const message = event.data;
+  if (message.type === 'run') run(message);
+  else if (message.type === 'stdin') supplyInput(message);
+};
+
+function post(message) { self.postMessage(message); }
+function describe(error) { return error && error.message ? error.message : String(error); }
+function bytes() { return new Uint8Array(memory.buffer); }
+function view() { return new DataView(memory.buffer); }
+function isStdio(fd) { return fd === 0 || fd === 1 || fd === 2; }
+
+async function run(message) {
+  if (Array.isArray(message.args) && message.args.length) args = message.args.map(String);
+  env = Object.entries(message.env || {}).map(([key, value]) => key + '=' + value);
+  if (message.outputLimit > 0) outputLimit = message.outputLimit;
+  if (typeof message.stdin === 'string') {
+    if (message.stdin) stdin.push(encoder.encode(message.stdin));
+    stdinClosed = true;
+  }
+
+  let module;
+  try {
+    module = await WebAssembly.compile(message.wasm);
+  } catch (error) {
+    post({ type: 'error', message: 'Could not load the compiled program: ' + describe(error) });
+    return;
+  }
+  const imports = { wasi_snapshot_preview1: createWasi() };
+  for (const entry of WebAssembly.Module.imports(module)) {
+    if (entry.kind !== 'function') continue;
+    imports[entry.module] = imports[entry.module] || {};
+    if (!(entry.name in imports[entry.module])) {
+      imports[entry.module][entry.name] = () => { throw new Error('unsupported import ' + entry.module + '.' + entry.name); };
+    }
+  }
+  let instance;
+  try {
+    instance = await WebAssembly.instantiate(module, imports);
+  } catch (error) {
+    post({ type: 'error', message: 'Could not start the program: ' + describe(error) });
+    return;
+  }
+  programExports = instance.exports;
+  memory = instance.exports.memory;
+  const start = instance.exports._start;
+  if (typeof start !== 'function') {
+    post({ type: 'error', message: 'The program has no entry point.' });
+    return;
+  }
+
+  post({ type: 'started', interactive: jspi && !stdinClosed });
+  startTime = performance.now();
+  try {
+    if (jspi) await WebAssembly.promising(start)();
+    else start();
+    finish({ type: 'exit', code: 0 });
+  } catch (error) {
+    if (error instanceof ProgramExit) finish({ type: 'exit', code: error.code });
+    else if (exited) finish({ type: 'exit', code: exitCode });
+    else finish({ type: 'trap', name: (error && error.name) || 'Error', message: describe(error) });
+  }
+}
+
+function finish(result) {
+  if (finished) return;
+  finished = true;
+  flushOutput();
+  result.cpuTime = Math.max(0, performance.now() - startTime - waitedMs);
+  post(result);
+}
+
+// ---- output -------------------------------------------------------------
+
+function emit(fd, data) {
+  if (exited || outputBlocked) return;
+  if (outputBytes + data.length > outputLimit) {
+    data = data.subarray(0, Math.max(0, outputLimit - outputBytes));
+    outputBlocked = true;
+  }
+  outputBytes += data.length;
+  const text = decoders[fd].decode(data, { stream: true });
+  if (text) {
+    pending.push([fd, text]);
+    pendingSize += text.length;
+  }
+  if (outputBlocked) {
+    flushOutput();
+    post({ type: 'output-limit' });
+    return;
+  }
+  if (pendingSize > 65536 || performance.now() - lastFlush > 50) flushOutput();
+}
+
+function flushOutput() {
+  lastFlush = performance.now();
+  if (!pending.length) return;
+  const chunks = [];
+  for (const [fd, text] of pending) {
+    const previous = chunks[chunks.length - 1];
+    if (previous && previous[0] === fd) previous[1] += text;
+    else chunks.push([fd, text]);
+  }
+  pending = [];
+  pendingSize = 0;
+  post({ type: 'output', chunks });
+}
+
+// ---- input --------------------------------------------------------------
+
+function supplyInput(message) {
+  if (message.eof) stdinClosed = true;
+  else if (message.text) stdin.push(encoder.encode(message.text));
+  if (stdinWaiter && (stdin.length || stdinClosed)) {
+    const resume = stdinWaiter;
+    stdinWaiter = null;
+    resume();
+  }
+}
+
+function readInput(iovs, iovsLength, nreadPointer) {
+  const memoryView = view();
+  const memoryBytes = bytes();
+  let total = 0;
+  for (let i = 0; i < iovsLength && stdin.length; i++) {
+    const pointer = memoryView.getUint32(iovs + i * 8, true);
+    let length = memoryView.getUint32(iovs + i * 8 + 4, true);
+    let position = 0;
+    while (length > 0 && stdin.length) {
+      const chunk = stdin[0];
+      const count = Math.min(length, chunk.length - stdinOffset);
+      memoryBytes.set(chunk.subarray(stdinOffset, stdinOffset + count), pointer + position);
+      position += count;
+      length -= count;
+      total += count;
+      stdinOffset += count;
+      if (stdinOffset >= chunk.length) {
+        stdin.shift();
+        stdinOffset = 0;
+      }
+    }
+  }
+  memoryView.setUint32(nreadPointer, total, true);
+  return ERRNO_SUCCESS;
+}
+
+function fdRead(fd, iovs, iovsLength, nreadPointer) {
+  if (fd !== 0) return isStdio(fd) ? ERRNO_INVAL : ERRNO_BADF;
+  if (!stdin.length && !stdinClosed) {
+    if (jspi) {
+      // Show any prompt the program printed without a newline, then wait for the user.
+      try { if (typeof programExports.fflush === 'function') programExports.fflush(0); } catch (error) { /* ignore */ }
+      flushOutput();
+      const waitStart = performance.now();
+      post({ type: 'stdin-request' });
+      return new Promise(resolve => {
+        stdinWaiter = () => {
+          waitedMs += performance.now() - waitStart;
+          resolve(readInput(iovs, iovsLength, nreadPointer));
+        };
+      });
+    }
+    stdinClosed = true;
+    post({ type: 'stdin-unavailable' });
+  }
+  return readInput(iovs, iovsLength, nreadPointer);
+}
+
+// ---- WASI ---------------------------------------------------------------
+
+function now(clockId) {
+  if (clockId === 0) {
+    const time = performance.timeOrigin + performance.now();
+    const milliseconds = Math.floor(time);
+    return BigInt(milliseconds) * 1000000n + BigInt(Math.floor((time - milliseconds) * 1e6));
+  }
+  if (clockId === 2 || clockId === 3) return BigInt(Math.round(Math.max(0, performance.now() - startTime - waitedMs) * 1e6));
+  return BigInt(Math.round(performance.now() * 1e6));
+}
+
+function sleepSync(milliseconds) {
+  if (!(milliseconds > 0)) return;
+  flushOutput();
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+    return;
+  } catch (error) { /* SharedArrayBuffer unavailable */ }
+  try {
+    Atomics.wait(new Int32Array(new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true }).buffer), 0, 0, milliseconds);
+    return;
+  } catch (error) { /* shared memory unavailable */ }
+  const end = performance.now() + milliseconds;
+  while (performance.now() < end) { /* busy wait */ }
+}
+
+function pollOneoff(inPointer, outPointer, subscriptions, neventsPointer) {
+  const memoryView = view();
+  const clocks = [];
+  const fds = [];
+  let timeout = null;
+  for (let i = 0; i < subscriptions; i++) {
+    const base = inPointer + i * 48;
+    const userdata = memoryView.getBigUint64(base, true);
+    const tag = memoryView.getUint8(base + 8);
+    if (tag === 0) {
+      const clockId = memoryView.getUint32(base + 16, true);
+      let delay = memoryView.getBigUint64(base + 24, true);
+      if (memoryView.getUint16(base + 40, true) & 1) {
+        const current = now(clockId);
+        delay = delay > current ? delay - current : 0n;
+      }
+      clocks.push({ userdata, delay });
+      if (timeout === null || delay < timeout) timeout = delay;
+    } else {
+      fds.push({ userdata, type: tag });
+    }
+  }
+  const write = events => {
+    const outView = view();
+    events.forEach((event, index) => {
+      const base = outPointer + index * 32;
+      outView.setBigUint64(base, event.userdata, true);
+      outView.setUint16(base + 8, 0, true);
+      outView.setUint8(base + 10, event.type);
+      outView.setBigUint64(base + 16, 1n, true);
+      outView.setUint16(base + 24, 0, true);
+    });
+    outView.setUint32(neventsPointer, events.length, true);
+    return ERRNO_SUCCESS;
+  };
+  if (fds.length || timeout === null) return write(fds);
+  const due = clocks.filter(clock => clock.delay <= timeout).map(clock => ({ userdata: clock.userdata, type: 0 }));
+  const milliseconds = Number(timeout) / 1e6;
+  if (jspi && milliseconds > 0) {
+    flushOutput();
+    return new Promise(resolve => setTimeout(() => resolve(write(due)), milliseconds));
+  }
+  sleepSync(milliseconds);
+  return write(due);
+}
+
+function procExit(code) {
+  exited = true;
+  exitCode = code;
+  if (jspi) {
+    // Abandon the suspended program instead of unwinding through it (C++ catch (...) must not see exit()).
+    finish({ type: 'exit', code });
+    return new Promise(() => {});
+  }
+  throw new ProgramExit(code);
+}
+
+function sizes(list, countPointer, sizePointer) {
+  const memoryView = view();
+  memoryView.setUint32(countPointer, list.length, true);
+  memoryView.setUint32(sizePointer, list.reduce((total, item) => total + encoder.encode(item).length + 1, 0), true);
+  return ERRNO_SUCCESS;
+}
+
+function strings(list, pointers, buffer) {
+  const memoryView = view();
+  const memoryBytes = bytes();
+  let offset = buffer;
+  list.forEach((item, index) => {
+    const data = encoder.encode(item);
+    memoryView.setUint32(pointers + index * 4, offset, true);
+    memoryBytes.set(data, offset);
+    memoryBytes[offset + data.length] = 0;
+    offset += data.length + 1;
+  });
+  return ERRNO_SUCCESS;
+}
+
+function createWasi() {
+  const notCapable = () => ERRNO_NOTCAPABLE;
+  const noSys = () => ERRNO_NOSYS;
+  return {
+    args_get: (pointers, buffer) => strings(args, pointers, buffer),
+    args_sizes_get: (countPointer, sizePointer) => sizes(args, countPointer, sizePointer),
+    environ_get: (pointers, buffer) => strings(env, pointers, buffer),
+    environ_sizes_get: (countPointer, sizePointer) => sizes(env, countPointer, sizePointer),
+    clock_res_get(clockId, resolutionPointer) {
+      view().setBigUint64(resolutionPointer, 1000n, true);
+      return ERRNO_SUCCESS;
+    },
+    clock_time_get(clockId, precision, timePointer) {
+      view().setBigUint64(timePointer, now(clockId), true);
+      return ERRNO_SUCCESS;
+    },
+    fd_advise: fd => isStdio(fd) ? ERRNO_SUCCESS : ERRNO_BADF,
+    fd_allocate: fd => isStdio(fd) ? ERRNO_NOTSUP : ERRNO_BADF,
+    fd_close: fd => isStdio(fd) ? ERRNO_SUCCESS : ERRNO_BADF,
+    fd_datasync: fd => isStdio(fd) ? ERRNO_SUCCESS : ERRNO_BADF,
+    fd_fdstat_get(fd, pointer) {
+      if (!isStdio(fd)) return ERRNO_BADF;
+      const memoryView = view();
+      memoryView.setUint8(pointer, FILETYPE_CHARACTER_DEVICE);
+      memoryView.setUint16(pointer + 2, fd === 0 ? 0 : 1, true);
+      memoryView.setBigUint64(pointer + 8, TTY_RIGHTS, true);
+      memoryView.setBigUint64(pointer + 16, 0n, true);
+      return ERRNO_SUCCESS;
+    },
+    fd_fdstat_set_flags: fd => isStdio(fd) ? ERRNO_SUCCESS : ERRNO_BADF,
+    fd_fdstat_set_rights: fd => isStdio(fd) ? ERRNO_SUCCESS : ERRNO_BADF,
+    fd_filestat_get(fd, pointer) {
+      if (!isStdio(fd)) return ERRNO_BADF;
+      const memoryView = view();
+      for (let offset = 0; offset < 64; offset += 8) memoryView.setBigUint64(pointer + offset, 0n, true);
+      memoryView.setUint8(pointer + 16, FILETYPE_CHARACTER_DEVICE);
+      return ERRNO_SUCCESS;
+    },
+    fd_filestat_set_size: fd => isStdio(fd) ? ERRNO_INVAL : ERRNO_BADF,
+    fd_filestat_set_times: fd => isStdio(fd) ? ERRNO_NOTSUP : ERRNO_BADF,
+    fd_pread: fd => isStdio(fd) ? ERRNO_SPIPE : ERRNO_BADF,
+    fd_prestat_get: () => ERRNO_BADF,
+    fd_prestat_dir_name: () => ERRNO_BADF,
+    fd_pwrite: fd => isStdio(fd) ? ERRNO_SPIPE : ERRNO_BADF,
+    fd_read: jspi ? new WebAssembly.Suspending(fdRead) : fdRead,
+    fd_readdir: fd => isStdio(fd) ? ERRNO_NOTDIR : ERRNO_BADF,
+    fd_renumber: () => ERRNO_BADF,
+    fd_seek: fd => isStdio(fd) ? ERRNO_SPIPE : ERRNO_BADF,
+    fd_sync: fd => isStdio(fd) ? ERRNO_SUCCESS : ERRNO_BADF,
+    fd_tell: fd => isStdio(fd) ? ERRNO_SPIPE : ERRNO_BADF,
+    fd_write(fd, iovs, iovsLength, nwrittenPointer) {
+      if (fd !== 1 && fd !== 2) return fd === 0 ? ERRNO_INVAL : ERRNO_BADF;
+      const memoryView = view();
+      const memoryBytes = bytes();
+      let written = 0;
+      for (let i = 0; i < iovsLength; i++) {
+        const pointer = memoryView.getUint32(iovs + i * 8, true);
+        const length = memoryView.getUint32(iovs + i * 8 + 4, true);
+        if (length) emit(fd, memoryBytes.subarray(pointer, pointer + length));
+        written += length;
+      }
+      memoryView.setUint32(nwrittenPointer, written, true);
+      return ERRNO_SUCCESS;
+    },
+    path_create_directory: notCapable,
+    path_filestat_get: notCapable,
+    path_filestat_set_times: notCapable,
+    path_link: notCapable,
+    path_open: notCapable,
+    path_readlink: notCapable,
+    path_remove_directory: notCapable,
+    path_rename: notCapable,
+    path_symlink: notCapable,
+    path_unlink_file: notCapable,
+    poll_oneoff: jspi ? new WebAssembly.Suspending(pollOneoff) : pollOneoff,
+    proc_exit: jspi ? new WebAssembly.Suspending(procExit) : procExit,
+    proc_raise: noSys,
+    random_get(pointer, length) {
+      const memoryBytes = bytes();
+      for (let offset = 0; offset < length; offset += 65536) {
+        crypto.getRandomValues(memoryBytes.subarray(pointer + offset, pointer + Math.min(length, offset + 65536)));
+      }
+      return ERRNO_SUCCESS;
+    },
+    sched_yield: () => ERRNO_SUCCESS,
+    sock_accept: noSys,
+    sock_recv: noSys,
+    sock_send: noSys,
+    sock_shutdown: noSys
+  };
+}
+  </script>
+
+  <!-- Prebuilt C++ exception runtime (inlined into the page by the build). -->
+  <script type="module" src="/src/cpp-eh-runtime.js"></script>
+
+  <script>
+    /* Developer configuration: change defaults here, or use window.CodeEditor at runtime. */
+    const CONFIG = {
+      language: 'cpp',
+      defaultCode: [
+        '// Write C++ here and press Run - it compiles and runs in your browser.',
+        '#include <algorithm>',
+        '#include <iostream>',
+        '#include <string>',
+        '#include <vector>',
+        '',
+        'int main() {',
+        '    std::vector<std::string> languages{"C++", "Rust", "Go", "Zig"};',
+        '    std::sort(languages.begin(), languages.end());',
+        '',
+        '    std::cout << "Hello from C++ compiled with Clang in WebAssembly!\\n";',
+        '    for (const auto& name : languages)',
+        '        std::cout << "  - " << name << \'\\n\';',
+        '',
+        '    std::string name;',
+        '    std::cout << "\\nWhat is your name? ";',
+        '    if (std::getline(std::cin, name) && !name.empty())',
+        '        std::cout << "Nice to meet you, " << name << "!\\n";',
+        '    return 0;',
+        '}'
+      ].join('\n'),
+      languages: [
+        { id: 'cpp', label: 'C++', fileName: 'main.cpp' },
+        { id: 'c', label: 'C', fileName: 'main.c' }
+      ],
+      // Themes may also be { name: 'my-theme', data: monacoThemeData } objects.
+      themes: { light: 'vs', dark: 'vs-dark' },
+      fontFamilies: [
+        { label: 'JetBrains Mono', value: "'JetBrains Mono', Menlo, Monaco, monospace" },
+        { label: 'Fira Code', value: "'Fira Code', Menlo, Monaco, monospace" },
+        { label: 'Menlo / Monaco', value: "Menlo, Monaco, 'Courier New', monospace" },
+        { label: 'Consolas', value: "Consolas, 'Courier New', monospace" },
+        { label: 'Courier New', value: "'Courier New', monospace" },
+        { label: 'System monospace', value: 'ui-monospace, SFMono-Regular, Menlo, monospace' }
+      ],
+      monaco: { vsUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' },
+      // Any Monaco construction option can be added here. No tab size is forced.
+      editor: {
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono', Menlo, Monaco, monospace",
+        lineNumbers: 'on',
+        lineNumbersMinChars: 3,
+        lineDecorationsWidth: 13,
+        folding: true,
+        foldingStrategy: 'auto',
+        showFoldingControls: 'mouseover',
+        detectIndentation: true,
+        wordWrap: 'off',
+        minimap: { enabled: true },
+        quickSuggestions: true,
+        suggestOnTriggerCharacters: true,
+        parameterHints: { enabled: true },
+        tabCompletion: 'on',
+        renderLineHighlight: 'line',
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        padding: { top: 19, bottom: 20 },
+        overviewRulerBorder: false,
+        fixedOverflowWidgets: true
+      },
+      fontSizeRange: { min: 10, max: 24 },
+      layout: { initialSplit: 0.56, minSplit: 0.18, maxSplit: 0.82, mobileBreakpoint: 768 },
+      storage: {
+        code: 'cpp-compiler:code',
+        settings: 'cpp-compiler:settings',
+        language: 'cpp-compiler:language',
+        stdin: 'cpp-compiler:stdin'
+      },
+      result: { sandbox: 'allow-scripts allow-forms allow-modals allow-popups' },
+      // Remove or reorder built-ins, or add { id, title, label, icon, onClick(api, event) }.
+      buttons: ['run', 'openTab', 'clear', 'theme', 'settings'],
+      compiler: {
+        // Clang + LLD compiled to WebAssembly by the YoWASP project (https://yowasp.org), loaded from a CDN.
+        // The version is pinned: the bundled C++ exception runtime is built against this exact libc++.
+        version: '21.1.4-3',
+        urls: [
+          'https://cdn.jsdelivr.net/npm/@yowasp/clang@21.1.4-3/gen/bundle.js',
+          'https://unpkg.com/@yowasp/clang@21.1.4-3/gen/bundle.js'
+        ],
+        preload: true,          // start downloading the compiler as soon as the page has loaded
+        downloadSize: '18 MB',  // approximate compressed download, shown while loading
+        cppStandards: [
+          { value: 'c++11', label: 'C++11' },
+          { value: 'c++14', label: 'C++14' },
+          { value: 'c++17', label: 'C++17' },
+          { value: 'c++20', label: 'C++20' },
+          { value: 'c++23', label: 'C++23' },
+          { value: 'c++2c', label: 'C++26 (draft)' }
+        ],
+        cStandards: [
+          { value: 'c89', label: 'C89' },
+          { value: 'c99', label: 'C99' },
+          { value: 'c11', label: 'C11' },
+          { value: 'c17', label: 'C17' },
+          { value: 'c23', label: 'C23' }
+        ],
+        optimizations: [
+          { value: '-O0', label: '-O0 (none)' },
+          { value: '-O1', label: '-O1' },
+          { value: '-O2', label: '-O2' },
+          { value: '-O3', label: '-O3' },
+          { value: '-Os', label: '-Os (size)' }
+        ],
+        timeLimits: [
+          { value: 5, label: '5 seconds' },
+          { value: 10, label: '10 seconds' },
+          { value: 30, label: '30 seconds' },
+          { value: 60, label: '1 minute' },
+          { value: 0, label: 'No limit' }
+        ],
+        defaults: { cppStd: 'c++20', cStd: 'c17', optimization: '-O2', warnings: true, hardening: true, timeLimit: 10, extraFlags: '' },
+        outputLimit: 1048576,   // bytes of program output before the program is stopped
+        stackSize: 8388608,     // linear-memory stack for compiled programs
+        maxMemory: 1073741824,  // upper bound for a program's memory
+        programArgs: [],        // extra argv entries passed to main()
+        env: { LANG: 'C.UTF-8', HOME: '/', PWD: '/', USER: 'user' }
+      },
+      // Compiles the code with Clang (WebAssembly) and runs it. Replace to plug in another pipeline.
+      onRun: (code, api) => compileAndRun(code, api)
+    };
+
+    const ICONS = {
+      play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.3v13.4L19 12 8 5.3Z"/></svg>',
+      stop: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>',
+      loading: '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
+      external: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M19 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>',
+      trash: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>',
+      moon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.7 14.2A8.5 8.5 0 0 1 9.8 3.3a8.5 8.5 0 1 0 10.9 10.9Z"/></svg>',
+      sun: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
+      settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4Z"/><path d="M19.1 13.6a7.8 7.8 0 0 0 0-3.2l1.6-1.2-1.6-2.8-1.9.7a7.8 7.8 0 0 0-2.8-1.6L14 3.5h-4l-.4 2a7.8 7.8 0 0 0-2.8 1.6l-1.9-.7-1.6 2.8 1.6 1.2a7.8 7.8 0 0 0 0 3.2l-1.6 1.2 1.6 2.8 1.9-.7a7.8 7.8 0 0 0 2.8 1.6l.4 2h4l.4-2a7.8 7.8 0 0 0 2.8-1.6l1.9.7 1.6-2.8-1.6-1.2Z"/></svg>'
+    };
+    const STATUS_ICONS = {
+      busy: '<svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>',
+      success: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+      warning: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 10v4M12 17h.01"/></svg>',
+      error: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+      stopped: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>',
+      input: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/></svg>'
+    };
+
+    const $ = id => document.getElementById(id);
+    const els = {
+      toolbar: $('toolbar'), workspace: $('workspace'), editorPane: $('editor-pane'),
+      editorHost: $('editor-host'), fallbackWrap: $('fallback-wrap'), fallback: $('fallback-editor'),
+      fallbackLines: $('fallback-lines'), editorError: $('editor-error'), retry: $('retry-editor'),
+      resizer: $('resizer'), dragShield: $('drag-shield'), result: $('result-frame'),
+      resultEmpty: $('result-empty'), emptyTitle: $('empty-title'), emptyDescription: $('empty-description'),
+      emptyProgress: $('empty-progress'), emptyProgressBar: $('empty-progress-bar'), emptyProgressText: $('empty-progress-text'),
+      console: $('console'), consoleText: $('console-text'),
+      stdinToggle: $('stdin-toggle'), stdinPanel: $('stdin-panel'), stdinInput: $('stdin-input'), stdinNote: $('stdin-note'),
+      languageSelect: $('language-select'), fileName: $('file-name'), languageStatus: $('language-status'),
+      cursor: $('cursor-position'), compilerStatus: $('compiler-status'), saveStatus: $('save-status'), keyboardHint: $('keyboard-hint'),
+      overlay: $('settings-overlay'), settingsClose: $('settings-close'), fontFamily: $('setting-font-family'),
+      fontSize: $('font-size-value'), fontDec: $('font-size-dec'), fontInc: $('font-size-inc'),
+      wordWrap: $('setting-word-wrap'), minimap: $('setting-minimap'),
+      suggestions: $('setting-suggestions'), hints: $('setting-hints'), reset: $('setting-reset'),
+      cppStd: $('setting-cpp-std'), cStd: $('setting-c-std'), optimization: $('setting-optimization'),
+      warnings: $('setting-warnings'), hardening: $('setting-hardening'), timeLimit: $('setting-time-limit'), extraFlags: $('setting-flags')
+    };
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+    const shortcut = isMac ? 'Cmd' : 'Ctrl';
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const mobileLayout = window.matchMedia('(max-width: ' + CONFIG.layout.mobileBreakpoint + 'px)');
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    // Engine features: WebAssembly exception handling (C++ exceptions) and JSPI (interactive stdin).
+    const wasmExceptions = (() => {
+      try { return WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 10, 7, 1, 5, 0, 6, 64, 11, 11])); }
+      catch { return false; }
+    })();
+    const jspiSupported = typeof WebAssembly === 'object' && typeof WebAssembly.Suspending === 'function' && typeof WebAssembly.promising === 'function';
+    let editor = null;
+    let editorInitializing = false;
+    let workerUrl = '';
+    let settings = loadSettings();
+    let currentLanguage = loadLanguage();
+    let running = false;
+    let saveTimer = 0;
+    let stdinTimer = 0;
+    let dragging = false;
+    let activePointer = null;
+    let toolbarItems = [];
+    let previousFocus = null;
+    let hasResult = false;
+    let lastResultHtml = '';
+    let lastResultKind = null;
+    let resultVersion = 0;
+    let activeSession = null;
+
+    function availableFonts() {
+      const fonts = [...CONFIG.fontFamilies];
+      if (CONFIG.editor.fontFamily && !fonts.some(font => font.value === CONFIG.editor.fontFamily)) {
+        fonts.unshift({ label: 'Custom font', value: CONFIG.editor.fontFamily });
+      }
+      return fonts;
+    }
+    function defaultSettings() {
+      const options = CONFIG.editor;
+      const compiler = CONFIG.compiler.defaults;
+      return {
+        fontSize: options.fontSize || 14,
+        fontFamily: options.fontFamily || availableFonts()[0].value,
+        wordWrap: options.wordWrap === true || ['on', 'bounded', 'wordWrapColumn'].includes(options.wordWrap),
+        minimap: options.minimap !== false && (!options.minimap || options.minimap.enabled !== false),
+        suggestions: options.quickSuggestions !== false,
+        parameterHints: !options.parameterHints || options.parameterHints.enabled !== false,
+        colorMode: null,
+        split: CONFIG.layout.initialSplit,
+        cppStd: compiler.cppStd,
+        cStd: compiler.cStd,
+        optimization: compiler.optimization,
+        warnings: compiler.warnings !== false,
+        hardening: compiler.hardening !== false,
+        timeLimit: compiler.timeLimit,
+        extraFlags: compiler.extraFlags || '',
+        stdinOpen: false
+      };
+    }
+    function normalizeSettings(raw) {
+      const defaults = defaultSettings();
+      const value = { ...defaults, ...(raw && typeof raw === 'object' ? raw : {}) };
+      const fontSize = Number(value.fontSize);
+      const split = Number(value.split);
+      const pick = (list, item, fallback) => list.some(option => option.value === item) ? item : fallback;
+      value.fontSize = clamp(Number.isFinite(fontSize) ? fontSize : defaults.fontSize, CONFIG.fontSizeRange.min, CONFIG.fontSizeRange.max);
+      value.split = clamp(Number.isFinite(split) ? split : defaults.split, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+      if (!availableFonts().some(font => font.value === value.fontFamily)) value.fontFamily = defaults.fontFamily;
+      if (![null, 'light', 'dark'].includes(value.colorMode)) value.colorMode = null;
+      value.cppStd = pick(CONFIG.compiler.cppStandards, value.cppStd, defaults.cppStd);
+      value.cStd = pick(CONFIG.compiler.cStandards, value.cStd, defaults.cStd);
+      value.optimization = pick(CONFIG.compiler.optimizations, value.optimization, defaults.optimization);
+      value.timeLimit = pick(CONFIG.compiler.timeLimits, Number(value.timeLimit), defaults.timeLimit);
+      value.extraFlags = typeof value.extraFlags === 'string' ? value.extraFlags.slice(0, 400) : defaults.extraFlags;
+      for (const key of ['wordWrap', 'minimap', 'suggestions', 'parameterHints', 'warnings', 'hardening', 'stdinOpen']) {
+        if (typeof value[key] !== 'boolean') value[key] = defaults[key];
+      }
+      return value;
+    }
+    function loadSettings() {
+      try { return normalizeSettings(JSON.parse(localStorage.getItem(CONFIG.storage.settings) || '{}')); }
+      catch { return normalizeSettings({}); }
+    }
+    function saveSettings() {
+      try { localStorage.setItem(CONFIG.storage.settings, JSON.stringify(settings)); } catch {}
+    }
+    function languageDefinition(id) {
+      if (typeof id !== 'string' || !id.trim()) return null;
+      let language = CONFIG.languages.find(item => item.id === id);
+      if (!language) {
+        language = { id, label: id, fileName: 'main.' + id };
+        CONFIG.languages.push(language);
+        if (els.languageSelect.options.length) {
+          const option = document.createElement('option');
+          option.value = id;
+          option.textContent = language.label;
+          els.languageSelect.appendChild(option);
+        }
+      }
+      return language;
+    }
+    function loadLanguage() {
+      const fallback = languageDefinition(CONFIG.language) || CONFIG.languages[0];
+      try {
+        const saved = localStorage.getItem(CONFIG.storage.language);
+        if (saved && CONFIG.languages.some(item => item.id === saved)) return saved;
+      } catch {}
+      return fallback.id;
+    }
+    function loadCode() {
+      try {
+        const code = localStorage.getItem(CONFIG.storage.code);
+        if (code !== null) {
+          els.saveStatus.textContent = 'Saved locally';
+          return code;
+        }
+      } catch { els.saveStatus.textContent = 'Autosave unavailable'; }
+      return CONFIG.defaultCode == null ? '' : String(CONFIG.defaultCode);
+    }
+    function getCode() { return editor ? editor.getValue() : els.fallback.value; }
+    function saveCodeNow() {
+      clearTimeout(saveTimer);
+      try {
+        localStorage.setItem(CONFIG.storage.code, getCode());
+        localStorage.setItem(CONFIG.storage.language, currentLanguage);
+        els.saveStatus.textContent = 'Saved locally';
+      } catch { els.saveStatus.textContent = 'Autosave unavailable'; }
+    }
+    function scheduleSave() {
+      els.saveStatus.textContent = 'Saving...';
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveCodeNow, 300);
+    }
+    function setCode(value) {
+      const code = value == null ? '' : String(value);
+      if (editor) editor.setValue(code);
+      els.fallback.value = code;
+      updateFallbackLines();
+      scheduleSave();
+      updateCursor();
+    }
+    function setLanguage(id) {
+      const language = languageDefinition(id);
+      if (!language) return;
+      currentLanguage = id;
+      els.languageSelect.value = id;
+      els.fileName.textContent = language.fileName || language.id;
+      els.languageStatus.textContent = language.label;
+      if (editor && window.monaco) monaco.editor.setModelLanguage(editor.getModel(), id);
+      try { localStorage.setItem(CONFIG.storage.language, id); } catch {}
+    }
+    function fillSelect(select, options) {
+      select.replaceChildren();
+      for (const item of options) {
+        const option = document.createElement('option');
+        option.value = String(item.value);
+        option.textContent = item.label;
+        select.appendChild(option);
+      }
+    }
+    function populateSelects() {
+      for (const language of CONFIG.languages) {
+        const option = document.createElement('option');
+        option.value = language.id;
+        option.textContent = language.label;
+        els.languageSelect.appendChild(option);
+      }
+      for (const font of availableFonts()) {
+        const option = document.createElement('option');
+        option.value = font.value;
+        option.textContent = font.label;
+        els.fontFamily.appendChild(option);
+      }
+      fillSelect(els.cppStd, CONFIG.compiler.cppStandards);
+      fillSelect(els.cStd, CONFIG.compiler.cStandards);
+      fillSelect(els.optimization, CONFIG.compiler.optimizations);
+      fillSelect(els.timeLimit, CONFIG.compiler.timeLimits);
+      setLanguage(currentLanguage);
+    }
+
+    function isDark() { return settings.colorMode === null ? systemTheme.matches : settings.colorMode === 'dark'; }
+    function themeName() {
+      const theme = isDark() ? CONFIG.themes.dark : CONFIG.themes.light;
+      if (typeof theme === 'string') return theme;
+      if (theme && theme.name && theme.data && window.monaco) {
+        monaco.editor.defineTheme(theme.name, theme.data);
+        return theme.name;
+      }
+      return isDark() ? 'vs-dark' : 'vs';
+    }
+    function applyTheme() {
+      document.documentElement.classList.toggle('dark', isDark());
+      if (editor && window.monaco) monaco.editor.setTheme(themeName());
+      if (hasResult && lastResultKind && (lastResultKind.type === 'text' || lastResultKind.type === 'error')) {
+        lastResultHtml = resultShell(lastResultKind.text, lastResultKind.type === 'error');
+        els.result.srcdoc = lastResultHtml;
+      }
+      refreshToolbar();
+    }
+    function editorOptions() {
+      const minimap = typeof CONFIG.editor.minimap === 'object' ? CONFIG.editor.minimap : {};
+      const hints = typeof CONFIG.editor.parameterHints === 'object' ? CONFIG.editor.parameterHints : {};
+      const wrapMode = typeof CONFIG.editor.wordWrap === 'string' && CONFIG.editor.wordWrap !== 'off' ? CONFIG.editor.wordWrap : 'on';
+      return {
+        fontSize: settings.fontSize,
+        fontFamily: settings.fontFamily,
+        wordWrap: settings.wordWrap ? wrapMode : 'off',
+        minimap: { ...minimap, enabled: settings.minimap },
+        quickSuggestions: settings.suggestions ? (CONFIG.editor.quickSuggestions || true) : false,
+        suggestOnTriggerCharacters: settings.suggestions && CONFIG.editor.suggestOnTriggerCharacters !== false,
+        wordBasedSuggestions: settings.suggestions ? (CONFIG.editor.wordBasedSuggestions || 'currentDocument') : 'off',
+        tabCompletion: settings.suggestions ? (CONFIG.editor.tabCompletion || 'on') : 'off',
+        parameterHints: { ...hints, enabled: settings.parameterHints }
+      };
+    }
+    function applyEditorSettings() {
+      document.documentElement.style.setProperty('--code-font', settings.fontFamily);
+      document.documentElement.style.setProperty('--code-size', settings.fontSize + 'px');
+      els.fallback.classList.toggle('is-wrapped', settings.wordWrap);
+      els.fallback.setAttribute('wrap', settings.wordWrap ? 'soft' : 'off');
+      if (editor) editor.updateOptions(editorOptions());
+    }
+    function renderSettings() {
+      els.fontFamily.value = settings.fontFamily;
+      els.fontSize.textContent = settings.fontSize + 'px';
+      els.fontDec.disabled = settings.fontSize <= CONFIG.fontSizeRange.min;
+      els.fontInc.disabled = settings.fontSize >= CONFIG.fontSizeRange.max;
+      els.wordWrap.setAttribute('aria-checked', String(settings.wordWrap));
+      els.minimap.setAttribute('aria-checked', String(settings.minimap));
+      els.suggestions.setAttribute('aria-checked', String(settings.suggestions));
+      els.hints.setAttribute('aria-checked', String(settings.parameterHints));
+      els.cppStd.value = settings.cppStd;
+      els.cStd.value = settings.cStd;
+      els.optimization.value = settings.optimization;
+      els.timeLimit.value = String(settings.timeLimit);
+      els.warnings.setAttribute('aria-checked', String(settings.warnings));
+      els.hardening.setAttribute('aria-checked', String(settings.hardening));
+      if (document.activeElement !== els.extraFlags && els.extraFlags.value !== settings.extraFlags) els.extraFlags.value = settings.extraFlags;
+      applyStdinPanel();
+    }
+    function updateSettings(patch) {
+      settings = normalizeSettings({ ...settings, ...patch });
+      saveSettings();
+      applyEditorSettings();
+      renderSettings();
+      applyTheme();
+      applySplit();
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    }
+    function resultShell(text, isError) {
+      const background = isDark() ? '#1b1c22' : '#fbfcfe';
+      const color = isError ? (isDark() ? '#fb8a8a' : '#c54646') : (isDark() ? '#eeeff4' : '#252936');
+      return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:' + background + ';color:' + color + ';font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}pre{margin:0;padding:24px;white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><pre>' + escapeHtml(text) + '</pre></body></html>';
+    }
+    function showResult(html, kind) {
+      lastResultHtml = html == null ? '' : String(html);
+      lastResultKind = kind;
+      hasResult = true;
+      resultVersion += 1;
+      ConsoleView.reset();
+      els.result.srcdoc = lastResultHtml;
+      els.result.hidden = false;
+      els.resultEmpty.hidden = true;
+      refreshToolbar();
+    }
+    function showConsole() {
+      lastResultHtml = '';
+      lastResultKind = { type: 'console' };
+      hasResult = true;
+      resultVersion += 1;
+      els.result.hidden = true;
+      els.result.removeAttribute('srcdoc');
+      els.resultEmpty.hidden = true;
+      els.console.hidden = false;
+      refreshToolbar();
+    }
+    function setResult(html) { showResult(html, { type: 'html' }); }
+    function setText(text) {
+      const value = text == null ? '' : String(text);
+      showResult(resultShell(value, false), { type: 'text', text: value });
+    }
+    function setError(text) {
+      const value = text == null ? '' : String(text);
+      showResult(resultShell(value, true), { type: 'error', text: value });
+    }
+    function clearResult() {
+      hasResult = false;
+      lastResultHtml = '';
+      lastResultKind = null;
+      resultVersion += 1;
+      els.result.hidden = true;
+      els.result.removeAttribute('srcdoc');
+      ConsoleView.reset();
+      clearMarkers();
+      els.emptyTitle.textContent = 'Your output will appear here';
+      els.emptyDescription.textContent = 'Press Run or ' + shortcut + ' + Enter to compile and execute your program.';
+      els.resultEmpty.hidden = false;
+      refreshToolbar();
+    }
+    function getApi() {
+      return {
+        get editor() { return editor; },
+        get monaco() { return window.monaco; },
+        get language() { return currentLanguage; },
+        get config() { return CONFIG; },
+        get compiler() { return CompilerService.snapshot(); },
+        getCode, setCode, setLanguage, setResult, setText, setError, clearResult,
+        run: runCode, stop: stopRun, loadCompiler: () => CompilerService.ensure(),
+        getSettings: () => ({ ...settings }), updateSettings, renderToolbar
+      };
+    }
+    async function runCode() {
+      if (running) {
+        stopRun();
+        return;
+      }
+      running = true;
+      refreshToolbar();
+      try {
+        await CONFIG.onRun(getCode(), getApi());
+      } catch (error) {
+        showConsole();
+        ConsoleView.append((error && error.message ? error.message : String(error)) + '\n', 'c-err');
+        ConsoleView.setStatus('error', 'Something went wrong');
+      } finally {
+        running = false;
+        activeSession = null;
+        refreshToolbar();
+      }
+    }
+    function openResult() {
+      if (!hasResult) return;
+      const html = lastResultKind && lastResultKind.type === 'console' ? ConsoleView.toHtml() : lastResultHtml;
+      const output = document.implementation.createHTMLDocument('Result - C++ Compiler');
+      const viewport = output.createElement('meta');
+      viewport.name = 'viewport';
+      viewport.content = 'width=device-width,initial-scale=1';
+      output.head.appendChild(viewport);
+      const style = output.createElement('style');
+      style.textContent = 'html,body{height:100%;margin:0;background:' + (isDark() ? '#1b1c22' : '#fbfcfe') + '}iframe{display:block;width:100%;height:100%;border:0}';
+      output.head.appendChild(style);
+      const frame = output.createElement('iframe');
+      frame.title = 'Code result';
+      frame.setAttribute('sandbox', CONFIG.result.sandbox || '');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.srcdoc = html;
+      output.body.appendChild(frame);
+      const url = URL.createObjectURL(new Blob(['<!doctype html>\n' + output.documentElement.outerHTML], { type: 'text/html' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    /* ---------------------------------------------------------------------
+       Output console: compiler diagnostics, program output and interactive stdin.
+       --------------------------------------------------------------------- */
+    const DIAG_RE = /^(.+?):(\d+):(\d+): (fatal error|error|warning|note|remark): (.*)$/;
+    function isUserFile(file, fileName) {
+      return file === fileName || file === './' + fileName || file === '/' + fileName;
+    }
+    const ConsoleView = (() => {
+      const root = $('console');
+      const text = $('console-text');
+      const status = $('console-status');
+      const history = [];
+      // Output is split into blocks of whole lines: appending a small block is far cheaper for the
+      // browser to lay out than growing one huge text node, and it copies and renders identically.
+      const BLOCK_CHARS = 8192;
+      let block = null;
+      let blockChars = 0;
+      let blockEndsLine = true;
+      let lastNode = null;
+      let lastClass = null;
+      let field = null;
+      let carry = '';
+      let statusText = '';
+      let sgr = freshSgr();
+      let queue = [];
+      let frame = 0;
+
+      function freshSgr() { return { fg: '', bold: false, dim: false, italic: false, underline: false }; }
+      function element(tag, className, content) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (content != null) node.textContent = content;
+        return node;
+      }
+      function nearBottom() { return root.scrollHeight - root.scrollTop - root.clientHeight < 60; }
+      function newBlock() {
+        block = element('div', 'console-block');
+        text.appendChild(block);
+        blockChars = 0;
+        lastNode = null;
+      }
+      // Writes text without touching the scroll position (callers batch that).
+      function write(value, className) {
+        if (!value) return;
+        if (!block || (!field && blockChars >= BLOCK_CHARS && blockEndsLine)) newBlock();
+        if (lastNode && lastClass === className && !field && lastNode.parentNode) {
+          lastNode.appendData(value);
+        } else {
+          const node = document.createTextNode(value);
+          let target = node;
+          if (className) {
+            target = element('span', className);
+            target.appendChild(node);
+          }
+          block.insertBefore(target, field && field.parentNode === block ? field : null);
+          lastNode = node;
+          lastClass = className;
+        }
+        blockChars += value.length;
+        blockEndsLine = value.endsWith('\n');
+      }
+      function append(value, className = '') {
+        if (!value) return;
+        flush();
+        const stick = nearBottom();
+        write(value, className);
+        if (stick) root.scrollTop = root.scrollHeight;
+      }
+      function appendBlock(node) {
+        flush();
+        const stick = nearBottom();
+        const wrapper = element('div', 'console-block');
+        wrapper.appendChild(node);
+        text.appendChild(wrapper);
+        block = null;
+        lastNode = null;
+        if (stick) root.scrollTop = root.scrollHeight;
+      }
+      // Program output arrives in bursts; render it at most once per animation frame.
+      function flush() {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+        if (!queue.length) return;
+        const pending = queue;
+        queue = [];
+        const stick = nearBottom();
+        for (const [fd, value] of pending) writeProgramText(value, fd === 2);
+        if (stick) root.scrollTop = root.scrollHeight;
+      }
+      function renderLogLine(fragment, line, fileName) {
+        const diagnostic = DIAG_RE.exec(line);
+        if (diagnostic) {
+          const [, file, lineNumber, column, kind, message] = diagnostic;
+          const severity = kind === 'fatal error' ? 'error' : kind === 'remark' ? 'note' : kind;
+          const location = element('span', 'c-loc', file + ':' + lineNumber + ':' + column);
+          if (isUserFile(file, fileName)) {
+            location.classList.add('is-link');
+            location.dataset.line = lineNumber;
+            location.dataset.column = column;
+            location.title = 'Go to line ' + lineNumber;
+          }
+          fragment.append(location, ': ', element('span', 'c-' + severity, kind + ':'), ' ', element('span', 'c-strong', message));
+          return;
+        }
+        let match = /^(\s*\d+\s*\|)(.*)$/.exec(line);
+        if (match) {
+          fragment.append(element('span', 'c-meta', match[1]), element('span', 'c-src', match[2]));
+          return;
+        }
+        match = /^(\s*\|)(.*)$/.exec(line);
+        if (match) {
+          fragment.append(element('span', 'c-meta', match[1]), element('span', 'c-caret', match[2]));
+          return;
+        }
+        if (/^(wasm-ld|clang\+\+|clang|ld): error:/.test(line) || /^internal compiler error:/.test(line)) {
+          fragment.append(element('span', 'c-error', line));
+        } else if (/^(wasm-ld|clang\+\+|clang): warning:/.test(line)) {
+          fragment.append(element('span', 'c-warning', line));
+        } else if (/^(In file included from|\s+from |In (instantiation|function|member)|\d+ (warning|error)s?( and \d+ (warning|error)s?)? generated\.)/.test(line)) {
+          fragment.append(element('span', 'c-meta', line));
+        } else {
+          fragment.append(line);
+        }
+      }
+      function appendCompilerLog(log, fileName) {
+        const lines = String(log).replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+        const fragment = document.createDocumentFragment();
+        for (const line of lines) {
+          renderLogLine(fragment, line, fileName);
+          fragment.append('\n');
+        }
+        appendBlock(fragment);
+      }
+      function applySgr(parameters) {
+        const codes = parameters === '' ? [0] : parameters.split(';').map(Number);
+        for (let i = 0; i < codes.length; i++) {
+          const code = codes[i];
+          if (code === 0) sgr = freshSgr();
+          else if (code === 1) sgr.bold = true;
+          else if (code === 2) sgr.dim = true;
+          else if (code === 3) sgr.italic = true;
+          else if (code === 4) sgr.underline = true;
+          else if (code === 22) { sgr.bold = false; sgr.dim = false; }
+          else if (code === 23) sgr.italic = false;
+          else if (code === 24) sgr.underline = false;
+          else if (code >= 30 && code <= 37) sgr.fg = String(code - 30);
+          else if (code >= 90 && code <= 97) sgr.fg = String(code - 90);
+          else if (code === 39) sgr.fg = '';
+          else if (code === 38 || code === 48) i += codes[i + 1] === 5 ? 2 : codes[i + 1] === 2 ? 4 : 0;
+        }
+      }
+      function sgrClass(isError) {
+        const classes = [];
+        if (isError) classes.push('c-err');
+        if (sgr.fg) classes.push('ansi-' + sgr.fg);
+        if (sgr.bold) classes.push('c-strong');
+        if (sgr.dim) classes.push('c-dim');
+        if (sgr.italic) classes.push('c-italic');
+        if (sgr.underline) classes.push('c-underline');
+        return classes.join(' ');
+      }
+      function writeProgramText(value, isError) {
+        value = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        if (value.indexOf('\x1b') === -1) {
+          write(value, sgrClass(isError));
+          return;
+        }
+        // Minimal ANSI support: colors and bold/italic/underline; other escape sequences are dropped.
+        const pattern = /\x1b\[([0-9;?]*)([A-Za-z])|\x1b[()][A-Za-z0-9]|\x1b./g;
+        let index = 0;
+        let match;
+        while ((match = pattern.exec(value))) {
+          if (match.index > index) write(value.slice(index, match.index), sgrClass(isError));
+          index = pattern.lastIndex;
+          if (match[2] === 'm') applySgr(match[1].replace(/\?/g, ''));
+        }
+        if (index < value.length) write(value.slice(index).replace(/\x1b/g, ''), sgrClass(isError));
+      }
+      function appendOutput(chunks) {
+        for (const chunk of chunks) queue.push(chunk);
+        if (!frame) frame = requestAnimationFrame(flush);
+      }
+      function appendRule() { appendBlock(element('div', 'c-rule')); }
+      function setStatus(kind, title, details = [], options = {}) {
+        const parts = details.filter(Boolean);
+        status.dataset.kind = kind;
+        status.replaceChildren();
+        const main = element('span', 'status-main');
+        main.innerHTML = STATUS_ICONS[kind] || '';
+        main.append(title);
+        status.append(main);
+        for (const part of parts) status.append(element('span', 'status-detail', part));
+        if (typeof options.progress === 'number') {
+          const track = element('span', 'progress-track status-progress');
+          const fill = element('span');
+          fill.style.width = Math.round(clamp(options.progress, 0, 1) * 100) + '%';
+          track.append(fill);
+          status.append(track);
+        }
+        if (options.title) status.title = options.title;
+        else status.removeAttribute('title');
+        statusText = [title, ...parts].join(' · ');
+      }
+      function removeField() {
+        if (field) field.remove();
+        field = null;
+        lastNode = null;
+      }
+      function requestInput(onSubmit, onEnd) {
+        removeField();
+        const input = element('input', 'console-input');
+        input.type = 'text';
+        input.spellcheck = false;
+        input.setAttribute('aria-label', 'Program input');
+        input.setAttribute('autocomplete', 'off');
+        input.setAttribute('autocapitalize', 'off');
+        input.setAttribute('autocorrect', 'off');
+        input.setAttribute('enterkeyhint', 'send');
+        input.value = carry;
+        carry = '';
+        let historyIndex = history.length;
+        const resize = () => input.style.setProperty('--chars', String(input.value.length + 1));
+        const detach = () => {
+          input.remove();
+          if (field === input) field = null;
+          lastNode = null;
+        };
+        const send = value => {
+          if (!input.isConnected || !value) return;
+          detach();
+          append(value, 'c-input');
+          const line = value.replace(/\n$/, '');
+          if (line && history[history.length - 1] !== line) history.push(line);
+          onSubmit(value);
+        };
+        input.addEventListener('input', resize);
+        input.addEventListener('keydown', event => {
+          if (event.key === 'Enter' && !event.isComposing && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            send(input.value + '\n');
+          } else if (event.ctrlKey && !event.altKey && !event.metaKey && (event.key === 'd' || event.key === 'D')) {
+            event.preventDefault();
+            if (input.value) {
+              send(input.value);
+            } else {
+              detach();
+              append('^D\n', 'c-meta');
+              onEnd();
+            }
+          } else if (event.key === 'ArrowUp' && history.length) {
+            event.preventDefault();
+            historyIndex = Math.max(0, historyIndex - 1);
+            input.value = history[historyIndex];
+            resize();
+          } else if (event.key === 'ArrowDown' && history.length) {
+            event.preventDefault();
+            historyIndex = Math.min(history.length, historyIndex + 1);
+            input.value = history[historyIndex] || '';
+            resize();
+          }
+        });
+        input.addEventListener('paste', event => {
+          const pasted = event.clipboardData ? event.clipboardData.getData('text') : '';
+          if (!/[\r\n]/.test(pasted)) return;
+          event.preventDefault();
+          const combined = (input.value.slice(0, input.selectionStart) + pasted + input.value.slice(input.selectionEnd)).replace(/\r\n?/g, '\n');
+          const cut = combined.lastIndexOf('\n') + 1;
+          carry = combined.slice(cut);
+          send(combined.slice(0, cut));
+        });
+        resize();
+        field = input;
+        lastNode = null;
+        text.appendChild(input);
+        input.focus({ preventScroll: true });
+        root.scrollTop = root.scrollHeight;
+      }
+      function finishOutput() {
+        removeField();
+        carry = '';
+        sgr = freshSgr();
+      }
+      function begin() {
+        finishOutput();
+        text.replaceChildren();
+        status.replaceChildren();
+        delete status.dataset.kind;
+        status.removeAttribute('title');
+        statusText = '';
+        root.scrollTop = 0;
+      }
+      function reset() {
+        begin();
+        root.hidden = true;
+      }
+      function toHtml() {
+        const clone = text.cloneNode(true);
+        clone.querySelectorAll('input').forEach(node => node.remove());
+        const css = getComputedStyle(document.documentElement);
+        const color = name => css.getPropertyValue(name).trim();
+        const style = 'html,body{margin:0;background:' + color('--result') + ';color:' + color('--text') + '}' +
+          'body{padding:24px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}' +
+          'pre{margin:0;font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}' +
+          '.c-err,.c-error,.ansi-1{color:' + color('--danger') + '}.c-warning,.ansi-3{color:' + color('--warning') + '}' +
+          '.c-note,.ansi-4{color:' + color('--note') + '}.c-caret,.ansi-2{color:' + color('--success') + '}' +
+          '.ansi-5{color:' + color('--magenta') + '}.ansi-6{color:' + color('--cyan') + '}.c-src{color:' + color('--secondary') + '}' +
+          '.c-meta,.c-dim{color:' + color('--muted') + '}.c-input{color:' + color('--console-input') + '}' +
+          '.c-error,.c-warning,.c-note,.c-loc,.c-strong{font-weight:600}.c-italic{font-style:italic}.c-underline{text-decoration:underline}' +
+          '.c-rule{display:block;height:1px;margin:12px 0;background:' + color('--border') + '}' +
+          '.status{margin-top:16px;padding-top:12px;border-top:1px solid ' + color('--border') + ';color:' + color('--muted') + ';font:500 12px/1.5 Inter,system-ui,sans-serif}';
+        return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Output</title><style>' + style +
+          '</style></head><body><pre>' + clone.innerHTML + '</pre>' + (statusText ? '<div class="status">' + escapeHtml(statusText) + '</div>' : '') + '</body></html>';
+      }
+      return {
+        begin, reset, append, appendCompilerLog, appendOutput, appendRule, setStatus, requestInput, finishOutput, toHtml,
+        hasInput: () => !!field,
+        focusInput: () => { if (field) field.focus({ preventScroll: true }); }
+      };
+    })();
+
+    /* ---------------------------------------------------------------------
+       Compiler service: owns the Clang worker (download, warm-up, compile jobs).
+       --------------------------------------------------------------------- */
+    function runtimeData() {
+      const runtime = globalThis.CPP_COMPILER_RUNTIME;
+      return wasmExceptions && runtime && typeof runtime.data === 'string' ? runtime.data : null;
+    }
+    const CompilerService = (() => {
+      let worker = null;
+      let url = '';
+      let ready = null;
+      let state = 'idle';
+      let phase = 'download';
+      let progress = 0;
+      let info = null;
+      let error = '';
+      let nextJob = 1;
+      const jobs = new Map();
+      const listeners = new Set();
+      const snapshot = () => ({ state, phase, progress, info, error });
+      const emit = () => {
+        const current = snapshot();
+        for (const listener of listeners) listener(current);
+      };
+      function teardown(reason) {
+        if (worker) {
+          worker.onmessage = null;
+          worker.onerror = null;
+          worker.terminate();
+        }
+        worker = null;
+        ready = null;
+        const pending = [...jobs.values()];
+        jobs.clear();
+        for (const job of pending) {
+          if (reason) job.reject(reason);
+          else job.resolve({ cancelled: true });
+        }
+      }
+      function ensure() {
+        if (ready) return ready;
+        state = 'loading';
+        phase = 'download';
+        progress = 0;
+        error = '';
+        emit();
+        ready = new Promise((resolve, reject) => {
+          const fail = failure => {
+            const message = failure && failure.message ? failure.message : String(failure);
+            teardown(new Error(message));
+            state = 'error';
+            error = message;
+            emit();
+            reject(new Error(message));
+          };
+          try {
+            if (!url) url = URL.createObjectURL(new Blob([$('compile-worker-source').textContent], { type: 'text/javascript' }));
+            worker = new Worker(url, { type: 'module', name: 'clang' });
+          } catch (failure) {
+            fail(failure);
+            return;
+          }
+          worker.onmessage = ({ data }) => {
+            if (data.type === 'progress') {
+              phase = data.phase;
+              if (data.total) progress = clamp(data.loaded / data.total, 0, 1);
+              emit();
+            } else if (data.type === 'ready') {
+              state = 'ready';
+              info = data;
+              progress = 1;
+              emit();
+              resolve(info);
+            } else if (data.type === 'init-error') {
+              fail(new Error('The compiler could not be downloaded (' + data.message + ').'));
+            } else if (data.type === 'result') {
+              const job = jobs.get(data.id);
+              if (job) {
+                jobs.delete(data.id);
+                job.resolve(data);
+              }
+            }
+          };
+          worker.onerror = event => {
+            event.preventDefault();
+            fail(new Error(event.message || 'The compiler worker stopped unexpectedly.'));
+          };
+          worker.postMessage({ type: 'init', urls: CONFIG.compiler.urls, runtimeData: runtimeData(), warmup: warmupRequest() });
+        });
+        ready.catch(() => {});
+        return ready;
+      }
+      function compile(request) {
+        return ensure().then(() => new Promise((resolve, reject) => {
+          if (!worker) {
+            reject(new Error('The compiler is not running.'));
+            return;
+          }
+          const id = nextJob++;
+          jobs.set(id, { resolve, reject });
+          worker.postMessage({ type: 'compile', id, ...request });
+        }));
+      }
+      // Stops a running compilation by discarding the worker; a fresh one warms up in the background.
+      function cancel() {
+        teardown(null);
+        state = 'idle';
+        phase = 'download';
+        progress = 0;
+        emit();
+        setTimeout(() => { if (!ready) ensure().catch(() => {}); }, 400);
+      }
+      function subscribe(listener) {
+        listeners.add(listener);
+        listener(snapshot());
+        return () => listeners.delete(listener);
+      }
+      return { ensure, compile, cancel, snapshot, subscribe };
+    })();
+
+    function splitFlags(value) {
+      return (String(value || '').match(/"[^"]*"|'[^']*'|\S+/g) || []).map(token => token.replace(/^(["'])(.*)\1$/, '$2'));
+    }
+    function compilerOptions(lang) {
+      const args = ['-std=' + (lang === 'c' ? settings.cStd : settings.cppStd), settings.optimization, '-fno-color-diagnostics'];
+      if (settings.warnings) args.push('-Wall', '-Wextra');
+      // wasi-libc emulation layers so clock(), signal(), getpid() and mmap() work.
+      args.push('-D_WASI_EMULATED_PROCESS_CLOCKS', '-D_WASI_EMULATED_SIGNAL', '-D_WASI_EMULATED_GETPID', '-D_WASI_EMULATED_MMAN');
+      if (lang === 'cpp') {
+        args.push('-isystem', '/include');
+        if (settings.hardening) {
+          args.push('-fexperimental-library', '-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST', '-D_LIBCPP_ASSERTION_SEMANTIC=_LIBCPP_ASSERTION_SEMANTIC_ENFORCE');
+        }
+      }
+      args.push(...splitFlags(settings.extraFlags));
+      const link = [
+        '-lwasi-emulated-process-clocks', '-lwasi-emulated-signal', '-lwasi-emulated-getpid', '-lwasi-emulated-mman',
+        '-Wl,-z,stack-size=' + CONFIG.compiler.stackSize,
+        '-Wl,--max-memory=' + CONFIG.compiler.maxMemory,
+        '-Wl,--export=fflush'
+      ];
+      return { args, link, exceptions: lang === 'cpp' && wasmExceptions };
+    }
+    function warmupRequest() {
+      return {
+        lang: 'cpp',
+        fileName: 'warmup.cpp',
+        source: '#include <iostream>\n#include <string>\nint main() { std::string s = "ready"; std::cout << s << std::endl; }\n',
+        ...compilerOptions('cpp')
+      };
+    }
+    function parseDiagnostics(log, fileName) {
+      const groups = [];
+      let errors = 0;
+      let warnings = 0;
+      let current = null;
+      for (const line of String(log || '').split(/\r?\n/)) {
+        const match = DIAG_RE.exec(line);
+        if (!match) {
+          if (/^(wasm-ld|clang\+\+|clang): error: (?!linker command failed)/.test(line)) errors++;
+          continue;
+        }
+        const severity = match[4] === 'fatal error' ? 'error' : match[4];
+        const entry = { file: match[1], line: Number(match[2]), column: Number(match[3]), severity, message: match[5], user: isUserFile(match[1], fileName) };
+        if (severity === 'note') {
+          if (current) current.notes.push(entry);
+          continue;
+        }
+        if (severity === 'remark') continue;
+        if (severity === 'error') errors++;
+        else warnings++;
+        current = { ...entry, notes: [] };
+        groups.push(current);
+      }
+      const markers = [];
+      for (const group of groups) {
+        // Errors inside headers (e.g. templates) are shown at the user's code that triggered them.
+        let target = group.user ? group : null;
+        for (let i = group.notes.length - 1; !target && i >= 0; i--) if (group.notes[i].user) target = group.notes[i];
+        if (!target) continue;
+        const suffix = target === group ? '' : '\n(reported in ' + group.file.replace(/^.*\//, '') + ':' + group.line + ')';
+        markers.push({ severity: group.severity, line: target.line, column: target.column, message: group.message + suffix });
+      }
+      return { errors, warnings, markers };
+    }
+    function applyMarkers(list) {
+      if (!editor || !window.monaco) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const lineCount = model.getLineCount();
+      const markers = list.map(item => {
+        const line = clamp(item.line, 1, lineCount);
+        const maxColumn = model.getLineMaxColumn(line);
+        let startColumn = clamp(item.column || 1, 1, maxColumn);
+        let endColumn = startColumn + 1;
+        const word = model.getWordAtPosition({ lineNumber: line, column: startColumn });
+        if (word) {
+          startColumn = word.startColumn;
+          endColumn = word.endColumn;
+        }
+        if (endColumn > maxColumn) {
+          endColumn = maxColumn;
+          startColumn = Math.max(1, Math.min(startColumn, maxColumn - 1));
+        }
+        return {
+          severity: item.severity === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+          message: item.message,
+          source: 'clang',
+          startLineNumber: line,
+          startColumn,
+          endLineNumber: line,
+          endColumn
+        };
+      });
+      monaco.editor.setModelMarkers(model, 'clang', markers);
+    }
+    function clearMarkers() {
+      if (editor && window.monaco && editor.getModel()) monaco.editor.setModelMarkers(editor.getModel(), 'clang', []);
+    }
+    function goToLocation(line, column) {
+      if (editor) {
+        const position = { lineNumber: line, column: column || 1 };
+        editor.setPosition(position);
+        editor.revealPositionInCenterIfOutsideViewport(position);
+        editor.focus();
+        return;
+      }
+      const lines = els.fallback.value.split('\n');
+      let offset = 0;
+      for (let i = 0; i < Math.min(line - 1, lines.length); i++) offset += lines[i].length + 1;
+      offset += Math.max(0, (column || 1) - 1);
+      els.fallback.focus();
+      els.fallback.setSelectionRange(offset, offset);
+    }
+    function formatDuration(milliseconds) {
+      if (milliseconds < 1000) return Math.max(0, Math.round(milliseconds)) + ' ms';
+      return (milliseconds / 1000).toFixed(milliseconds < 10000 ? 2 : 1) + ' s';
+    }
+    function formatBytes(value) {
+      return value >= 1048576 ? (value / 1048576).toFixed(value % 1048576 ? 1 : 0) + ' MB' : Math.round(value / 1024) + ' KB';
+    }
+    function plural(count, word) { return count + ' ' + word + (count === 1 ? '' : 's'); }
+    function describeTrap(name, message) {
+      const text = String(message || '').toLowerCase();
+      if (/unreachable/.test(text)) return { title: 'Aborted', detail: 'abort() was called or the program reached an invalid state' };
+      if (/call stack|stack size|too much recursion|stack overflow/.test(text) || name === 'InternalError') return { title: 'Stack overflow', detail: 'recursion is too deep' };
+      if (/table index|signature mismatch|null function|call_indirect|indirect call/.test(text)) return { title: 'Segmentation fault', detail: 'invalid function pointer call' };
+      if (/out of bounds|memory access/.test(text)) return { title: 'Segmentation fault', detail: 'invalid memory access' };
+      if (/divi(de|sion) by zero|remainder by zero/.test(text)) return { title: 'Floating point exception', detail: 'integer division by zero' };
+      if (/integer overflow/.test(text)) return { title: 'Floating point exception', detail: 'integer overflow in division' };
+      if (/out of memory|allocation|cannot allocate|memory\.grow/.test(text)) return { title: 'Out of memory', detail: 'the program used too much memory' };
+      return { title: 'Runtime error', detail: message || name || 'unknown error' };
+    }
+
+    /* ---------------------------------------------------------------------
+       Program runner: one disposable worker per run (time limit, stdin, stop).
+       --------------------------------------------------------------------- */
+    const ProgramRunner = (() => {
+      let url = '';
+      function start(wasm, options) {
+        let worker = null;
+        let finished = false;
+        let timer = 0;
+        let active = false;
+        let activeSince = 0;
+        let elapsed = 0;
+        let resolveDone;
+        const done = new Promise(resolve => { resolveDone = resolve; });
+        const pause = () => {
+          if (active) elapsed += performance.now() - activeSince;
+          active = false;
+          clearTimeout(timer);
+        };
+        const resume = () => {
+          if (finished || active) return;
+          active = true;
+          activeSince = performance.now();
+          if (options.timeLimit > 0) timer = setTimeout(() => finish({ type: 'timeout' }), Math.max(0, options.timeLimit * 1000 - elapsed));
+        };
+        const finish = outcome => {
+          if (finished) return;
+          pause();
+          finished = true;
+          if (worker) worker.terminate();
+          outcome.elapsed = elapsed;
+          resolveDone(outcome);
+        };
+        try {
+          if (!url) url = URL.createObjectURL(new Blob([$('run-worker-source').textContent], { type: 'text/javascript' }));
+          worker = new Worker(url, { name: 'program' });
+        } catch (failure) {
+          finish({ type: 'error', message: failure && failure.message ? failure.message : String(failure) });
+          return { done, stop() {}, sendInput() {}, sendEOF() {} };
+        }
+        worker.onmessage = ({ data }) => {
+          if (finished) return;
+          switch (data.type) {
+            case 'started': resume(); break;
+            case 'output': options.onOutput(data.chunks); break;
+            case 'stdin-request': pause(); options.onInputRequest(); break;
+            case 'stdin-unavailable': if (options.onInputUnavailable) options.onInputUnavailable(); break;
+            case 'output-limit': finish({ type: 'output-limit' }); break;
+            case 'exit': finish({ type: 'exit', code: data.code }); break;
+            case 'trap': finish({ type: 'trap', name: data.name, message: data.message }); break;
+            case 'error': finish({ type: 'error', message: data.message }); break;
+          }
+        };
+        worker.onerror = event => {
+          event.preventDefault();
+          finish({ type: 'error', message: event.message || 'The program stopped unexpectedly.' });
+        };
+        worker.postMessage({ type: 'run', wasm, stdin: options.stdin, args: options.args, env: options.env, outputLimit: options.outputLimit }, [wasm]);
+        return {
+          done,
+          stop: () => finish({ type: 'stopped' }),
+          sendInput(value) {
+            if (finished) return;
+            resume();
+            worker.postMessage({ type: 'stdin', text: value });
+          },
+          sendEOF() {
+            if (finished) return;
+            resume();
+            worker.postMessage({ type: 'stdin', eof: true });
+          }
+        };
+      }
+      return { start };
+    })();
+
+    /* ---------------------------------------------------------------------
+       Compile & run.
+       --------------------------------------------------------------------- */
+    const STOPPED = { stopped: true };
+    function stopRun() {
+      const session = activeSession;
+      if (!session || session.stopped) return;
+      session.stopped = true;
+      if (session.stage === 'compile') CompilerService.cancel();
+      if (session.runner) session.runner.stop();
+      session.resolveStop(STOPPED);
+    }
+    function renderLoadingStatus(snapshot) {
+      if (snapshot.phase === 'warmup') {
+        ConsoleView.setStatus('busy', 'Preparing the compiler…', ['almost ready'], { progress: 1 });
+      } else {
+        ConsoleView.setStatus('busy', 'Downloading the compiler… ' + Math.round(snapshot.progress * 100) + '%', ['about ' + CONFIG.compiler.downloadSize + ', cached for next time'], { progress: snapshot.progress });
+      }
+    }
+    function stdinNoteText() {
+      if (els.stdinInput.value) return 'Sent to the program as stdin, followed by end-of-file.';
+      return jspiSupported ? 'Empty: the program asks for input while it runs.' : 'Empty: the program receives end-of-file.';
+    }
+    function applyStdinPanel() {
+      els.stdinPanel.hidden = !settings.stdinOpen;
+      els.stdinToggle.setAttribute('aria-pressed', String(settings.stdinOpen));
+      els.stdinNote.textContent = stdinNoteText();
+    }
+    async function compileAndRun(code) {
+      const language = languageDefinition(currentLanguage) || CONFIG.languages[0];
+      const session = { stage: 'load', stopped: false, runner: null };
+      session.stopSignal = new Promise(resolve => { session.resolveStop = resolve; });
+      activeSession = session;
+      ConsoleView.begin();
+      clearMarkers();
+      showConsole();
+      if (language.id !== 'cpp' && language.id !== 'c') {
+        ConsoleView.setStatus('error', 'Only C++ and C can be compiled', ['choose C++ or C in the language menu']);
+        return;
+      }
+      const lang = language.id;
+      const fileName = language.fileName || (lang === 'c' ? 'main.c' : 'main.cpp');
+
+      // 1. Make sure the compiler is downloaded and warmed up.
+      if (CompilerService.snapshot().state !== 'ready') {
+        renderLoadingStatus(CompilerService.snapshot());
+        let loaded;
+        try {
+          loaded = await Promise.race([CompilerService.ensure(), session.stopSignal]);
+        } catch (failure) {
+          ConsoleView.append(failure.message + '\n', 'c-err');
+          ConsoleView.setStatus('error', 'The compiler is unavailable', ['check your connection, then press Run to retry']);
+          return;
+        }
+        if (loaded === STOPPED) {
+          ConsoleView.setStatus('stopped', 'Stopped', ['the compiler keeps downloading in the background']);
+          return;
+        }
+      }
+
+      // 2. Compile.
+      session.stage = 'compile';
+      ConsoleView.setStatus('busy', 'Compiling ' + fileName + '…');
+      let result;
+      try {
+        result = await Promise.race([CompilerService.compile({ lang, fileName, source: code, ...compilerOptions(lang) }), session.stopSignal]);
+      } catch (failure) {
+        ConsoleView.append(failure.message + '\n', 'c-err');
+        ConsoleView.setStatus('error', 'The compiler stopped unexpectedly', ['press Run to try again']);
+        return;
+      }
+      if (result === STOPPED || result.cancelled) {
+        ConsoleView.setStatus('stopped', 'Compilation stopped');
+        return;
+      }
+      const diagnostics = parseDiagnostics(result.log, fileName);
+      applyMarkers(diagnostics.markers);
+      const hasLog = /\S/.test(result.log);
+      if (hasLog) ConsoleView.appendCompilerLog(result.log, fileName);
+      const compiled = 'compiled in ' + formatDuration(result.time);
+      if (!result.ok) {
+        const summary = diagnostics.errors ? plural(diagnostics.errors, 'error') : result.crashed ? 'internal compiler error' : '';
+        ConsoleView.setStatus('error', 'Compilation failed', [summary, diagnostics.warnings ? plural(diagnostics.warnings, 'warning') : '', compiled], { title: result.command });
+        return;
+      }
+      if (hasLog) ConsoleView.appendRule();
+
+      // 3. Run the program in its own worker.
+      session.stage = 'run';
+      const stdinText = settings.stdinOpen && els.stdinInput.value ? els.stdinInput.value.replace(/\r\n?/g, '\n') : null;
+      let triedToRead = false;
+      ConsoleView.setStatus('busy', 'Running…', [compiled]);
+      const runner = ProgramRunner.start(result.wasm, {
+        stdin: stdinText,
+        timeLimit: settings.timeLimit,
+        args: [fileName.replace(/\.[^.]+$/, ''), ...CONFIG.compiler.programArgs],
+        env: CONFIG.compiler.env,
+        outputLimit: CONFIG.compiler.outputLimit,
+        onOutput: chunks => ConsoleView.appendOutput(chunks),
+        onInputRequest: () => {
+          ConsoleView.setStatus('input', 'Waiting for input', ['press Enter to send a line', 'Ctrl+D ends input']);
+          const resume = () => ConsoleView.setStatus('busy', 'Running…', [compiled]);
+          ConsoleView.requestInput(value => { resume(); runner.sendInput(value); }, () => { resume(); runner.sendEOF(); });
+        },
+        onInputUnavailable: () => { triedToRead = true; }
+      });
+      session.runner = runner;
+      if (session.stopped) runner.stop();
+      const outcome = await runner.done;
+      ConsoleView.finishOutput();
+      if (triedToRead && stdinText === null && outcome.type !== 'stopped') {
+        ConsoleView.append('\n[the program read from stdin; open the Input panel to provide input]\n', 'c-meta');
+      }
+      reportOutcome(outcome, compiled, result.command);
+    }
+    function reportOutcome(outcome, compiled, command) {
+      const details = [compiled, 'ran in ' + formatDuration(outcome.elapsed || 0)];
+      const options = { title: command };
+      if (outcome.type === 'exit') {
+        const code = outcome.code & 255;
+        ConsoleView.setStatus(code === 0 ? 'success' : 'warning', 'Exited with code ' + code, details, options);
+      } else if (outcome.type === 'trap') {
+        const trap = describeTrap(outcome.name, outcome.message);
+        ConsoleView.setStatus('error', trap.title, [trap.detail, ...details], { title: outcome.message });
+      } else if (outcome.type === 'timeout') {
+        ConsoleView.setStatus('warning', 'Time limit exceeded', ['stopped after ' + settings.timeLimit + ' s', 'the limit can be changed in settings'], options);
+      } else if (outcome.type === 'output-limit') {
+        ConsoleView.setStatus('warning', 'Output limit reached', ['stopped after ' + formatBytes(CONFIG.compiler.outputLimit) + ' of output', ...details], options);
+      } else if (outcome.type === 'stopped') {
+        ConsoleView.setStatus('stopped', 'Stopped', details, options);
+      } else {
+        ConsoleView.setStatus('error', 'The program could not run', [outcome.message || 'unknown error'], options);
+      }
+    }
+    function renderCompilerStatus(snapshot) {
+      const percent = Math.round(snapshot.progress * 100);
+      let label = 'Compiler not loaded';
+      let className = '';
+      let title = 'Clang/LLD ' + CONFIG.compiler.version + ' compiled to WebAssembly';
+      if (snapshot.state === 'loading') {
+        label = snapshot.phase === 'warmup' ? 'Preparing compiler…' : 'Loading compiler ' + percent + '%';
+      } else if (snapshot.state === 'ready') {
+        const version = (snapshot.info && snapshot.info.clang) || CONFIG.compiler.version;
+        label = 'Clang ' + version;
+        className = 'is-ready';
+        title = 'Clang/LLD ' + version + ' running locally in WebAssembly · C++ exceptions ' + (snapshot.info && snapshot.info.exceptions ? 'enabled' : 'disabled') + ' · interactive input ' + (jspiSupported ? 'enabled' : 'unavailable in this browser');
+      } else if (snapshot.state === 'error') {
+        label = 'Compiler unavailable';
+        className = 'is-error';
+        title = snapshot.error;
+      }
+      els.compilerStatus.textContent = label;
+      els.compilerStatus.className = className;
+      els.compilerStatus.title = title;
+      const loading = snapshot.state === 'loading';
+      els.emptyProgress.hidden = !loading;
+      if (loading) {
+        els.emptyProgressBar.style.width = (snapshot.phase === 'warmup' ? 100 : percent) + '%';
+        els.emptyProgressText.textContent = snapshot.phase === 'warmup'
+          ? 'Preparing the compiler…'
+          : 'Downloading the Clang compiler · ' + percent + '% (about ' + CONFIG.compiler.downloadSize + ', cached afterwards)';
+      }
+      if (activeSession && activeSession.stage === 'load' && !activeSession.stopped) renderLoadingStatus(snapshot);
+    }
+
+    function builtinButtons() {
+      return {
+        run: { id: 'run', label: 'Run', title: 'Run (' + shortcut + '+Enter)', icon: ICONS.play, primary: true, isRun: true, onClick: () => runCode() },
+        openTab: { id: 'openTab', title: 'Open result in new tab', icon: ICONS.external, disabled: () => !hasResult, onClick: openResult },
+        clear: { id: 'clear', title: 'Clear result', icon: ICONS.trash, disabled: () => !hasResult || running, onClick: clearResult },
+        theme: { id: 'theme', title: 'Toggle color mode', icon: ICONS.moon, isTheme: true, onClick: () => updateSettings({ colorMode: isDark() ? 'light' : 'dark' }) },
+        settings: { id: 'settings', title: 'Editor settings', icon: ICONS.settings, onClick: openSettings }
+      };
+    }
+    function renderToolbar() {
+      const builtins = builtinButtons();
+      toolbarItems = [];
+      els.toolbar.replaceChildren();
+      for (const item of CONFIG.buttons) {
+        const definition = typeof item === 'string' ? builtins[item] : item;
+        if (!definition || !definition.id) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'toolbar-button' + (definition.primary ? ' primary' : '');
+        button.dataset.button = definition.id;
+        button.title = definition.title || definition.label || definition.id;
+        button.setAttribute('aria-label', button.title);
+        if (definition.icon) {
+          const icon = document.createElement('span');
+          icon.className = 'button-icon';
+          icon.innerHTML = definition.icon;
+          button.appendChild(icon);
+        }
+        if (definition.label) {
+          const label = document.createElement('span');
+          label.className = 'button-label';
+          label.textContent = definition.label;
+          button.appendChild(label);
+        }
+        if (definition.isRun) {
+          const hint = document.createElement('span');
+          hint.className = 'run-shortcut';
+          hint.textContent = shortcut + ' + Enter';
+          hint.setAttribute('aria-hidden', 'true');
+          button.appendChild(hint);
+        }
+        button.addEventListener('click', event => {
+          if (!button.disabled && typeof definition.onClick === 'function') definition.onClick(getApi(), event);
+        });
+        toolbarItems.push({ button, definition });
+        els.toolbar.appendChild(button);
+      }
+      refreshToolbar();
+    }
+    function refreshToolbar() {
+      for (const { button, definition } of toolbarItems) {
+        button.disabled = typeof definition.disabled === 'function' ? Boolean(definition.disabled(getApi())) : Boolean(definition.disabled);
+        const icon = button.querySelector('.button-icon');
+        if (definition.isRun) {
+          if (icon) icon.innerHTML = running ? ICONS.stop : ICONS.play;
+          const label = button.querySelector('.button-label');
+          if (label) label.textContent = running ? 'Stop' : (definition.label || 'Run');
+          button.title = running ? 'Stop (' + shortcut + '+Enter)' : definition.title;
+          button.setAttribute('aria-label', button.title);
+        }
+        if (definition.isTheme) {
+          if (icon) icon.innerHTML = isDark() ? ICONS.sun : ICONS.moon;
+          button.title = isDark() ? 'Switch to light mode' : 'Switch to dark mode';
+          button.setAttribute('aria-label', button.title);
+        }
+      }
+    }
+    function openSettings() {
+      previousFocus = document.activeElement;
+      els.overlay.hidden = false;
+      els.settingsClose.focus();
+    }
+    function closeSettings() {
+      els.overlay.hidden = true;
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+    }
+
+    function updateFallbackLines() {
+      const count = els.fallback.value.split('\n').length;
+      els.fallbackLines.textContent = Array.from({ length: count }, (_, index) => index + 1).join('\n');
+      els.fallbackLines.style.transform = 'translateY(-' + els.fallback.scrollTop + 'px)';
+    }
+    function updateCursor() {
+      if (editor) {
+        const position = editor.getPosition();
+        if (position) els.cursor.textContent = 'Ln ' + position.lineNumber + ', Col ' + position.column;
+        return;
+      }
+      const before = els.fallback.value.slice(0, els.fallback.selectionStart).split('\n');
+      els.cursor.textContent = 'Ln ' + before.length + ', Col ' + (before[before.length - 1].length + 1);
+    }
+    function fallbackIndent() {
+      const indents = els.fallback.value.split('\n').map(line => (line.match(/^[\t ]+(?=\S)/) || [''])[0]).filter(Boolean);
+      if (indents.some(indent => indent.includes('\t'))) return '\t';
+      if (indents.length) return ' '.repeat(Math.min(...indents.map(indent => indent.length)));
+      return '\t';
+    }
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let finished = false;
+        const finish = error => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          if (error) { script.remove(); reject(error); } else resolve();
+        };
+        const timer = setTimeout(() => finish(new Error('Monaco loading timed out.')), 12000);
+        script.src = src;
+        script.onload = () => finish();
+        script.onerror = () => finish(new Error('Monaco could not be loaded.'));
+        document.head.appendChild(script);
+      });
+    }
+    function configureWorkers(vs) {
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
+      const base = vs.replace(/\/vs$/, '/');
+      const source = 'self.MonacoEnvironment = { baseUrl: ' + JSON.stringify(base) + ' }; importScripts(' + JSON.stringify(vs + '/base/worker/workerMain.js') + ');';
+      workerUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+      window.MonacoEnvironment = { getWorkerUrl: () => workerUrl };
+    }
+    async function loadMonaco() {
+      if (window.monaco && window.monaco.editor) return;
+      const vs = CONFIG.monaco.vsUrl.replace(/\/$/, '');
+      configureWorkers(vs);
+      if (!window.require || typeof window.require.config !== 'function') await loadScript(vs + '/loader.js');
+      if (!window.require || typeof window.require.config !== 'function') throw new Error('Monaco loader did not initialize.');
+      window.require.config({ paths: { vs } });
+      await new Promise((resolve, reject) => {
+        let finished = false;
+        const finish = error => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          if (error) reject(error); else resolve();
+        };
+        const timer = setTimeout(() => finish(new Error('Monaco loading timed out.')), 12000);
+        window.require(['vs/editor/editor.main'], () => finish(), error => finish(error));
+      });
+    }
+    async function initializeEditor() {
+      if (editor || editorInitializing) return;
+      editorInitializing = true;
+      els.editorError.hidden = true;
+      try {
+        await loadMonaco();
+        const hadFocus = document.activeElement === els.fallback;
+        const start = els.fallback.selectionStart;
+        const end = els.fallback.selectionEnd;
+        const value = els.fallback.value;
+        els.editorHost.hidden = false;
+        editor = monaco.editor.create(els.editorHost, {
+          ...CONFIG.editor,
+          ...editorOptions(),
+          value,
+          language: currentLanguage,
+          theme: themeName()
+        });
+        els.fallbackWrap.hidden = true;
+        editor.onDidChangeModelContent(() => {
+          els.fallback.value = editor.getValue();
+          scheduleSave();
+          updateCursor();
+        });
+        editor.onDidChangeCursorPosition(updateCursor);
+        if (hadFocus) {
+          const model = editor.getModel();
+          const from = model.getPositionAt(start);
+          const to = model.getPositionAt(end);
+          editor.setSelection({ startLineNumber: from.lineNumber, startColumn: from.column, endLineNumber: to.lineNumber, endColumn: to.column });
+          editor.focus();
+        }
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+        updateCursor();
+      } catch (error) {
+        if (editor) { editor.dispose(); editor = null; }
+        els.editorHost.hidden = true;
+        els.fallbackWrap.hidden = false;
+        els.editorError.hidden = false;
+        updateCursor();
+      } finally {
+        editorInitializing = false;
+      }
+    }
+
+    function applySplit() {
+      const column = mobileLayout.matches;
+      els.workspace.classList.toggle('is-column', column);
+      els.editorPane.style.flexBasis = (settings.split * 100) + '%';
+      els.resizer.setAttribute('aria-orientation', column ? 'horizontal' : 'vertical');
+      els.resizer.setAttribute('aria-valuemin', String(Math.round(CONFIG.layout.minSplit * 100)));
+      els.resizer.setAttribute('aria-valuemax', String(Math.round(CONFIG.layout.maxSplit * 100)));
+      els.resizer.setAttribute('aria-valuenow', String(Math.round(settings.split * 100)));
+      els.resizer.setAttribute('aria-valuetext', Math.round(settings.split * 100) + '% editor');
+      if (editor) editor.layout();
+    }
+    function splitFromPointer(event) {
+      const rect = els.workspace.getBoundingClientRect();
+      const ratio = mobileLayout.matches ? (event.clientY - rect.top) / rect.height : (event.clientX - rect.left) / rect.width;
+      settings.split = clamp(ratio, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+      applySplit();
+    }
+    function finishResize() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('is-resizing', 'is-row-resize');
+      els.dragShield.hidden = true;
+      if (activePointer !== null) {
+        try { els.resizer.releasePointerCapture(activePointer); } catch {}
+      }
+      activePointer = null;
+      saveSettings();
+      applySplit();
+    }
+    function initResize() {
+      els.resizer.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        dragging = true;
+        activePointer = event.pointerId;
+        document.body.classList.add('is-resizing');
+        document.body.classList.toggle('is-row-resize', mobileLayout.matches);
+        els.dragShield.hidden = false;
+        try { els.resizer.setPointerCapture(event.pointerId); } catch {}
+        splitFromPointer(event);
+      });
+      window.addEventListener('pointermove', event => { if (dragging && event.pointerId === activePointer) splitFromPointer(event); });
+      window.addEventListener('pointerup', event => { if (event.pointerId === activePointer) finishResize(); });
+      window.addEventListener('pointercancel', event => { if (event.pointerId === activePointer) finishResize(); });
+      window.addEventListener('blur', finishResize);
+      els.resizer.addEventListener('keydown', event => {
+        const step = event.shiftKey ? .05 : .02;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') settings.split -= step;
+        else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') settings.split += step;
+        else if (event.key === 'Home') settings.split = CONFIG.layout.minSplit;
+        else if (event.key === 'End') settings.split = CONFIG.layout.maxSplit;
+        else return;
+        event.preventDefault();
+        settings.split = clamp(settings.split, CONFIG.layout.minSplit, CONFIG.layout.maxSplit);
+        applySplit();
+        saveSettings();
+      });
+      els.resizer.addEventListener('dblclick', () => updateSettings({ split: CONFIG.layout.initialSplit }));
+      mobileLayout.addEventListener('change', applySplit);
+      window.addEventListener('resize', () => { if (editor) editor.layout(); });
+    }
+    function initEvents() {
+      els.languageSelect.addEventListener('change', () => setLanguage(els.languageSelect.value));
+      els.fontFamily.addEventListener('change', () => updateSettings({ fontFamily: els.fontFamily.value }));
+      els.fontDec.addEventListener('click', () => updateSettings({ fontSize: settings.fontSize - 1 }));
+      els.fontInc.addEventListener('click', () => updateSettings({ fontSize: settings.fontSize + 1 }));
+      for (const [element, key] of [[els.wordWrap, 'wordWrap'], [els.minimap, 'minimap'], [els.suggestions, 'suggestions'], [els.hints, 'parameterHints'], [els.warnings, 'warnings'], [els.hardening, 'hardening']]) {
+        element.addEventListener('click', () => updateSettings({ [key]: !settings[key] }));
+      }
+      els.cppStd.addEventListener('change', () => updateSettings({ cppStd: els.cppStd.value }));
+      els.cStd.addEventListener('change', () => updateSettings({ cStd: els.cStd.value }));
+      els.optimization.addEventListener('change', () => updateSettings({ optimization: els.optimization.value }));
+      els.timeLimit.addEventListener('change', () => updateSettings({ timeLimit: Number(els.timeLimit.value) }));
+      els.extraFlags.addEventListener('input', () => updateSettings({ extraFlags: els.extraFlags.value }));
+      els.reset.addEventListener('click', () => {
+        const { split, stdinOpen } = settings;
+        settings = normalizeSettings({ ...defaultSettings(), split, stdinOpen });
+        els.extraFlags.value = settings.extraFlags;
+        saveSettings();
+        applyEditorSettings();
+        renderSettings();
+        applyTheme();
+        applySplit();
+      });
+      els.settingsClose.addEventListener('click', closeSettings);
+      els.overlay.addEventListener('click', event => { if (event.target === els.overlay) closeSettings(); });
+      els.retry.addEventListener('click', async () => {
+        els.retry.disabled = true;
+        await initializeEditor();
+        els.retry.disabled = false;
+      });
+      els.stdinToggle.addEventListener('click', () => {
+        updateSettings({ stdinOpen: !settings.stdinOpen });
+        if (settings.stdinOpen) els.stdinInput.focus();
+      });
+      els.stdinInput.addEventListener('input', () => {
+        els.stdinNote.textContent = stdinNoteText();
+        clearTimeout(stdinTimer);
+        stdinTimer = setTimeout(() => { try { localStorage.setItem(CONFIG.storage.stdin, els.stdinInput.value); } catch {} }, 300);
+      });
+      els.consoleText.addEventListener('click', event => {
+        const location = event.target.closest('.c-loc.is-link');
+        if (location) goToLocation(Number(location.dataset.line), Number(location.dataset.column));
+      });
+      els.console.addEventListener('mouseup', event => {
+        if (ConsoleView.hasInput() && !event.target.closest('.c-loc') && !String(window.getSelection() || '')) ConsoleView.focusInput();
+      });
+      els.fallback.addEventListener('input', () => { updateFallbackLines(); updateCursor(); scheduleSave(); });
+      els.fallback.addEventListener('click', updateCursor);
+      els.fallback.addEventListener('keyup', updateCursor);
+      els.fallback.addEventListener('scroll', updateFallbackLines);
+      els.fallback.addEventListener('keydown', event => {
+        if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) return;
+        event.preventDefault();
+        els.fallback.setRangeText(fallbackIndent(), els.fallback.selectionStart, els.fallback.selectionEnd, 'end');
+        updateFallbackLines();
+        updateCursor();
+        scheduleSave();
+      });
+      document.addEventListener('keydown', event => {
+        if (!els.overlay.hidden) {
+          if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return; }
+          if (event.key === 'Tab') {
+            const controls = Array.from(els.overlay.querySelectorAll('button:not(:disabled), select:not(:disabled), input:not(:disabled)'));
+            if (event.shiftKey && document.activeElement === controls[0]) { event.preventDefault(); controls[controls.length - 1].focus(); }
+            else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) { event.preventDefault(); controls[0].focus(); }
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); runCode(); }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); saveCodeNow(); }
+      }, true);
+      systemTheme.addEventListener('change', () => { if (settings.colorMode === null) applyTheme(); });
+      window.addEventListener('pagehide', saveCodeNow);
+    }
+    function init() {
+      els.fallback.value = loadCode();
+      try { els.stdinInput.value = localStorage.getItem(CONFIG.storage.stdin) || ''; } catch {}
+      els.result.setAttribute('sandbox', CONFIG.result.sandbox || '');
+      els.keyboardHint.innerHTML = '<kbd>' + shortcut + '</kbd> + <kbd>Enter</kbd> to run';
+      els.emptyDescription.textContent = 'Press Run or ' + shortcut + ' + Enter to compile and execute your program.';
+      populateSelects();
+      renderToolbar();
+      applyEditorSettings();
+      renderSettings();
+      applyTheme();
+      applySplit();
+      updateFallbackLines();
+      updateCursor();
+      initResize();
+      initEvents();
+      CompilerService.subscribe(renderCompilerStatus);
+      window.CodeEditor = getApi();
+      initializeEditor();
+      if (CONFIG.compiler.preload) {
+        // The exception runtime module runs after parsing, so start once the document is ready.
+        const preload = () => setTimeout(() => CompilerService.ensure().catch(() => {}), 700);
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', preload, { once: true });
+        else preload();
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

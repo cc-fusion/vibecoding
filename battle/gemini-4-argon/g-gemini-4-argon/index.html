@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TerraCraft — 3D Voxel Sandbox</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Underwater & Hurt Screen Tint Overlays -->
+    <div id="underwater-overlay" class="screen-tint hidden"></div>
+    <div id="damage-overlay" class="screen-tint hidden"></div>
+
+    <!-- ================= IN-GAME HUD ================= -->
+    <div id="hud" class="hidden">
+      <!-- Top Bar -->
+      <div class="hud-top">
+        <div class="hud-context">
+          <div id="hud-world-pill" class="hud-pill">Emerald Plains · Day 1 · 09:00</div>
+          <div id="hud-debug" class="hud-debug hidden"></div>
+        </div>
+        <div class="hud-shortcuts">
+          <span><kbd>E</kbd> Inventory</span>
+          <span><kbd>F3</kbd> Stats</span>
+          <span><kbd>Esc</kbd> Menu</span>
+        </div>
+      </div>
+
+      <!-- Center Crosshair & Optional Click-to-Resume Prompt -->
+      <div id="crosshair" aria-hidden="true"></div>
+      <div id="pointer-prompt" class="pointer-prompt hidden">Click anywhere to resume control</div>
+
+      <!-- Bottom Cluster: Item Label + Survival Bars + 9-Slot Hotbar -->
+      <div class="hud-bottom">
+        <div id="hotbar-label" class="hotbar-label"></div>
+
+        <div id="oxygen-bar" class="vital-row oxygen-row hidden"></div>
+
+        <div id="survival-bars" class="vitals-container">
+          <div id="health-bar" class="vital-row" aria-label="Health"></div>
+          <div id="hunger-bar" class="vital-row" aria-label="Hunger"></div>
+        </div>
+
+        <div id="hotbar" class="hotbar" role="toolbar" aria-label="Hotbar"></div>
+      </div>
+    </div>
+
+    <!-- ================= TITLE & WORLD SELECTOR ================= -->
+    <div id="title-screen" class="overlay-backdrop">
+      <div class="panel title-panel">
+        <div class="brand-header">
+          <div class="brand-logo">TERRACRAFT</div>
+          <p class="brand-subtitle">Procedural Voxel Sandbox</p>
+        </div>
+
+        <!-- Saved Worlds Section (shown dynamically only when worlds exist) -->
+        <div id="saved-worlds-section" class="section-block hidden">
+          <div class="section-header">
+            <h2>Saved Worlds</h2>
+            <button id="btn-Import-world" class="btn-ghost btn-sm" type="button">Import JSON</button>
+          </div>
+          <div id="world-list" class="world-list"></div>
+        </div>
+
+        <!-- Create New World Form -->
+        <form id="create-world-form" class="section-block">
+          <div class="section-header">
+            <h2>New World</h2>
+            <button id="btn-import-empty" class="btn-ghost btn-sm" type="button">Import JSON</button>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label for="input-world-name">World Name</label>
+              <input id="input-world-name" type="text" maxlength="28" value="Emerald Valley" required />
+            </div>
+            <div class="field">
+              <label for="input-world-seed">Seed</label>
+              <div class="input-with-btn">
+                <input id="input-world-seed" type="text" maxlength="24" placeholder="Random seed" />
+                <button id="btn-random-seed" class="btn-icon" type="button" title="Roll random seed">🎲</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mode-selector" role="radiogroup" aria-label="Game Mode">
+            <button type="button" class="mode-card active" data-mode="survival">
+              <span class="mode-title">Survival</span>
+              <span class="mode-desc">Gather timber &amp; ores, craft tools, survive nightfall</span>
+            </button>
+            <button type="button" class="mode-card" data-mode="creative">
+              <span class="mode-title">Creative</span>
+              <span class="mode-desc">Unlimited blocks, instant mining &amp; free flight</span>
+            </button>
+          </div>
+
+          <button type="submit" class="btn-primary btn-lg">Create &amp; Enter World</button>
+        </form>
+
+        <input id="file-import-world" type="file" accept=".json,application/json" class="hidden" />
+      </div>
+    </div>
+
+    <!-- ================= INVENTORY, CRAFTING & CREATIVE MODAL ================= -->
+    <div id="inventory-modal" class="overlay-backdrop hidden">
+      <div class="panel inventory-panel">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <h2 id="inv-modal-title">Inventory &amp; Crafting</h2>
+            <span id="station-badge" class="station-badge">Hand Crafting</span>
+          </div>
+          <button id="btn-close-inventory" class="btn-ghost btn-sm" type="button">Close (E)</button>
+        </div>
+
+        <div class="inventory-body">
+          <!-- Left: Backpack & Hotbar Grid -->
+          <div class="inv-left">
+            <div class="inv-section-label">Backpack <span class="inv-hint">Click to move · Shift+Click quick transfer · Right-Click split</span></div>
+            <div id="backpack-grid" class="slot-grid"></div>
+
+            <div class="inv-section-label">Hotbar</div>
+            <div id="modal-hotbar-grid" class="slot-grid"></div>
+
+            <div id="held-cursor-banner" class="held-banner hidden"></div>
+          </div>
+
+          <!-- Right: Categorized Crafting / Smelting / Creative Palette -->
+          <div class="inv-right">
+            <div id="recipe-tabs" class="tab-bar"></div>
+            <div id="recipe-list" class="recipe-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= PAUSE & SETTINGS MODAL ================= -->
+    <div id="pause-modal" class="overlay-backdrop hidden">
+      <div class="panel pause-panel">
+        <div class="modal-header">
+          <h2>Game Paused</h2>
+          <span id="save-toast" class="save-toast hidden">World Saved</span>
+        </div>
+
+        <div class="pause-actions-top">
+          <button id="btn-resume" class="btn-primary btn-lg" type="button">Resume Game</button>
+        </div>
+
+        <div class="settings-grid">
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <label for="slider-render-dist">Render Distance</label>
+              <span id="val-render-dist">5 chunks</span>
+            </div>
+            <input id="slider-render-dist" type="range" min="3" max="8" step="1" value="5" />
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <label for="slider-volume">Audio Volume</label>
+              <span id="val-volume">65%</span>
+            </div>
+            <input id="slider-volume" type="range" min="0" max="100" step="5" value="65" />
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <label for="slider-sens">Look Sensitivity</label>
+              <span id="val-sens">100%</span>
+            </div>
+            <input id="slider-sens" type="range" min="40" max="200" step="10" value="100" />
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <label>Game Mode</label>
+            </div>
+            <div class="pill-group">
+              <button id="btn-mode-survival" class="pill-btn" type="button">Survival</button>
+              <button id="btn-mode-creative" class="pill-btn" type="button">Creative</button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <label>Time of Day</label>
+            </div>
+            <div class="pill-group">
+              <button class="pill-btn" data-time="0.02" type="button">Dawn</button>
+              <button class="pill-btn" data-time="0.22" type="button">Noon</button>
+              <button class="pill-btn" data-time="0.49" type="button">Sunset</button>
+              <button class="pill-btn" data-time="0.75" type="button">Night</button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <label>Weather</label>
+            </div>
+            <div class="pill-group">
+              <button class="pill-btn active" data-weather="auto" type="button">Auto</button>
+              <button class="pill-btn" data-weather="clear" type="button">Clear</button>
+              <button class="pill-btn" data-weather="rain" type="button">Rain / Snow</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls-summary">
+          <span><kbd>WASD</kbd> Move</span>
+          <span><kbd>Space</kbd> Jump / Swim</span>
+          <span><kbd>Shift</kbd> Sneak (Edge Guard)</span>
+          <span><kbd>Ctrl</kbd> Sprint</span>
+          <span><kbd>F</kbd> Fly (Creative)</span>
+          <span><kbd>L-Click</kbd> Mine / Attack</span>
+          <span><kbd>R-Click</kbd> Place / Use / Eat</span>
+        </div>
+
+        <div class="pause-footer">
+          <button id="btn-save-now" class="btn-secondary" type="button">Save World</button>
+          <button id="btn-export-world" class="btn-secondary" type="button">Export JSON</button>
+          <button id="btn-exit-title" class="btn-danger" type="button">Save &amp; Quit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= RESPAWN OVERLAY ================= -->
+    <div id="death-modal" class="overlay-backdrop death-backdrop hidden">
+      <div class="panel death-panel">
+        <h2>You Fell in the Wilds</h2>
+        <button id="btn-respawn" class="btn-primary btn-lg" type="button">Respawn at Camp</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

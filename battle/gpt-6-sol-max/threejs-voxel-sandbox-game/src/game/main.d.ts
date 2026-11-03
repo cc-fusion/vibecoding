@@ -1,0 +1,1 @@
+export function startGame(root: HTMLElement): () => void;

@@ -1,0 +1,16 @@
+import puppeteer from "puppeteer";
+import http from "http"; import fs from "fs"; import path from "path";
+const root = path.resolve("dist");
+const server = http.createServer((req,res)=>{const p=path.join(root,req.url==="/"?"index.html":req.url.split("?")[0]);if(!fs.existsSync(p)){res.writeHead(404);return res.end();}res.writeHead(200,{"Content-Type":"text/html"});res.end(fs.readFileSync(p));});
+await new Promise(r=>server.listen(5056,r));
+const b = await puppeteer.launch({headless:"new",args:["--no-sandbox","--enable-unsafe-swiftshader","--use-gl=angle","--use-angle=swiftshader"]});
+const p = await b.newPage();
+const logs=[]; p.on("console",m=>logs.push(m.text())); p.on("pageerror",e=>logs.push("ERR "+e.message));
+await p.goto("http://localhost:5056/",{waitUntil:"networkidle0"});
+await p.evaluate(()=>{[...document.querySelectorAll("button")].find(x=>x.textContent.includes("New world"))?.click()});
+await new Promise(r=>setTimeout(r,200));
+await p.evaluate(()=>{[...document.querySelectorAll("button")].find(x=>x.textContent.includes("Create"))?.click()});
+await new Promise(r=>setTimeout(r,4000));
+console.log(logs.slice(0,3).join("\n\n"));
+console.log("TOTAL LOGS", logs.length);
+await b.close(); server.close();

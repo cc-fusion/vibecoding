@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voxelwild — 3D Voxel Sandbox</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Damage / Underwater Screen Vignette -->
+    <div id="screen-tint" class="screen-tint"></div>
+
+    <!-- In-Game HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="hud-top">
+        <div id="env-bar" class="env-bar">
+          <span id="env-time-icon" class="env-icon">☀</span>
+          <span id="env-time-text">Day 1 · 07:30</span>
+          <span class="env-sep">·</span>
+          <span id="env-biome-text">Emerald Plains</span>
+          <span class="env-sep">·</span>
+          <span id="env-coords-text">0, 64, 0</span>
+        </div>
+
+        <div id="starter-guide" class="starter-guide hidden">
+          <div class="guide-content">
+            <span class="guide-step-label" id="guide-step-num">Goal 1/7</span>
+            <span class="guide-step-text" id="guide-step-text">Gather 3 Wood Logs</span>
+          </div>
+          <button id="guide-dismiss-btn" class="guide-close" title="Hide guide">×</button>
+        </div>
+      </div>
+
+      <!-- Optional Diagnostics (F3 toggle) -->
+      <div id="debug-panel" class="debug-panel hidden"></div>
+
+      <!-- Center Crosshair & Contextual Prompt -->
+      <div class="center-reticle">
+        <div id="crosshair" class="crosshair"></div>
+        <div id="interact-prompt" class="interact-prompt hidden"></div>
+      </div>
+
+      <!-- Transient Feedback Toast -->
+      <div id="hint-toast" class="hint-toast hidden"></div>
+
+      <!-- Bottom Survival Status + Hotbar -->
+      <div class="hud-bottom">
+        <div id="hotbar-item-label" class="hotbar-item-label"></div>
+
+        <div id="vitals-row" class="vitals-row">
+          <div id="health-bar" class="vital-group" aria-label="Health"></div>
+          <div id="air-bar" class="vital-group air-group hidden" aria-label="Breath"></div>
+          <div id="hunger-bar" class="vital-group" aria-label="Stamina"></div>
+        </div>
+
+        <div id="hotbar" class="hotbar"></div>
+      </div>
+    </div>
+
+    <!-- Inventory / Crafting / Furnace / Chest Modal -->
+    <div id="inventory-modal" class="modal-backdrop hidden">
+      <div class="workshop-card">
+        <div class="workshop-header">
+          <div class="workshop-tabs" id="station-mode-tabs">
+            <button id="tab-btn-crafting" class="station-tab active">Crafting</button>
+            <button id="tab-btn-creative" class="station-tab hidden">Block Palette</button>
+          </div>
+          <span id="station-title" class="station-subtitle">Hand Crafting</span>
+          <button id="close-inventory-btn" class="icon-close-btn" title="Close (Esc / E)">×</button>
+        </div>
+
+        <div class="workshop-body">
+          <!-- Left Side: Player Backpack + Hotbar -->
+          <div class="inventory-column">
+            <div class="section-heading-row">
+              <h3>Backpack</h3>
+              <button id="drop-held-btn" class="subtle-action-btn hidden">Drop Held Item [Q]</button>
+            </div>
+            <div id="backpack-grid" class="slot-grid"></div>
+
+            <h3 class="hotbar-heading">Hotbar</h3>
+            <div id="modal-hotbar-grid" class="slot-grid"></div>
+          </div>
+
+          <!-- Right Side: Dynamic Panel (Crafting OR Creative Palette OR Furnace OR Chest) -->
+          <div class="station-column">
+            <!-- Crafting Panel -->
+            <div id="panel-crafting" class="station-panel">
+              <div id="recipe-categories" class="category-pills"></div>
+              <div id="recipe-list" class="recipe-list"></div>
+            </div>
+
+            <!-- Creative Block Palette Panel -->
+            <div id="panel-creative" class="station-panel hidden">
+              <div id="creative-grid" class="slot-grid creative-palette-grid"></div>
+            </div>
+
+            <!-- Furnace Smelting Panel -->
+            <div id="panel-furnace" class="station-panel hidden">
+              <div class="furnace-layout">
+                <div class="furnace-inputs">
+                  <div class="slot-labeled">
+                    <span>Smelt Item</span>
+                    <div id="furnace-input-slot" class="inv-slot" title="Iron/Gold Ore, Sand, Clay, Cobblestone, Logs, or Raw Meat"></div>
+                  </div>
+                  <div class="furnace-flame-wrap" title="Fuel burn remaining">
+                    <div id="furnace-flame-fill" class="furnace-flame-fill"></div>
+                    <span class="furnace-flame-icon">🔥</span>
+                  </div>
+                  <div class="slot-labeled">
+                    <span>Fuel</span>
+                    <div id="furnace-fuel-slot" class="inv-slot" title="Coal, Charcoal, Logs, Planks, or Sticks"></div>
+                  </div>
+                </div>
+
+                <div class="furnace-arrow-wrap" title="Smelting progress">
+                  <div class="furnace-arrow-track">
+                    <div id="furnace-arrow-fill" class="furnace-arrow-fill"></div>
+                  </div>
+                </div>
+
+                <div class="slot-labeled">
+                  <span>Output</span>
+                  <div id="furnace-output-slot" class="inv-slot output-slot"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Storage Chest Panel -->
+            <div id="panel-chest" class="station-panel hidden">
+              <div id="chest-grid" class="slot-grid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating Cursor Slot while Moving Items -->
+      <div id="cursor-item" class="cursor-item hidden"></div>
+    </div>
+
+    <!-- Respawn Modal -->
+    <div id="death-modal" class="modal-backdrop hidden">
+      <div class="menu-card compact-card">
+        <h2>You Fell!</h2>
+        <p class="muted-subtitle">Your world and items are still waiting for you.</p>
+        <button id="respawn-btn" class="btn btn-primary">Respawn</button>
+      </div>
+    </div>
+
+    <!-- Title & Pause Menu Overlay -->
+    <div id="menu-overlay" class="menu-overlay">
+      <div class="menu-card">
+        <div class="brand-header">
+          <h1 class="brand-title">Voxelwild</h1>
+          <p id="active-world-summary" class="brand-subtitle hidden"></p>
+        </div>
+
+        <!-- View 1: Main Menu -->
+        <div id="menu-view-main" class="menu-view">
+          <button id="btn-play-resume" class="btn btn-primary">Play World</button>
+          <button id="btn-open-worlds" class="btn">Worlds &amp; New Game</button>
+          <div class="btn-row">
+            <button id="btn-open-settings" class="btn">Settings</button>
+            <button id="btn-open-controls" class="btn">Controls</button>
+          </div>
+          <button id="btn-save-now" class="btn btn-subtle hidden">Save World</button>
+        </div>
+
+        <!-- View 2: World Manager & Creator -->
+        <div id="menu-view-worlds" class="menu-view hidden">
+          <div class="subview-header">
+            <h2>Your Worlds</h2>
+            <button data-back-main class="btn-link">← Back</button>
+          </div>
+
+          <div id="world-list" class="world-list"></div>
+
+          <div class="new-world-box">
+            <h3>Create New World</h3>
+            <div class="form-row">
+              <input id="new-world-name" type="text" maxlength="28" placeholder="World Name (e.g. Pine Haven)" />
+            </div>
+            <div class="form-row split-row">
+              <input id="new-world-seed" type="text" maxlength="24" placeholder="Seed (leave blank for random)" />
+              <button id="btn-random-seed" class="btn btn-small" type="button">Random</button>
+            </div>
+            <div class="mode-selector">
+              <button id="mode-btn-survival" class="mode-option active" type="button">
+                <strong>Survival</strong>
+                <span>Gather, craft, health &amp; creatures</span>
+              </button>
+              <button id="mode-btn-creative" class="mode-option" type="button">
+                <strong>Creative</strong>
+                <span>Unlimited blocks &amp; flight</span>
+              </button>
+            </div>
+            <button id="btn-create-world" class="btn btn-primary" type="button">Create &amp; Play</button>
+          </div>
+        </div>
+
+        <!-- View 3: Settings -->
+        <div id="menu-view-settings" class="menu-view hidden">
+          <div class="subview-header">
+            <h2>Settings</h2>
+            <button data-back-main class="btn-link">← Back</button>
+          </div>
+
+          <div class="settings-list">
+            <label class="setting-item">
+              <div class="setting-label">
+                <span>Render Distance</span>
+                <strong id="val-render-dist">5 chunks</strong>
+              </div>
+              <input id="opt-render-dist" type="range" min="3" max="8" step="1" value="5" />
+            </label>
+
+            <label class="setting-item">
+              <div class="setting-label">
+                <span>Field of View</span>
+                <strong id="val-fov">74°</strong>
+              </div>
+              <input id="opt-fov" type="range" min="60" max="100" step="1" value="74" />
+            </label>
+
+            <label class="setting-item">
+              <div class="setting-label">
+                <span>Audio Volume</span>
+                <strong id="val-volume">70%</strong>
+              </div>
+              <input id="opt-volume" type="range" min="0" max="100" step="5" value="70" />
+            </label>
+
+            <label class="setting-item">
+              <div class="setting-label">
+                <span>Mouse Sensitivity</span>
+                <strong id="val-sens">100%</strong>
+              </div>
+              <input id="opt-sens" type="range" min="30" max="200" step="5" value="100" />
+            </label>
+
+            <label class="setting-toggle">
+              <span>Invert Look Y-Axis</span>
+              <input id="opt-invert-y" type="checkbox" />
+            </label>
+          </div>
+
+          <div id="creative-env-controls" class="creative-tools-box hidden">
+            <h3>Creative World Controls</h3>
+            <div class="btn-row">
+              <button id="btn-set-dawn" class="btn btn-small" type="button">Dawn</button>
+              <button id="btn-set-noon" class="btn btn-small" type="button">Noon</button>
+              <button id="btn-set-night" class="btn btn-small" type="button">Night</button>
+              <button id="btn-toggle-weather" class="btn btn-small" type="button">Toggle Weather</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- View 4: Friendly Controls Reference -->
+        <div id="menu-view-controls" class="menu-view hidden">
+          <div class="subview-header">
+            <h2>Controls</h2>
+            <button data-back-main class="btn-link">← Back</button>
+          </div>
+
+          <div class="controls-grid">
+            <div class="control-row"><kbd>W A S D</kbd><span>Move</span></div>
+            <div class="control-row"><kbd>Space</kbd><span>Jump / Swim Up</span></div>
+            <div class="control-row"><kbd>Shift</kbd><span>Sprint</span></div>
+            <div class="control-row"><kbd>C</kbd><span>Sneak (Edge Guard)</span></div>
+            <div class="control-row"><kbd>Left Click</kbd><span>Mine / Attack</span></div>
+            <div class="control-row"><kbd>Right Click</kbd><span>Place / Use / Eat</span></div>
+            <div class="control-row"><kbd>1 – 9 / Scroll</kbd><span>Select Hotbar</span></div>
+            <div class="control-row"><kbd>E</kbd><span>Inventory &amp; Crafting</span></div>
+            <div class="control-row"><kbd>Q</kbd><span>Drop Selected Item</span></div>
+            <div class="control-row"><kbd>F / 2× Space</kbd><span>Creative Flight</span></div>
+            <div class="control-row"><kbd>F3</kbd><span>Toggle Diagnostics</span></div>
+            <div class="control-row"><kbd>Esc</kbd><span>Pause Menu</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

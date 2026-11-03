@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optics Sandbox</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  :root{--bg:#0b0d12;--panel:#12151c;--line:#1f242e;--text:#e6e9ef;--muted:#8b93a3;--accent:#6ea8fe;}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;overflow:hidden;}
+  #app{display:grid;grid-template-rows:48px 1fr;grid-template-columns:168px 1fr 300px;height:100vh;}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel);}
+  aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;}
+  #props{border-right:none;border-left:1px solid var(--line);}
+  #stage{position:relative;overflow:hidden;background:#07080c;}
+  canvas#c{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none;}
+  .tool{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;border-radius:8px;color:var(--text);font-size:13px;text-align:left;transition:background .12s;}
+  .tool:hover{background:#1a1f2a;}
+  .tool svg{width:22px;height:22px;flex:none;stroke:#aab3c5;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+  .sec{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:14px 16px 6px;}
+  .field{padding:8px 16px;}
+  .field label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .field label b{color:var(--text);font-weight:500;font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%;accent-color:var(--accent);height:4px;}
+  select,.btn{background:#1a1f2a;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px;width:100%;}
+  .btn{cursor:pointer;transition:background .12s;}
+  .btn:hover{background:#232a38;}
+  .btn.danger{color:#ff7b7b;}
+  .btn.sm{width:auto;padding:5px 10px;font-size:12px;}
+  .toggle{display:flex;gap:4px;background:#1a1f2a;border:1px solid var(--line);border-radius:8px;padding:3px;}
+  .toggle button{flex:1;padding:5px;border-radius:6px;font-size:12px;color:var(--muted);}
+  .toggle button.on{background:#2a3242;color:var(--text);}
+  .hint{color:var(--muted);font-size:12.5px;line-height:1.6;padding:16px;}
+  .hint kbd{background:#1a1f2a;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px;color:var(--text);}
+  #specCanvas{width:100%;height:84px;border-radius:8px;background:#0b0d12;border:1px solid var(--line);cursor:ns-resize;display:block;}
+  .swatch{width:14px;height:14px;border-radius:50%;display:inline-block;vertical-align:-2px;margin-left:6px;}
+  .readout{background:#0b0d12;border:1px solid var(--line);border-radius:8px;padding:10px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="font-semibold tracking-tight">Optics Sandbox</div>
+    <div class="flex items-center gap-2 ml-6 text-xs" style="color:var(--muted)">
+      <span>Brightness</span>
+      <input id="brightness" type="range" min="0.2" max="4" step="0.05" value="1" style="width:120px">
+    </div>
+    <div class="flex items-center gap-2 text-xs" style="color:var(--muted)">
+      <span>Ray depth</span>
+      <input id="depth" type="range" min="2" max="30" step="1" value="14" style="width:90px">
+    </div>
+    <div class="ml-auto flex items-center gap-2">
+      <button id="gridBtn" class="btn sm">Grid</button>
+      <button id="clearBtn" class="btn sm">Clear scene</button>
+    </div>
+  </header>
+
+  <aside id="toolbar">
+    <div class="sec">Sources</div>
+    <div class="px-2" data-group="src"></div>
+    <div class="sec">Optics</div>
+    <div class="px-2" data-group="opt"></div>
+    <div class="sec">Detectors</div>
+    <div class="px-2" data-group="det"></div>
+  </aside>
+
+  <div id="stage"><canvas id="c"></canvas></div>
+
+  <aside id="props"></aside>
+</div>
+
+<script>
+/* ========================= Spectral utilities ========================= */
+const BINS=16, WL0=380, DW=20;
+const binWl=i=>WL0+DW*(i+0.5);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+const gauss=(x,mu,s)=>Math.exp(-0.5*((x-mu)/s)**2);
+
+// CIE 1931 colour matching functions – multi-lobe Gaussian fit (Wyman, Sloan, Shirley 2013)
+function pg(l,mu,s1,s2){const s=l<mu?s1:s2,t=(l-mu)/s;return Math.exp(-0.5*t*t);}
+function xyz(l){return [
+  1.056*pg(l,599.8,37.9,31.0)+0.362*pg(l,442.0,16.0,26.7)-0.065*pg(l,501.1,20.4,26.2),
+  0.821*pg(l,568.8,46.9,40.5)+0.286*pg(l,530.9,16.3,31.1),
+  1.217*pg(l,437.0,11.8,36.0)+0.681*pg(l,459.0,26.0,13.8)];}
+function linRGB(l){const [X,Y,Z]=xyz(l);
+  return [Math.max(0,3.2406*X-1.5372*Y-0.4986*Z),Math.max(0,-0.9689*X+1.8758*Y+0.0415*Z),Math.max(0,0.0557*X-0.2040*Y+1.0570*Z)];}
+let RGBNORM=1;{let m=0;for(let l=380;l<=720;l++)m=Math.max(m,...linRGB(l));RGBNORM=m;}
+const enc=c=>c<=0.0031308?12.92*c:1.055*Math.pow(c,1/2.4)-0.055;
+const rgbCache=new Map();
+function wlRGB(l){l=Math.round(l);if(rgbCache.has(l))return rgbCache.get(l);
+  const v=linRGB(l).map(c=>Math.round(255*clamp(enc(c/RGBNORM),0,1)));rgbCache.set(l,v);return v;}
+const wlCSS=l=>`rgb(${wlRGB(l).join(',')})`;
+
+function planck(T){return norm(Array.from({length:BINS},(_,i)=>{const l=binWl(i)*1e-9;return 1/(l**5*(Math.exp(1.4388e-2/(l*T))-1));}));}
+function norm(a){const m=Math.max(...a)||1;return a.map(v=>v/m);}
+const shape=f=>norm(Array.from({length:BINS},(_,i)=>f(binWl(i))));
+const PRESETS={
+  sunlight:{name:'Sunlight (5778 K)',f:()=>planck(5778)},
+  whiteled:{name:'White LED',f:()=>shape(l=>gauss(l,450,12)+0.8*gauss(l,565,55))},
+  incandescent:{name:'Incandescent (2700 K)',f:()=>planck(2700)},
+  fluorescent:{name:'Fluorescent',f:()=>shape(l=>gauss(l,436,8)+1.2*gauss(l,546,8)+gauss(l,611,8)+0.15*gauss(l,520,80))},
+  sodium:{name:'Sodium lamp',f:()=>shape(l=>gauss(l,589,8))},
+  red:{name:'Red LED',f:()=>shape(l=>gauss(l,630,10))},
+  green:{name:'Green LED',f:()=>shape(l=>gauss(l,525,15))},
+  blue:{name:'Blue LED',f:()=>shape(l=>gauss(l,465,10))},
+  equal:{name:'Equal energy',f:()=>Array(BINS).fill(1)},
+  custom:{name:'Custom'}
+};
+const MATERIALS={ // Cauchy n = A + B/λ²  (λ in µm)
+  bk7:{name:'BK7 crown glass',A:1.5046,B:0.00420},
+  f2:{name:'F2 flint glass',A:1.6030,B:0.00850},
+  sf11:{name:'SF11 dense flint',A:1.7450,B:0.01340},
+  silica:{name:'Fused silica',A:1.4580,B:0.00354},
+  water:{name:'Water',A:1.3240,B:0.00319},
+  diamond:{name:'Diamond',A:2.3818,B:0.01210},
+  custom:{name:'Custom'}
+};
+
+/* ========================= Scene model ========================= */
+const TOOLS=[
+  {type:'flashlight',name:'Flashlight',group:'src',icon:'<rect x="3" y="8" width="9" height="8" rx="1"/><path d="M12 7l8 -3v16l-8 -3z"/>'},
+  {type:'laser',name:'Laser',group:'src',icon:'<rect x="2" y="9" width="10" height="6" rx="1"/><path d="M12 12h10"/>'},
+  {type:'mirror',name:'Mirror',group:'opt',icon:'<path d="M6 3v18"/><path d="M6 6l-3 2M6 10l-3 2M6 14l-3 2M6 18l-3 2"/>'},
+  {type:'curved',name:'Curved mirror',group:'opt',icon:'<path d="M15 3q-10 9 0 18"/><path d="M14 7l-3 1M12.5 11l-3 1M12.5 14l-3 1M14 17l-3 1"/>'},
+  {type:'lens',name:'Lens',group:'opt',icon:'<path d="M12 3q-5 9 0 18q5 -9 0 -18z"/>'},
+  {type:'prism',name:'Prism',group:'opt',icon:'<path d="M12 4l8 15H4z"/>'},
+  {type:'grating',name:'Diffraction grating',group:'opt',icon:'<path d="M9 3v18"/><path d="M9 12h12M9 12l10 -5M9 12l10 5"/>'},
+  {type:'polarizer',name:'Polarizer',group:'opt',icon:'<circle cx="12" cy="12" r="8"/><path d="M12 5v14M8.5 7v10M15.5 7v10"/>'},
+  {type:'glass',name:'Colored glass',group:'opt',icon:'<rect x="8" y="3" width="8" height="18" rx="1"/><path d="M10 6l4 4"/>'},
+  {type:'blocker',name:'Light blocker',group:'opt',icon:'<path d="M12 3v18" stroke-width="3"/>'},
+  {type:'sensor',name:'Sensor',group:'det',icon:'<path d="M12 3v18"/><path d="M8 7h4M8 12h4M8 17h4"/>'},
+];
+function defaults(type){
+  const d={type,x:0,y:0,angle:0};
+  const extra={
+    flashlight:{intensity:1,divergence:8,rays:9,aperture:24,preset:'sunlight',spectrum:PRESETS.sunlight.f(),pol:-1},
+    laser:{wavelength:532,intensity:1,width:0,rays:1,pol:-1},
+    polarizer:{length:80,axis:0},
+    lens:{length:100,focal:150},
+    mirror:{length:100,reflectance:1},
+    curved:{aperture:100,radius:200},
+    grating:{length:100,density:600,orders:2,slit:0.3,reflective:false},
+    prism:{pshape:'triangle',apex:60,size:120,width:120,height:50,material:'bk7',A:1.5046,B:0.0042,reflect:'fresnel',maxBounce:8},
+    glass:{length:100,lo:600,hi:700,transmit:0.9,reflectance:0.04},
+    blocker:{length:100},
+    sensor:{length:80}
+  }[type];
+  return Object.assign(d,extra);
+}
+let objects=[], selected=null, nextId=1, dirty=true, showGrid=true;
+let brightness=1, maxDepth=14;
+const sensorData=new Map();
+
+/* ========================= Geometry ========================= */
+const dirOf=o=>[Math.cos(rad(o.angle)),Math.sin(rad(o.angle))];
+function segOf(o){const [ux,uy]=dirOf(o),L=o.length/2;return {ax:o.x-ux*L,ay:o.y-uy*L,bx:o.x+ux*L,by:o.y+uy*L,ux,uy,nx:-uy,ny:ux};}
+function polyOf(o){
+  let pts;
+  if(o.pshape==='triangle'){const s=o.size,h=(s/2)/Math.tan(rad(o.apex)/2);pts=[[-s/2,h/2],[s/2,h/2],[0,-h/2]];}
+  else {const w=o.width/2,h=o.height/2;pts=[[-w,-h],[w,-h],[w,h],[-w,h]];}
+  const c=Math.cos(rad(o.angle)),s=Math.sin(rad(o.angle));
+  return pts.map(([px,py])=>[o.x+px*c-py*s,o.y+px*s+py*c]);
+}
+function arcOf(o){
+  const [ux,uy]=dirOf(o),nx=-uy,ny=ux;const R=Math.abs(o.radius),half=o.aperture/2;
+  const Rr=Math.max(R,half+0.01);const sgn=Math.sign(o.radius)||1;
+  const dist=Math.sqrt(Rr*Rr-half*half);
+  const cx=o.x+nx*dist*sgn,cy=o.y+ny*dist*sgn;
+  const vx=cx-nx*Rr*sgn,vy=cy-ny*Rr*sgn; // arc vertex
+  return {cx,cy,R:Rr,vx,vy,halfAng:Math.asin(half/Rr),sgn,nx,ny};
+}
+function pointInPoly(px,py,pts){let inside=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];
+  if((yi>py)!==(yj>py)&&px<(xj-xi)*(py-yi)/(yj-yi)+xi)inside=!inside;}return inside;}
+function distSeg(px,py,ax,ay,bx,by){const ex=bx-ax,ey=by-ay,L2=ex*ex+ey*ey||1;const t=clamp(((px-ax)*ex+(py-ay)*ey)/L2,0,1);return Math.hypot(px-ax-ex*t,py-ay-ey*t);}
+
+function hitSeg(r,ax,ay,bx,by){
+  const ex=bx-ax,ey=by-ay;const den=r.dx*ey-r.dy*ex;if(Math.abs(den)<1e-12)return null;
+  const wx=ax-r.x,wy=ay-r.y;const t=(wx*ey-wy*ex)/den;const s=(wx*r.dy-wy*r.dx)/den;
+  if(t<1e-4||s<0||s>1)return null;
+  let nx=-ey,ny=ex;const L=Math.hypot(nx,ny);nx/=L;ny/=L;if(nx*r.dx+ny*r.dy>0){nx=-nx;ny=-ny;}
+  return {t,s,nx,ny,px:r.x+r.dx*t,py:r.y+r.dy*t};
+}
+function hitObj(r,o){
+  if(o.type==='flashlight'||o.type==='laser')return null;
+  if(o.type==='prism'){const pts=polyOf(o);let best=null;
+    for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length];const h=hitSeg(r,a[0],a[1],b[0],b[1]);if(h&&(!best||h.t<best.t))best=h;}
+    return best;}
+  if(o.type==='curved'){const A=arcOf(o);const fx=r.x-A.cx,fy=r.y-A.cy;
+    const b=2*(fx*r.dx+fy*r.dy),c=fx*fx+fy*fy-A.R*A.R;const disc=b*b-4*c;if(disc<0)return null;
+    const sq=Math.sqrt(disc);const cosH=Math.cos(A.halfAng);
+    for(const t of [(-b-sq)/2,(-b+sq)/2]){if(t<1e-4)continue;const px=r.x+r.dx*t,py=r.y+r.dy*t;
+      const ox=(px-A.cx)/A.R,oy=(py-A.cy)/A.R;const wx=(A.vx-A.cx)/A.R,wy=(A.vy-A.cy)/A.R;
+      if(ox*wx+oy*wy<cosH)continue;let nx=ox,ny=oy;if(nx*r.dx+ny*r.dy>0){nx=-nx;ny=-ny;}
+      return {t,px,py,nx,ny};}
+    return null;}
+  const s=segOf(o);return hitSeg(r,s.ax,s.ay,s.bx,s.by);
+}
+
+/* ========================= Ray tracing ========================= */
+let segs=[];
+const MINI=0.003, MAXSEGS=60000;
+const sinc=x=>x===0?1:Math.sin(x)/x;
+const refl=(r,nx,ny)=>{const d=r.dx*nx+r.dy*ny;return [r.dx-2*d*nx,r.dy-2*d*ny];};
+
+function emit(){
+  const out=[];
+  for(const o of objects){
+    if(o.type==='flashlight'){
+      const [dx,dy]=dirOf(o),ux=-dy,uy=dx;const sum=o.spectrum.reduce((a,b)=>a+b,0);if(sum<=0)continue;
+      for(let i=0;i<o.rays;i++){const f=o.rays>1?i/(o.rays-1)-0.5:0;
+        const a=rad(o.angle+f*o.divergence),ox=o.x+ux*f*o.aperture,oy=o.y+uy*f*o.aperture;
+        for(let b=0;b<BINS;b++){if(o.spectrum[b]<=0)continue;
+          out.push({x:ox,y:oy,dx:Math.cos(a),dy:Math.sin(a),wl:binWl(b),I:o.intensity*o.spectrum[b]/sum,pol:o.pol,inside:null,depth:0,bounces:0});}}
+    } else if(o.type==='laser'){
+      const [dx,dy]=dirOf(o),ux=-dy,uy=dx;
+      for(let i=0;i<o.rays;i++){const f=o.rays>1?i/(o.rays-1)-0.5:0;
+        out.push({x:o.x+ux*f*o.width,y:o.y+uy*f*o.width,dx,dy,wl:o.wavelength,I:o.intensity,pol:o.pol,inside:null,depth:0,bounces:0});}
+    }
+  }
+  const prisms=objects.filter(o=>o.type==='prism');
+  for(const r of out)for(const p of prisms)if(pointInPoly(r.x,r.y,polyOf(p)))r.inside=p;
+  return out;
+}
+function spawn(q,r,x,y,dx,dy,props){
+  const L=Math.hypot(dx,dy);dx/=L;dy/=L;
+  q.push(Object.assign({},r,{x:x+dx*1e-3,y:y+dy*1e-3,dx,dy,depth:r.depth+1},props));
+}
+function trace(){
+  segs=[];sensorData.clear();
+  for(const o of objects)if(o.type==='sensor')sensorData.set(o.id,{total:0,bins:Array(BINS).fill(0)});
+  const q=emit();let n=0;
+  while(q.length&&segs.length<MAXSEGS){
+    const r=q.pop();if(r.I<MINI||r.depth>maxDepth)continue;
+    let best=null,bo=null;
+    for(const o of objects){const h=hitObj(r,o);if(h&&(!best||h.t<best.t)){best=h;bo=o;}}
+    if(!best){segs.push([r.x,r.y,r.x+r.dx*5000,r.y+r.dy*5000,r.wl,r.I]);continue;}
+    segs.push([r.x,r.y,best.px,best.py,r.wl,r.I]);
+    interact(q,r,best,bo);
+  }
+}
+function interact(q,r,h,o){
+  const {px,py,nx,ny}=h;
+  switch(o.type){
+    case 'blocker':return;
+    case 'sensor':{const d=sensorData.get(o.id);d.total+=r.I;const b=clamp(Math.floor((r.wl-WL0)/DW),0,BINS-1);d.bins[b]+=r.I;return;}
+    case 'mirror':{const [dx,dy]=refl(r,nx,ny);spawn(q,r,px,py,dx,dy,{I:r.I*o.reflectance});return;}
+    case 'curved':{const [dx,dy]=refl(r,nx,ny);spawn(q,r,px,py,dx,dy,{});return;}
+    case 'polarizer':{ // Malus's law
+      let I,pol=o.axis;if(r.pol<0)I=r.I/2;else I=r.I*Math.cos(rad(r.pol-o.axis))**2;
+      spawn(q,r,px,py,r.dx,r.dy,{I,pol});return;}
+    case 'lens':{ // ideal thin lens: slope' = slope - h/f
+      const s=segOf(o);let ax=s.nx,ay=s.ny;if(ax*r.dx+ay*r.dy<0){ax=-ax;ay=-ay;}
+      const hh=(px-o.x)*s.ux+(py-o.y)*s.uy;const a=r.dx*ax+r.dy*ay,b=r.dx*s.ux+r.dy*s.uy;
+      const s2=b/a-hh/o.focal;spawn(q,r,px,py,ax+s2*s.ux,ay+s2*s.uy,{});return;}
+    case 'glass':{
+      const inBand=r.wl>=o.lo&&r.wl<=o.hi;const R=o.reflectance;
+      if(inBand)spawn(q,r,px,py,r.dx,r.dy,{I:r.I*(1-R)*o.transmit});
+      if(R>0.002){const [dx,dy]=refl(r,nx,ny);spawn(q,r,px,py,dx,dy,{I:r.I*R});}
+      return;}
+    case 'grating':{ // d (sinθm − sinθi) = mλ
+      const s=segOf(o);let ax=s.nx,ay=s.ny;if(ax*r.dx+ay*r.dy<0){ax=-ax;ay=-ay;}
+      const d=1/o.density, lam=r.wl*1e-6, sini=r.dx*s.ux+r.dy*s.uy;
+      const orders=[];let sum=0;
+      for(let m=-o.orders;m<=o.orders;m++){const sm=sini+m*lam/d;if(Math.abs(sm)>1)continue;const w=sinc(Math.PI*m*o.slit)**2;sum+=w;orders.push([sm,w]);}
+      const sign=o.reflective?-1:1;
+      for(const [sm,w] of orders){const cm=Math.sqrt(1-sm*sm);spawn(q,r,px,py,sign*cm*ax+sm*s.ux,sign*cm*ay+sm*s.uy,{I:r.I*w/sum});}
+      return;}
+    case 'prism':{
+      const nG=o.A+o.B/((r.wl/1000)**2);const entering=r.inside!==o;
+      const n1=entering?1:nG,n2=entering?nG:1;
+      const cosi=-(r.dx*nx+r.dy*ny),eta=n1/n2,k=1-eta*eta*(1-cosi*cosi);
+      const pfrac=r.pol<0?0.5:Math.cos(rad(r.pol))**2;
+      if(k<0){ // total internal reflection
+        if(o.reflect==='none'||r.bounces>=o.maxBounce)return;
+        const [dx,dy]=refl(r,nx,ny);spawn(q,r,px,py,dx,dy,{bounces:r.bounces+1});return;}
+      const cost=Math.sqrt(k);
+      const Rs=((n1*cosi-n2*cost)/(n1*cosi+n2*cost))**2,Rp=((n1*cost-n2*cosi)/(n1*cost+n2*cosi))**2;
+      let R=o.reflect==='fresnel'?pfrac*Rp+(1-pfrac)*Rs:0;
+      const polT=r.pol<0?-1:deg(Math.atan2(Math.sqrt((1-pfrac)*(1-Rs)),Math.sqrt(pfrac*(1-Rp))));
+      spawn(q,r,px,py,eta*r.dx+(eta*cosi-cost)*nx,eta*r.dy+(eta*cosi-cost)*ny,{I:r.I*(1-R),inside:entering?o:null,pol:polT});
+      if(R>0.002&&(entering||r.bounces<o.maxBounce)){
+        let polR;
+        if(r.pol<0){const dop=Math.abs(Rs-Rp)/(Rs+Rp+1e-12);polR=dop>0.9?(Rs>Rp?90:0):-1;}
+        else polR=deg(Math.atan2(Math.sqrt((1-pfrac)*Rs),Math.sqrt(pfrac*Rp)));
+        const [dx,dy]=refl(r,nx,ny);spawn(q,r,px,py,dx,dy,{I:r.I*R,bounces:entering?r.bounces:r.bounces+1,pol:polR});}
+      return;}
+  }
+}
+
+/* ========================= Rendering ========================= */
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+let W=0,H=0;
+function resize(){const r=canvas.parentElement.getBoundingClientRect();W=r.width;H=r.height;const dpr=devicePixelRatio||1;
+  canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);dirty=true;}
+addEventListener('resize',resize);
+
+function render(){
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+  ctx.fillStyle='#07080c';ctx.fillRect(0,0,W,H);
+  if(showGrid){ctx.strokeStyle='#11141b';ctx.lineWidth=1;ctx.beginPath();
+    for(let x=0;x<W;x+=50){ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,H);}for(let y=0;y<H;y+=50){ctx.moveTo(0,y+.5);ctx.lineTo(W,y+.5);}ctx.stroke();}
+  // rays, batched by colour & alpha
+  ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+  const groups=new Map();
+  for(const s of segs){const a=clamp(s[5]*brightness,0,1);if(a<0.004)continue;const key=Math.round(s[4])+'_'+Math.round(a*24);
+    let g=groups.get(key);if(!g){g={wl:s[4],a:Math.round(a*24)/24,p:new Path2D()};groups.set(key,g);}g.p.moveTo(s[0],s[1]);g.p.lineTo(s[2],s[3]);}
+  for(const g of groups.values()){ctx.strokeStyle=wlCSS(g.wl);
+    ctx.globalAlpha=g.a*0.18;ctx.lineWidth=5;ctx.stroke(g.p);
+    ctx.globalAlpha=g.a*0.85;ctx.lineWidth=1.3;ctx.stroke(g.p);}
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+  for(const o of objects)drawObj(o);
+  if(selected)drawSelection(selected);
+  if(!objects.length){ctx.fillStyle='#4a5263';ctx.font='14px system-ui';ctx.textAlign='center';ctx.fillText('Add a source and some optics from the left panel',W/2,H/2);}
+}
+function local(o,fn){ctx.save();ctx.translate(o.x,o.y);ctx.rotate(rad(o.angle));fn();ctx.restore();}
+function drawObj(o){
+  ctx.lineCap='butt';ctx.lineJoin='round';
+  switch(o.type){
+    case 'flashlight':local(o,()=>{const w=o.aperture+10;ctx.fillStyle='#2a3140';ctx.strokeStyle='#4a5468';ctx.lineWidth=1;
+      rr(-34,-w/2,34,w,4);ctx.fill();ctx.stroke();ctx.fillStyle='#e6e9ef';ctx.fillRect(-3,-o.aperture/2,3,o.aperture);});break;
+    case 'laser':local(o,()=>{const w=Math.max(o.width+8,12);ctx.fillStyle='#2a3140';ctx.strokeStyle='#4a5468';ctx.lineWidth=1;
+      rr(-36,-w/2,36,w,3);ctx.fill();ctx.stroke();ctx.fillStyle=wlCSS(o.wavelength);ctx.fillRect(-2,-w/2+2,2,w-4);});break;
+    case 'mirror':local(o,()=>{const L=o.length/2;ctx.strokeStyle='#d9dee8';ctx.lineWidth=2.5;line(-L,0,L,0);ctx.strokeStyle='#596275';ctx.lineWidth=1;
+      for(let x=-L+4;x<L;x+=8)line(x,2,x-4,7);});break;
+    case 'blocker':local(o,()=>{ctx.strokeStyle='#3a404d';ctx.lineWidth=6;line(-o.length/2,0,o.length/2,0);});break;
+    case 'sensor':local(o,()=>{const L=o.length/2;ctx.strokeStyle='#5ee0c6';ctx.lineWidth=3;line(-L,0,L,0);ctx.lineWidth=1;ctx.strokeStyle='#2f8c7b';
+      for(let x=-L;x<=L;x+=10)line(x,2,x,7);});break;
+    case 'polarizer':local(o,()=>{const L=o.length/2;ctx.strokeStyle='#9aa6ff';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);line(-L,0,L,0);ctx.setLineDash([]);
+      ctx.beginPath();ctx.arc(0,0,9,0,7);ctx.fillStyle='#0b0d12';ctx.fill();ctx.stroke();
+      ctx.save();ctx.rotate(rad(o.axis));ctx.lineWidth=2;line(0,-6,0,6);ctx.restore();});break;
+    case 'lens':local(o,()=>{const L=o.length/2,cv=o.focal>0;ctx.strokeStyle='#7fd1ff';ctx.lineWidth=2;line(-L,0,L,0);
+      ctx.lineWidth=1.5;const s=cv?1:-1;
+      ctx.beginPath();ctx.moveTo(-L+6*s,-6);ctx.lineTo(-L,0);ctx.lineTo(-L+6*s,6);ctx.moveTo(L-6*s,-6);ctx.lineTo(L,0);ctx.lineTo(L-6*s,6);ctx.stroke();
+      ctx.fillStyle='rgba(127,209,255,0.10)';ctx.beginPath();if(cv){ctx.moveTo(-L,0);ctx.quadraticCurveTo(0,-14,L,0);ctx.quadraticCurveTo(0,14,-L,0);}
+      else{ctx.moveTo(-L,-10);ctx.quadraticCurveTo(0,4,L,-10);ctx.lineTo(L,10);ctx.quadraticCurveTo(0,-4,-L,10);}ctx.fill();});break;
+    case 'grating':local(o,()=>{const L=o.length/2;ctx.strokeStyle='#c7b3ff';ctx.lineWidth=1.5;line(-L,0,L,0);ctx.lineWidth=1;
+      for(let x=-L;x<=L;x+=4)line(x,-4,x,4);
+      if(o.reflective){ctx.strokeStyle='#596275';line(-L,6,L,6);}});break;
+    case 'glass':local(o,()=>{const L=o.length/2;const mid=(o.lo+o.hi)/2;const c=wlRGB(mid);
+      ctx.strokeStyle=`rgba(${c.join(',')},0.9)`;ctx.lineWidth=4;line(-L,0,L,0);});break;
+    case 'curved':{const A=arcOf(o);ctx.strokeStyle='#d9dee8';ctx.lineWidth=2.5;
+      const a0=Math.atan2(A.vy-A.cy,A.vx-A.cx);ctx.beginPath();ctx.arc(A.cx,A.cy,A.R,a0-A.halfAng,a0+A.halfAng);ctx.stroke();
+      ctx.strokeStyle='#596275';ctx.lineWidth=1;ctx.beginPath();ctx.arc(A.cx,A.cy,A.R+(A.sgn>0?-5:5),a0-A.halfAng,a0+A.halfAng);ctx.stroke();break;}
+    case 'prism':{const pts=polyOf(o);ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
+      ctx.fillStyle='rgba(150,190,255,0.08)';ctx.fill();ctx.strokeStyle='#8fb4e8';ctx.lineWidth=1.5;ctx.stroke();break;}
+  }
+}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function line(a,b,c,d){ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(c,d);ctx.stroke();}
+function handleDist(o){
+  if(o.type==='prism')return (o.pshape==='triangle'?o.size:Math.max(o.width,o.height))/2+30;
+  if(o.type==='curved')return o.aperture/2+30;
+  if(o.type==='flashlight'||o.type==='laser')return 48;
+  return o.length/2+30;
+}
+function handlePos(o){const [dx,dy]=dirOf(o),d=handleDist(o);return [o.x+dx*d,o.y+dy*d];}
+function drawSelection(o){
+  const [hx,hy]=handlePos(o);
+  ctx.strokeStyle='rgba(110,168,254,0.5)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.arc(o.x,o.y,handleDist(o),0,7);ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(o.x,o.y,3,0,7);ctx.fillStyle='#6ea8fe';ctx.fill();
+  ctx.beginPath();ctx.arc(hx,hy,6,0,7);ctx.fillStyle='#6ea8fe';ctx.fill();
+}
+function frame(){if(dirty){dirty=false;trace();render();if(selected&&selected.type==='sensor')updateReadout();}requestAnimationFrame(frame);}
+
+/* ========================= Interaction ========================= */
+function pick(px,py){
+  for(let i=objects.length-1;i>=0;i--){const o=objects[i];
+    if(o.type==='flashlight'||o.type==='laser'){const c=Math.cos(-rad(o.angle)),s=Math.sin(-rad(o.angle));const lx=(px-o.x)*c-(py-o.y)*s,ly=(px-o.x)*s+(py-o.y)*c;
+      const w=(o.type==='flashlight'?o.aperture+10:Math.max(o.width+8,12))/2+4;if(lx>-38&&lx<6&&Math.abs(ly)<w)return o;continue;}
+    if(o.type==='prism'){const pts=polyOf(o);if(pointInPoly(px,py,pts))return o;
+      for(let j=0;j<pts.length;j++){const a=pts[j],b=pts[(j+1)%pts.length];if(distSeg(px,py,a[0],a[1],b[0],b[1])<8)return o;}continue;}
+    if(o.type==='curved'){const A=arcOf(o);const d=Math.hypot(px-A.cx,py-A.cy);if(Math.abs(d-A.R)<8){
+      const ox=(px-A.cx)/d,oy=(py-A.cy)/d,wx=(A.vx-A.cx)/A.R,wy=(A.vy-A.cy)/A.R;if(ox*wx+oy*wy>=Math.cos(A.halfAng))return o;}continue;}
+    const s=segOf(o);if(distSeg(px,py,s.ax,s.ay,s.bx,s.by)<8)return o;}
+  return null;
+}
+let drag=null;
+const pos=e=>{const r=canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
+canvas.addEventListener('pointerdown',e=>{const [px,py]=pos(e);canvas.setPointerCapture(e.pointerId);
+  if(selected){const [hx,hy]=handlePos(selected);if(Math.hypot(px-hx,py-hy)<12){drag={mode:'rot',o:selected};return;}}
+  const o=pick(px,py);select(o);
+  if(o){drag={mode:'move',o,ox:px-o.x,oy:py-o.y};objects.splice(objects.indexOf(o),1);objects.push(o);}
+  dirty=true;});
+canvas.addEventListener('pointermove',e=>{if(!drag)return;const [px,py]=pos(e);const o=drag.o;
+  if(drag.mode==='move'){o.x=px-drag.ox;o.y=py-drag.oy;}
+  else{let a=deg(Math.atan2(py-o.y,px-o.x));if(e.shiftKey)a=Math.round(a/15)*15;o.angle=Math.round(a*10)/10;syncField('angle');}
+  dirty=true;});
+canvas.addEventListener('pointerup',()=>drag=null);
+canvas.addEventListener('wheel',e=>{if(!selected)return;e.preventDefault();selected.angle=((selected.angle+(e.deltaY>0?1:-1)*(e.shiftKey?15:2)+540)%360)-180;syncField('angle');dirty=true;},{passive:false});
+addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;
+  if((e.key==='Delete'||e.key==='Backspace')&&selected)removeObj(selected);
+  if(e.key==='Escape')select(null);
+  if(e.key==='d'&&selected)duplicate(selected);});
+
+function addObj(type){const o=defaults(type);o.id=nextId++;o.x=Math.round(W/2+(Math.random()-0.5)*80);o.y=Math.round(H/2+(Math.random()-0.5)*80);objects.push(o);select(o);dirty=true;return o;}
+function removeObj(o){objects=objects.filter(x=>x!==o);if(selected===o)select(null);dirty=true;}
+function duplicate(o){const c=JSON.parse(JSON.stringify(o));c.id=nextId++;c.x+=30;c.y+=30;objects.push(c);select(c);dirty=true;}
+function select(o){selected=o;buildProps();dirty=true;}
+
+/* ========================= Toolbar ========================= */
+for(const t of TOOLS){const b=document.createElement('button');b.className='tool';b.innerHTML=`<svg viewBox="0 0 24 24">${t.icon}</svg><span>${t.name}</span>`;
+  b.onclick=()=>addObj(t.type);document.querySelector(`[data-group="${t.group}"]`).appendChild(b);}
+document.getElementById('brightness').oninput=e=>{brightness=+e.target.value;dirty=true;};
+document.getElementById('depth').oninput=e=>{maxDepth=+e.target.value;dirty=true;};
+document.getElementById('gridBtn').onclick=()=>{showGrid=!showGrid;dirty=true;};
+document.getElementById('clearBtn').onclick=()=>{objects=[];select(null);};
+
+/* ========================= Properties panel ========================= */
+const props=document.getElementById('props');
+const fieldEls={};
+function el(html){const t=document.createElement('template');t.innerHTML=html.trim();return t.content.firstChild;}
+function sec(t){props.appendChild(el(`<div class="sec">${t}</div>`));}
+function range(label,key,min,max,step,fmt,onchange){
+  const o=selected;const f=el(`<div class="field"><label><span>${label}</span><b></b></label><input type="range" min="${min}" max="${max}" step="${step}"></div>`);
+  const inp=f.querySelector('input'),val=f.querySelector('b');inp.value=o[key];
+  const show=()=>val.innerHTML=fmt?fmt(o[key]):o[key];show();
+  inp.oninput=()=>{o[key]=+inp.value;show();if(onchange)onchange();dirty=true;};
+  fieldEls[key]={inp,show};props.appendChild(f);
+}
+function sel(label,key,opts,onchange){
+  const o=selected;const f=el(`<div class="field"><label><span>${label}</span></label><select></select></div>`);const s=f.querySelector('select');
+  for(const [v,n] of opts){const op=document.createElement('option');op.value=v;op.textContent=n;s.appendChild(op);}s.value=String(o[key]);
+  s.onchange=()=>{o[key]=isNaN(+s.value)||s.value===''?(s.value==='true'?true:s.value==='false'?false:s.value):+s.value;if(onchange)onchange();dirty=true;buildProps();};
+  props.appendChild(f);
+}
+function toggle(label,key,opts,onchange){
+  const o=selected;const f=el(`<div class="field"><label><span>${label}</span></label><div class="toggle"></div></div>`);const t=f.querySelector('.toggle');
+  for(const [v,n] of opts){const b=document.createElement('button');b.textContent=n;if(o[key]===v)b.classList.add('on');
+    b.onclick=()=>{o[key]=v;if(onchange)onchange();dirty=true;buildProps();};t.appendChild(b);}
+  props.appendChild(f);
+}
+function polarField(){
+  const o=selected;const f=el(`<div class="field"><label><span>Polarization</span></label><div class="toggle"><button>Unpolarized</button><button>Linear</button></div></div>`);
+  const [bu,bl]=f.querySelectorAll('button');(o.pol<0?bu:bl).classList.add('on');
+  bu.onclick=()=>{o.pol=-1;dirty=true;buildProps();};bl.onclick=()=>{o.pol=0;dirty=true;buildProps();};
+  props.appendChild(f);
+  if(o.pol>=0)range('Polarization angle','pol',0,180,1,v=>v+'°');
+}
+function syncField(key){const f=fieldEls[key];if(f&&selected){f.inp.value=selected[key];f.show();}}
+const nm=v=>v+' nm', mm=v=>v+' mm', dg=v=>v+'°', pct=v=>Math.round(v*100)+'%';
+
+function buildProps(){
+  props.innerHTML='';for(const k in fieldEls)delete fieldEls[k];
+  const o=selected;
+  if(!o){props.innerHTML=`<div class="hint">
+    Select an element to edit it.<br><br>
+    <b style="color:var(--text)">Drag</b> to move · <b style="color:var(--text)">blue handle</b> or <kbd>scroll</kbd> to rotate<br>
+    <kbd>Shift</kbd> snaps rotation · <kbd>Del</kbd> removes · <kbd>D</kbd> duplicates<br><br>
+    Units: 1 px = 1 mm.</div>`;return;}
+  sec(TOOLS.find(t=>t.type===o.type).name);
+  range('Rotation','angle',-180,180,0.5,dg);
+  switch(o.type){
+    case 'flashlight':
+      sel('Spectrum','preset',Object.entries(PRESETS).map(([k,p])=>[k,p.name]),()=>{if(o.preset!=='custom')o.spectrum=PRESETS[o.preset].f();});
+      spectrumEditor();
+      range('Intensity','intensity',0.05,3,0.05);
+      range('Beam divergence','divergence',0,90,0.5,dg);
+      range('Aperture','aperture',2,80,1,mm);
+      range('Ray count','rays',1,41,2);
+      polarField();break;
+    case 'laser':
+      range('Wavelength','wavelength',380,700,1,v=>`${v} nm<span class="swatch" style="background:${wlCSS(v)}"></span>`);
+      range('Intensity','intensity',0.05,3,0.05);
+      range('Beam width','width',0,40,1,mm);
+      range('Ray count','rays',1,15,1);
+      polarField();break;
+    case 'mirror':range('Length','length',20,400,1,mm);range('Reflectance','reflectance',0,1,0.01,pct);break;
+    case 'curved':range('Aperture','aperture',20,400,1,mm);
+      range('Radius of curvature','radius',-800,800,5,v=>`${Math.abs(v)} mm · ${v>0?'concave':'convex'}`,()=>{if(Math.abs(o.radius)<o.aperture/2+1)o.radius=Math.sign(o.radius||1)*(o.aperture/2+1);});
+      props.appendChild(el(`<div class="hint" style="padding-top:0">Focal length ≈ R/2. Rotate 180° or flip the sign to swap the reflective side.</div>`));break;
+    case 'lens':range('Aperture','length',20,400,1,mm);
+      range('Focal length','focal',-500,500,5,v=>`${v} mm · ${v>0?'convex':'concave'}`,()=>{if(o.focal===0)o.focal=5;});break;
+    case 'polarizer':range('Length','length',20,400,1,mm);range('Transmission axis','axis',-90,90,1,dg);
+      props.appendChild(el(`<div class="hint" style="padding-top:0">0° lies in the screen plane, 90° points out of it. Transmitted intensity follows Malus's law.</div>`));break;
+    case 'grating':toggle('Type','reflective',[[false,'Transmission'],[true,'Reflective']]);
+      range('Length','length',20,400,1,mm);range('Line density','density',100,2400,10,v=>v+' lines/mm');
+      range('Max order','orders',1,6,1);range('Slit width / period','slit',0.05,0.95,0.01,v=>v.toFixed(2));break;
+    case 'prism':toggle('Shape','pshape',[['triangle','Triangle'],['rect','Slab']]);
+      if(o.pshape==='triangle'){range('Apex angle','apex',10,150,1,dg);range('Base length','size',20,300,1,mm);}
+      else{range('Width','width',10,400,1,mm);range('Thickness','height',5,300,1,mm);}
+      sel('Material','material',Object.entries(MATERIALS).map(([k,m])=>[k,m.name]),()=>{if(o.material!=='custom'){o.A=MATERIALS[o.material].A;o.B=MATERIALS[o.material].B;}});
+      range('Cauchy A (n at ∞)','A',1,2.6,0.001,v=>v.toFixed(3),()=>{o.material='custom';});
+      range('Cauchy B (dispersion)','B',0,0.03,0.0001,v=>v.toFixed(4)+' µm²',()=>{o.material='custom';});
+      props.appendChild(el(`<div class="hint" style="padding-top:0">n(λ) = A + B/λ² → n<sub>589</sub> = ${(o.A+o.B/0.589**2).toFixed(4)}</div>`));
+      sel('Internal reflection','reflect',[['fresnel','Fresnel (partial + total)'],['tir','Total internal only'],['none','None']]);
+      range('Max internal bounces','maxBounce',0,20,1);break;
+    case 'glass':range('Length','length',20,400,1,mm);
+      range('Pass band from','lo',380,700,5,nm,()=>{if(o.hi<o.lo){o.hi=o.lo;syncField('hi');}});
+      range('Pass band to','hi',380,700,5,nm,()=>{if(o.lo>o.hi){o.lo=o.hi;syncField('lo');}});
+      range('Transmittance in band','transmit',0,1,0.01,pct);range('Surface reflectance','reflectance',0,1,0.01,pct);break;
+    case 'blocker':range('Length','length',20,400,1,mm);break;
+    case 'sensor':range('Length','length',20,400,1,mm);sec('Readout');
+      props.appendChild(el(`<div class="field"><div class="readout" id="readout"></div></div>`));updateReadout();break;
+  }
+  const row=el(`<div class="field flex gap-2" style="margin-top:8px"><button class="btn">Duplicate</button><button class="btn danger">Delete</button></div>`);
+  const [bd,bx]=row.querySelectorAll('button');bd.onclick=()=>duplicate(o);bx.onclick=()=>removeObj(o);props.appendChild(row);
+}
+function updateReadout(){
+  const r=document.getElementById('readout');if(!r||!selected)return;const d=sensorData.get(selected.id);if(!d)return;
+  const peak=Math.max(...d.bins)||1;const bars=d.bins.map((v,i)=>`<div style="flex:1;display:flex;align-items:flex-end;height:48px"><div style="width:100%;height:${Math.max(2,48*v/peak)}px;background:${wlCSS(binWl(i))};opacity:${v>0?1:0.15};border-radius:2px 2px 0 0"></div></div>`).join('');
+  const wsum=d.bins.reduce((a,v,i)=>a+v*binWl(i),0);
+  r.innerHTML=`<div class="flex justify-between text-xs" style="color:var(--muted)"><span>Incident power</span><b style="color:var(--text)">${d.total.toFixed(3)}</b></div>
+    ${d.total>0?`<div class="flex justify-between text-xs mt-1" style="color:var(--muted)"><span>Mean wavelength</span><b style="color:var(--text)">${Math.round(wsum/d.total)} nm</b></div>`:''}
+    <div class="flex gap-px mt-3">${bars}</div><div class="flex justify-between text-[10px] mt-1" style="color:var(--muted)"><span>380</span><span>540</span><span>700 nm</span></div>`;
+}
+function spectrumEditor(){
+  const o=selected;const f=el(`<div class="field"><label><span>Spectral power</span><span id="specHint">drag to paint</span></label><canvas id="specCanvas"></canvas></div>`);
+  props.appendChild(f);const cv=f.querySelector('canvas');
+  const draw=()=>{const dpr=devicePixelRatio||1;const w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,w,h);const bw=w/BINS;for(let i=0;i<BINS;i++){const v=o.spectrum[i];c.fillStyle=wlCSS(binWl(i));c.globalAlpha=0.25;c.fillRect(i*bw+1,h-4,bw-2,4);c.globalAlpha=1;c.fillRect(i*bw+1,h-4-v*(h-10),bw-2,v*(h-10));}};
+  requestAnimationFrame(draw);
+  let painting=false;
+  const paint=e=>{const r=cv.getBoundingClientRect();const i=clamp(Math.floor((e.clientX-r.left)/r.width*BINS),0,BINS-1);
+    const v=clamp(1-(e.clientY-r.top-3)/(r.height-10),0,1);o.spectrum[i]=Math.round(v*100)/100;o.preset='custom';
+    const s=props.querySelector('select');if(s)s.value='custom';draw();dirty=true;};
+  cv.onpointerdown=e=>{painting=true;cv.setPointerCapture(e.pointerId);paint(e);};
+  cv.onpointermove=e=>painting&&paint(e);cv.onpointerup=()=>painting=false;
+}
+
+/* ========================= Boot ========================= */
+resize();
+(function demo(){
+  const cx=W/2,cy=H/2;
+  const fl=addObj('flashlight');Object.assign(fl,{x:cx-300,y:cy+10,angle:0,divergence:1.5,aperture:10,rays:5});
+  const pr=addObj('prism');Object.assign(pr,{x:cx-40,y:cy-15,angle:8});
+  const se=addObj('sensor');Object.assign(se,{x:cx+300,y:cy+150,angle:100,length:160});
+  select(null);
+})();
+buildProps();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

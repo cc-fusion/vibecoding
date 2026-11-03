@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MPM.js — standalone example (no frameworks)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #0c1424; color: #e9effa; font: 14px/1.5 system-ui, sans-serif; }
+    header { padding: 14px 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-bottom: 1px solid rgba(148,170,210,.15); }
+    h1 { font-size: 15px; margin: 0 16px 0 0; }
+    button { background: #1a2a45; color: #e9effa; border: 1px solid rgba(148,170,210,.25); border-radius: 7px; padding: 7px 13px; cursor: pointer; font-size: 12.5px; }
+    button:hover { border-color: #ffb224; color: #ffb224; }
+    button.on { background: rgba(255,178,36,.15); border-color: #ffb224; color: #ffb224; }
+    #sim { width: 100%; height: calc(100vh - 118px); }
+    footer { padding: 10px 20px; font-size: 12px; color: #93a3bf; border-top: 1px solid rgba(148,170,210,.15); }
+    code { color: #3ed6c4; }
+  </style>
+  <!-- 1. The entire library: one script tag, zero dependencies -->
+  <script src="lib/mpm.js"></script>
+</head>
+<body>
+  <header>
+    <h1>MPM.js standalone</h1>
+    <button id="scene-a">Sand wheel</button>
+    <button id="scene-b">My declarative scene</button>
+    <button id="wheel">+ Motor wheel (live)</button>
+    <button id="faucet">+ Sand faucet (live)</button>
+    <button id="tool-push">Tool: push</button>
+    <button id="tool-spawn">Tool: spawn</button>
+    <button id="moon">Moon gravity</button>
+  </header>
+  <div id="sim"></div>
+  <footer>
+    Everything on this page is plain HTML + <code>mpm.js</code> — view source.
+    Docs: <a href="docs.md" style="color:#3ed6c4">docs.md</a>
+  </footer>
+
+  <script>
+    // 2. Create a simulation
+    const sim = MPM.create('#sim', {
+      scene: 'sand-wheel',
+      loop: true,
+      pointer: { mode: 'push' },
+    });
+    sim.on('loaded', (i) => console.log('loaded:', i.name));
+
+    // 3. A custom scene as plain data — no source code edited
+    const myScene = {
+      name: 'Sand mill', dim: 2, duration: 0,
+      levelset: {
+        planes: [{ normal: [0, 1], d: -0.06 },
+                 { normal: [1, 0], d: -0.06 },
+                 { normal: [-1, 0], d: 0.94 }],
+        friction: 0.6,
+      },
+      wheels: [{ center: [0.5, 0.38], radius: 0.2, blades: 10,
+                 mode: 'free', friction: -2, damping: 1.6 }],
+      sources: [{ type: 'sand', position: [0.34, 0.92], size: [0.05, 0.03],
+                  velocity: [0.2, -1], ppc: 3, density: 1200,
+                  color: [0.93, 0.76, 0.45] }],
+    };
+
+    document.getElementById('scene-a').onclick = () => sim.loadScene('sand-wheel');
+    document.getElementById('scene-b').onclick = () => sim.loadScene(myScene);
+
+    // 4. Runtime modification — while it runs
+    document.getElementById('wheel').onclick = () =>
+      sim.addWheel({ center: [0.2 + Math.random() * 0.6, 0.6],
+                     radius: 0.1, mode: 'motor', speed: 200 });
+    document.getElementById('faucet').onclick = () =>
+      sim.addSource({ type: 'sand', position: [0.5, 0.94], size: [0.06, 0.03],
+                      velocity: [0, -1.2], ppc: 3, density: 1200,
+                      color: [0.93, 0.76, 0.45] });
+    document.getElementById('moon').onclick = () => sim.setGravity([0, -1.6]);
+
+    const push = document.getElementById('tool-push');
+    const spawn = document.getElementById('tool-spawn');
+    function tool(mode) {
+      sim.setPointer({ mode, size: 0.028,
+        material: { type: 'jelly', E: 2e4, nu: 0.3, density: 400,
+                    color: [0.96, 0.42, 0.56], ppc: 3 } });
+      push.classList.toggle('on', mode === 'push');
+      spawn.classList.toggle('on', mode === 'spawn');
+    }
+    push.onclick = () => tool('push');
+    spawn.onclick = () => tool('spawn');
+    tool('push');
+  </script>
+</body>
+</html>

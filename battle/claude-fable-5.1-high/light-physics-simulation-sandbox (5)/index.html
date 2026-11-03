@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Light Sandbox</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  :root{--bg:#0b0d12;--panel:#10141b;--line:#1e2531;--text:#d5dce6;--muted:#7c8794;--accent:#8ab4ff;--hover:#171d27;}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;overflow:hidden;font-size:13px;}
+  #stage{position:relative;overflow:hidden;background-color:var(--bg);background-image:radial-gradient(circle,#1b2330 1px,transparent 1.2px);}
+  #rays,#ui{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  #rays{filter:url(#gammaFilter);}
+  #ui{touch-action:none;cursor:default;}
+  .pal-btn{display:flex;align-items:center;gap:10px;width:100%;padding:7px 9px;border-radius:8px;color:var(--text);background:transparent;border:1px solid transparent;text-align:left;cursor:pointer;transition:background .12s,border-color .12s;}
+  .pal-btn:hover{background:var(--hover);}
+  .pal-btn.active{background:#1a2638;border-color:#2b3f5c;}
+  .pal-btn svg{width:22px;height:22px;flex:none;}
+  .btn{padding:5px 11px;border-radius:7px;border:1px solid var(--line);background:#141a23;color:var(--text);cursor:pointer;font-size:12px;}
+  .btn:hover{background:var(--hover);border-color:#2a3444;}
+  .btn.danger:hover{border-color:#7f2d3a;color:#ff9aa8;}
+  .sel,select{appearance:none;-webkit-appearance:none;background:#141a23 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%237c8794' stroke-width='1.5'/></svg>") no-repeat right 9px center;border:1px solid var(--line);color:var(--text);border-radius:7px;padding:5px 26px 5px 9px;font-size:12px;cursor:pointer;outline:none;}
+  select:focus{border-color:#2f4b75;}
+  .panel-sec{padding:12px 16px;border-bottom:1px solid var(--line);}
+  .sec-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .field{margin:8px 0;}
+  .field-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+  .field-label{color:#b9c3cf;display:flex;align-items:center;gap:6px;}
+  .num{width:74px;background:#0e1218;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;padding:2px 6px;text-align:right;outline:none;font-variant-numeric:tabular-nums;}
+  .num:focus{border-color:#2f4b75;}
+  .num::-webkit-inner-spin-button{opacity:.3}
+  .unit{color:var(--muted);font-size:11px;margin-left:4px;min-width:18px;}
+  input[type=range]{width:100%;height:4px;appearance:none;-webkit-appearance:none;background:#1c2431;border-radius:2px;outline:none;margin:6px 0 2px;}
+  input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid #0b0d12;box-shadow:0 0 0 1px #2f4b75;cursor:pointer;}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid #0b0d12;cursor:pointer;}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;}
+  .switch{position:relative;width:34px;height:20px;border-radius:10px;background:#1c2431;border:1px solid var(--line);cursor:pointer;transition:background .15s;flex:none;}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#7c8794;transition:transform .15s,background .15s;}
+  .switch.on{background:#1f3a66;border-color:#2f4b75;}
+  .switch.on::after{transform:translateX(14px);background:var(--accent);}
+  .swatch{width:12px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.15);display:inline-block;}
+  .spec-canvas{width:100%;height:120px;display:block;border-radius:6px;background:#0e1218;cursor:crosshair;border:1px solid var(--line);}
+  .kv{display:flex;justify-content:space-between;padding:3px 0;color:#b9c3cf;}
+  .kv b{font-weight:500;color:var(--text);font-variant-numeric:tabular-nums;}
+  .kbd{display:inline-block;padding:0 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;font-size:11px;color:#b9c3cf;background:#0e1218;margin-right:2px;}
+  .hint{color:var(--muted);font-size:11.5px;line-height:1.6;}
+  aside::-webkit-scrollbar{width:8px}aside::-webkit-scrollbar-thumb{background:#1e2531;border-radius:4px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="gammaFilter" color-interpolation-filters="sRGB">
+    <feComponentTransfer>
+      <feFuncR type="gamma" amplitude="1" exponent="0.4545" offset="0"/>
+      <feFuncG type="gamma" amplitude="1" exponent="0.4545" offset="0"/>
+      <feFuncB type="gamma" amplitude="1" exponent="0.4545" offset="0"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+
+<div class="h-full flex flex-col">
+  <header class="h-12 flex items-center px-4 gap-3 border-b shrink-0" style="border-color:var(--line);background:var(--panel)">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10h8" stroke="#8ab4ff" stroke-width="1.6" stroke-linecap="round"/><path d="M11 10l6-4M11 10l6 4M11 10h6" stroke="#8ab4ff" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M9 6l4 8-8 0z" fill="#1f3a66" stroke="#8ab4ff" stroke-width="1.2" stroke-linejoin="round"/></svg>
+    <div class="font-semibold tracking-tight text-[14px]">Light Sandbox</div>
+    <div class="flex-1"></div>
+    <select id="examples" class="sel">
+      <option value="">Load example…</option>
+      <option value="prism">Prism rainbow</option>
+      <option value="polarizers">Three polarizers</option>
+      <option value="lens">Galilean telescope</option>
+      <option value="grating">Diffraction grating</option>
+      <option value="mirrors">Mirrors &amp; periscope</option>
+      <option value="tir">Total internal reflection</option>
+      <option value="filters">Colored glass filters</option>
+    </select>
+    <button id="clearBtn" class="btn">Clear scene</button>
+  </header>
+
+  <div class="flex-1 flex min-h-0">
+    <aside id="palette" class="w-44 shrink-0 border-r overflow-y-auto p-2 flex flex-col gap-0.5" style="border-color:var(--line);background:var(--panel)">
+      <div class="sec-title px-2 pt-2">Add</div>
+    </aside>
+
+    <div id="stage" class="flex-1 relative min-w-0">
+      <canvas id="rays"></canvas>
+      <canvas id="ui"></canvas>
+      <div id="status" class="absolute left-3 bottom-2 text-[11px] pointer-events-none select-none" style="color:var(--muted)"></div>
+    </div>
+
+    <aside id="panel" class="w-80 shrink-0 border-l overflow-y-auto" style="border-color:var(--line);background:var(--panel)"></aside>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const DEG = Math.PI / 180, TAU = Math.PI * 2;
+const LMIN = 380, LMAX = 750, LSTEP = 5, NB = Math.round((LMAX - LMIN) / LSTEP) + 1;
+const BIN_WL = Array.from({ length: NB }, (_, i) => LMIN + i * LSTEP);
+const $ = s => document.querySelector(s);
+
+/* ---------------- Color science (CIE 1931 fit → linear sRGB) ---------------- */
+function gpw(x, mu, s1, s2) { const s = x < mu ? s1 : s2, t = (x - mu) / s; return Math.exp(-0.5 * t * t); }
+function cmf(l) {
+  return [
+    1.056 * gpw(l, 599.8, 37.9, 31.0) + 0.362 * gpw(l, 442.0, 16.0, 26.7) - 0.065 * gpw(l, 501.1, 20.4, 26.2),
+    0.821 * gpw(l, 568.8, 46.9, 40.5) + 0.286 * gpw(l, 530.9, 16.3, 31.1),
+    1.217 * gpw(l, 437.0, 11.8, 36.0) + 0.681 * gpw(l, 459.0, 26.0, 13.8)
+  ];
+}
+function rawLin(l) {
+  const [X, Y, Z] = cmf(l);
+  return [Math.max(0, 3.2406 * X - 1.5372 * Y - 0.4986 * Z), Math.max(0, -0.9689 * X + 1.8758 * Y + 0.0415 * Z), Math.max(0, 0.0557 * X - 0.2040 * Y + 1.0570 * Z)];
+}
+const WB = (() => { const s = [0, 0, 0]; for (const l of BIN_WL) { const c = rawLin(l); s[0] += c[0]; s[1] += c[1]; s[2] += c[2]; } return s.map(v => NB / v); })();
+const colCache = new Map();
+function wlColor(l) { const k = Math.round(l * 2); let c = colCache.get(k); if (!c) { const r = rawLin(l); c = [r[0] * WB[0], r[1] * WB[1], r[2] * WB[2]]; colCache.set(k, c); } return c; }
+const BIN_COL = BIN_WL.map(wlColor);
+function srgb(c) { c = Math.max(0, Math.min(1, c)); return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; }
+function cssLin(c, alpha = 1) { let [r, g, b] = c; const m = Math.max(r, g, b); if (m > 1) { r /= m; g /= m; b /= m; } return `rgba(${(srgb(r) * 255) | 0},${(srgb(g) * 255) | 0},${(srgb(b) * 255) | 0},${alpha})`; }
+function spectrumLin(w) { let r = 0, g = 0, b = 0, t = 0; for (let i = 0; i < NB; i++) { const a = w[i]; if (a <= 0) continue; r += a * BIN_COL[i][0]; g += a * BIN_COL[i][1]; b += a * BIN_COL[i][2]; t += a; } if (t > 0) { r /= t; g /= t; b /= t; } return [r, g, b]; }
+
+/* ---------------- Spectra & materials ---------------- */
+const G = (l, mu, s) => Math.exp(-0.5 * ((l - mu) / s) ** 2);
+function planck(l, T) { const lm = l * 1e-9; return Math.pow(lm, -5) / (Math.exp(0.014388 / (lm * T)) - 1); }
+const PRESETS = {
+  whiteled: { label: 'White LED', fn: l => 0.9 * G(l, 452, 10) + 0.75 * G(l, 560, 50) },
+  warmled: { label: 'Warm white LED', fn: l => 0.45 * G(l, 452, 10) + G(l, 600, 55) },
+  sun: { label: 'Sunlight (5778 K)', fn: l => planck(l, 5778) },
+  incan: { label: 'Incandescent (2700 K)', fn: l => planck(l, 2700) },
+  bb: { label: 'Blackbody (custom T)', fn: (l, T) => planck(l, T) },
+  sodium: { label: 'Sodium lamp', fn: l => G(l, 589.3, 2.5) },
+  mercury: { label: 'Mercury vapor', fn: l => 0.5 * G(l, 404.7, 2.5) + 0.8 * G(l, 435.8, 2.5) + G(l, 546.1, 2.5) + 0.9 * G(l, 578, 3) },
+  red: { label: 'Red LED', fn: l => G(l, 630, 9) },
+  green: { label: 'Green LED', fn: l => G(l, 525, 14) },
+  blue: { label: 'Blue LED', fn: l => G(l, 465, 10) },
+  flat: { label: 'Equal energy', fn: () => 1 },
+  custom: { label: 'Custom (drawn)' }
+};
+function presetSpectrum(key, T) { const p = PRESETS[key]; if (!p || !p.fn) return null; const a = BIN_WL.map(l => p.fn(l, T || 5000)); const m = Math.max(...a); return a.map(v => m > 0 ? v / m : 0); }
+const MATERIALS = {
+  bk7: ['BK7 crown glass', 1.5046, 0.00420], silica: ['Fused silica', 1.4580, 0.00354], k5: ['K5 crown', 1.5220, 0.00459],
+  baf10: ['BaF10', 1.6700, 0.00743], sf10: ['SF10 flint', 1.6889, 0.0136], sf11: ['SF11 dense flint', 1.7390, 0.0159],
+  pmma: ['Acrylic (PMMA)', 1.4787, 0.0045], water: ['Water', 1.3239, 0.00314], diamond: ['Diamond', 2.3789, 0.0134],
+  demo: ['Exaggerated dispersion', 1.52, 0.05], custom: ['Custom (Cauchy A, B)', null, null]
+};
+const cauchy = (A, B, l) => { const u = l / 1000; return A + B / (u * u); };
+function matIndex(o, l) { if (o.material === 'custom') return cauchy(o.A, o.B, l); const m = MATERIALS[o.material] || MATERIALS.bk7; return cauchy(m[1], m[2], l); }
+function glassT(o, l) {
+  const e = Math.max(0.5, o.edge), st = x => 1 / (1 + Math.exp(-x * 4 / e));
+  let v = 1;
+  if (o.ftype === 'bandpass') v = st(l - (o.center - o.width / 2)) * st((o.center + o.width / 2) - l);
+  else if (o.ftype === 'bandstop') v = 1 - st(l - (o.center - o.width / 2)) * st((o.center + o.width / 2) - l);
+  else if (o.ftype === 'longpass') v = st(l - o.center);
+  else if (o.ftype === 'shortpass') v = st(o.center - l);
+  return o.peak * v;
+}
+
+/* ---------------- Mueller calculus (linear + circular Stokes) ---------------- */
+const mulM = (M, S) => M.map(r => r[0] * S[0] + r[1] * S[1] + r[2] * S[2] + r[3] * S[3]);
+const scaleS = (S, k) => [S[0] * k, S[1] * k, S[2] * k, S[3] * k];
+function fresnelT(Ts, Tp) { const a = .5 * (Ts + Tp), b = .5 * (Ts - Tp), c = Math.sqrt(Math.max(0, Ts * Tp)); return [[a, b, 0, 0], [b, a, 0, 0], [0, 0, c, 0], [0, 0, 0, c]]; }
+function fresnelR(rs, rp) { const Rs = rs * rs, Rp = rp * rp, a = .5 * (Rs + Rp), b = .5 * (Rs - Rp), c = rs * rp; return [[a, b, 0, 0], [b, a, 0, 0], [0, 0, c, 0], [0, 0, 0, c]]; }
+function tirM(d) { const c = Math.cos(d), s = Math.sin(d); return [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, c, s], [0, 0, -s, c]]; }
+function polarizerM(phi) { const c = Math.cos(2 * phi), s = Math.sin(2 * phi); return [[.5, .5 * c, .5 * s, 0], [.5 * c, .5 * c * c, .5 * c * s, 0], [.5 * s, .5 * c * s, .5 * s * s, 0], [0, 0, 0, 0]]; }
+
+/* ---------------- State ---------------- */
+const state = {
+  objects: [], selectedId: null,
+  view: { x: 0, y: 0, s: 1 },
+  settings: { rays: 40, exposure: 1, maxBounces: 60, lineWidth: 1.5 }
+};
+let nextId = 1, placing = null;
+const stage = $('#stage'), raysC = $('#rays'), uiC = $('#ui'), rctx = raysC.getContext('2d'), uctx = uiC.getContext('2d');
+const panel = $('#panel'), statusEl = $('#status');
+let live = [], lastStats = { rays: 0, segs: 0, ms: 0, overflow: false };
+
+const ICON = {
+  flashlight: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M3 9h7l4-3v12l-4-3H3z" fill="#1f2a3a"/><path d="M17 9l4-2M17 12h5M17 15l4 2" stroke="#8ab4ff"/></svg>',
+  laser: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="2" y="9" width="10" height="6" rx="1.5" fill="#1f2a3a"/><path d="M12 12h10" stroke="#ff5a5a" stroke-width="2"/></svg>',
+  polarizer: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><circle cx="12" cy="12" r="8" fill="#1f2a3a"/><path d="M8 6v12M12 4v16M16 6v12" stroke="#b8a3ff" stroke-width="1.2"/></svg>',
+  lens: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M12 3c5 4 5 14 0 18-5-4-5-14 0-18z" fill="#1f2a3a"/></svg>',
+  mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M6 20L18 4" stroke-width="2.5"/><path d="M8 22l2-3M12 17l2-3M16 11l2-3" stroke="#5b6b80"/></svg>',
+  cmirror: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M16 3c-7 3-7 15 0 18" stroke-width="2.5"/></svg>',
+  grating: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="9" y="3" width="6" height="18" rx="1" fill="#1f2a3a"/><path d="M12 5v14" stroke-dasharray="1 1.4" stroke="#8ab4ff"/></svg>',
+  prism: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M12 4l9 16H3z" fill="#1f2a3a"/></svg>',
+  glass: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="9" y="3" width="6" height="18" rx="1" fill="rgba(255,80,80,.45)"/></svg>',
+  blocker: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="9" y="3" width="6" height="18" rx="1.5" fill="#2b2f36"/></svg>',
+  sensor: '<svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="9" y="3" width="6" height="18" rx="1.5" fill="#1f2a3a"/><circle cx="12" cy="12" r="1.6" fill="#7ee0a0" stroke="none"/></svg>'
+};
+
+const DEFS = {
+  flashlight: { label: 'Flashlight', defaults: () => ({ preset: 'whiteled', temp: 5000, spectrum: presetSpectrum('whiteled'), power: 1, div: 5, profile: 'gaussian', width: 20 }) },
+  laser: { label: 'Laser', defaults: () => ({ wl: 632.8, power: 1, width: 3, div: 0, pol: 'unpolarized', polAngle: 0 }) },
+  polarizer: { label: 'Polarizing filter', defaults: () => ({ len: 80, angle: 0 }) },
+  lens: { label: 'Lens', defaults: () => ({ f: 150, dia: 100, dispersion: false, material: 'bk7' }) },
+  mirror: { label: 'Flat mirror', defaults: () => ({ len: 100, refl: 1 }) },
+  cmirror: { label: 'Curved mirror', defaults: () => ({ R: 200, width: 120, refl: 1 }) },
+  grating: { label: 'Diffraction grating', defaults: () => ({ mode: 'transmission', lpm: 600, maxOrder: 2, slit: 0.35, len: 80, refl: 0.9 }) },
+  prism: { label: 'Prism', defaults: () => ({ shape: 'triangle', apex: 60, base: 100, w: 120, h: 40, r: 60, material: 'bk7', A: 1.5046, B: 0.0042, fresnel: true, maxInternal: 6 }) },
+  glass: { label: 'Colored glass', defaults: () => ({ w: 120, t: 12, ftype: 'bandpass', center: 620, width: 80, edge: 15, peak: 0.9, refl: 0.04, n: 1.52 }) },
+  blocker: { label: 'Light blocker', defaults: () => ({ len: 100 }) },
+  sensor: { label: 'Sensor', defaults: () => ({ len: 80 }) }
+};
+const settingsOf = () => state.settings;
+const objects = () => state.objects;
+const selected = () => state.objects.find(o => o.id === state.selectedId) || null;
+
+function makeObj(type, x, y, rot = 0, props = {}) {
+  const o = Object.assign({ id: nextId++, type, x, y, rot }, DEFS[type].defaults(), props);
+  if (type === 'flashlight' && o.preset !== 'custom') o.spectrum = presetSpectrum(o.preset, o.temp);
+  return o;
+}
+
+/* ---------------- Geometry helpers ---------------- */
+function l2w(o, lx, ly) { const c = Math.cos(o.rot), s = Math.sin(o.rot); return { x: o.x + lx * c - ly * s, y: o.y + lx * s + ly * c }; }
+function w2l(o, x, y) { const dx = x - o.x, dy = y - o.y, c = Math.cos(o.rot), s = Math.sin(o.rot); return { x: dx * c + dy * s, y: -dx * s + dy * c }; }
+function angDiff(a, b) { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return Math.abs(d); }
+function seg(o, ax, ay, bx, by, act) {
+  const a = l2w(o, ax, ay), b = l2w(o, bx, by); const ex = b.x - a.x, ey = b.y - a.y, L = Math.hypot(ex, ey) || 1;
+  return { kind: 'seg', a, b, obj: o, act, tx: ex / L, ty: ey / L, nx: -ey / L, ny: ex / L, len: L };
+}
+function polySurfs(o, verts, act) {
+  const ws = verts.map(v => l2w(o, v[0], v[1])); const cx = ws.reduce((s, p) => s + p.x, 0) / ws.length, cy = ws.reduce((s, p) => s + p.y, 0) / ws.length;
+  const out = [];
+  for (let i = 0; i < ws.length; i++) {
+    const a = ws[i], b = ws[(i + 1) % ws.length]; const ex = b.x - a.x, ey = b.y - a.y, L = Math.hypot(ex, ey) || 1;
+    let nx = -ey / L, ny = ex / L; const mx = (a.x + b.x) / 2 - cx, my = (a.y + b.y) / 2 - cy; if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+    out.push({ kind: 'seg', a, b, obj: o, act, tx: ex / L, ty: ey / L, nx, ny, len: L });
+  }
+  return out;
+}
+function prismVerts(o) {
+  if (o.shape === 'rectangle') return [[-o.w / 2, -o.h / 2], [o.w / 2, -o.h / 2], [o.w / 2, o.h / 2], [-o.w / 2, o.h / 2]];
+  const h = (o.base / 2) / Math.tan(o.apex * DEG / 2); return [[0, -2 * h / 3], [o.base / 2, h / 3], [-o.base / 2, h / 3]];
+}
+function bodyHeight(o) { return o.type === 'flashlight' ? Math.max(o.width, 14) + 10 : 12; }
+function surfacesOf(o) {
+  switch (o.type) {
+    case 'flashlight': case 'laser': { const h = bodyHeight(o) / 2; return [seg(o, -44, -h, -44, h, 'absorb'), seg(o, -44, -h, 0, -h, 'absorb'), seg(o, -44, h, 0, h, 'absorb')]; }
+    case 'polarizer': return [seg(o, -o.len / 2, 0, o.len / 2, 0, 'polarizer')];
+    case 'lens': return [seg(o, -o.dia / 2, 0, o.dia / 2, 0, 'lens')];
+    case 'mirror': return [seg(o, -o.len / 2, 0, o.len / 2, 0, 'mirror')];
+    case 'grating': return [seg(o, -o.len / 2, 0, o.len / 2, 0, 'grating')];
+    case 'blocker': return [seg(o, -o.len / 2, 0, o.len / 2, 0, 'absorb')];
+    case 'sensor': return [seg(o, -o.len / 2, 0, o.len / 2, 0, 'sensor')];
+    case 'cmirror': { const half = Math.asin(Math.min(1, o.width / (2 * o.R))); return [{ kind: 'arc', c: l2w(o, 0, o.R), r: o.R, mid: o.rot - Math.PI / 2, half, obj: o, act: 'mirror' }]; }
+    case 'glass': return polySurfs(o, [[-o.w / 2, -o.t / 2], [o.w / 2, -o.t / 2], [o.w / 2, o.t / 2], [-o.w / 2, o.t / 2]], 'dielectric');
+    case 'prism':
+      if (o.shape === 'semicircle') { const flat = seg(o, -o.r, 0, o.r, 0, 'dielectric'); const n = l2w({ x: 0, y: 0, rot: o.rot }, 0, 1); flat.nx = n.x; flat.ny = n.y; return [flat, { kind: 'arc', c: l2w(o, 0, 0), r: o.r, mid: o.rot - Math.PI / 2, half: Math.PI / 2, obj: o, act: 'dielectric' }]; }
+      return polySurfs(o, prismVerts(o), 'dielectric');
+  }
+  return [];
+}
+const EPS = 1e-4;
+function intersectSeg(r, s) {
+  const ex = s.b.x - s.a.x, ey = s.b.y - s.a.y; const den = r.dx * ey - r.dy * ex; if (Math.abs(den) < 1e-12) return -1;
+  const ox = s.a.x - r.x, oy = s.a.y - r.y; const t = (ox * ey - oy * ex) / den, u = (ox * r.dy - oy * r.dx) / den;
+  return (t > EPS && u >= 0 && u <= 1) ? t : -1;
+}
+function intersectArc(r, s) {
+  const fx = r.x - s.c.x, fy = r.y - s.c.y; const b = 2 * (fx * r.dx + fy * r.dy), c = fx * fx + fy * fy - s.r * s.r; const disc = b * b - 4 * c; if (disc < 0) return -1;
+  const sq = Math.sqrt(disc);
+  for (const t of [(-b - sq) / 2, (-b + sq) / 2]) { if (t <= EPS) continue; const px = r.x + t * r.dx - s.c.x, py = r.y + t * r.dy - s.c.y; if (angDiff(Math.atan2(py, px), s.mid) <= s.half + 1e-9) return t; }
+  return -1;
+}
+let surfaces = [];
+function nearest(r) {
+  let bt = Infinity, bs = null;
+  for (const s of surfaces) {
+    if (s === r.last && s.kind === 'seg') continue;
+    const t = s.kind === 'seg' ? intersectSeg(r, s) : intersectArc(r, s);
+    if (t > 0 && t < bt) { bt = t; bs = s; }
+  }
+  if (!bs) return null;
+  const x = r.x + bt * r.dx, y = r.y + bt * r.dy; let nx, ny;
+  if (bs.kind === 'seg') { nx = bs.nx; ny = bs.ny; } else { nx = (x - bs.c.x) / bs.r; ny = (y - bs.c.y) / bs.r; }
+  return { t: bt, s: bs, x, y, nx, ny };
+}
+const reflect = (dx, dy, nx, ny) => { const k = 2 * (dx * nx + dy * ny); return [dx - k * nx, dy - k * ny]; };
+const sinc2 = x => { if (Math.abs(x) < 1e-9) return 1; const p = Math.PI * x; return (Math.sin(p) / p) ** 2; };
+
+/* ---------------- Emission ---------------- */
+function emitSources(push) {
+  const A0 = Math.max(1, settingsOf().rays | 0);
+  for (const o of objects()) {
+    if (o.type === 'flashlight') {
+      const tot = o.spectrum.reduce((a, b) => a + b, 0); if (tot <= 0 || o.power <= 0) continue;
+      const A = (o.div === 0 && o.width === 0) ? 1 : A0; const span = o.profile === 'gaussian' ? 1.25 : 1;
+      const us = [], prof = []; let ps = 0;
+      for (let j = 0; j < A; j++) { const u = A === 1 ? 0 : (j / (A - 1) * 2 - 1) * span; us.push(u); const p = o.profile === 'gaussian' ? Math.exp(-2 * u * u) : 1; prof.push(p); ps += p; }
+      for (let j = 0; j < A; j++) {
+        const u = us[j];
+        // Rays fan out from a virtual point behind the aperture: offset across the face is paired with angle.
+        const thr = o.rot + u * o.div * DEG; const dx = Math.cos(thr), dy = Math.sin(thr); const org = l2w(o, 0, Math.max(-1, Math.min(1, u)) * o.width / 2);
+        const wj = o.power * prof[j] / ps;
+        for (let i = 0; i < NB; i++) { const wi = o.spectrum[i] / tot; if (wi < 1e-4) continue; push({ x: org.x, y: org.y, dx, dy, wl: BIN_WL[i], S: [wj * wi, 0, 0, 0], depth: 0, internal: 0, last: null, col: BIN_COL[i] }); }
+      }
+    } else if (o.type === 'laser') {
+      if (o.power <= 0) continue;
+      const A = Math.max(1, Math.min(9, Math.round(o.width / 2))); const col = wlColor(o.wl);
+      let S0;
+      if (o.pol === 'linear') { const a = o.polAngle * DEG; S0 = [1, Math.cos(2 * a), Math.sin(2 * a), 0]; }
+      else if (o.pol === 'circular') S0 = [1, 0, 0, 1]; else S0 = [1, 0, 0, 0];
+      for (let j = 0; j < A; j++) {
+        const u = A === 1 ? 0 : j / (A - 1) * 2 - 1; const th = o.rot + u * o.div * DEG; const org = l2w(o, 0, u * o.width / 2);
+        push({ x: org.x, y: org.y, dx: Math.cos(th), dy: Math.sin(th), wl: o.wl, S: scaleS(S0, o.power / A), depth: 0, internal: 0, last: null, col });
+      }
+    }
+  }
+}
+
+/* ---------------- Interactions ---------------- */
+const newRay = (r, h, dx, dy, S, internal = 0) => ({ x: h.x, y: h.y, dx, dy, wl: r.wl, S, depth: r.depth + 1, last: h.s, internal, col: r.col });
+function lensF(o, wl) { if (!o.dispersion) return o.f; const nd = matIndex(o, 587.6), n = matIndex(o, wl); return o.f * (nd - 1) / (n - 1); }
+function interact(r, h, push) {
+  const s = h.s, o = s.obj;
+  switch (s.act) {
+    case 'absorb': return;
+    case 'sensor': { const a = o._acc; for (let i = 0; i < 4; i++) a.S[i] += r.S[i]; const bi = Math.max(0, Math.min(NB - 1, Math.round((r.wl - LMIN) / LSTEP))); a.spec[bi] += r.S[0]; return; }
+    case 'mirror': { const [dx, dy] = reflect(r.dx, r.dy, h.nx, h.ny); push(newRay(r, h, dx, dy, scaleS(r.S, o.refl))); return; }
+    case 'polarizer': push(newRay(r, h, r.dx, r.dy, mulM(polarizerM(o.angle * DEG), r.S))); return;
+    case 'lens': {
+      const f = lensF(o, r.wl); const dn = r.dx * s.nx + r.dy * s.ny; if (Math.abs(dn) < 1e-6) return;
+      const t = f / Math.abs(dn); const Px = o.x + r.dx * t, Py = o.y + r.dy * t; let vx = Px - h.x, vy = Py - h.y; if (f < 0) { vx = -vx; vy = -vy; }
+      const L = Math.hypot(vx, vy) || 1; push(newRay(r, h, vx / L, vy / L, r.S)); return;
+    }
+    case 'grating': {
+      let nx = s.nx, ny = s.ny; if (r.dx * nx + r.dy * ny > 0) { nx = -nx; ny = -ny; }
+      const sini = r.dx * s.tx + r.dy * s.ty, d = 1e6 / o.lpm, f = o.slit, refl = o.mode === 'reflective', sign = refl ? 1 : -1;
+      for (let m = -o.maxOrder; m <= o.maxOrder; m++) {
+        const sm = sini + m * r.wl / d; if (Math.abs(sm) >= 1) continue; const c = Math.sqrt(1 - sm * sm);
+        const eff = f * f * sinc2(m * f) * (refl ? o.refl : 1);
+        push(newRay(r, h, s.tx * sm + sign * nx * c, s.ty * sm + sign * ny * c, scaleS(r.S, eff)));
+      }
+      return;
+    }
+    case 'dielectric': dielectric(r, h, o, push); return;
+  }
+}
+function dielectric(r, h, o, push) {
+  const ng = o.type === 'glass' ? o.n : matIndex(o, r.wl);
+  const entering = (r.dx * h.nx + r.dy * h.ny) < 0;
+  const n1 = entering ? 1 : ng, n2 = entering ? ng : 1;
+  const nx = entering ? h.nx : -h.nx, ny = entering ? h.ny : -h.ny;
+  const cosi = Math.min(1, Math.max(0, -(r.dx * nx + r.dy * ny)));
+  const eta = n1 / n2, sin2t = eta * eta * (1 - cosi * cosi);
+  const [rx, ry] = reflect(r.dx, r.dy, nx, ny);
+  const maxInt = o.maxInternal ?? 20;
+  if (sin2t >= 1) {
+    if (r.internal + 1 > maxInt) return;
+    const n = n2 / n1, root = Math.sqrt(Math.max(0, 1 - cosi * cosi - n * n));
+    const ds = 2 * Math.atan2(root, cosi), dp = 2 * Math.atan2(root, n * n * cosi);
+    push(newRay(r, h, rx, ry, mulM(tirM(dp - ds), r.S), r.internal + 1)); return;
+  }
+  const cost = Math.sqrt(1 - sin2t);
+  let rs, rp;
+  if (o.type === 'glass') { rs = rp = -Math.sqrt(Math.max(0, o.refl)); }
+  else { rs = (n1 * cosi - n2 * cost) / (n1 * cosi + n2 * cost); rp = (n2 * cosi - n1 * cost) / (n2 * cosi + n1 * cost); }
+  let St = mulM(fresnelT(1 - rs * rs, 1 - rp * rp), r.S);
+  if (o.type === 'glass' && entering) St = scaleS(St, glassT(o, r.wl));
+  push(newRay(r, h, eta * r.dx + (eta * cosi - cost) * nx, eta * r.dy + (eta * cosi - cost) * ny, St, 0));
+  if (o.type === 'glass' ? o.refl > 0 : o.fresnel) {
+    const Sr = mulM(fresnelR(rs, rp), r.S); const ni = entering ? 0 : r.internal + 1;
+    if (ni <= maxInt) push(newRay(r, h, rx, ry, Sr, ni));
+  }
+}
+
+/* ---------------- Trace & render rays ---------------- */
+let traceQueued = false;
+function requestTrace() { if (traceQueued) return; traceQueued = true; requestAnimationFrame(() => { traceQueued = false; trace(); }); }
+function trace() {
+  const t0 = performance.now(), st = settingsOf(), view = state.view, dpr = devicePixelRatio || 1;
+  surfaces = [];
+  for (const o of objects()) { for (const s of surfacesOf(o)) surfaces.push(s); if (o.type === 'sensor') o._acc = { S: [0, 0, 0, 0], spec: new Float32Array(NB) }; }
+  rctx.setTransform(1, 0, 0, 1, 0, 0); rctx.clearRect(0, 0, raysC.width, raysC.height);
+  rctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
+  rctx.globalCompositeOperation = 'lighter'; rctx.lineWidth = st.lineWidth / view.s; rctx.lineCap = 'butt';
+  const stack = []; let nRays = 0, nSeg = 0, overflow = false; const minI = 1e-4, exp = st.exposure;
+  const push = r => { if (r.S[0] > minI && r.depth <= st.maxBounces) stack.push(r); };
+  emitSources(push);
+  while (stack.length) {
+    if (nRays > 350000) { overflow = true; break; }
+    const r = stack.pop(); nRays++;
+    const h = nearest(r); const ex = h ? h.x : r.x + r.dx * 2e4, ey = h ? h.y : r.y + r.dy * 2e4;
+    const I = r.S[0] * exp, c = r.col; const R = Math.min(255, c[0] * I * 255), Gc = Math.min(255, c[1] * I * 255), B = Math.min(255, c[2] * I * 255);
+    if (R + Gc + B >= 1) { rctx.strokeStyle = `rgb(${R | 0},${Gc | 0},${B | 0})`; rctx.beginPath(); rctx.moveTo(r.x, r.y); rctx.lineTo(ex, ey); rctx.stroke(); nSeg++; }
+    if (h) interact(r, h, push);
+  }
+  lastStats = { rays: nRays, segs: nSeg, ms: performance.now() - t0, overflow };
+  for (const fn of live) fn();
+  drawUI(); updateStatus();
+}
+function updateStatus() {
+  if (placing) { statusEl.textContent = `Click on the canvas to place a ${DEFS[placing].label.toLowerCase()} · Esc to cancel`; return; }
+  const s = lastStats; statusEl.textContent = `${s.rays.toLocaleString()} rays · ${s.segs.toLocaleString()} segments · ${s.ms.toFixed(0)} ms · ${Math.round(state.view.s * 100)}%${s.overflow ? ' · ray limit reached' : ''}`;
+}
+
+/* ---------------- Object drawing ---------------- */
+function bounds(o) {
+  switch (o.type) {
+    case 'flashlight': { const h = bodyHeight(o) / 2; return [-44, -h - 3, 2, h + 3]; }
+    case 'laser': return [-44, -7, 2, 7];
+    case 'lens': return [-o.dia / 2, -o.dia * 0.12 - 2, o.dia / 2, o.dia * 0.12 + 2];
+    case 'cmirror': { const half = Math.asin(Math.min(1, o.width / (2 * o.R))); return [-o.R * Math.sin(half), -2, o.R * Math.sin(half), o.R * (1 - Math.cos(half)) + 2]; }
+    case 'glass': return [-o.w / 2, -o.t / 2, o.w / 2, o.t / 2];
+    case 'prism': { if (o.shape === 'semicircle') return [-o.r, -o.r, o.r, 0]; const v = prismVerts(o); return [Math.min(...v.map(p => p[0])), Math.min(...v.map(p => p[1])), Math.max(...v.map(p => p[0])), Math.max(...v.map(p => p[1]))]; }
+    case 'polarizer': return [-o.len / 2, -26, o.len / 2, 4];
+    default: return [-o.len / 2, -4, o.len / 2, 4];
+  }
+}
+function drawObj(o, g, k) {
+  g.lineJoin = 'round';
+  switch (o.type) {
+    case 'flashlight': case 'laser': {
+      const h = bodyHeight(o) / 2; const col = o.type === 'flashlight' ? cssLin(spectrumLin(o.spectrum)) : cssLin(wlColor(o.wl));
+      g.fillStyle = '#1b222c'; g.strokeStyle = '#3b4656'; g.lineWidth = 1.2 * k;
+      g.beginPath(); g.roundRect(-44, -h, 34, 2 * h, 3 * k); g.fill(); g.stroke();
+      g.fillStyle = '#28313f'; g.beginPath(); g.roundRect(-13, -h - 2, 13, 2 * h + 4, 2 * k); g.fill(); g.stroke();
+      g.strokeStyle = col; g.lineWidth = 3 * k; g.beginPath();
+      const w = o.type === 'flashlight' ? Math.max(o.width / 2, 2) : Math.max(o.width / 2, 1.5); g.moveTo(0, -w); g.lineTo(0, w); g.stroke();
+      break;
+    }
+    case 'polarizer': {
+      g.strokeStyle = 'rgba(184,163,255,0.95)'; g.lineWidth = 4 * k; g.beginPath(); g.moveTo(-o.len / 2, 0); g.lineTo(o.len / 2, 0); g.stroke();
+      g.strokeStyle = 'rgba(184,163,255,0.5)'; g.lineWidth = 1 * k; g.beginPath(); g.arc(0, -15 * k, 8 * k, 0, TAU); g.stroke();
+      const a = o.angle * DEG; g.strokeStyle = '#d9ccff'; g.lineWidth = 1.5 * k; g.beginPath(); g.moveTo(-7 * k * Math.cos(a), -15 * k - 7 * k * Math.sin(a)); g.lineTo(7 * k * Math.cos(a), -15 * k + 7 * k * Math.sin(a)); g.stroke();
+      break;
+    }
+    case 'lens': {
+      const D = o.dia / 2, t = o.dia * 0.12; g.fillStyle = 'rgba(120,200,255,0.12)'; g.strokeStyle = 'rgba(150,210,255,0.85)'; g.lineWidth = 1.3 * k; g.beginPath();
+      if (o.f >= 0) { g.moveTo(-D, 0); g.quadraticCurveTo(0, -2 * t, D, 0); g.quadraticCurveTo(0, 2 * t, -D, 0); }
+      else { g.moveTo(-D, -t); g.quadraticCurveTo(0, -t * 0.15, D, -t); g.lineTo(D, t); g.quadraticCurveTo(0, t * 0.15, -D, t); }
+      g.closePath(); g.fill(); g.stroke(); break;
+    }
+    case 'mirror': g.strokeStyle = '#e3eaf2'; g.lineWidth = 3 * k; g.beginPath(); g.moveTo(-o.len / 2, 0); g.lineTo(o.len / 2, 0); g.stroke(); break;
+    case 'cmirror': { const half = Math.asin(Math.min(1, o.width / (2 * o.R))); g.strokeStyle = '#e3eaf2'; g.lineWidth = 3 * k; g.beginPath(); g.arc(0, o.R, o.R, -Math.PI / 2 - half, -Math.PI / 2 + half); g.stroke(); break; }
+    case 'grating': {
+      const refl = o.mode === 'reflective';
+      g.strokeStyle = refl ? '#cbd5e1' : 'rgba(138,180,255,0.35)'; g.lineWidth = (refl ? 4 : 5) * k; g.beginPath(); g.moveTo(-o.len / 2, 0); g.lineTo(o.len / 2, 0); g.stroke();
+      g.strokeStyle = refl ? '#1b222c' : '#8ab4ff'; g.lineWidth = 1 * k; g.beginPath(); const step = 3.5 * k; for (let x = -o.len / 2 + step; x < o.len / 2; x += step) { g.moveTo(x, -2.5 * k); g.lineTo(x, 2.5 * k); } g.stroke();
+      break;
+    }
+    case 'prism': {
+      g.fillStyle = 'rgba(150,190,255,0.10)'; g.strokeStyle = 'rgba(170,205,255,0.8)'; g.lineWidth = 1.3 * k; g.beginPath();
+      if (o.shape === 'semicircle') { g.moveTo(-o.r, 0); g.lineTo(o.r, 0); g.arc(0, 0, o.r, 0, Math.PI, true); }
+      else { const v = prismVerts(o); g.moveTo(v[0][0], v[0][1]); for (let i = 1; i < v.length; i++) g.lineTo(v[i][0], v[i][1]); }
+      g.closePath(); g.fill(); g.stroke(); break;
+    }
+    case 'glass': {
+      const col = spectrumLin(BIN_WL.map(l => glassT(o, l))); const tot = BIN_WL.reduce((s, l) => s + glassT(o, l), 0) / NB;
+      g.fillStyle = cssLin(col, 0.25 + 0.4 * tot); g.strokeStyle = cssLin(col, 0.9); g.lineWidth = 1.2 * k;
+      g.beginPath(); g.rect(-o.w / 2, -o.t / 2, o.w, o.t); g.fill(); g.stroke(); break;
+    }
+    case 'blocker': g.strokeStyle = '#596270'; g.lineWidth = 7 * k; g.lineCap = 'round'; g.beginPath(); g.moveTo(-o.len / 2, 0); g.lineTo(o.len / 2, 0); g.stroke(); g.strokeStyle = '#1a1e25'; g.lineWidth = 4.5 * k; g.stroke(); g.lineCap = 'butt'; break;
+    case 'sensor': {
+      const a = o._acc; let P = 0, col = [0.4, 0.9, 0.6];
+      if (a) { P = a.S[0]; if (P > 0) col = spectrumLin(a.spec); }
+      if (P > 0) { g.fillStyle = cssLin(col, Math.min(1, Math.sqrt(P * settingsOf().exposure))); g.beginPath(); g.rect(-o.len / 2, 3 * k, o.len, 5 * k); g.fill(); }
+      g.strokeStyle = '#7ee0a0'; g.lineWidth = 3 * k; g.beginPath(); g.moveTo(-o.len / 2, 0); g.lineTo(o.len / 2, 0); g.stroke();
+      g.save(); g.translate(0, 18 * k); g.rotate(-o.rot); g.font = `${11 * k}px ui-sans-serif,system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#9fb0c2';
+      g.fillText(P > 0 ? fmt(P) : '0', 0, 0); g.restore(); break;
+    }
+  }
+}
+function drawUI() {
+  const view = state.view, dpr = devicePixelRatio || 1, k = 1 / view.s;
+  uctx.setTransform(1, 0, 0, 1, 0, 0); uctx.clearRect(0, 0, uiC.width, uiC.height);
+  uctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.x, dpr * view.y);
+  stage.style.backgroundSize = `${40 * view.s}px ${40 * view.s}px`; stage.style.backgroundPosition = `${view.x}px ${view.y}px`;
+  for (const o of objects()) { uctx.save(); uctx.translate(o.x, o.y); uctx.rotate(o.rot); drawObj(o, uctx, k); uctx.restore(); }
+  const sel = selected();
+  if (sel) {
+    const b = bounds(sel), pad = 8 * k; uctx.save(); uctx.translate(sel.x, sel.y); uctx.rotate(sel.rot);
+    uctx.strokeStyle = 'rgba(138,180,255,0.7)'; uctx.lineWidth = 1 * k; uctx.setLineDash([4 * k, 4 * k]);
+    uctx.beginPath(); uctx.roundRect(b[0] - pad, b[1] - pad, b[2] - b[0] + 2 * pad, b[3] - b[1] + 2 * pad, 4 * k); uctx.stroke(); uctx.setLineDash([]);
+    const hp = handlePos(sel, true); uctx.beginPath(); uctx.moveTo(0, b[1] - pad); uctx.lineTo(0, hp.y + 6 * k); uctx.stroke();
+    uctx.fillStyle = '#0b0d12'; uctx.strokeStyle = '#8ab4ff'; uctx.lineWidth = 1.5 * k; uctx.beginPath(); uctx.arc(0, hp.y, 6 * k, 0, TAU); uctx.fill(); uctx.stroke();
+    uctx.restore();
+  }
+}
+function handlePos(o, local) { const b = bounds(o), k = 1 / state.view.s; const ly = b[1] - 8 * k - 22 * k; return local ? { x: 0, y: ly } : l2w(o, 0, ly); }
+
+/* ---------------- Hit testing ---------------- */
+function distSeg(px, py, a, b) { const ex = b.x - a.x, ey = b.y - a.y, L2 = ex * ex + ey * ey; let u = L2 > 0 ? ((px - a.x) * ex + (py - a.y) * ey) / L2 : 0; u = Math.max(0, Math.min(1, u)); return Math.hypot(px - a.x - u * ex, py - a.y - u * ey); }
+function distArc(px, py, s) { const ang = Math.atan2(py - s.c.y, px - s.c.x); if (angDiff(ang, s.mid) <= s.half) return Math.abs(Math.hypot(px - s.c.x, py - s.c.y) - s.r); let m = Infinity; for (const a of [s.mid - s.half, s.mid + s.half]) m = Math.min(m, Math.hypot(px - s.c.x - s.r * Math.cos(a), py - s.c.y - s.r * Math.sin(a))); return m; }
+function pointInPoly(p, v) { let inside = false; for (let i = 0, j = v.length - 1; i < v.length; j = i++) { const xi = v[i][0], yi = v[i][1], xj = v[j][0], yj = v[j][1]; if ((yi > p.y) !== (yj > p.y) && p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi) inside = !inside; } return inside; }
+function hitTest(o, wx, wy) {
+  const tol = 8 / state.view.s, lp = w2l(o, wx, wy);
+  if (o.type === 'flashlight' || o.type === 'laser' || o.type === 'glass') { const b = bounds(o); return lp.x >= b[0] - tol && lp.x <= b[2] + tol && lp.y >= b[1] - tol && lp.y <= b[3] + tol; }
+  if (o.type === 'prism') { if (o.shape === 'semicircle') return Math.hypot(lp.x, lp.y) <= o.r + tol && lp.y <= tol; return pointInPoly(lp, prismVerts(o)) || surfacesOf(o).some(s => distSeg(wx, wy, s.a, s.b) <= tol); }
+  for (const s of surfacesOf(o)) { const d = s.kind === 'seg' ? distSeg(wx, wy, s.a, s.b) : distArc(wx, wy, s); if (d <= tol) return true; }
+  if (o.type === 'polarizer') { const k = 1 / state.view.s; if (Math.hypot(lp.x, lp.y + 15 * k) <= 9 * k) return true; }
+  return false;
+}
+
+/* ---------------- Canvas interaction ---------------- */
+function resize() {
+  const dpr = devicePixelRatio || 1, r = stage.getBoundingClientRect();
+  for (const c of [raysC, uiC]) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }
+  if (!state.view.inited) { state.view.x = r.width / 2; state.view.y = r.height / 2; state.view.inited = true; }
+  requestTrace();
+}
+window.addEventListener('resize', resize);
+const toWorld = (cx, cy) => { const r = uiC.getBoundingClientRect(), v = state.view; return { x: (cx - r.left - v.x) / v.s, y: (cy - r.top - v.y) / v.s }; };
+let drag = null;
+uiC.addEventListener('pointerdown', e => {
+  if (e.button === 2) return;
+  uiC.setPointerCapture(e.pointerId); const w = toWorld(e.clientX, e.clientY);
+  if (placing) { const o = makeObj(placing, Math.round(w.x), Math.round(w.y)); state.objects.push(o); state.selectedId = o.id; if (!e.shiftKey) setPlacing(null); buildPanel(); afterChange(); drag = null; return; }
+  const sel = selected();
+  if (sel) { const hp = handlePos(sel, false); if (Math.hypot(w.x - hp.x, w.y - hp.y) <= 10 / state.view.s) { drag = { mode: 'rotate', o: sel }; return; } }
+  for (let i = state.objects.length - 1; i >= 0; i--) {
+    const o = state.objects[i];
+    if (hitTest(o, w.x, w.y)) {
+      if (state.selectedId !== o.id) { state.selectedId = o.id; buildPanel(); }
+      drag = { mode: 'move', o, ox: o.x - w.x, oy: o.y - w.y, moved: false }; drawUI(); return;
+    }
+  }
+  drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: state.view.x, vy: state.view.y, moved: false };
+});
+uiC.addEventListener('pointermove', e => {
+  if (!drag) { if (!placing) { const w = toWorld(e.clientX, e.clientY); const sel = selected(); let cur = 'default'; if (sel) { const hp = handlePos(sel, false); if (Math.hypot(w.x - hp.x, w.y - hp.y) <= 10 / state.view.s) cur = 'grab'; } if (cur === 'default' && state.objects.some(o => hitTest(o, w.x, w.y))) cur = 'move'; uiC.style.cursor = cur; } return; }
+  const w = toWorld(e.clientX, e.clientY);
+  if (drag.mode === 'move') { drag.o.x = w.x + drag.ox; drag.o.y = w.y + drag.oy; if (e.shiftKey) { drag.o.x = Math.round(drag.o.x / 10) * 10; drag.o.y = Math.round(drag.o.y / 10) * 10; } drag.moved = true; requestTrace(); }
+  else if (drag.mode === 'rotate') { let a = Math.atan2(w.y - drag.o.y, w.x - drag.o.x) + Math.PI / 2; if (e.shiftKey) a = Math.round(a / (15 * DEG)) * 15 * DEG; drag.o.rot = a; syncPanelValues(); requestTrace(); }
+  else if (drag.mode === 'pan') { state.view.x = drag.vx + e.clientX - drag.sx; state.view.y = drag.vy + e.clientY - drag.sy; drag.moved = true; requestTrace(); }
+});
+uiC.addEventListener('pointerup', e => {
+  if (!drag) return;
+  if (drag.mode === 'pan' && !drag.moved && state.selectedId !== null) { state.selectedId = null; buildPanel(); drawUI(); }
+  if (drag.mode === 'move' || drag.mode === 'rotate') save();
+  if (drag.mode === 'pan') save();
+  drag = null;
+});
+uiC.addEventListener('contextmenu', e => e.preventDefault());
+uiC.addEventListener('wheel', e => {
+  e.preventDefault(); const v = state.view, r = uiC.getBoundingClientRect(); const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const f = Math.exp(-e.deltaY * 0.0012), ns = Math.max(0.2, Math.min(8, v.s * f)); const k = ns / v.s;
+  v.x = mx - (mx - v.x) * k; v.y = my - (my - v.y) * k; v.s = ns; requestTrace(); save();
+}, { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  const sel = selected();
+  if (e.key === 'Escape') { if (placing) setPlacing(null); else if (sel) { state.selectedId = null; buildPanel(); drawUI(); } }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { deleteObj(sel); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && sel) { e.preventDefault(); duplicateObj(sel); }
+  else if (sel && (e.key === '[' || e.key === ']')) { sel.rot += (e.key === ']' ? 1 : -1) * (e.shiftKey ? 15 : 1) * DEG; syncPanelValues(); afterChange(); }
+  else if (sel && e.key.startsWith('Arrow')) { e.preventDefault(); const d = e.shiftKey ? 10 : 1; if (e.key === 'ArrowLeft') sel.x -= d; if (e.key === 'ArrowRight') sel.x += d; if (e.key === 'ArrowUp') sel.y -= d; if (e.key === 'ArrowDown') sel.y += d; afterChange(); }
+});
+function deleteObj(o) { state.objects = state.objects.filter(x => x !== o); state.selectedId = null; buildPanel(); afterChange(); }
+function duplicateObj(o) { const c = JSON.parse(JSON.stringify(strip(o))); c.id = nextId++; c.x += 30; c.y += 30; state.objects.push(c); state.selectedId = c.id; buildPanel(); afterChange(); }
+function afterChange() { requestTrace(); save(); }
+function setPlacing(type) { placing = type; document.querySelectorAll('.pal-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type)); uiC.style.cursor = type ? 'crosshair' : 'default'; updateStatus(); }
+
+/* ---------------- Palette ---------------- */
+for (const type of Object.keys(DEFS)) {
+  const b = document.createElement('button'); b.className = 'pal-btn'; b.dataset.type = type; b.innerHTML = ICON[type] + `<span>${DEFS[type].label}</span>`;
+  b.addEventListener('click', () => setPlacing(placing === type ? null : type)); $('#palette').appendChild(b);
+}
+
+/* ---------------- Panel builder ---------------- */
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function fmt(v) { const a = Math.abs(v); if (a === 0) return '0'; if (a >= 100) return v.toFixed(0); if (a >= 10) return v.toFixed(1); if (a >= 1) return v.toFixed(2); if (a >= 0.01) return v.toFixed(3); return v.toExponential(2); }
+const syncers = [];
+function section(title) { const s = el('div', 'panel-sec'); if (title) s.appendChild(el('div', 'sec-title', title)); panel.appendChild(s); return s; }
+function range(parent, c) {
+  const row = el('div', 'field'), top = el('div', 'field-top'), lab = el('span', 'field-label', c.label); const right = el('span', 'flex items-center');
+  const num = el('input', 'num'); num.type = 'number'; num.min = c.min; num.max = c.max; num.step = c.step; const unit = el('span', 'unit', c.unit || '');
+  const inp = el('input'); inp.type = 'range'; inp.min = c.min; inp.max = c.max; inp.step = c.step;
+  const show = () => { const v = c.get(); inp.value = v; num.value = +(+v).toFixed(4); };
+  inp.addEventListener('input', () => { c.set(parseFloat(inp.value)); show(); afterEdit(false); if (c.after) c.after(); });
+  num.addEventListener('change', () => { let v = parseFloat(num.value); if (isNaN(v)) { show(); return; } c.set(v); show(); afterEdit(c.rebuild); if (c.after) c.after(); });
+  if (c.swatch) { const sw = el('span', 'swatch'); lab.prepend(sw); syncers.push(() => sw.style.background = c.swatch()); sw.style.background = c.swatch(); }
+  right.append(num, unit); top.append(lab, right); row.append(top, inp); parent.appendChild(row); show(); syncers.push(show); return row;
+}
+function select(parent, c) {
+  const row = el('div', 'row'); row.appendChild(el('span', 'field-label', c.label)); const s = el('select');
+  for (const [v, l] of c.options) { const o = el('option', null, l); o.value = v; s.appendChild(o); } s.value = c.get();
+  s.addEventListener('change', () => { c.set(s.value); afterEdit(c.rebuild !== false); }); row.appendChild(s); parent.appendChild(row); return s;
+}
+function toggle(parent, c) {
+  const row = el('div', 'row'); row.appendChild(el('span', 'field-label', c.label)); const sw = el('div', 'switch' + (c.get() ? ' on' : ''));
+  sw.addEventListener('click', () => { c.set(!c.get()); sw.classList.toggle('on', c.get()); afterEdit(c.rebuild !== false); }); row.appendChild(sw); parent.appendChild(row); return sw;
+}
+function afterEdit(rebuild) { if (rebuild) buildPanel(); requestTrace(); save(); }
+function syncPanelValues() { for (const f of syncers) f(); }
+
+function buildPanel() {
+  panel.innerHTML = ''; live = []; syncers.length = 0;
+  const o = selected();
+  if (!o) { buildScenePanel(); return; }
+  const head = section(null); head.className = 'panel-sec flex items-center gap-2';
+  const t = el('div', 'flex items-center gap-2 flex-1 font-medium text-[13.5px]'); t.innerHTML = `<span class="w-5 h-5 inline-flex">${ICON[o.type]}</span>${DEFS[o.type].label}`;
+  const dup = el('button', 'btn', 'Duplicate'); dup.title = 'Ctrl+D'; dup.onclick = () => duplicateObj(o);
+  const del = el('button', 'btn danger', 'Delete'); del.title = 'Delete'; del.onclick = () => deleteObj(o);
+  head.append(t, dup, del);
+  const pl = section('Placement');
+  range(pl, { label: 'Rotation', min: -180, max: 180, step: 1, unit: '°', get: () => { let d = o.rot / DEG; d = ((d + 180) % 360 + 360) % 360 - 180; return Math.round(d * 10) / 10; }, set: v => o.rot = v * DEG });
+  switch (o.type) {
+    case 'flashlight': {
+      const s = section('Spectrum'); let presetSel;
+      presetSel = select(s, { label: 'Preset', options: Object.entries(PRESETS).map(([k, p]) => [k, p.label]), get: () => o.preset, set: v => { o.preset = v; if (v !== 'custom') o.spectrum = presetSpectrum(v, o.temp); } });
+      if (o.preset === 'bb') range(s, { label: 'Temperature', min: 1000, max: 12000, step: 50, unit: 'K', get: () => o.temp, set: v => { o.temp = v; o.spectrum = presetSpectrum('bb', v); }, after: () => specDraw && specDraw() });
+      let specDraw = spectrumEditor(s, o, presetSel);
+      const b = section('Beam');
+      range(b, { label: 'Power', min: 0, max: 5, step: 0.05, get: () => o.power, set: v => o.power = v });
+      range(b, { label: 'Divergence (half-angle)', min: 0, max: 60, step: 0.1, unit: '°', get: () => o.div, set: v => o.div = v });
+      select(b, { label: 'Angular profile', options: [['gaussian', 'Gaussian (1/e²)'], ['uniform', 'Uniform']], get: () => o.profile, set: v => o.profile = v, rebuild: false });
+      range(b, { label: 'Aperture width', min: 0, max: 150, step: 1, unit: 'mm', get: () => o.width, set: v => o.width = v });
+      break;
+    }
+    case 'laser': {
+      const s = section('Beam');
+      range(s, { label: 'Wavelength', min: 380, max: 750, step: 0.5, unit: 'nm', get: () => o.wl, set: v => o.wl = v, swatch: () => cssLin(wlColor(o.wl)) });
+      range(s, { label: 'Power', min: 0, max: 5, step: 0.05, get: () => o.power, set: v => o.power = v });
+      range(s, { label: 'Beam width', min: 0, max: 20, step: 0.5, unit: 'mm', get: () => o.width, set: v => o.width = v });
+      range(s, { label: 'Divergence (half-angle)', min: 0, max: 15, step: 0.05, unit: '°', get: () => o.div, set: v => o.div = v });
+      const p = section('Polarization');
+      select(p, { label: 'State', options: [['unpolarized', 'Unpolarized'], ['linear', 'Linear'], ['circular', 'Circular']], get: () => o.pol, set: v => o.pol = v });
+      if (o.pol === 'linear') range(p, { label: 'Angle (0° = in-plane)', min: 0, max: 180, step: 1, unit: '°', get: () => o.polAngle, set: v => o.polAngle = v });
+      break;
+    }
+    case 'polarizer': {
+      const s = section('Filter');
+      range(s, { label: 'Transmission axis (0° = in-plane)', min: 0, max: 180, step: 1, unit: '°', get: () => o.angle, set: v => o.angle = v });
+      range(s, { label: 'Size', min: 20, max: 400, step: 1, unit: 'mm', get: () => o.len, set: v => o.len = v });
+      break;
+    }
+    case 'lens': {
+      const s = section('Thin lens');
+      range(s, { label: 'Focal length (+ convex, − concave)', min: -600, max: 600, step: 5, unit: 'mm', get: () => o.f, set: v => { if (Math.abs(v) < 5) v = v < 0 ? -5 : 5; o.f = v; } });
+      range(s, { label: 'Diameter', min: 20, max: 400, step: 1, unit: 'mm', get: () => o.dia, set: v => o.dia = v });
+      toggle(s, { label: 'Chromatic dispersion', get: () => o.dispersion, set: v => o.dispersion = v });
+      if (o.dispersion) { select(s, { label: 'Glass', options: Object.entries(MATERIALS).filter(([k]) => k !== 'custom').map(([k, m]) => [k, m[0]]), get: () => o.material, set: v => o.material = v, rebuild: false }); s.appendChild(el('div', 'hint', 'Focal length is specified at 587.6 nm and scales with (n−1).')); }
+      break;
+    }
+    case 'mirror': {
+      const s = section('Mirror');
+      range(s, { label: 'Length', min: 10, max: 600, step: 1, unit: 'mm', get: () => o.len, set: v => o.len = v });
+      range(s, { label: 'Reflectance', min: 0, max: 100, step: 1, unit: '%', get: () => Math.round(o.refl * 100), set: v => o.refl = v / 100 });
+      break;
+    }
+    case 'cmirror': {
+      const s = section('Spherical mirror');
+      range(s, { label: 'Radius of curvature', min: 20, max: 1500, step: 5, unit: 'mm', get: () => o.R, set: v => { o.R = v; o.width = Math.min(o.width, 2 * v); } });
+      range(s, { label: 'Width', min: 10, max: 800, step: 1, unit: 'mm', get: () => o.width, set: v => o.width = Math.min(v, 2 * o.R) });
+      range(s, { label: 'Reflectance', min: 0, max: 100, step: 1, unit: '%', get: () => Math.round(o.refl * 100), set: v => o.refl = v / 100 });
+      s.appendChild(el('div', 'hint', 'Focal length ≈ R/2. Rotate 180° to use the convex side.'));
+      break;
+    }
+    case 'grating': {
+      const s = section('Grating');
+      select(s, { label: 'Type', options: [['transmission', 'Transmission'], ['reflective', 'Reflective']], get: () => o.mode, set: v => o.mode = v });
+      range(s, { label: 'Line density', min: 50, max: 3000, step: 10, unit: '/mm', get: () => o.lpm, set: v => o.lpm = v });
+      range(s, { label: 'Highest order shown', min: 1, max: 6, step: 1, get: () => o.maxOrder, set: v => o.maxOrder = v });
+      range(s, { label: 'Slit / period ratio', min: 0.05, max: 0.95, step: 0.01, get: () => o.slit, set: v => o.slit = v });
+      if (o.mode === 'reflective') range(s, { label: 'Reflectance', min: 0, max: 100, step: 1, unit: '%', get: () => Math.round(o.refl * 100), set: v => o.refl = v / 100 });
+      range(s, { label: 'Length', min: 10, max: 600, step: 1, unit: 'mm', get: () => o.len, set: v => o.len = v });
+      s.appendChild(el('div', 'hint', 'Angles follow d(sin θ<sub>m</sub> − sin θ<sub>i</sub>) = mλ; order efficiencies follow the sinc² envelope of the slit width.'));
+      break;
+    }
+    case 'prism': {
+      const s = section('Shape');
+      select(s, { label: 'Shape', options: [['triangle', 'Triangle'], ['rectangle', 'Rectangular slab'], ['semicircle', 'Semicircle']], get: () => o.shape, set: v => o.shape = v });
+      if (o.shape === 'triangle') { range(s, { label: 'Apex angle', min: 10, max: 170, step: 1, unit: '°', get: () => o.apex, set: v => o.apex = v }); range(s, { label: 'Base length', min: 20, max: 400, step: 1, unit: 'mm', get: () => o.base, set: v => o.base = v }); }
+      else if (o.shape === 'rectangle') { range(s, { label: 'Width', min: 10, max: 500, step: 1, unit: 'mm', get: () => o.w, set: v => o.w = v }); range(s, { label: 'Height', min: 10, max: 500, step: 1, unit: 'mm', get: () => o.h, set: v => o.h = v }); }
+      else range(s, { label: 'Radius', min: 20, max: 300, step: 1, unit: 'mm', get: () => o.r, set: v => o.r = v });
+      const m = section('Material');
+      select(m, { label: 'Glass', options: Object.entries(MATERIALS).map(([k, v]) => [k, v[0]]), get: () => o.material, set: v => { o.material = v; if (v !== 'custom') { o.A = MATERIALS[v][1]; o.B = MATERIALS[v][2]; } } });
+      if (o.material === 'custom') { range(m, { label: 'Cauchy A', min: 1, max: 3, step: 0.001, get: () => o.A, set: v => o.A = v }); range(m, { label: 'Cauchy B', min: 0, max: 0.1, step: 0.0005, unit: 'µm²', get: () => o.B, set: v => o.B = v }); }
+      const nd = el('div', 'kv'); live.push(() => { nd.innerHTML = `<span>n at 486 / 589 / 656 nm</span><b>${matIndex(o, 486.1).toFixed(4)} / ${matIndex(o, 589.3).toFixed(4)} / ${matIndex(o, 656.3).toFixed(4)}</b>`; }); m.appendChild(nd);
+      const r = section('Internal reflection');
+      toggle(r, { label: 'Fresnel partial reflections', get: () => o.fresnel, set: v => o.fresnel = v, rebuild: false });
+      range(r, { label: 'Max internal bounces', min: 0, max: 30, step: 1, get: () => o.maxInternal, set: v => o.maxInternal = v });
+      r.appendChild(el('div', 'hint', 'Total internal reflection always occurs beyond the critical angle; partial reflections use the s/p Fresnel equations.'));
+      break;
+    }
+    case 'glass': {
+      const s = section('Filter');
+      select(s, { label: 'Type', options: [['bandpass', 'Band-pass'], ['bandstop', 'Band-stop (notch)'], ['longpass', 'Long-pass'], ['shortpass', 'Short-pass']], get: () => o.ftype, set: v => o.ftype = v });
+      const isBand = o.ftype === 'bandpass' || o.ftype === 'bandstop';
+      range(s, { label: isBand ? 'Center wavelength' : 'Cut-off wavelength', min: 380, max: 750, step: 1, unit: 'nm', get: () => o.center, set: v => o.center = v, swatch: () => cssLin(wlColor(o.center)) });
+      if (isBand) range(s, { label: 'Bandwidth', min: 5, max: 300, step: 1, unit: 'nm', get: () => o.width, set: v => o.width = v });
+      range(s, { label: 'Edge softness', min: 1, max: 80, step: 1, unit: 'nm', get: () => o.edge, set: v => o.edge = v });
+      range(s, { label: 'Peak transmission', min: 0, max: 100, step: 1, unit: '%', get: () => Math.round(o.peak * 100), set: v => o.peak = v / 100 });
+      const tc = el('canvas', 'spec-canvas'); tc.style.height = '60px'; tc.style.cursor = 'default'; s.appendChild(tc);
+      const drawT = () => { const W = tc.clientWidth || 272, H = 60, dpr = devicePixelRatio || 1; tc.width = W * dpr; tc.height = H * dpr; const g = tc.getContext('2d'); g.scale(dpr, dpr); const bw = W / NB; for (let i = 0; i < NB; i++) { const T = glassT(o, BIN_WL[i]); g.fillStyle = cssLin(BIN_COL[i], 0.18); g.fillRect(i * bw, 0, bw + 0.5, H); g.fillStyle = cssLin(BIN_COL[i]); g.fillRect(i * bw, H - T * H, bw + 0.5, T * H); } };
+      syncers.push(drawT); requestAnimationFrame(drawT);
+      const sf = section('Surfaces');
+      range(sf, { label: 'Surface reflectance', min: 0, max: 100, step: 0.5, unit: '%', get: () => +(o.refl * 100).toFixed(1), set: v => o.refl = v / 100 });
+      range(sf, { label: 'Refractive index', min: 1, max: 2.5, step: 0.01, get: () => o.n, set: v => o.n = v });
+      range(sf, { label: 'Width', min: 10, max: 500, step: 1, unit: 'mm', get: () => o.w, set: v => o.w = v });
+      range(sf, { label: 'Thickness', min: 2, max: 200, step: 1, unit: 'mm', get: () => o.t, set: v => o.t = v });
+      break;
+    }
+    case 'blocker': range(section('Blocker'), { label: 'Length', min: 10, max: 800, step: 1, unit: 'mm', get: () => o.len, set: v => o.len = v }); break;
+    case 'sensor': {
+      range(section('Sensor'), { label: 'Length', min: 10, max: 800, step: 1, unit: 'mm', get: () => o.len, set: v => o.len = v });
+      const r = section('Reading'); const rows = {}; const sw = el('span', 'swatch');
+      for (const k of ['Power', 'Mean wavelength', 'Degree of polarization', 'Linear angle', 'Circular fraction']) { const kv = el('div', 'kv'); kv.innerHTML = `<span>${k}</span><b></b>`; rows[k] = kv.querySelector('b'); r.appendChild(kv); }
+      rows['Power'].parentElement.querySelector('span').prepend(sw); sw.style.marginRight = '6px';
+      const sc = el('canvas', 'spec-canvas'); sc.style.height = '70px'; sc.style.cursor = 'default'; sc.style.marginTop = '8px'; r.appendChild(sc);
+      live.push(() => {
+        const a = o._acc; if (!a) return; const [I, Q, U, V] = a.S;
+        rows['Power'].textContent = fmt(I); sw.style.background = I > 0 ? cssLin(spectrumLin(a.spec)) : '#222';
+        if (I > 0) {
+          let sl = 0, sw2 = 0; for (let i = 0; i < NB; i++) { sl += a.spec[i] * BIN_WL[i]; sw2 += a.spec[i]; }
+          rows['Mean wavelength'].textContent = (sl / sw2).toFixed(1) + ' nm';
+          const dop = Math.sqrt(Q * Q + U * U + V * V) / I; rows['Degree of polarization'].textContent = (dop * 100).toFixed(1) + ' %';
+          rows['Linear angle'].textContent = Math.hypot(Q, U) / I > 0.01 ? ((0.5 * Math.atan2(U, Q) / DEG + 180) % 180).toFixed(1) + '°' : '—';
+          rows['Circular fraction'].textContent = (V / I * 100).toFixed(1) + ' %';
+        } else for (const k of ['Mean wavelength', 'Degree of polarization', 'Linear angle', 'Circular fraction']) rows[k].textContent = '—';
+        const W = sc.clientWidth || 272, H = 70, dpr = devicePixelRatio || 1; sc.width = W * dpr; sc.height = H * dpr; const g = sc.getContext('2d'); g.scale(dpr, dpr);
+        let mx = 0; for (let i = 0; i < NB; i++) mx = Math.max(mx, a.spec[i]); const bw = W / NB;
+        for (let i = 0; i < NB; i++) { g.fillStyle = cssLin(BIN_COL[i], 0.12); g.fillRect(i * bw, 0, bw + 0.5, H); if (mx > 0) { const hh = a.spec[i] / mx * (H - 4); g.fillStyle = cssLin(BIN_COL[i]); g.fillRect(i * bw, H - hh, bw + 0.5, hh); } }
+      });
+      break;
+    }
+  }
+  for (const fn of live) fn();
+}
+function buildScenePanel() {
+  const s = section('Scene');
+  const st = settingsOf();
+  range(s, { label: 'Ray density', min: 4, max: 160, step: 2, get: () => st.rays, set: v => st.rays = v });
+  range(s, { label: 'Exposure', min: 0.05, max: 6, step: 0.05, get: () => st.exposure, set: v => st.exposure = v });
+  range(s, { label: 'Max bounces per ray', min: 2, max: 200, step: 1, get: () => st.maxBounces, set: v => st.maxBounces = v });
+  range(s, { label: 'Ray width', min: 0.5, max: 4, step: 0.1, unit: 'px', get: () => st.lineWidth, set: v => st.lineWidth = v });
+  const h = section('Controls');
+  h.innerHTML += `<div class="hint">
+    <div><span class="kbd">Click</span> a palette item, then click the canvas to place it. Hold <span class="kbd">Shift</span> to place several.</div>
+    <div>Drag objects to move · drag the round handle to rotate · <span class="kbd">[</span><span class="kbd">]</span> rotate by 1°, <span class="kbd">Shift</span> for 15°.</div>
+    <div><span class="kbd">Del</span> delete · <span class="kbd">Ctrl</span>+<span class="kbd">D</span> duplicate · arrow keys nudge.</div>
+    <div>Drag empty space to pan · scroll to zoom.</div>
+  </div>`;
+  const u = section('Units');
+  u.innerHTML += `<div class="hint">Distances are in millimetres (1 px at 100 %). Wavelengths are in nanometres; power is in arbitrary units (one source at full power = 1).</div>`;
+}
+function spectrumEditor(parent, o, presetSel) {
+  const c = el('canvas', 'spec-canvas'); parent.appendChild(c);
+  parent.appendChild(el('div', 'hint', 'Drag across the chart to draw a custom spectrum.'));
+  const H = 100;
+  function draw() {
+    const W = c.clientWidth || 272, dpr = devicePixelRatio || 1; c.width = W * dpr; c.height = 120 * dpr; const g = c.getContext('2d'); g.scale(dpr, dpr);
+    const bw = W / NB;
+    for (let i = 0; i < NB; i++) { g.fillStyle = cssLin(BIN_COL[i], 0.12); g.fillRect(i * bw, 0, bw + 0.5, H); const hh = o.spectrum[i] * (H - 4); g.fillStyle = cssLin(BIN_COL[i]); g.fillRect(i * bw, H - hh, bw + 0.5, hh); }
+    g.fillStyle = '#7c8794'; g.font = '10px ui-sans-serif,system-ui'; g.textAlign = 'center';
+    for (const L of [400, 500, 600, 700]) { const x = (L - LMIN + LSTEP / 2) / (LMAX - LMIN + LSTEP) * W; g.fillText(L + ' nm', x, 113); g.fillRect(x - 0.5, H, 1, 3); }
+  }
+  let last = null;
+  const paint = e => {
+    const r = c.getBoundingClientRect(); const i = Math.max(0, Math.min(NB - 1, Math.floor((e.clientX - r.left) / r.width * NB))); const a = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / H));
+    if (last) { const n = Math.abs(i - last.i); for (let k = 0; k <= n; k++) { const ii = last.i + Math.sign(i - last.i) * k; o.spectrum[ii] = last.a + (a - last.a) * (n ? k / n : 1); } } else o.spectrum[i] = a;
+    last = { i, a }; if (o.preset !== 'custom') { o.preset = 'custom'; presetSel.value = 'custom'; } draw(); requestTrace();
+  };
+  c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); last = null; paint(e); });
+  c.addEventListener('pointermove', e => { if (last && e.buttons) paint(e); });
+  c.addEventListener('pointerup', () => { last = null; save(); });
+  requestAnimationFrame(draw); return draw;
+}
+
+/* ---------------- Persistence & examples ---------------- */
+function strip(o) { const c = {}; for (const k in o) if (!k.startsWith('_')) c[k] = o[k]; return c; }
+let saveT = null;
+function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem('lightsandbox.v1', JSON.stringify({ objects: state.objects.map(strip), settings: state.settings, view: state.view })); } catch (e) { } }, 250); }
+function load() {
+  try { const d = JSON.parse(localStorage.getItem('lightsandbox.v1')); if (!d || !Array.isArray(d.objects)) return false; state.objects = d.objects; Object.assign(state.settings, d.settings || {}); if (d.view) Object.assign(state.view, d.view); nextId = Math.max(1, ...state.objects.map(o => o.id + 1)); return state.objects.length > 0; } catch (e) { return false; }
+}
+const EXAMPLES = {
+  prism: [['flashlight', -277, 149, -32.9, { preset: 'sun', width: 4, div: 0.3, power: 1.5 }], ['prism', 0, 0, 0, { material: 'sf11' }], ['sensor', 294, 160, 122.9, { len: 220 }]],
+  polarizers: [['laser', -300, 0, 0, { wl: 532, pol: 'unpolarized' }], ['polarizer', -120, 0, 90, { angle: 0 }], ['polarizer', 0, 0, 90, { angle: 45 }], ['polarizer', 120, 0, 90, { angle: 90 }], ['sensor', 260, 0, 90, { len: 60 }]],
+  lens: [['flashlight', -320, 0, 0, { preset: 'whiteled', div: 0, width: 120 }], ['lens', -40, 0, 90, { f: 200, dia: 160 }], ['lens', 120, 0, 90, { f: -80, dia: 80 }], ['sensor', 320, 0, 90, { len: 120 }]],
+  grating: [['flashlight', -300, 10, 0, { preset: 'whiteled', div: 0.2, width: 3, power: 2 }], ['laser', -300, -20, 0, { wl: 532, power: 0.6 }], ['grating', 0, 0, 90, { lpm: 600, maxOrder: 2, slit: 0.35, len: 70 }], ['sensor', 300, 0, 90, { len: 600 }]],
+  mirrors: [['flashlight', -330, 0, 0, { preset: 'whiteled', div: 0, width: 120 }], ['cmirror', 220, 0, 98, { R: 400, width: 200 }], ['sensor', 22, -28, 98, { len: 24 }], ['laser', -300, 150, 0, { wl: 650 }], ['mirror', -100, 150, 45, { len: 60 }], ['mirror', -100, 250, 45, { len: 60 }], ['sensor', 250, 250, 90, { len: 40 }]],
+  tir: [['prism', 0, 40, 0, { shape: 'semicircle', r: 90 }], ['laser', -150, -110, 45, { wl: 532 }], ['laser', -260, -110, 30, { wl: 650 }], ['sensor', 240, 0, 90, { len: 420 }], ['sensor', 0, 230, 0, { len: 300 }]],
+  filters: [['flashlight', -300, 0, 0, { preset: 'sun', div: 6, width: 30, power: 1.5 }], ['glass', -60, -52, 90, { w: 50, ftype: 'longpass', center: 600 }], ['glass', -60, 0, 90, { w: 50, ftype: 'bandpass', center: 540, width: 60 }], ['glass', -60, 52, 90, { w: 50, ftype: 'shortpass', center: 500 }], ['sensor', 250, 0, 90, { len: 220 }]]
+};
+function loadExample(key) {
+  const ex = EXAMPLES[key]; if (!ex) return;
+  state.objects = ex.map(([type, x, y, rot, props]) => makeObj(type, x, y, rot * DEG, props));
+  state.selectedId = null; const r = stage.getBoundingClientRect(); state.view = { x: r.width / 2, y: r.height / 2, s: 1, inited: true };
+  buildPanel(); afterChange();
+}
+$('#examples').addEventListener('change', e => { loadExample(e.target.value); e.target.value = ''; });
+$('#clearBtn').addEventListener('click', () => { state.objects = []; state.selectedId = null; buildPanel(); afterChange(); });
+
+/* ---------------- Boot ---------------- */
+const r0 = stage.getBoundingClientRect();
+if (!load()) { state.view = { x: r0.width / 2, y: r0.height / 2, s: 1, inited: true }; state.objects = EXAMPLES.prism.map(([type, x, y, rot, props]) => makeObj(type, x, y, rot * DEG, props)); }
+state.view.inited = true;
+buildPanel(); resize();
+})();
+</script>
+</body>
+</html>

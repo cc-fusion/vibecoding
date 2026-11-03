@@ -1,0 +1,2040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0e12">
+  <title>Luma - Optics Sandbox</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0e12;
+      --panel: #10151b;
+      --panel-raised: #151b22;
+      --line: #252d36;
+      --line-soft: #1d252d;
+      --text: #e7edf3;
+      --muted: #87939f;
+      --quiet: #5d6975;
+      --accent: #a9d7ea;
+      --accent-strong: #70b9d5;
+      --danger: #df8c85;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-width: 320px; min-height: 100%; margin: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+
+    .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar {
+      min-height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+      background: #0e1217;
+    }
+
+    .brand-lockup { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-glyph { width: 29px; height: 29px; flex: 0 0 auto; color: #b4e0ef; }
+    .brand-ring { transform-box: fill-box; transform-origin: center; animation: ring-breathe 5.8s ease-in-out infinite; }
+    .brand-name { font-size: 15px; line-height: 1; letter-spacing: .2em; font-weight: 650; }
+    .brand-divider { width: 1px; height: 22px; margin: 0 3px; background: #313a43; }
+    .brand-caption { color: #97a3af; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+    .topbar-actions { display: flex; align-items: center; gap: 16px; }
+    .scene-summary { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+    .quiet-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 33px;
+      border: 1px solid #313b45;
+      border-radius: 6px;
+      padding: 0 11px;
+      background: transparent;
+      color: #c0cad3;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, color .16s ease;
+    }
+    .quiet-button:hover { border-color: #586976; background: #171e25; color: white; }
+    .quiet-button svg { width: 14px; height: 14px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 196px minmax(360px, 1fr) 292px;
+      flex: 1;
+      min-height: calc(100vh - 62px);
+    }
+
+    .toolbox {
+      padding: 20px 12px 18px;
+      border-right: 1px solid var(--line);
+      background: #0f1318;
+      overflow-y: auto;
+    }
+    .sidebar-caption, .group-title, .section-label, .eyebrow {
+      color: var(--quiet);
+      font-size: 10px;
+      line-height: 1.3;
+      font-weight: 650;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .sidebar-caption { padding: 0 9px; margin: 0 0 13px; }
+    .tool-group { margin: 0 0 17px; }
+    .group-title { margin: 0 0 6px; padding: 0 9px; }
+    .tool-list { display: grid; gap: 2px; }
+    .tool-item {
+      width: 100%;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      padding: 0 8px;
+      background: transparent;
+      color: #adb8c2;
+      text-align: left;
+      cursor: pointer;
+      transition: color .14s ease, background .14s ease, border-color .14s ease;
+    }
+    .tool-item:hover { background: #171e25; color: #edf4f7; }
+    .tool-item:active { background: #1c2730; }
+    .tool-icon { width: 18px; height: 18px; flex: 0 0 auto; color: #9cacb8; transition: color .16s ease, transform .16s ease; }
+    .tool-item span:not(.tool-add) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tool-item:hover .tool-icon { color: #b8e2ef; transform: translateX(1px); }
+    .tool-add { margin-left: auto; color: #62717d; font-size: 17px; line-height: 1; opacity: 0; transition: opacity .14s ease; }
+    .tool-item:hover .tool-add { opacity: 1; }
+
+    .bench-area {
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      padding: 19px 20px 12px;
+    }
+    .bench-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 38px;
+      margin-bottom: 12px;
+    }
+    .bench-title-wrap { display: flex; align-items: baseline; gap: 11px; }
+    .bench-title { margin: 0; color: #dce5eb; font-size: 14px; font-weight: 550; letter-spacing: .01em; }
+    .bench-meta { color: var(--quiet); font-size: 11px; }
+    .stage-frame {
+      position: relative;
+      flex: 1;
+      min-height: 430px;
+      overflow: hidden;
+      border: 1px solid #29323b;
+      border-radius: 8px;
+      background: #0b1015;
+    }
+    #scene {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 430px;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    .empty-canvas {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      color: #75818b;
+      font-size: 13px;
+    }
+    .empty-canvas.visible { display: flex; }
+    .stage-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      min-height: 31px;
+      color: #75818b;
+      font-size: 10px;
+      letter-spacing: .015em;
+    }
+    .stage-footer span:last-child { color: #91a2ae; font-variant-numeric: tabular-nums; }
+
+    .inspector {
+      min-width: 0;
+      border-left: 1px solid var(--line);
+      background: #10151b;
+      overflow-y: auto;
+      scrollbar-color: #39434d transparent;
+      scrollbar-width: thin;
+    }
+    .inspector-empty {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      text-align: center;
+    }
+    .empty-glyph { width: 42px; height: 42px; margin-bottom: 14px; color: #586773; }
+    .inspector-empty strong { color: #c6d0d8; font-size: 13px; font-weight: 550; }
+    .inspector-empty p { max-width: 185px; margin: 7px 0 0; color: #77838e; font-size: 11px; line-height: 1.6; }
+    .inspector-content { padding: 19px 17px 23px; animation: inspector-in .2s ease-out both; }
+    .inspector-head { display: flex; align-items: center; gap: 10px; min-height: 41px; }
+    .selected-symbol {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #33404a;
+      border-radius: 7px;
+      background: #151e25;
+      color: #a9d7e7;
+    }
+    .selected-symbol svg { width: 19px; height: 19px; }
+    .selected-title-group { min-width: 0; flex: 1; }
+    .selected-title-group .eyebrow { margin-bottom: 3px; }
+    .selected-title { overflow: hidden; margin: 0; color: #e6edf2; font-size: 15px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+    .remove-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 0 6px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: #8d7b7a;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .remove-button:hover { background: #2a1b1b; color: #e8a09a; }
+    .remove-button svg { width: 14px; height: 14px; }
+    .element-description { margin: 11px 1px 16px; color: #89959f; font-size: 11px; line-height: 1.55; }
+    .inspector-section { padding: 13px 0 14px; border-top: 1px solid var(--line-soft); }
+    .section-label { margin: 0 0 11px; }
+    .field { display: block; margin: 0 0 13px; }
+    .field:last-child { margin-bottom: 0; }
+    .field-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; color: #b7c2ca; font-size: 11px; }
+    .field-line output { color: #a7b6c0; font-size: 10px; font-variant-numeric: tabular-nums; }
+    input[type="range"] {
+      display: block;
+      width: 100%;
+      height: 14px;
+      margin: 0;
+      accent-color: #8fc7dc;
+      cursor: pointer;
+    }
+    .position-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .number-field { display: block; color: #8996a1; font-size: 10px; }
+    .number-field span { display: block; margin-bottom: 5px; }
+    .number-field input {
+      width: 100%;
+      height: 31px;
+      border: 1px solid #303a44;
+      border-radius: 5px;
+      outline: none;
+      padding: 0 8px;
+      background: #0d1217;
+      color: #d5dfe6;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .number-field input:focus, .select-control:focus { border-color: #6e9fb2; }
+    .select-control {
+      width: 100%;
+      height: 33px;
+      border: 1px solid #303a44;
+      border-radius: 5px;
+      outline: none;
+      padding: 0 8px;
+      background: #0d1217;
+      color: #d2dce3;
+      font-size: 11px;
+    }
+    .select-label { display: block; margin-bottom: 7px; color: #b7c2ca; font-size: 11px; }
+    .spectrum-plot {
+      display: block;
+      width: 100%;
+      height: 100px;
+      border: 1px solid #2b353e;
+      border-radius: 5px;
+      background: #111820;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    .spectrum-axis { display: flex; justify-content: space-between; margin-top: 5px; color: #77838d; font-size: 9px; font-variant-numeric: tabular-nums; }
+    .chart-help { margin: 7px 0 0; color: #77838d; font-size: 10px; }
+    .check-line { display: flex; align-items: center; gap: 8px; color: #b7c2ca; font-size: 11px; cursor: pointer; }
+    .check-line input { width: 14px; height: 14px; accent-color: #8fc7dc; }
+    .sensor-readings { display: grid; gap: 10px; }
+    .reading-row { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    .reading-row span { color: #88959f; font-size: 10px; }
+    .reading-row strong { color: #d9e5eb; font-size: 12px; font-weight: 550; font-variant-numeric: tabular-nums; }
+    .formula-note { margin: 3px 0 0; color: #73808a; font-size: 10px; line-height: 1.55; }
+
+    .tool-item:focus-visible, .quiet-button:focus-visible, .remove-button:focus-visible,
+    .select-control:focus-visible, input:focus-visible {
+      outline: 2px solid #89c8de;
+      outline-offset: 2px;
+    }
+
+    @keyframes ring-breathe {
+      0%, 100% { opacity: .48; }
+      50% { opacity: .95; }
+    }
+    @keyframes inspector-in {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+
+    @media (min-height: 850px) {
+      .workspace { min-height: calc(100vh - 62px); }
+    }
+    @media (max-width: 1120px) {
+      .workspace { grid-template-columns: 177px minmax(330px, 1fr) 270px; }
+      .bench-area { padding-right: 14px; padding-left: 14px; }
+      .inspector-content { padding-right: 14px; padding-left: 14px; }
+    }
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 165px minmax(0, 1fr); }
+      .inspector { grid-column: 1 / -1; min-height: 0; border-top: 1px solid var(--line); border-left: 0; }
+      .inspector-content { max-width: 660px; margin: 0 auto; }
+      .inspector-empty { min-height: 180px; }
+      .bench-area { min-height: 620px; }
+    }
+    @media (max-width: 600px) {
+      .topbar { min-height: 55px; padding: 0 13px; }
+      .brand-caption, .brand-divider, .scene-summary { display: none; }
+      .brand-name { font-size: 14px; }
+      .topbar-actions { gap: 8px; }
+      .quiet-button { min-height: 31px; padding: 0 8px; font-size: 11px; }
+      .workspace { display: flex; flex-direction: column; min-height: calc(100vh - 55px); }
+      .toolbox { display: flex; gap: 19px; padding: 11px 12px 8px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+      .sidebar-caption { display: none; }
+      .tool-group { flex: 0 0 auto; margin: 0; }
+      .group-title { padding: 0 7px; white-space: nowrap; }
+      .tool-list { display: flex; gap: 3px; }
+      .tool-item { width: auto; min-width: 35px; height: 33px; justify-content: center; padding: 0 8px; }
+      .tool-item span:not(.tool-add) { display: none; }
+      .tool-add { display: none; }
+      .bench-area { min-height: 520px; padding: 12px 10px 7px; }
+      .bench-toolbar { min-height: 28px; margin-bottom: 7px; }
+      .stage-frame, #scene { min-height: 375px; }
+      .stage-footer { font-size: 9px; }
+      .inspector-content { padding: 17px 16px 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-lockup" aria-label="Luma optics sandbox">
+        <svg class="brand-glyph" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <circle class="brand-ring" cx="16" cy="16" r="12" stroke="currentColor" stroke-width="1.4" opacity=".55" />
+          <path d="M5 16h9l5-7 8 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="14" cy="16" r="2" fill="currentColor" />
+        </svg>
+        <span class="brand-name">LUMA</span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-caption">Optics sandbox</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="scene-summary" id="scene-summary">0 elements</span>
+        <button class="quiet-button" id="reset-scene" type="button" title="Restore the starter experiment">
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.2 5.2A5.2 5.2 0 1 1 2.8 9M3 2.9v2.8h2.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span>Reset scene</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="toolbox" aria-label="Add optical elements">
+        <p class="sidebar-caption">Click to add an element</p>
+        <section class="tool-group">
+          <h2 class="group-title">Sources</h2>
+          <div class="tool-list">
+            <button class="tool-item" data-add="flashlight" type="button" title="Add a spectrum-based flashlight">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m3 7 8-3 2 2-3 8-2 2-2-2-3-7Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="m12.6 5.6 3-1m-2.2 4.1 3-.2m-4.5 2.7 2.2 1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              <span>Flashlight</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="laser" type="button" title="Add a monochromatic laser">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 8h8l2 2-2 2H3V8Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="M13 10h4m-2-2 2-2m-2 6 2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              <span>Laser</span><span class="tool-add">+</span>
+            </button>
+          </div>
+        </section>
+        <section class="tool-group">
+          <h2 class="group-title">Optics</h2>
+          <div class="tool-list">
+            <button class="tool-item" data-add="polarizer" type="button" title="Add a polarizing filter">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5v15M7.5 5.2h5M7.5 8.3h5M7.5 11.5h5M7.5 14.7h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              <span>Polarizer</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="convexLens" type="button" title="Add a converging lens">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5C4.9 6 4.9 14 10 17.5M10 2.5c5.1 3.5 5.1 11.5 0 15" stroke="currentColor" stroke-width="1.35"/></svg>
+              <span>Convex lens</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="concaveLens" type="button" title="Add a diverging lens">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 2.5c3 3.5 3 11.5 0 15M15 2.5c-3 3.5-3 11.5 0 15" stroke="currentColor" stroke-width="1.35"/></svg>
+              <span>Concave lens</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="mirror" type="button" title="Add a plane mirror">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5v15M7 4l-2 2m2 2-2 2m2 2-2 2m2 2-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <span>Plane mirror</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="curvedMirror" type="button" title="Add a spherical curved mirror">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5c-3.5 3.5-3.5 11.5 0 15M7 4l-2 2m2 3-2 2m2 3-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              <span>Curved mirror</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="transmissionGrating" type="button" title="Add a transmission diffraction grating">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M6 2.5v15m2-15v15m2-15v15m2-15v15m2-15v15" stroke="currentColor" stroke-width="1.1"/></svg>
+              <span>Transmission grating</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="reflectionGrating" type="button" title="Add a reflective diffraction grating">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M6 2.5v15m2-15v15m2-15v15m2-15v15m2-15v15M4 16.5h12" stroke="currentColor" stroke-width="1.1"/></svg>
+              <span>Reflective grating</span><span class="tool-add">+</span>
+            </button>
+          </div>
+        </section>
+        <section class="tool-group">
+          <h2 class="group-title">Materials</h2>
+          <div class="tool-list">
+            <button class="tool-item" data-add="prism" type="button" title="Add a dispersive prism">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m3 15 6-11 8 11H3Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/></svg>
+              <span>Prism</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="glass" type="button" title="Add wavelength-selective colored glass">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 3.5h10v13H5z" stroke="currentColor" stroke-width="1.3"/><path d="M7.5 5.5v9m2.5-9v9m2.5-9v9" stroke="currentColor" stroke-width=".9" opacity=".7"/></svg>
+              <span>Colored glass</span><span class="tool-add">+</span>
+            </button>
+            <button class="tool-item" data-add="blocker" type="button" title="Add an opaque light blocker">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5v15M7 4l-2 2m2 2-2 2m2 2-2 2m2 2-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <span>Light blocker</span><span class="tool-add">+</span>
+            </button>
+          </div>
+        </section>
+        <section class="tool-group">
+          <h2 class="group-title">Measurement</h2>
+          <div class="tool-list">
+            <button class="tool-item" data-add="sensor" type="button" title="Add a radiant-power sensor">
+              <svg class="tool-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3v14M6 6l4-3 4 3M6 14l4 3 4-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg>
+              <span>Sensor</span><span class="tool-add">+</span>
+            </button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="bench-area">
+        <div class="bench-toolbar">
+          <div class="bench-title-wrap"><span class="eyebrow">WORKSPACE</span><h1 class="bench-title">Ray bench</h1></div>
+          <span class="bench-meta">1 coordinate unit = 1 mm</span>
+        </div>
+        <div class="stage-frame" id="stage-frame">
+          <canvas id="scene" aria-label="Interactive optical ray bench. Drag elements to move them; use the round handle to rotate."></canvas>
+          <div class="empty-canvas" id="empty-canvas">Add an element to begin an experiment.</div>
+        </div>
+        <div class="stage-footer">
+          <span>Drag to move. Drag the round handle to rotate. R rotates 15 degrees. Delete removes.</span>
+          <span id="ray-count">0 ray segments</span>
+        </div>
+      </main>
+
+      <aside class="inspector" id="inspector" aria-label="Element properties"></aside>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    const WORLD = { width: 1000, height: 620 };
+    const BIN_COUNT = 33;
+    const MIN_WAVELENGTH = 380;
+    const MAX_WAVELENGTH = 700;
+    const WAVELENGTH_STEP = (MAX_WAVELENGTH - MIN_WAVELENGTH) / (BIN_COUNT - 1);
+    const TRACE_EPSILON = 0.035;
+    const MIN_RAY_POWER = 1e-8;
+    const MAX_INTERACTIONS = 12;
+    const MAX_QUEUED_RAYS = 18000;
+
+    const canvas = document.getElementById('scene');
+    const inspector = document.getElementById('inspector');
+    const emptyCanvas = document.getElementById('empty-canvas');
+    const sceneSummary = document.getElementById('scene-summary');
+    const rayCountLabel = document.getElementById('ray-count');
+    const ctx = canvas.getContext('2d');
+
+    let objects = [];
+    let selectedId = null;
+    let idCounter = 0;
+    let view = { width: 0, height: 0, dpr: 1, scale: 1, offsetX: 0, offsetY: 0 };
+    let sensorMeasurements = new Map();
+    let pointerMode = null;
+    let pointerObjectId = null;
+    let pointerOffset = { x: 0, y: 0 };
+    let activeSpectrumCanvas = null;
+    let previousSpectrumPoint = null;
+
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    const degToRad = value => value * Math.PI / 180;
+    const radToDeg = value => ((value * 180 / Math.PI + 540) % 360) - 180;
+    const wavelengthAt = index => MIN_WAVELENGTH + index * WAVELENGTH_STEP;
+
+    function gaussian(wavelength, center, sigma) {
+      const distance = (wavelength - center) / sigma;
+      return Math.exp(-0.5 * distance * distance);
+    }
+
+    function blackbodySpectrum(temperature) {
+      const values = [];
+      const c2 = 1.438776877e-2;
+      for (let i = 0; i < BIN_COUNT; i += 1) {
+        const wavelengthM = wavelengthAt(i) * 1e-9;
+        const exponent = c2 / (wavelengthM * temperature);
+        values.push(1 / (Math.pow(wavelengthM, 5) * Math.expm1(exponent)));
+      }
+      return scaleToPeak(values);
+    }
+
+    function scaleToPeak(values) {
+      const peak = Math.max(...values, 0);
+      return peak > 0 ? values.map(value => value / peak) : values.map(() => 0);
+    }
+
+    function sourceSpectrumPreset(preset) {
+      if (preset === 'sunlight') return blackbodySpectrum(5778);
+      if (preset === 'red') return scaleToPeak(Array.from({ length: BIN_COUNT }, (_, i) => gaussian(wavelengthAt(i), 650, 22)));
+      if (preset === 'green') return scaleToPeak(Array.from({ length: BIN_COUNT }, (_, i) => gaussian(wavelengthAt(i), 535, 20)));
+      if (preset === 'blue') return scaleToPeak(Array.from({ length: BIN_COUNT }, (_, i) => gaussian(wavelengthAt(i), 460, 17)));
+      if (preset === 'broadband') return Array.from({ length: BIN_COUNT }, () => 1);
+      return scaleToPeak(Array.from({ length: BIN_COUNT }, (_, i) => {
+        const wavelength = wavelengthAt(i);
+        return 0.78 * gaussian(wavelength, 452, 15) + 0.58 * gaussian(wavelength, 562, 53);
+      }));
+    }
+
+    function glassSpectrumPreset(preset) {
+      if (preset === 'clear') return Array.from({ length: BIN_COUNT }, () => 1);
+      const centers = { red: 635, green: 540, blue: 465 };
+      const center = centers[preset] || centers.red;
+      const width = preset === 'red' ? 37 : 30;
+      return Array.from({ length: BIN_COUNT }, (_, i) => {
+        const wavelength = wavelengthAt(i);
+        return clamp(0.012 + 0.9 * gaussian(wavelength, center, width), 0, 1);
+      });
+    }
+
+    function normalizedWeights(values) {
+      const nonNegative = values.map(value => Math.max(0, Number(value) || 0));
+      const sum = nonNegative.reduce((total, value) => total + value, 0);
+      return sum > 0 ? nonNegative.map(value => value / sum) : nonNegative.map(() => 0);
+    }
+
+    function createObject(toolType, x, y) {
+      const object = {
+        id: `element-${++idCounter}`,
+        type: toolType,
+        x,
+        y,
+        angle: 0
+      };
+
+      if (toolType === 'flashlight') {
+        Object.assign(object, { power: 2.5, divergence: 1.8, spectrumPreset: 'whiteLed', spectrum: sourceSpectrumPreset('whiteLed') });
+      } else if (toolType === 'laser') {
+        Object.assign(object, { power: 1, wavelength: 532, divergence: 0.08, polarizationAngle: 90 });
+      } else if (toolType === 'polarizer') {
+        Object.assign(object, { length: 78 });
+      } else if (toolType === 'convexLens' || toolType === 'concaveLens') {
+        Object.assign(object, { type: 'lens', lensKind: toolType === 'convexLens' ? 'convex' : 'concave', focalLength: toolType === 'convexLens' ? 220 : -220, length: 84 });
+      } else if (toolType === 'mirror') {
+        Object.assign(object, { reflectance: 0.94, length: 84 });
+      } else if (toolType === 'curvedMirror') {
+        Object.assign(object, { radius: 360, curvature: 'concave', reflectance: 0.94, length: 88 });
+      } else if (toolType === 'transmissionGrating' || toolType === 'reflectionGrating') {
+        Object.assign(object, { type: 'grating', mode: toolType === 'reflectionGrating' ? 'reflection' : 'transmission', groovesPerMm: 600, phaseDepth: 2.1, maxOrder: 3, length: 100 });
+      } else if (toolType === 'prism') {
+        Object.assign(object, { apexDeg: 60, nD: 1.5168, abbe: 64.17, internalReflection: true });
+      } else if (toolType === 'glass') {
+        Object.assign(object, { thicknessMm: 48, heightMm: 92, nD: 1.52, abbe: 64, reflectance: 0.02, transmissionPreset: 'red', transmission: glassSpectrumPreset('red') });
+      } else if (toolType === 'blocker') {
+        Object.assign(object, { length: 104 });
+      } else if (toolType === 'sensor') {
+        Object.assign(object, { length: 128 });
+      }
+      return object;
+    }
+
+    function seedScene() {
+      idCounter = 0;
+      const source = createObject('flashlight', 126, 250);
+      const prism = createObject('prism', 500, 250);
+      const sensor = createObject('sensor', 842, 540);
+      sensor.length = 178;
+      objects = [source, prism, sensor];
+      selectedId = source.id;
+      renderInspector();
+      renderScene();
+    }
+
+    function getSelected() {
+      return objects.find(object => object.id === selectedId) || null;
+    }
+
+    function objectLabel(object) {
+      if (object.type === 'flashlight') return 'Flashlight';
+      if (object.type === 'laser') return 'Laser';
+      if (object.type === 'polarizer') return 'Polarizer';
+      if (object.type === 'lens') return `${object.lensKind === 'convex' ? 'Convex' : 'Concave'} lens`;
+      if (object.type === 'mirror') return 'Plane mirror';
+      if (object.type === 'curvedMirror') return `${object.curvature === 'concave' ? 'Concave' : 'Convex'} mirror`;
+      if (object.type === 'grating') return `${object.mode === 'reflection' ? 'Reflective' : 'Transmission'} grating`;
+      if (object.type === 'prism') return 'Prism';
+      if (object.type === 'glass') return 'Colored glass';
+      if (object.type === 'blocker') return 'Light blocker';
+      if (object.type === 'sensor') return 'Sensor';
+      return 'Optical element';
+    }
+
+    function objectDescription(object) {
+      if (object.type === 'flashlight') return 'A sampled, uniform angular radiant distribution with an editable spectral power curve.';
+      if (object.type === 'laser') return 'Monochromatic source with adjustable wavelength, divergence, and linear polarization.';
+      if (object.type === 'polarizer') return 'Transmits linear polarization according to Malus law; unpolarized input loses half its power.';
+      if (object.type === 'lens') return 'Paraxial thin-lens transfer using focal length f and ray height at the optical plane.';
+      if (object.type === 'mirror') return 'Specular reflection from a finite plane surface.';
+      if (object.type === 'curvedMirror') return 'Specular reflection from a spherical surface with the selected radius of curvature.';
+      if (object.type === 'grating') return 'Diffraction angles follow tangential wave-vector conservation; order power uses J_m(phi)^2 for a sinusoidal phase grating.';
+      if (object.type === 'prism') return 'Wavelength-dependent Snell refraction and Fresnel splitting with Cauchy dispersion.';
+      if (object.type === 'glass') return 'Dispersive Fresnel interfaces and Beer-Lambert attenuation through the editable transmission spectrum.';
+      if (object.type === 'blocker') return 'An opaque surface that absorbs incident rays.';
+      return 'Absorbs incident rays and records their radiant power by wavelength.';
+    }
+
+    function rangeField(label, property, min, max, step, value, formatter, unit = '') {
+      return `<label class="field">
+        <span class="field-line"><span>${label}</span><output>${formatter(value)}</output></span>
+        <input type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-prop="${property}" data-unit="${unit}" aria-label="${label}">
+      </label>`;
+    }
+
+    function selectField(label, action, options, selected) {
+      const choices = options.map(([value, text]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${text}</option>`).join('');
+      return `<label class="select-label">${label}<select class="select-control" data-select="${action}">${choices}</select></label>`;
+    }
+
+    function positionSection(object) {
+      const angleLabel = object.type === 'flashlight' || object.type === 'laser'
+        ? 'Beam direction'
+        : (object.type === 'prism' || object.type === 'glass' ? 'Rotation angle' : 'Surface angle');
+      const angle = radToDeg(object.angle);
+      return `<section class="inspector-section">
+        <h3 class="section-label">POSITION AND ROTATION</h3>
+        <div class="position-grid">
+          <label class="number-field"><span>X position (mm)</span><input type="number" min="0" max="1000" step="1" value="${object.x.toFixed(0)}" data-prop="x" aria-label="X position in millimeters"></label>
+          <label class="number-field"><span>Y position (mm)</span><input type="number" min="0" max="620" step="1" value="${object.y.toFixed(0)}" data-prop="y" aria-label="Y position in millimeters"></label>
+        </div>
+        <div style="height:13px"></div>
+        ${rangeField(angleLabel, 'angle', -180, 180, 1, angle, value => `${Math.round(value)} deg`, 'degrees')}
+      </section>`;
+    }
+
+    function sourceSpectrumSection(object) {
+      const options = [
+        ['whiteLed', 'White LED'],
+        ['sunlight', 'Sunlight (5800 K)'],
+        ['broadband', 'Equal-energy broadband'],
+        ['red', 'Red band'],
+        ['green', 'Green band'],
+        ['blue', 'Blue band'],
+        ['custom', 'Custom curve']
+      ];
+      return `<section class="inspector-section">
+        <h3 class="section-label">SPECTRAL POWER</h3>
+        ${selectField('Preset', 'sourceSpectrum', options, object.spectrumPreset)}
+        <div style="height:10px"></div>
+        <canvas class="spectrum-plot" width="520" height="200" data-spectrum="source" aria-label="Editable wavelength spectrum; drag to draw relative spectral power"></canvas>
+        <div class="spectrum-axis"><span>380 nm</span><span>Wavelength</span><span>700 nm</span></div>
+        <p class="chart-help">Drag across the plot to edit relative power.</p>
+      </section>`;
+    }
+
+    function glassSpectrumSection(object) {
+      const options = [
+        ['clear', 'Clear glass'],
+        ['red', 'Red pass'],
+        ['green', 'Green pass'],
+        ['blue', 'Blue pass'],
+        ['custom', 'Custom curve']
+      ];
+      return `<section class="inspector-section">
+        <h3 class="section-label">SPECTRAL TRANSMISSION</h3>
+        ${selectField('Preset', 'glassSpectrum', options, object.transmissionPreset)}
+        <div style="height:10px"></div>
+        <canvas class="spectrum-plot" width="520" height="200" data-spectrum="transmission" aria-label="Editable colored glass transmission spectrum"></canvas>
+        <div class="spectrum-axis"><span>380 nm</span><span>Transmission at 10 mm</span><span>700 nm</span></div>
+        <p class="chart-help">Drag to edit. Attenuation scales with optical path length.</p>
+      </section>`;
+    }
+
+    function renderInspector() {
+      const object = getSelected();
+      if (!object) {
+        inspector.innerHTML = `<div class="inspector-empty">
+          <svg class="empty-glyph" viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="13" stroke="currentColor" stroke-width="1.2"/><path d="M4 20h10l6-9 7 18 5-9h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <strong>No element selected</strong><p>Add an optical component, then select it on the bench to edit its properties.</p>
+        </div>`;
+        return;
+      }
+
+      let details = '';
+      if (object.type === 'flashlight') {
+        details = `<section class="inspector-section"><h3 class="section-label">EMISSION</h3>
+          ${rangeField('Optical power', 'power', 0.1, 10, 0.1, object.power, value => `${Number(value).toFixed(1)} W`)}
+          ${rangeField('Full-angle divergence', 'divergence', 0, 40, 0.1, object.divergence, value => `${Number(value).toFixed(1)} deg`)}</section>${sourceSpectrumSection(object)}`;
+      } else if (object.type === 'laser') {
+        details = `<section class="inspector-section"><h3 class="section-label">EMISSION</h3>
+          ${rangeField('Optical power', 'power', 0.01, 5, 0.01, object.power, value => `${Number(value).toFixed(2)} W`)}
+          ${rangeField('Wavelength', 'wavelength', 380, 700, 1, object.wavelength, value => `${Math.round(value)} nm`)}
+          ${rangeField('Full-angle divergence', 'divergence', 0, 5, 0.01, object.divergence, value => `${Number(value).toFixed(2)} deg`)}
+          ${rangeField('Polarization angle', 'polarizationAngle', 0, 180, 1, object.polarizationAngle, value => `${Math.round(value)} deg`)}</section>`;
+      } else if (object.type === 'lens') {
+        details = `<section class="inspector-section"><h3 class="section-label">LENS</h3>
+          ${rangeField('Focal length', 'focalLength', 50, 1200, 10, Math.abs(object.focalLength), value => `${object.lensKind === 'concave' ? '-' : ''}${Math.round(value)} mm`, 'signedFocal')}
+          <p class="formula-note">${object.lensKind === 'concave' ? 'Negative focal length: diverging lens.' : 'Positive focal length: converging lens.'}</p></section>`;
+      } else if (object.type === 'polarizer') {
+        details = `<section class="inspector-section"><h3 class="section-label">APERTURE</h3>${rangeField('Clear length', 'length', 30, 150, 1, object.length, value => `${Math.round(value)} mm`)}</section>
+          <p class="formula-note">The transmission axis lies along the filter line.</p>`;
+      } else if (object.type === 'mirror') {
+        details = `<section class="inspector-section"><h3 class="section-label">SURFACE</h3>
+          ${rangeField('Reflectance', 'reflectance', 0, 1, 0.01, object.reflectance, value => `${Math.round(value * 100)}%`)}
+          ${rangeField('Mirror length', 'length', 30, 160, 1, object.length, value => `${Math.round(value)} mm`)}</section>`;
+      } else if (object.type === 'curvedMirror') {
+        details = `<section class="inspector-section"><h3 class="section-label">SPHERICAL SURFACE</h3>
+          ${selectField('Curvature', 'curvature', [['concave', 'Concave'], ['convex', 'Convex']], object.curvature)}
+          <div style="height:11px"></div>
+          ${rangeField('Radius of curvature', 'radius', 80, 1500, 10, object.radius, value => `${Math.round(value)} mm`)}
+          ${rangeField('Reflectance', 'reflectance', 0, 1, 0.01, object.reflectance, value => `${Math.round(value * 100)}%`)}
+          ${rangeField('Aperture length', 'length', 30, 160, 1, object.length, value => `${Math.round(value)} mm`)}</section>`;
+      } else if (object.type === 'grating') {
+        details = `<section class="inspector-section"><h3 class="section-label">GRATING</h3>
+          ${rangeField('Groove density', 'groovesPerMm', 300, 1800, 10, object.groovesPerMm, value => `${Math.round(value)} lines/mm`)}
+          ${rangeField('Phase modulation', 'phaseDepth', 0, 3.5, 0.05, object.phaseDepth, value => `${Number(value).toFixed(2)} rad`)}
+          ${rangeField('Maximum order', 'maxOrder', 1, 5, 1, object.maxOrder, value => `+/-${Math.round(value)}`)}
+          ${rangeField('Aperture length', 'length', 30, 180, 1, object.length, value => `${Math.round(value)} mm`)}</section>`;
+      } else if (object.type === 'prism') {
+        details = `<section class="inspector-section"><h3 class="section-label">PRISM GEOMETRY</h3>
+          ${rangeField('Apex angle', 'apexDeg', 20, 80, 1, object.apexDeg, value => `${Math.round(value)} deg`)}
+          ${rangeField('Index at 589.3 nm', 'nD', 1.3, 1.9, 0.001, object.nD, value => Number(value).toFixed(3))}
+          ${rangeField('Abbe number', 'abbe', 15, 90, 0.1, object.abbe, value => Number(value).toFixed(1))}
+          <label class="check-line"><input type="checkbox" data-prop="internalReflection" ${object.internalReflection ? 'checked' : ''}>Allow total internal reflection</label>
+          </section><p class="formula-note">Dispersion is fitted with a two-term Cauchy model using nD and the Abbe number.</p>`;
+      } else if (object.type === 'glass') {
+        details = `<section class="inspector-section"><h3 class="section-label">MATERIAL</h3>
+          ${rangeField('Thickness', 'thicknessMm', 10, 120, 1, object.thicknessMm, value => `${Math.round(value)} mm`)}
+          ${rangeField('Index at 589.3 nm', 'nD', 1.3, 1.9, 0.001, object.nD, value => Number(value).toFixed(3))}
+          ${rangeField('Abbe number', 'abbe', 15, 90, 0.1, object.abbe, value => Number(value).toFixed(1))}
+          ${rangeField('Added surface reflectance', 'reflectance', 0, 1, 0.01, object.reflectance, value => `${Math.round(value * 100)}%`)}</section>${glassSpectrumSection(object)}`;
+      } else if (object.type === 'blocker') {
+        details = `<section class="inspector-section"><h3 class="section-label">APERTURE</h3>${rangeField('Blocker length', 'length', 30, 180, 1, object.length, value => `${Math.round(value)} mm`)}</section>`;
+      } else if (object.type === 'sensor') {
+        details = `<section class="inspector-section"><h3 class="section-label">DETECTOR</h3>
+          ${rangeField('Active length', 'length', 20, 200, 1, object.length, value => `${Math.round(value)} mm`)}
+          <div class="sensor-readings">
+            <div class="reading-row"><span>Detected radiant power</span><strong id="sensor-power">0 W</strong></div>
+            <div class="reading-row"><span>Strongest wavelength</span><strong id="sensor-wavelength">-</strong></div>
+          </div></section>
+          <section class="inspector-section"><h3 class="section-label">MEASURED SPECTRUM</h3><canvas class="spectrum-plot" width="520" height="200" data-spectrum="measurement" aria-label="Measured sensor power by wavelength"></canvas><div class="spectrum-axis"><span>380 nm</span><span>Wavelength</span><span>700 nm</span></div></section>`;
+      }
+
+      const icon = iconForObject(object);
+      inspector.innerHTML = `<div class="inspector-content">
+        <div class="inspector-head">
+          <div class="selected-symbol">${icon}</div>
+          <div class="selected-title-group"><div class="eyebrow">Selected element</div><h2 class="selected-title">${objectLabel(object)}</h2></div>
+          <button class="remove-button" type="button" data-action="remove" title="Remove selected element">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 4.5h9m-7.5 0 .5 8h5l.5-8M6.2 4.5V3h3.6v1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Remove</span>
+          </button>
+        </div>
+        <p class="element-description">${objectDescription(object)}</p>
+        ${positionSection(object)}
+        ${details}
+      </div>`;
+      drawInspectorPlots();
+      updateSensorReadout();
+    }
+
+    function iconForObject(object) {
+      if (object.type === 'flashlight') return '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m3 7 8-3 2 2-3 8-2 2-2-2-3-7Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="m13 7 4-1m-3 4h4m-5 2 3 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+      if (object.type === 'laser') return '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 8h8l2 2-2 2H3V8Zm10 2h4m-2-2 2-2m-2 6 2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      if (object.type === 'prism') return '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m3 15 6-11 8 11H3Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+      if (object.type === 'lens') return '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5C4.9 6 4.9 14 10 17.5M10 2.5c5.1 3.5 5.1 11.5 0 15" stroke="currentColor" stroke-width="1.3"/></svg>';
+      if (object.type === 'sensor') return '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3v14M6 6l4-3 4 3M6 14l4 3 4-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg>';
+      return '<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5v15m-3-13-2 2m2 2-2 2m2 2-2 2m2 2-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
+    }
+
+    function formatPower(power) {
+      if (!Number.isFinite(power) || power <= 0) return '0 W';
+      if (power >= 1) return `${power.toFixed(2)} W`;
+      if (power >= 0.001) return `${(power * 1000).toFixed(2)} mW`;
+      return `${(power * 1e6).toFixed(1)} uW`;
+    }
+
+    function drawInspectorPlots() {
+      inspector.querySelectorAll('canvas[data-spectrum]').forEach(plot => {
+        const type = plot.dataset.spectrum;
+        if (type === 'source') {
+          const object = getSelected();
+          drawSpectrumPlot(plot, object && object.type === 'flashlight' ? object.spectrum : []);
+        } else if (type === 'transmission') {
+          const object = getSelected();
+          drawSpectrumPlot(plot, object && object.type === 'glass' ? object.transmission : []);
+        } else if (type === 'measurement') {
+          drawSpectrumPlot(plot, selectedSensorSpectrum());
+        }
+      });
+    }
+
+    function drawSpectrumPlot(plot, values) {
+      const bounds = plot.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = Math.max(1, bounds.width);
+      const height = Math.max(1, bounds.height);
+      plot.width = Math.round(width * dpr);
+      plot.height = Math.round(height * dpr);
+      const plotCtx = plot.getContext('2d');
+      plotCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      plotCtx.clearRect(0, 0, width, height);
+      plotCtx.fillStyle = '#111820';
+      plotCtx.fillRect(0, 0, width, height);
+
+      const colorGradient = plotCtx.createLinearGradient(0, 0, width, 0);
+      for (let i = 0; i < 33; i += 1) {
+        const rgb = wavelengthRgb(MIN_WAVELENGTH + i * 10);
+        colorGradient.addColorStop(i / 32, `rgba(${rgb.r},${rgb.g},${rgb.b},0.18)`);
+      }
+      plotCtx.fillStyle = colorGradient;
+      plotCtx.fillRect(0, 0, width, height);
+
+      plotCtx.lineWidth = 1;
+      plotCtx.strokeStyle = 'rgba(189,204,216,.12)';
+      for (let row = 1; row < 4; row += 1) {
+        const y = Math.round(height * row / 4) + 0.5;
+        plotCtx.beginPath();
+        plotCtx.moveTo(0, y);
+        plotCtx.lineTo(width, y);
+        plotCtx.stroke();
+      }
+      for (let column = 1; column < 4; column += 1) {
+        const x = Math.round(width * column / 4) + 0.5;
+        plotCtx.beginPath();
+        plotCtx.moveTo(x, 0);
+        plotCtx.lineTo(x, height);
+        plotCtx.stroke();
+      }
+
+      const samples = values.length === BIN_COUNT ? values : Array.from({ length: BIN_COUNT }, () => 0);
+      const sampleMax = Math.max(...samples);
+      const measurement = plot.dataset.spectrum === 'measurement';
+      const scale = measurement && sampleMax > 0 ? 1 / sampleMax : 1;
+      const max = measurement ? 1 : Math.max(1, sampleMax);
+      const pointY = index => height - 5 - clamp(samples[index] * scale / max * 0.88, 0, 0.88) * (height - 10);
+      plotCtx.beginPath();
+      plotCtx.moveTo(0, height - 4);
+      for (let i = 0; i < BIN_COUNT; i += 1) {
+        const x = i / (BIN_COUNT - 1) * width;
+        plotCtx.lineTo(x, pointY(i));
+      }
+      plotCtx.lineTo(width, height - 4);
+      plotCtx.closePath();
+      plotCtx.fillStyle = 'rgba(130,196,220,.14)';
+      plotCtx.fill();
+      plotCtx.beginPath();
+      for (let i = 0; i < BIN_COUNT; i += 1) {
+        const x = i / (BIN_COUNT - 1) * width;
+        if (i === 0) plotCtx.moveTo(x, pointY(i));
+        else plotCtx.lineTo(x, pointY(i));
+      }
+      plotCtx.strokeStyle = '#c4e8f2';
+      plotCtx.lineWidth = 1.6;
+      plotCtx.lineJoin = 'round';
+      plotCtx.stroke();
+    }
+
+    function updateSensorReadout() {
+      const object = getSelected();
+      if (!object || object.type !== 'sensor') return;
+      const data = sensorMeasurements.get(object.id) || { power: 0, spectrum: Array.from({ length: BIN_COUNT }, () => 0), wavelengths: new Map() };
+      const powerNode = inspector.querySelector('#sensor-power');
+      const wavelengthNode = inspector.querySelector('#sensor-wavelength');
+      if (powerNode) powerNode.textContent = formatPower(data.power);
+      if (wavelengthNode) {
+        let peakWavelength = null;
+        let peakPower = 0;
+        for (const [wavelength, power] of data.wavelengths) {
+          if (power > peakPower) { peakPower = power; peakWavelength = wavelength; }
+        }
+        wavelengthNode.textContent = peakWavelength === null ? '-' : `${Math.round(peakWavelength)} nm`;
+      }
+      const plot = inspector.querySelector('canvas[data-spectrum="measurement"]');
+      if (plot) drawSpectrumPlot(plot, data.spectrum);
+    }
+
+    function selectedSensorSpectrum() {
+      const object = getSelected();
+      if (!object || object.type !== 'sensor') return [];
+      const data = sensorMeasurements.get(object.id);
+      return data ? data.spectrum : [];
+    }
+
+    function handleInspectorInput(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (event.type === 'input' && target.matches('select[data-select]')) return;
+      if (target.matches('[data-prop]')) {
+        const object = getSelected();
+        if (!object) return;
+        if (target.type === 'checkbox') {
+          object[target.dataset.prop] = target.checked;
+        } else {
+          const value = Number(target.value);
+          if (!Number.isFinite(value)) return;
+          const property = target.dataset.prop;
+          const unit = target.dataset.unit;
+          if (property === 'angle' && unit === 'degrees') object.angle = degToRad(value);
+          else if (property === 'focalLength' && unit === 'signedFocal') object.focalLength = Math.abs(value) * (object.lensKind === 'concave' ? -1 : 1);
+          else object[property] = value;
+
+          const output = target.closest('.field')?.querySelector('output');
+          if (output) output.textContent = formatControlOutput(object, property, value);
+        }
+        renderScene();
+        return;
+      }
+
+      if (target.matches('[data-select]')) {
+        const object = getSelected();
+        if (!object) return;
+        if (target.dataset.select === 'sourceSpectrum' && object.type === 'flashlight') {
+          object.spectrumPreset = target.value;
+          if (target.value !== 'custom') object.spectrum = sourceSpectrumPreset(target.value);
+          drawInspectorPlots();
+        } else if (target.dataset.select === 'glassSpectrum' && object.type === 'glass') {
+          object.transmissionPreset = target.value;
+          if (target.value !== 'custom') object.transmission = glassSpectrumPreset(target.value);
+          drawInspectorPlots();
+        } else if (target.dataset.select === 'curvature' && object.type === 'curvedMirror') {
+          object.curvature = target.value;
+          renderInspector();
+        }
+        renderScene();
+      }
+    }
+
+    function formatControlOutput(object, property, value) {
+      if (property === 'angle') return `${Math.round(value)} deg`;
+      if (property === 'focalLength') return `${object.lensKind === 'concave' ? '-' : ''}${Math.round(value)} mm`;
+      if (property === 'power') return object.type === 'laser' ? `${Number(value).toFixed(2)} W` : `${Number(value).toFixed(1)} W`;
+      if (property === 'divergence') return object.type === 'laser' ? `${Number(value).toFixed(2)} deg` : `${Number(value).toFixed(1)} deg`;
+      if (property === 'wavelength') return `${Math.round(value)} nm`;
+      if (property === 'polarizationAngle' || property === 'apexDeg') return `${Math.round(value)} deg`;
+      if (property === 'nD') return Number(value).toFixed(3);
+      if (property === 'abbe') return Number(value).toFixed(1);
+      if (property === 'reflectance') return `${Math.round(value * 100)}%`;
+      if (property === 'phaseDepth') return `${Number(value).toFixed(2)} rad`;
+      if (property === 'maxOrder') return `+/-${Math.round(value)}`;
+      if (property === 'groovesPerMm') return `${Math.round(value)} lines/mm`;
+      if (property === 'radius' || property === 'length' || property === 'thicknessMm') return `${Math.round(value)} mm`;
+      return `${Math.round(value)}`;
+    }
+
+    inspector.addEventListener('input', handleInspectorInput);
+    inspector.addEventListener('change', handleInspectorInput);
+
+    inspector.addEventListener('pointerdown', event => {
+      const plot = event.target.closest('canvas[data-spectrum="source"], canvas[data-spectrum="transmission"]');
+      if (!plot) return;
+      const object = getSelected();
+      if (!object) return;
+      activeSpectrumCanvas = plot;
+      previousSpectrumPoint = null;
+      plot.setPointerCapture(event.pointerId);
+      editSpectrumAtPointer(plot, event);
+    });
+
+    inspector.addEventListener('pointermove', event => {
+      if (!activeSpectrumCanvas || !activeSpectrumCanvas.hasPointerCapture(event.pointerId)) return;
+      editSpectrumAtPointer(activeSpectrumCanvas, event);
+    });
+
+    inspector.addEventListener('pointerup', event => {
+      if (activeSpectrumCanvas && activeSpectrumCanvas.hasPointerCapture(event.pointerId)) activeSpectrumCanvas.releasePointerCapture(event.pointerId);
+      activeSpectrumCanvas = null;
+      previousSpectrumPoint = null;
+    });
+
+    inspector.addEventListener('pointercancel', () => {
+      activeSpectrumCanvas = null;
+      previousSpectrumPoint = null;
+    });
+
+    function editSpectrumAtPointer(plot, event) {
+      const object = getSelected();
+      if (!object) return;
+      const rect = plot.getBoundingClientRect();
+      const index = clamp((event.clientX - rect.left) / rect.width, 0, 1) * (BIN_COUNT - 1);
+      const value = clamp(1 - (event.clientY - rect.top) / rect.height, 0, 1);
+      const key = plot.dataset.spectrum === 'source' ? 'spectrum' : 'transmission';
+      if (plot.dataset.spectrum === 'source' && object.type !== 'flashlight') return;
+      if (plot.dataset.spectrum === 'transmission' && object.type !== 'glass') return;
+      if (!Array.isArray(object[key]) || object[key].length !== BIN_COUNT) object[key] = Array.from({ length: BIN_COUNT }, () => 0);
+
+      if (previousSpectrumPoint) {
+        const steps = Math.max(1, Math.ceil(Math.abs(index - previousSpectrumPoint.index) * 2));
+        for (let step = 0; step <= steps; step += 1) {
+          const fraction = step / steps;
+          const sampleIndex = Math.round(previousSpectrumPoint.index + (index - previousSpectrumPoint.index) * fraction);
+          const sampleValue = previousSpectrumPoint.value + (value - previousSpectrumPoint.value) * fraction;
+          object[key][sampleIndex] = sampleValue;
+        }
+      } else {
+        object[key][Math.round(index)] = value;
+      }
+      previousSpectrumPoint = { index, value };
+
+      if (key === 'spectrum') {
+        object.spectrumPreset = 'custom';
+        const select = inspector.querySelector('[data-select="sourceSpectrum"]');
+        if (select) select.value = 'custom';
+      } else {
+        object.transmissionPreset = 'custom';
+        const select = inspector.querySelector('[data-select="glassSpectrum"]');
+        if (select) select.value = 'custom';
+      }
+      drawSpectrumPlot(plot, object[key]);
+      renderScene();
+    }
+
+    function vec(x, y) { return { x, y }; }
+    function add(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
+    function sub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
+    function mul(a, scalar) { return { x: a.x * scalar, y: a.y * scalar }; }
+    function dot(a, b) { return a.x * b.x + a.y * b.y; }
+    function cross(a, b) { return a.x * b.y - a.y * b.x; }
+    function magnitude(a) { return Math.hypot(a.x, a.y); }
+    function normalize(a) {
+      const length = magnitude(a) || 1;
+      return { x: a.x / length, y: a.y / length };
+    }
+    function normalFor(object) { return { x: Math.cos(object.angle), y: Math.sin(object.angle) }; }
+    function tangentFor(object) { return { x: -Math.sin(object.angle), y: Math.cos(object.angle) }; }
+    function elementPoint(object, localX, localY) {
+      return add(vec(object.x, object.y), add(mul(normalFor(object), localX), mul(tangentFor(object), localY)));
+    }
+
+    function localCoordinates(object, point) {
+      const delta = sub(point, vec(object.x, object.y));
+      return { x: dot(delta, normalFor(object)), y: dot(delta, tangentFor(object)) };
+    }
+
+    function prismVertices(object) {
+      const halfBase = 36;
+      const apexAngle = degToRad(object.apexDeg);
+      const height = halfBase / Math.tan(apexAngle / 2);
+      const baseY = height / 3;
+      const tipY = -2 * height / 3;
+      return [
+        elementPoint(object, -halfBase, baseY),
+        elementPoint(object, halfBase, baseY),
+        elementPoint(object, 0, tipY)
+      ];
+    }
+
+    function solidVertices(object) {
+      if (object.type === 'prism') return prismVertices(object);
+      const halfWidth = object.thicknessMm / 2;
+      const halfHeight = object.heightMm / 2;
+      return [
+        elementPoint(object, -halfWidth, -halfHeight),
+        elementPoint(object, halfWidth, -halfHeight),
+        elementPoint(object, halfWidth, halfHeight),
+        elementPoint(object, -halfWidth, halfHeight)
+      ];
+    }
+
+    function surfaceSegment(object) {
+      const half = object.length / 2;
+      const center = vec(object.x, object.y);
+      const tangent = tangentFor(object);
+      return [add(center, mul(tangent, -half)), add(center, mul(tangent, half))];
+    }
+
+    function raySegmentIntersection(origin, direction, start, end) {
+      const segment = sub(end, start);
+      const denominator = cross(direction, segment);
+      if (Math.abs(denominator) < 1e-10) return null;
+      const offset = sub(start, origin);
+      const distance = cross(offset, segment) / denominator;
+      const along = cross(offset, direction) / denominator;
+      if (distance <= 1e-4 || along < -1e-8 || along > 1 + 1e-8) return null;
+      return { distance, point: add(origin, mul(direction, distance)), along };
+    }
+
+    function polygonArea(vertices) {
+      let area = 0;
+      for (let i = 0; i < vertices.length; i += 1) {
+        const current = vertices[i];
+        const next = vertices[(i + 1) % vertices.length];
+        area += current.x * next.y - next.x * current.y;
+      }
+      return area / 2;
+    }
+
+    function intersectPolygon(origin, direction, vertices) {
+      let nearest = null;
+      const winding = polygonArea(vertices) >= 0 ? 1 : -1;
+      for (let i = 0; i < vertices.length; i += 1) {
+        const start = vertices[i];
+        const end = vertices[(i + 1) % vertices.length];
+        const hit = raySegmentIntersection(origin, direction, start, end);
+        if (!hit || (nearest && hit.distance >= nearest.distance)) continue;
+        const edge = sub(end, start);
+        const outward = winding > 0 ? normalize(vec(edge.y, -edge.x)) : normalize(vec(-edge.y, edge.x));
+        nearest = { ...hit, normal: outward };
+      }
+      return nearest;
+    }
+
+    function curvedMirrorIntersection(object, origin, direction) {
+      const normal = normalFor(object);
+      const center = add(vec(object.x, object.y), mul(normal, object.curvature === 'concave' ? -object.radius : object.radius));
+      const radius = object.radius;
+      const offset = sub(origin, center);
+      const b = 2 * dot(offset, direction);
+      const c = dot(offset, offset) - radius * radius;
+      const discriminant = b * b - 4 * c;
+      if (discriminant < 0) return null;
+      const root = Math.sqrt(discriminant);
+      const roots = [(-b - root) / 2, (-b + root) / 2].filter(value => value > 1e-4).sort((a, bValue) => a - bValue);
+      for (const distance of roots) {
+        const point = add(origin, mul(direction, distance));
+        const local = localCoordinates(object, point);
+        const signedRadius = object.curvature === 'concave' ? -radius : radius;
+        const sag = Math.sign(signedRadius) * (radius - Math.sqrt(Math.max(0, radius * radius - local.y * local.y)));
+        if (Math.abs(local.y) > object.length / 2 || Math.abs(local.x - sag) > 2) continue;
+        return { distance, point, normal: normalize(sub(point, center)) };
+      }
+      return null;
+    }
+
+    function nearestHit(origin, direction) {
+      let nearest = null;
+      for (const object of objects) {
+        if (object.type === 'flashlight' || object.type === 'laser') continue;
+        let hit = null;
+        if (object.type === 'prism' || object.type === 'glass') {
+          hit = intersectPolygon(origin, direction, solidVertices(object));
+        } else if (object.type === 'curvedMirror') {
+          hit = curvedMirrorIntersection(object, origin, direction);
+        } else {
+          const [start, end] = surfaceSegment(object);
+          hit = raySegmentIntersection(origin, direction, start, end);
+          if (hit) hit.normal = normalFor(object);
+        }
+        if (hit && (!nearest || hit.distance < nearest.distance)) nearest = { ...hit, object };
+      }
+      return nearest;
+    }
+
+    function boundaryDistance(origin, direction) {
+      const candidates = [];
+      if (direction.x > 1e-9) candidates.push((WORLD.width - origin.x) / direction.x);
+      if (direction.x < -1e-9) candidates.push((0 - origin.x) / direction.x);
+      if (direction.y > 1e-9) candidates.push((WORLD.height - origin.y) / direction.y);
+      if (direction.y < -1e-9) candidates.push((0 - origin.y) / direction.y);
+      return Math.min(...candidates.filter(value => value > 1e-5), 1800);
+    }
+
+    function materialIndex(object, wavelengthNm) {
+      const wavelengthUm = wavelengthNm / 1000;
+      const lambdaD = 0.5893;
+      const lambdaF = 0.4861;
+      const lambdaC = 0.6563;
+      const dispersionDelta = 1 / (lambdaF * lambdaF) - 1 / (lambdaC * lambdaC);
+      const b = (object.nD - 1) / (object.abbe * dispersionDelta);
+      const a = object.nD - b / (lambdaD * lambdaD);
+      return a + b / (wavelengthUm * wavelengthUm);
+    }
+
+    function spectralTransmission(object, wavelengthNm) {
+      const index = clamp(Math.round((wavelengthNm - MIN_WAVELENGTH) / WAVELENGTH_STEP), 0, BIN_COUNT - 1);
+      return clamp(object.transmission[index] || 0, 1e-8, 1);
+    }
+
+    function attenuationCoefficient(object, wavelengthNm) {
+      if (!object || object.type !== 'glass') return 0;
+      return -Math.log(spectralTransmission(object, wavelengthNm)) / 10;
+    }
+
+    function besselJ(order, value) {
+      const n = Math.abs(order);
+      if (value === 0) return n === 0 ? 1 : 0;
+      let factorial = 1;
+      for (let i = 2; i <= n; i += 1) factorial *= i;
+      let term = Math.pow(value / 2, n) / factorial;
+      let sum = term;
+      for (let k = 1; k <= 36; k += 1) {
+        term *= -(value * value / 4) / (k * (k + n));
+        sum += term;
+        if (Math.abs(term) < 1e-14) break;
+      }
+      return order < 0 && n % 2 === 1 ? -sum : sum;
+    }
+
+    function fresnelReflectance(n1, n2, cosIncident, cosTransmitted) {
+      const sDenominator = n1 * cosIncident + n2 * cosTransmitted;
+      const pDenominator = n1 * cosTransmitted + n2 * cosIncident;
+      const rs = sDenominator === 0 ? 1 : (n1 * cosIncident - n2 * cosTransmitted) / sDenominator;
+      const rp = pDenominator === 0 ? 1 : (n1 * cosTransmitted - n2 * cosIncident) / pDenominator;
+      return clamp((rs * rs + rp * rp) / 2, 0, 1);
+    }
+
+    function reflectedDirection(direction, normalAgainstIncident) {
+      return normalize(sub(direction, mul(normalAgainstIncident, 2 * dot(direction, normalAgainstIncident))));
+    }
+
+    function reflectRayAtMirror(ray, hit, reflectance) {
+      const direction = reflectedDirection(ray.direction, hit.normal);
+      return { ...ray, origin: add(hit.point, mul(direction, TRACE_EPSILON)), direction, power: ray.power * reflectance, interactions: ray.interactions + 1 };
+    }
+
+    function traceRays() {
+      const segments = [];
+      sensorMeasurements = new Map(objects.filter(object => object.type === 'sensor').map(object => [object.id, {
+        power: 0,
+        spectrum: Array.from({ length: BIN_COUNT }, () => 0),
+        wavelengths: new Map()
+      }]));
+
+      const queue = [];
+      for (const source of objects) {
+        if (source.type !== 'flashlight' && source.type !== 'laser') continue;
+        const divergence = degToRad(source.divergence);
+        const angleCount = divergence < 1e-8 ? 1 : 9;
+        const angularSamples = Array.from({ length: angleCount }, (_, index) => {
+          const fraction = angleCount === 1 ? 0 : index / (angleCount - 1) - 0.5;
+          return { angle: source.angle + fraction * divergence, weight: 1 / angleCount };
+        });
+        const samples = source.type === 'laser'
+          ? [{ wavelength: source.wavelength, weight: 1 }]
+          : normalizedWeights(source.spectrum).map((weight, index) => ({ wavelength: wavelengthAt(index), weight }));
+        for (const sample of samples) {
+          if (sample.weight <= 0) continue;
+          for (const angular of angularSamples) {
+            const direction = vec(Math.cos(angular.angle), Math.sin(angular.angle));
+            const origin = add(vec(source.x, source.y), mul(direction, source.type === 'flashlight' ? 17 : 13));
+            queue.push({
+              origin,
+              direction,
+              wavelength: sample.wavelength,
+              power: source.power * sample.weight * angular.weight,
+              polarization: source.type === 'laser' ? degToRad(source.polarizationAngle) : null,
+              mediumId: null,
+              interactions: 0
+            });
+          }
+        }
+      }
+
+      let processed = 0;
+      while (queue.length && processed < MAX_QUEUED_RAYS) {
+        processed += 1;
+        const ray = queue.pop();
+        let current = ray;
+        while (current.power > MIN_RAY_POWER && current.interactions < MAX_INTERACTIONS) {
+          const hit = nearestHit(current.origin, current.direction);
+          const edgeDistance = boundaryDistance(current.origin, current.direction);
+          const hasHit = hit && hit.distance < edgeDistance;
+          const travel = hasHit ? hit.distance : edgeDistance;
+          const medium = objects.find(object => object.id === current.mediumId);
+          const coefficient = attenuationCoefficient(medium, current.wavelength);
+          const attenuation = coefficient > 0 ? Math.exp(-coefficient * travel) : 1;
+          const visiblePower = current.power * (coefficient > 0 ? Math.exp(-coefficient * travel / 2) : 1);
+          const endPoint = hasHit ? hit.point : add(current.origin, mul(current.direction, travel));
+          if (travel > 0.12 && visiblePower > MIN_RAY_POWER) {
+            segments.push({ start: current.origin, end: endPoint, wavelength: current.wavelength, power: visiblePower });
+          }
+          current.power *= attenuation;
+          if (!hasHit || !hit) break;
+
+          const object = hit.object;
+          if (object.type === 'sensor') {
+            const measurement = sensorMeasurements.get(object.id);
+            if (measurement) {
+              measurement.power += current.power;
+              const bin = clamp(Math.round((current.wavelength - MIN_WAVELENGTH) / WAVELENGTH_STEP), 0, BIN_COUNT - 1);
+              measurement.spectrum[bin] += current.power;
+              measurement.wavelengths.set(current.wavelength, (measurement.wavelengths.get(current.wavelength) || 0) + current.power);
+            }
+            break;
+          }
+          if (object.type === 'blocker') break;
+
+          if (object.type === 'mirror' || object.type === 'curvedMirror') {
+            current = reflectRayAtMirror(current, hit, object.reflectance);
+            if (current.power <= MIN_RAY_POWER) break;
+            continue;
+          }
+
+          if (object.type === 'polarizer') {
+            const axis = object.angle + Math.PI / 2;
+            const transmission = current.polarization === null ? 0.5 : Math.pow(Math.cos(current.polarization - axis), 2);
+            const direction = current.direction;
+            current = {
+              ...current,
+              origin: add(hit.point, mul(direction, TRACE_EPSILON)),
+              power: current.power * transmission,
+              polarization: axis,
+              interactions: current.interactions + 1
+            };
+            continue;
+          }
+
+          if (object.type === 'lens') {
+            const normal = normalFor(object);
+            const tangent = tangentFor(object);
+            const normalComponent = dot(current.direction, normal);
+            const tangentComponent = dot(current.direction, tangent);
+            const rayHeight = dot(sub(hit.point, vec(object.x, object.y)), tangent);
+            const newTangent = tangentComponent - Math.abs(normalComponent) * rayHeight / object.focalLength;
+            const direction = normalize(add(mul(normal, normalComponent), mul(tangent, newTangent)));
+            current = {
+              ...current,
+              origin: add(hit.point, mul(direction, TRACE_EPSILON)),
+              direction,
+              interactions: current.interactions + 1
+            };
+            continue;
+          }
+
+          if (object.type === 'grating') {
+            const normal = normalFor(object);
+            const tangent = tangentFor(object);
+            const normalIncident = dot(current.direction, normal);
+            const tangentIncident = dot(current.direction, tangent);
+            const grooveSpacingNm = 1e6 / object.groovesPerMm;
+            for (let order = -object.maxOrder; order <= object.maxOrder; order += 1) {
+              const tangentOutgoing = tangentIncident + order * current.wavelength / grooveSpacingNm;
+              if (Math.abs(tangentOutgoing) > 1) continue;
+              const normalMagnitude = Math.sqrt(Math.max(0, 1 - tangentOutgoing * tangentOutgoing));
+              const side = object.mode === 'reflection' ? -Math.sign(normalIncident || 1) : Math.sign(normalIncident || 1);
+              const direction = normalize(add(mul(normal, side * normalMagnitude), mul(tangent, tangentOutgoing)));
+              const efficiency = Math.pow(besselJ(order, object.phaseDepth), 2);
+              const power = current.power * efficiency;
+              if (power <= MIN_RAY_POWER) continue;
+              queue.push({
+                ...current,
+                origin: add(hit.point, mul(direction, TRACE_EPSILON)),
+                direction,
+                power,
+                interactions: current.interactions + 1
+              });
+            }
+            break;
+          }
+
+          if (object.type === 'prism' || object.type === 'glass') {
+            const outgoing = dielectricBranches(current, hit, object);
+            for (const branch of outgoing) {
+              if (branch.power > MIN_RAY_POWER && queue.length < MAX_QUEUED_RAYS) queue.push(branch);
+            }
+            break;
+          }
+
+          break;
+        }
+      }
+      return { segments, processed };
+    }
+
+    function dielectricBranches(ray, hit, boundaryObject) {
+      const outward = hit.normal;
+      const normal = dot(ray.direction, outward) > 0 ? mul(outward, -1) : outward;
+      const cosIncident = clamp(-dot(normal, ray.direction), 0, 1);
+      const enteringBoundary = ray.mediumId !== boundaryObject.id;
+      const oldMedium = objects.find(object => object.id === ray.mediumId) || null;
+      const n1 = oldMedium ? materialIndex(oldMedium, ray.wavelength) : 1;
+      const n2 = enteringBoundary ? materialIndex(boundaryObject, ray.wavelength) : 1;
+      const eta = n1 / n2;
+      const discriminant = 1 - eta * eta * (1 - cosIncident * cosIncident);
+      const nextInteraction = ray.interactions + 1;
+
+      if (discriminant < 0) {
+        if (boundaryObject.type === 'prism' && !boundaryObject.internalReflection) return [];
+        const direction = reflectedDirection(ray.direction, normal);
+        return [{ ...ray, origin: add(hit.point, mul(direction, TRACE_EPSILON)), direction, mediumId: ray.mediumId, interactions: nextInteraction }];
+      }
+
+      const cosTransmitted = Math.sqrt(Math.max(0, discriminant));
+      const fresnel = fresnelReflectance(n1, n2, cosIncident, cosTransmitted);
+      const coating = boundaryObject.type === 'glass' ? boundaryObject.reflectance : 0;
+      const reflectance = clamp(coating + (1 - coating) * fresnel, 0, 1);
+      const reflected = reflectedDirection(ray.direction, normal);
+      const transmitted = normalize(add(mul(ray.direction, eta), mul(normal, eta * cosIncident - cosTransmitted)));
+      const nextMediumId = enteringBoundary ? boundaryObject.id : (oldMedium && oldMedium.id !== boundaryObject.id ? oldMedium.id : null);
+      const branches = [];
+
+      if (reflectance > 0) {
+        branches.push({
+          ...ray,
+          origin: add(hit.point, mul(reflected, TRACE_EPSILON)),
+          direction: reflected,
+          power: ray.power * reflectance,
+          mediumId: ray.mediumId,
+          interactions: nextInteraction
+        });
+      }
+      if (reflectance < 1) {
+        branches.push({
+          ...ray,
+          origin: add(hit.point, mul(transmitted, TRACE_EPSILON)),
+          direction: transmitted,
+          power: ray.power * (1 - reflectance),
+          mediumId: nextMediumId,
+          interactions: nextInteraction
+        });
+      }
+      return branches;
+    }
+
+    function cieGaussian(wavelength, mean, leftWidth, rightWidth) {
+      const width = wavelength < mean ? leftWidth : rightWidth;
+      return Math.exp(-0.5 * Math.pow((wavelength - mean) / width, 2));
+    }
+
+    function wavelengthXYZ(wavelength) {
+      const x = 1.056 * cieGaussian(wavelength, 599.8, 37.9, 31.0)
+        + 0.362 * cieGaussian(wavelength, 442.0, 16.0, 26.7)
+        - 0.065 * cieGaussian(wavelength, 501.1, 20.4, 26.2);
+      const y = 0.821 * cieGaussian(wavelength, 568.8, 46.9, 40.5)
+        + 0.286 * cieGaussian(wavelength, 530.9, 16.3, 31.1);
+      const z = 1.217 * cieGaussian(wavelength, 437.0, 11.8, 36.0)
+        + 0.681 * cieGaussian(wavelength, 459.0, 26.0, 13.8);
+      return { x: Math.max(0, x), y: clamp(y, 0, 1), z: Math.max(0, z) };
+    }
+
+    function wavelengthRgb(wavelength) {
+      const xyz = wavelengthXYZ(wavelength);
+      let red = 3.2406 * xyz.x - 1.5372 * xyz.y - 0.4986 * xyz.z;
+      let green = -0.9689 * xyz.x + 1.8758 * xyz.y + 0.0415 * xyz.z;
+      let blue = 0.0557 * xyz.x - 0.2040 * xyz.y + 1.057 * xyz.z;
+      red = Math.max(0, red);
+      green = Math.max(0, green);
+      blue = Math.max(0, blue);
+      const maximum = Math.max(red, green, blue, 1e-9);
+      const toSrgb = value => {
+        const linear = value / maximum;
+        return Math.round(255 * (linear <= 0.0031308 ? 12.92 * linear : 1.055 * Math.pow(linear, 1 / 2.4) - 0.055));
+      };
+      return { r: toSrgb(red), g: toSrgb(green), b: toSrgb(blue), photopic: xyz.y };
+    }
+
+    function rgbString(color) { return `rgb(${color.r},${color.g},${color.b})`; }
+
+    function drawGrid(context) {
+      context.fillStyle = '#0b1015';
+      context.fillRect(0, 0, WORLD.width, WORLD.height);
+      for (let x = 0; x <= WORLD.width; x += 50) {
+        context.beginPath();
+        context.moveTo(x + 0.5, 0);
+        context.lineTo(x + 0.5, WORLD.height);
+        context.strokeStyle = x % 100 === 0 ? 'rgba(148,169,184,.075)' : 'rgba(148,169,184,.035)';
+        context.lineWidth = 1;
+        context.stroke();
+      }
+      for (let y = 0; y <= WORLD.height; y += 50) {
+        context.beginPath();
+        context.moveTo(0, y + 0.5);
+        context.lineTo(WORLD.width, y + 0.5);
+        context.strokeStyle = y % 100 === 0 ? 'rgba(148,169,184,.075)' : 'rgba(148,169,184,.035)';
+        context.lineWidth = 1;
+        context.stroke();
+      }
+      context.fillStyle = 'rgba(162,180,194,.36)';
+      context.font = '12px ui-sans-serif, system-ui, sans-serif';
+      context.textAlign = 'center';
+      for (let x = 100; x < WORLD.width; x += 100) context.fillText(String(x), x, 16);
+      context.textAlign = 'left';
+    }
+
+    function drawRaySegments(context, segments) {
+      context.save();
+      context.globalCompositeOperation = 'lighter';
+      context.lineCap = 'round';
+      for (const segment of segments) {
+        const color = wavelengthRgb(segment.wavelength);
+        // A monotone exposure curve preserves power differences while avoiding display clipping.
+        const alpha = clamp(1 - Math.exp(-segment.power * 10 * color.photopic), 0, 0.76);
+        if (alpha < 0.002) continue;
+        context.strokeStyle = rgbString(color);
+        context.shadowColor = rgbString(color);
+        context.shadowBlur = 7;
+        context.globalAlpha = alpha * 0.28;
+        context.lineWidth = 4.2;
+        context.beginPath();
+        context.moveTo(segment.start.x, segment.start.y);
+        context.lineTo(segment.end.x, segment.end.y);
+        context.stroke();
+        context.shadowBlur = 0;
+        context.globalAlpha = alpha * 0.82;
+        context.lineWidth = 1.25;
+        context.beginPath();
+        context.moveTo(segment.start.x, segment.start.y);
+        context.lineTo(segment.end.x, segment.end.y);
+        context.stroke();
+      }
+      context.restore();
+    }
+
+    function drawScene() {
+      const width = view.width;
+      const height = view.height;
+      if (!width || !height) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0b1015';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(view.dpr * view.scale, 0, 0, view.dpr * view.scale, view.dpr * view.offsetX, view.dpr * view.offsetY);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, WORLD.width, WORLD.height);
+      ctx.clip();
+      drawGrid(ctx);
+      const trace = traceRays();
+      drawRaySegments(ctx, trace.segments);
+      for (const object of objects) drawObject(ctx, object);
+      const selected = getSelected();
+      if (selected) drawSelection(ctx, selected);
+      ctx.restore();
+
+      emptyCanvas.classList.toggle('visible', objects.length === 0);
+      sceneSummary.textContent = `${objects.length} ${objects.length === 1 ? 'element' : 'elements'}`;
+      rayCountLabel.textContent = `${trace.segments.length.toLocaleString()} ray segments`;
+      updateSensorReadout();
+    }
+
+    function drawObject(context, object) {
+      context.save();
+      context.translate(object.x, object.y);
+      context.rotate(object.angle);
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      if (object.type === 'flashlight') drawFlashlight(context, object);
+      else if (object.type === 'laser') drawLaser(context, object);
+      else if (object.type === 'polarizer') drawPolarizer(context, object);
+      else if (object.type === 'lens') drawLens(context, object);
+      else if (object.type === 'mirror') drawMirror(context, object);
+      else if (object.type === 'curvedMirror') drawCurvedMirror(context, object);
+      else if (object.type === 'grating') drawGrating(context, object);
+      else if (object.type === 'prism') drawPrism(context, object);
+      else if (object.type === 'glass') drawGlass(context, object);
+      else if (object.type === 'blocker') drawBlocker(context, object);
+      else if (object.type === 'sensor') drawSensor(context, object);
+      context.restore();
+
+      context.save();
+      context.fillStyle = object.id === selectedId ? '#c0d6df' : 'rgba(157,174,186,.74)';
+      context.font = '14px ui-sans-serif, system-ui, sans-serif';
+      context.textAlign = 'center';
+      context.fillText(objectLabel(object), object.x, object.y + labelOffset(object));
+      context.restore();
+    }
+
+    function labelOffset(object) {
+      if (object.type === 'prism') return 58;
+      if (object.type === 'glass') return object.heightMm / 2 + 22;
+      if (object.type === 'lens') return 57;
+      if (object.type === 'flashlight' || object.type === 'laser') return 31;
+      if (object.type === 'sensor') return -object.length / 2 - 14;
+      return object.length / 2 + 20;
+    }
+
+    function drawFlashlight(context) {
+      context.fillStyle = '#182129';
+      context.strokeStyle = '#9bb0bc';
+      context.lineWidth = 1.6;
+      context.beginPath();
+      context.moveTo(-13, -7);
+      context.lineTo(5, -7);
+      context.lineTo(12, -4);
+      context.lineTo(12, 4);
+      context.lineTo(5, 7);
+      context.lineTo(-13, 7);
+      context.closePath();
+      context.fill();
+      context.stroke();
+      context.beginPath();
+      context.moveTo(-8, -6);
+      context.lineTo(-8, 6);
+      context.moveTo(12, -4);
+      context.lineTo(15, -2);
+      context.lineTo(15, 2);
+      context.lineTo(12, 4);
+      context.strokeStyle = '#d1e7ed';
+      context.stroke();
+      context.fillStyle = '#a9d7e7';
+      context.beginPath();
+      context.arc(16, 0, 2.2, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    function drawLaser(context, object) {
+      const color = wavelengthRgb(object.wavelength);
+      context.fillStyle = '#171f26';
+      context.strokeStyle = '#9bb0bc';
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.roundRect(-13, -6, 23, 12, 3);
+      context.fill();
+      context.stroke();
+      context.fillStyle = rgbString(color);
+      context.beginPath();
+      context.arc(12, 0, 2.4, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    function drawPolarizer(context, object) {
+      const half = object.length / 2;
+      context.fillStyle = 'rgba(97,154,171,.13)';
+      context.strokeStyle = '#78aebe';
+      context.lineWidth = 1.8;
+      context.fillRect(-4, -half, 8, object.length);
+      context.strokeRect(-4, -half, 8, object.length);
+      context.strokeStyle = 'rgba(187,226,235,.64)';
+      context.lineWidth = 1;
+      for (let y = -half + 9; y < half; y += 12) {
+        context.beginPath();
+        context.moveTo(-2, y);
+        context.lineTo(2, y + 5);
+        context.stroke();
+      }
+    }
+
+    function drawLens(context, object) {
+      const half = object.length / 2;
+      const bulge = object.lensKind === 'convex' ? 12 : -9;
+      context.beginPath();
+      context.moveTo(0, -half);
+      context.quadraticCurveTo(bulge, 0, 0, half);
+      context.quadraticCurveTo(-bulge, 0, 0, -half);
+      context.closePath();
+      context.fillStyle = 'rgba(124,187,207,.13)';
+      context.fill();
+      context.strokeStyle = '#9bc9d7';
+      context.lineWidth = 1.8;
+      context.stroke();
+      context.beginPath();
+      context.moveTo(bulge * 0.34, -half * 0.58);
+      context.quadraticCurveTo(bulge * 0.55, 0, bulge * 0.34, half * 0.58);
+      context.strokeStyle = 'rgba(196,229,237,.54)';
+      context.lineWidth = 1;
+      context.stroke();
+    }
+
+    function drawMirror(context, object) {
+      const half = object.length / 2;
+      context.strokeStyle = '#53616d';
+      context.lineWidth = 6;
+      context.beginPath(); context.moveTo(-4, -half); context.lineTo(-4, half); context.stroke();
+      context.strokeStyle = '#c6d5dc';
+      context.lineWidth = 2.2;
+      context.beginPath(); context.moveTo(0, -half); context.lineTo(0, half); context.stroke();
+      context.strokeStyle = 'rgba(168,184,194,.68)';
+      context.lineWidth = 1;
+      for (let y = -half + 8; y < half; y += 13) {
+        context.beginPath(); context.moveTo(-7, y + 4); context.lineTo(-2, y - 1); context.stroke();
+      }
+    }
+
+    function drawCurvedMirror(context, object) {
+      const radius = object.curvature === 'concave' ? -object.radius : object.radius;
+      context.beginPath();
+      for (let index = 0; index <= 30; index += 1) {
+        const y = -object.length / 2 + object.length * index / 30;
+        const x = Math.sign(radius) * (Math.abs(radius) - Math.sqrt(Math.max(0, radius * radius - y * y)));
+        if (index === 0) context.moveTo(x - 4, y);
+        else context.lineTo(x - 4, y);
+      }
+      context.strokeStyle = '#53616d';
+      context.lineWidth = 6;
+      context.stroke();
+      context.beginPath();
+      for (let index = 0; index <= 30; index += 1) {
+        const y = -object.length / 2 + object.length * index / 30;
+        const x = Math.sign(radius) * (Math.abs(radius) - Math.sqrt(Math.max(0, radius * radius - y * y)));
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      }
+      context.strokeStyle = '#c6d5dc';
+      context.lineWidth = 2.2;
+      context.stroke();
+    }
+
+    function drawGrating(context, object) {
+      const half = object.length / 2;
+      context.strokeStyle = object.mode === 'reflection' ? '#ddb995' : '#9acbd7';
+      context.lineWidth = 2;
+      context.beginPath(); context.moveTo(0, -half); context.lineTo(0, half); context.stroke();
+      context.strokeStyle = object.mode === 'reflection' ? 'rgba(228,190,151,.72)' : 'rgba(170,217,229,.72)';
+      context.lineWidth = 1;
+      for (let y = -half + 4; y < half; y += 7) {
+        context.beginPath(); context.moveTo(-3, y); context.lineTo(3, y + 4); context.stroke();
+      }
+      if (object.mode === 'reflection') {
+        context.strokeStyle = 'rgba(205,171,137,.7)';
+        context.lineWidth = 3;
+        context.beginPath(); context.moveTo(-3, -half); context.lineTo(-3, half); context.stroke();
+      }
+    }
+
+    function drawPrism(context, object) {
+      const vertices = prismVertices(object).map(point => localCoordinates(object, point));
+      context.beginPath();
+      vertices.forEach((point, index) => index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y));
+      context.closePath();
+      context.fillStyle = 'rgba(83,143,162,.22)';
+      context.fill();
+      context.strokeStyle = '#8ebbc8';
+      context.lineWidth = 1.8;
+      context.stroke();
+    }
+
+    function glassTint(object) {
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let total = 0;
+      for (let i = 0; i < BIN_COUNT; i += 1) {
+        const transmission = object.transmission[i] || 0;
+        const color = wavelengthRgb(wavelengthAt(i));
+        const weight = transmission * color.photopic;
+        red += color.r * weight;
+        green += color.g * weight;
+        blue += color.b * weight;
+        total += weight;
+      }
+      if (total <= 0) return { r: 130, g: 145, b: 155 };
+      const values = [red / total, green / total, blue / total];
+      const max = Math.max(...values, 1);
+      return { r: Math.round(values[0] / max * 220), g: Math.round(values[1] / max * 220), b: Math.round(values[2] / max * 220) };
+    }
+
+    function drawGlass(context, object) {
+      const tint = glassTint(object);
+      const halfWidth = object.thicknessMm / 2;
+      const halfHeight = object.heightMm / 2;
+      context.fillStyle = `rgba(${tint.r},${tint.g},${tint.b},.2)`;
+      context.strokeStyle = `rgb(${tint.r},${tint.g},${tint.b})`;
+      context.lineWidth = 1.8;
+      context.beginPath();
+      context.rect(-halfWidth, -halfHeight, object.thicknessMm, object.heightMm);
+      context.fill();
+      context.stroke();
+      context.strokeStyle = 'rgba(220,235,241,.24)';
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(-halfWidth + 5, -halfHeight + 6);
+      context.lineTo(halfWidth - 5, -halfHeight + 6);
+      context.moveTo(-halfWidth + 5, halfHeight - 6);
+      context.lineTo(halfWidth - 5, halfHeight - 6);
+      context.stroke();
+    }
+
+    function drawBlocker(context, object) {
+      const half = object.length / 2;
+      context.strokeStyle = '#2b343c';
+      context.lineWidth = 10;
+      context.beginPath(); context.moveTo(0, -half); context.lineTo(0, half); context.stroke();
+      context.strokeStyle = '#82909a';
+      context.lineWidth = 1.4;
+      context.beginPath(); context.moveTo(0, -half); context.lineTo(0, half); context.stroke();
+      context.strokeStyle = 'rgba(174,188,198,.48)';
+      context.lineWidth = 1;
+      for (let y = -half + 8; y < half; y += 14) {
+        context.beginPath(); context.moveTo(-4, y + 4); context.lineTo(4, y - 4); context.stroke();
+      }
+    }
+
+    function drawSensor(context, object) {
+      const half = object.length / 2;
+      context.strokeStyle = 'rgba(104,196,157,.28)';
+      context.lineWidth = 8;
+      context.beginPath(); context.moveTo(0, -half); context.lineTo(0, half); context.stroke();
+      context.strokeStyle = '#82d5ae';
+      context.lineWidth = 1.8;
+      context.beginPath(); context.moveTo(0, -half); context.lineTo(0, half); context.stroke();
+      context.fillStyle = '#a4e2c3';
+      for (let y = -half; y <= half; y += 14) {
+        context.beginPath(); context.arc(0, y, 1.8, 0, Math.PI * 2); context.fill();
+      }
+      context.beginPath(); context.moveTo(-6, -half - 4); context.lineTo(0, -half - 9); context.lineTo(6, -half - 4); context.stroke();
+    }
+
+    function objectPolygon(object) {
+      return solidVertices(object);
+    }
+
+    function pointInPolygon(point, vertices) {
+      let inside = false;
+      for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i, i += 1) {
+        const a = vertices[i];
+        const b = vertices[j];
+        const crosses = ((a.y > point.y) !== (b.y > point.y))
+          && point.x < (b.x - a.x) * (point.y - a.y) / ((b.y - a.y) || 1e-12) + a.x;
+        if (crosses) inside = !inside;
+      }
+      return inside;
+    }
+
+    function distanceToSegment(point, start, end) {
+      const segment = sub(end, start);
+      const lengthSquared = dot(segment, segment);
+      const fraction = lengthSquared > 0 ? clamp(dot(sub(point, start), segment) / lengthSquared, 0, 1) : 0;
+      return magnitude(sub(point, add(start, mul(segment, fraction))));
+    }
+
+    function distanceToCurvedMirror(object, point) {
+      let distance = Infinity;
+      const signedRadius = object.curvature === 'concave' ? -object.radius : object.radius;
+      for (let index = 0; index < 30; index += 1) {
+        const y1 = -object.length / 2 + object.length * index / 30;
+        const y2 = -object.length / 2 + object.length * (index + 1) / 30;
+        const x1 = Math.sign(signedRadius) * (Math.abs(signedRadius) - Math.sqrt(Math.max(0, signedRadius * signedRadius - y1 * y1)));
+        const x2 = Math.sign(signedRadius) * (Math.abs(signedRadius) - Math.sqrt(Math.max(0, signedRadius * signedRadius - y2 * y2)));
+        distance = Math.min(distance, distanceToSegment(point, elementPoint(object, x1, y1), elementPoint(object, x2, y2)));
+      }
+      return distance;
+    }
+
+    function objectHitTest(object, point) {
+      const local = localCoordinates(object, point);
+      if (object.type === 'flashlight' || object.type === 'laser') return magnitude(sub(point, vec(object.x, object.y))) < 22;
+      if (object.type === 'prism' || object.type === 'glass') {
+        const polygon = objectPolygon(object);
+        if (pointInPolygon(point, polygon)) return true;
+        for (let i = 0; i < polygon.length; i += 1) {
+          if (distanceToSegment(point, polygon[i], polygon[(i + 1) % polygon.length]) < 11) return true;
+        }
+        return false;
+      }
+      if (object.type === 'lens') return Math.abs(local.y) <= object.length / 2 + 10 && Math.abs(local.x) <= 17;
+      if (object.type === 'curvedMirror') return distanceToCurvedMirror(object, point) < 12;
+      const [start, end] = surfaceSegment(object);
+      return distanceToSegment(point, start, end) < 11;
+    }
+
+    function rotationHandle(object) {
+      const distance = object.type === 'flashlight' || object.type === 'laser' ? 37 : 57;
+      return add(vec(object.x, object.y), mul(normalFor(object), distance));
+    }
+
+    function drawSelection(context, object) {
+      context.save();
+      context.strokeStyle = 'rgba(141,209,232,.85)';
+      context.fillStyle = '#a9d7ea';
+      context.lineWidth = 1.2;
+      context.setLineDash([4, 4]);
+      if (object.type === 'flashlight' || object.type === 'laser') {
+        context.beginPath(); context.arc(object.x, object.y, 23, 0, Math.PI * 2); context.stroke();
+      } else if (object.type === 'prism' || object.type === 'glass') {
+        const polygon = objectPolygon(object);
+        context.beginPath();
+        polygon.forEach((point, index) => index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y));
+        context.closePath(); context.stroke();
+      } else if (object.type === 'lens') {
+        context.beginPath();
+        context.moveTo(object.x - 15 * Math.cos(object.angle), object.y - 15 * Math.sin(object.angle));
+        context.lineTo(object.x + 15 * Math.cos(object.angle), object.y + 15 * Math.sin(object.angle));
+        context.stroke();
+      } else if (object.type === 'curvedMirror') {
+        const [start, end] = surfaceSegment(object);
+        context.beginPath(); context.moveTo(start.x, start.y); context.lineTo(end.x, end.y); context.stroke();
+      } else {
+        const [start, end] = surfaceSegment(object);
+        context.beginPath(); context.moveTo(start.x, start.y); context.lineTo(end.x, end.y); context.stroke();
+      }
+      context.setLineDash([]);
+      const handle = rotationHandle(object);
+      context.beginPath(); context.moveTo(object.x, object.y); context.lineTo(handle.x, handle.y); context.stroke();
+      context.beginPath(); context.arc(handle.x, handle.y, 7, 0, Math.PI * 2); context.fill();
+      context.strokeStyle = '#0b1015';
+      context.lineWidth = 1.5;
+      context.stroke();
+      context.restore();
+    }
+
+    function worldPointFromEvent(event) {
+      const bounds = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - bounds.left - view.offsetX) / view.scale,
+        y: (event.clientY - bounds.top - view.offsetY) / view.scale
+      };
+    }
+
+    canvas.addEventListener('pointerdown', event => {
+      const point = worldPointFromEvent(event);
+      const selected = getSelected();
+      if (selected && magnitude(sub(point, rotationHandle(selected))) < 13) {
+        pointerMode = 'rotate';
+        pointerObjectId = selected.id;
+        canvas.setPointerCapture(event.pointerId);
+        event.preventDefault();
+        return;
+      }
+      const hit = [...objects].reverse().find(object => objectHitTest(object, point));
+      if (hit) {
+        selectedId = hit.id;
+        pointerMode = 'move';
+        pointerObjectId = hit.id;
+        pointerOffset = { x: point.x - hit.x, y: point.y - hit.y };
+        renderInspector();
+        renderScene();
+        canvas.setPointerCapture(event.pointerId);
+      } else {
+        selectedId = null;
+        pointerMode = null;
+        pointerObjectId = null;
+        renderInspector();
+        renderScene();
+      }
+      event.preventDefault();
+    });
+
+    canvas.addEventListener('pointermove', event => {
+      if (!pointerMode || !pointerObjectId) return;
+      const object = objects.find(item => item.id === pointerObjectId);
+      if (!object) return;
+      const point = worldPointFromEvent(event);
+      if (pointerMode === 'move') {
+        object.x = clamp(point.x - pointerOffset.x, 5, WORLD.width - 5);
+        object.y = clamp(point.y - pointerOffset.y, 5, WORLD.height - 5);
+      } else if (pointerMode === 'rotate') {
+        object.angle = Math.atan2(point.y - object.y, point.x - object.x);
+      }
+      renderScene();
+    });
+
+    function endCanvasPointer(event) {
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      pointerMode = null;
+      pointerObjectId = null;
+    }
+    canvas.addEventListener('pointerup', endCanvasPointer);
+    canvas.addEventListener('pointercancel', endCanvasPointer);
+
+    document.querySelectorAll('[data-add]').forEach(button => {
+      button.addEventListener('click', () => {
+        const position = spawnPosition(button.dataset.add);
+        const object = createObject(button.dataset.add, position.x, position.y);
+        objects.push(object);
+        selectedId = object.id;
+        renderInspector();
+        renderScene();
+      });
+    });
+
+    function spawnPosition(toolType) {
+      if (toolType === 'flashlight' || toolType === 'laser') {
+        const sources = objects.filter(object => object.type === 'flashlight' || object.type === 'laser').length;
+        return { x: 125 + sources * 30, y: clamp(310 + ((sources % 3) - 1) * 64, 80, 540) };
+      }
+      if (toolType === 'sensor') {
+        const sensors = objects.filter(object => object.type === 'sensor').length;
+        return { x: 835 - sensors * 34, y: clamp(310 + ((sensors % 3) - 1) * 66, 80, 540) };
+      }
+      const optics = objects.filter(object => !['flashlight', 'laser', 'sensor'].includes(object.type)).length;
+      return { x: clamp(490 + (optics % 4 - 1.5) * 36, 100, 900), y: clamp(310 + (optics % 5 - 2) * 48, 100, 520) };
+    }
+
+    inspector.addEventListener('click', event => {
+      if (event.target.closest('[data-action="remove"]')) removeSelected();
+    });
+
+    function removeSelected() {
+      if (!selectedId) return;
+      objects = objects.filter(object => object.id !== selectedId);
+      selectedId = objects.length ? objects[objects.length - 1].id : null;
+      renderInspector();
+      renderScene();
+    }
+
+    document.getElementById('reset-scene').addEventListener('click', seedScene);
+
+    document.addEventListener('keydown', event => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        removeSelected();
+      } else if (event.key.toLowerCase() === 'r' && selectedId) {
+        const object = getSelected();
+        object.angle += degToRad(event.shiftKey ? -15 : 15);
+        renderInspector();
+        renderScene();
+      } else if (event.key === 'Escape') {
+        selectedId = null;
+        renderInspector();
+        renderScene();
+      }
+    });
+
+    function resizeCanvas() {
+      const bounds = canvas.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(bounds.width * dpr);
+      canvas.height = Math.round(bounds.height * dpr);
+      const scale = Math.min(bounds.width / WORLD.width, bounds.height / WORLD.height);
+      view = {
+        width: bounds.width,
+        height: bounds.height,
+        dpr,
+        scale,
+        offsetX: (bounds.width - WORLD.width * scale) / 2,
+        offsetY: (bounds.height - WORLD.height * scale) / 2
+      };
+      drawScene();
+    }
+
+    const resizeObserver = new ResizeObserver(resizeCanvas);
+    resizeObserver.observe(canvas);
+    window.addEventListener('resize', resizeCanvas);
+
+    seedScene();
+    resizeCanvas();
+  </script>
+</body>
+</html>

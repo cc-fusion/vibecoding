@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumen — Optics Sandbox</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  html,body{height:100%;background:#070b11;color:#dbe4ef;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#243040;border-radius:8px}::-webkit-scrollbar-track{background:transparent}
+  input[type=range]{accent-color:#22d3ee;cursor:pointer}
+  select,input[type=number],input[type=text]{background:#0c121a;border:1px solid #1f2a3a;border-radius:8px;padding:6px 8px;font-size:12px;color:#dbe4ef;outline:none;width:100%}
+  select:focus,input:focus{border-color:#22d3ee66}
+  .tool-btn{transition:all .15s ease}
+  .tool-btn:hover{background:#182233;border-color:#2a3a52}
+  .tool-btn.active{background:#0e2a33;border-color:#22d3ee66}
+  .seg-btn{transition:all .15s}
+  .seg-btn.active{background:#22d3ee;color:#06202a;font-weight:600}
+  canvas{display:block}
+  .glass{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015));}
+  .prop-label{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#7d8aa0;font-weight:600}
+  .val{font-size:11px;color:#9fb0c7;font-variant-numeric:tabular-nums}
+  .divider{height:1px;background:#1a2433;margin:12px 0}
+  #scene{cursor:default;touch-action:none}
+  .kbd{background:#1a2433;border:1px solid #2a3a52;border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px}
+</style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+<!-- TOP BAR -->
+<header class="h-[52px] shrink-0 flex items-center justify-between px-4 border-b border-[#16202f] bg-[#0a0f16]/90 backdrop-blur z-20">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-400 via-sky-500 to-violet-500 grid place-items-center shadow-[0_0_24px_#22d3ee44]">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12h7l2-5 2 10 2-5h3" stroke="#06121a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div>
+      <div class="text-[14px] font-semibold tracking-tight leading-none">Lumen <span class="text-cyan-300 font-normal">· Optics Sandbox</span></div>
+      <div class="text-[11px] text-slate-500 mt-0.5">real dispersion · polarization · diffraction</div>
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <div id="statRays" class="hidden md:block text-[11px] text-slate-500 tabular-nums mr-2">— rays</div>
+    <button id="btnPause" class="flex items-center gap-2 text-[12px] px-3 h-8 rounded-lg bg-[#131c29] border border-[#223047] hover:border-cyan-400/40 hover:bg-[#162233] transition">
+      <svg id="icoPause" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+      <span id="pauseLabel">Pause light</span>
+    </button>
+    <button id="btnClear" class="text-[12px] px-3 h-8 rounded-lg bg-[#131c29] border border-[#223047] hover:border-rose-400/40 hover:text-rose-200 transition">Clear</button>
+    <button id="btnHelp" class="w-8 h-8 grid place-items-center rounded-lg bg-[#131c29] border border-[#223047] hover:border-cyan-400/40 transition text-slate-300 font-semibold">?</button>
+  </div>
+</header>
+
+<div class="flex-1 flex min-h-0">
+  <!-- LEFT TOOLBAR -->
+  <aside class="w-[78px] shrink-0 border-r border-[#16202f] bg-[#0a0f16] flex flex-col items-center py-3 gap-1.5 overflow-y-auto z-10">
+    <div class="prop-label mb-1">Add</div>
+    <div id="toolbar" class="flex flex-col gap-1.5 w-full px-2"></div>
+    <div class="mt-auto px-2 w-full">
+      <div class="text-[10px] text-slate-600 leading-tight text-center">click to place<br>drag to move</div>
+    </div>
+  </aside>
+
+  <!-- CANVAS -->
+  <main id="stageWrap" class="flex-1 relative min-w-0 bg-[#070b11]">
+    <canvas id="scene" class="absolute inset-0 w-full h-full"></canvas>
+    <div id="hint" class="absolute left-3 bottom-3 text-[11px] text-slate-500 bg-[#0a0f16]/80 border border-[#1a2433] rounded-lg px-2.5 py-1.5 backdrop-blur pointer-events-none">
+      drag body to move · drag <span class="text-cyan-300">○</span> handle to rotate · <span class="kbd">Del</span> deletes
+    </div>
+    <div id="emptyMsg" class="absolute inset-0 hidden items-center justify-center pointer-events-none">
+      <div class="text-slate-600 text-[13px]">Add an emitter from the left to begin</div>
+    </div>
+  </main>
+
+  <!-- RIGHT PANEL -->
+  <aside class="w-[302px] shrink-0 border-l border-[#16202f] bg-[#0a0f16] flex flex-col min-h-0">
+    <div class="px-4 pt-3 pb-2 border-b border-[#16202f] flex items-center justify-between">
+      <div id="propsTitle" class="text-[12px] font-semibold tracking-wide text-slate-200">Scene</div>
+      <div id="propsSub" class="text-[11px] text-slate-500"></div>
+    </div>
+    <div id="props" class="flex-1 overflow-y-auto px-4 py-3"></div>
+  </aside>
+</div>
+
+<!-- HELP MODAL -->
+<div id="helpModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+  <div class="max-w-[560px] w-full rounded-2xl bg-[#0c121a] border border-[#223047] p-6 shadow-2xl max-h-[86vh] overflow-y-auto">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="text-[16px] font-semibold">How to play with light</div>
+        <div class="text-[12px] text-slate-400 mt-1">A physically-based 2D ray tracer. Every wavelength is traced independently.</div>
+      </div>
+      <button id="btnCloseHelp" class="w-8 h-8 rounded-lg bg-[#131c29] border border-[#223047] hover:border-cyan-400/40">✕</button>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mt-4 text-[12px]">
+      <div class="rounded-xl p-3 bg-[#101825] border border-[#1c2940]"><b class="text-cyan-300">1 · Add</b><br><span class="text-slate-400">Click any tool on the left. It appears at the canvas center.</span></div>
+      <div class="rounded-xl p-3 bg-[#101825] border border-[#1c2940]"><b class="text-cyan-300">2 · Move</b><br><span class="text-slate-400">Drag the body. Drag the ○ handle to rotate.</span></div>
+      <div class="rounded-xl p-3 bg-[#101825] border border-[#1c2940]"><b class="text-cyan-300">3 · Tune</b><br><span class="text-slate-400">Select any object — the right panel shows its real parameters.</span></div>
+      <div class="rounded-xl p-3 bg-[#101825] border border-[#1c2940]"><b class="text-cyan-300">4 · Measure</b><br><span class="text-slate-400">Place a sensor to read power and colour of incident light.</span></div>
+    </div>
+    <div class="mt-4 text-[12px] text-slate-300 font-semibold">Physics used (no fakes)</div>
+    <ul class="mt-1 text-[12px] text-slate-400 space-y-1 list-disc pl-5">
+      <li><span class="text-slate-200">Snell + Fresnel</span> — n₁sinθ₁ = n₂sinθ₂, Rₛ/Rₚ from full Fresnel equations, TIR when sinθ > n₂/n₁</li>
+      <li><span class="text-slate-200">Sellmeier dispersion</span> — n(λ)² = 1 + Σ Bᵢλ²/(λ²−Cᵢ) for BK7 / SF10 / silica (lens focus + prism rainbow shift with λ)</li>
+      <li><span class="text-slate-200">Grating equation</span> — sinθₘ = sinθᵢₙ + mλ/d, d = 1/lines-per-mm, orders |sin| ≤ 1</li>
+      <li><span class="text-slate-200">Thin-lens</span> — θₒᵤₜ = θᵢₙ − atan(h/f(λ)), f(λ) scaled by (n_d−1)/(n(λ)−1)</li>
+      <li><span class="text-slate-200">Malus + Stokes-ish</span> — tracks in-plane / out-of-plane power, I = Iₚcos²A + Iₛsin²A</li>
+      <li><span class="text-slate-200">Planck blackbody</span> — sunlight / tungsten spectra from Planck's law; LED = gaussians</li>
+      <li><span class="text-slate-200">Curved mirror</span> — exact circle intersection, f = R/2</li>
+    </ul>
+    <div class="mt-3 text-[11px] text-slate-500">Tip: white LED through a 600 lines/mm transmission grating or an SF10 prism gives the cleanest rainbow. Cross two polarizers at 0° / 90° to kill any beam.</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   LUMEN — physically-based 2D optics sandbox (plain JS)
+   ============================================================ */
+const TAU = Math.PI*2;
+const D2R = Math.PI/180, R2D = 180/Math.PI;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+let _uid=1; const uid=()=> 'o'+(_uid++);
+
+/* ---------- wavelength handling ---------- */
+const NL = 24, LAM_MIN=380, LAM_MAX=780;
+const LAMBDAS = Array.from({length:NL},(_,i)=> LAM_MIN + i*(LAM_MAX-LAM_MIN)/(NL-1));
+
+function wavelengthToRGB(w){
+  // Dan Bruton approx
+  let r=0,g=0,b=0;
+  if(w>=380&&w<440){r=-(w-440)/60;b=1;}
+  else if(w<490){g=(w-440)/50;b=1;}
+  else if(w<510){g=1;b=-(w-510)/20;}
+  else if(w<580){r=(w-510)/70;g=1;b=0;}
+  else if(w<645){r=1;g=-(w-645)/65;b=0;}
+  else {r=1;}
+  let f=1;
+  if(w<420) f=0.35+0.65*(w-380)/40;
+  else if(w>700) f=0.35+0.65*(780-w)/80;
+  const gamma=0.85;
+  r=Math.pow(clamp(r*f,0,1),gamma); g=Math.pow(clamp(g*f,0,1),gamma); b=Math.pow(clamp(b*f,0,1),gamma);
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+}
+const LAMBDA_RGB = LAMBDAS.map(wavelengthToRGB);
+function cssRGB(rgb,a=1){return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;}
+
+/* ---------- glass dispersion (Sellmeier, λ in nm) ---------- */
+const GLASS_COEFF = {
+  BK7:   {B:[1.03961212,0.231792344,1.01046945], C:[0.00600069867,0.0200179144,103.560653]},
+  SF10:  {B:[1.61625977,0.259229334,1.07762317], C:[0.0127534559,0.0581983954,116.60768]},
+  SILICA:{B:[0.6961663,0.4079426,0.8974794],     C:[0.00467914826,0.0135120631,97.9340025]},
+};
+function glassN(glass, lamNm){
+  if(glass==='ACRYLIC'){ const l2=lamNm*lamNm; return 1.47 + 8000/l2; }
+  const c=GLASS_COEFF[glass]||GLASS_COEFF.BK7;
+  const l=lamNm/1000, l2=l*l;
+  let n2=1;
+  for(let i=0;i<3;i++) n2 += c.B[i]*l2/(l2-c.C[i]);
+  return Math.sqrt(n2);
+}
+const N_D = {}; for(const k of ['BK7','SF10','SILICA','ACRYLIC']) N_D[k]=glassN(k,587.6);
+
+/* ---------- spectra ---------- */
+function gauss(lam, peak, sigma){ const d=(lam-peak)/sigma; return Math.exp(-0.5*d*d); }
+function planck(lamNm, T){
+  const h=6.62607015e-34, c=299792458, k=1.380649e-23;
+  const l=lamNm*1e-9;
+  const x=(h*c)/(l*k*T);
+  if(x>60) return 0;
+  return (2*h*c*c/Math.pow(l,5))/(Math.exp(x)-1);
+}
+function normArr(a){ const m=Math.max(...a,1e-9); return a.map(v=>v/m); }
+function presetSpectrum(name){
+  if(name==='whiteLED') return normArr(LAMBDAS.map(l=> gauss(l,450,14)*1.0 + gauss(l,560,75)*0.85 + gauss(l,620,60)*0.25));
+  if(name==='sunlight') return normArr(LAMBDAS.map(l=> planck(l,5800)));
+  if(name==='tungsten') return normArr(LAMBDAS.map(l=> planck(l,3000)));
+  if(name==='red')    return normArr(LAMBDAS.map(l=> gauss(l,650,16)));
+  if(name==='green')  return normArr(LAMBDAS.map(l=> gauss(l,532,13)));
+  if(name==='blue')   return normArr(LAMBDAS.map(l=> gauss(l,450,13)));
+  if(name==='amber')  return normArr(LAMBDAS.map(l=> gauss(l,590,14)));
+  if(name==='cyan')   return normArr(LAMBDAS.map(l=> gauss(l,490,14)));
+  if(name==='violet') return normArr(LAMBDAS.map(l=> gauss(l,405,12)));
+  if(name==='magenta')return normArr(LAMBDAS.map(l=> gauss(l,450,16)*0.9+gauss(l,650,18)*0.9));
+  return normArr(LAMBDAS.map(()=>1));
+}
+function filterPreset(name){
+  const smooth=(l,e0,e1,passHigh)=>{ const s=12; let t=(l-(e0+e1)/2)/s; let v=1/(1+Math.exp(-t*2)); return passHigh?v:1-v; };
+  if(name==='red')   return LAMBDAS.map(l=> smooth(l,585,615,true));
+  if(name==='green') return normArr(LAMBDAS.map(l=> gauss(l,535,32)));
+  if(name==='blue')  return LAMBDAS.map(l=> smooth(l,485,515,false));
+  if(name==='yellow')return LAMBDAS.map(l=> smooth(l,495,525,true));
+  if(name==='cyan')  return LAMBDAS.map(l=> smooth(l,585,615,false));
+  if(name==='magenta')return LAMBDAS.map(l=> 1-gauss(l,540,45)*0.95);
+  if(name==='nd50')  return LAMBDAS.map(()=>0.5);
+  if(name==='uv-block') return LAMBDAS.map(l=> smooth(l,395,415,true));
+  return LAMBDAS.map(()=>0.6);
+}
+function spectrumAvgColor(spec){
+  let r=0,g=0,b=0,tot=0;
+  for(let i=0;i<NL;i++){ const w=spec[i]; tot+=w; r+=LAMBDA_RGB[i][0]*w; g+=LAMBDA_RGB[i][1]*w; b+=LAMBDA_RGB[i][2]*w; }
+  if(tot<1e-6) return [30,34,44];
+  return [Math.round(r/tot),Math.round(g/tot),Math.round(b/tot)];
+}
+
+/* ---------- state ---------- */
+const state = {
+  objects: [], selectedId: null,
+  settings: { exposure:1.0, quality:'med', bounces:7, grid:true, labels:true, paused:false },
+  nextN: 0,
+};
+let segments=[]; let needsTrace=true;
+let rayCanvas=document.createElement('canvas'), rayCtx=rayCanvas.getContext('2d');
+
+const canvas=document.getElementById('scene'), ctx=canvas.getContext('2d');
+const stageWrap=document.getElementById('stageWrap');
+let DPR=1, W=800, H=600;
+
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const r=stageWrap.getBoundingClientRect();
+  W=Math.max(200,r.width); H=Math.max(200,r.height);
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  rayCanvas.width=W*DPR; rayCanvas.height=H*DPR;
+  drawRaysToCache();
+}
+new ResizeObserver(resize).observe(stageWrap);
+
+/* ---------- object factories ---------- */
+function baseXY(){ return { x: W*0.5 + (Math.random()*60-30), y: H*0.5 + (Math.random()*60-30) }; }
+function makeObject(type){
+  const p=baseXY(); const id=uid();
+  switch(type){
+    case 'flashlight': return {id,type,x:p.x,y:p.y,angle:-8,divergence:11,intensity:85,beamWidth:14,spectrum:presetSpectrum('whiteLED'),preset:'whiteLED'};
+    case 'laser': return {id,type,x:p.x,y:p.y,angle:0,wavelength:650,intensity:90,beamWidth:7};
+    case 'mirror': return {id,type,x:p.x,y:p.y,angle:90,length:170,refl:0.96};
+    case 'curved': return {id,type,x:p.x,y:p.y,angle:180,length:170,radius:260,refl:0.94};
+    case 'lens': return {id,type,x:p.x,y:p.y,angle:0,aperture:150,focal:130,glass:'BK7'};
+    case 'prism': return {id,type,x:p.x,y:p.y,angle:0,size:115,apex:60,glass:'BK7',internal:true};
+    case 'grating': return {id,type,x:p.x,y:p.y,angle:90,length:170,lpm:600,kind:'transmission',maxOrder:2};
+    case 'polarizer': return {id,type,x:p.x,y:p.y,angle:90,length:150,axis:0};
+    case 'filter': return {id,type,x:p.x,y:p.y,angle:90,length:150,transmission:filterPreset('red'),preset:'red',reflect:0.07};
+    case 'blocker': return {id,type,x:p.x,y:p.y,angle:90,length:170};
+    case 'sensor': return {id,type,x:p.x,y:p.y,angle:90,length:95,_power:0,_r:0,_g:0,_b:0};
+  }
+}
+const TYPE_META = {
+  flashlight:{name:'Flashlight', desc:'diverging beam · full spectrum'},
+  laser:{name:'Laser', desc:'collimated · single λ'},
+  mirror:{name:'Mirror', desc:'flat reflector'},
+  curved:{name:'Curved mirror', desc:'spherical · f = R/2'},
+  lens:{name:'Lens', desc:'thin lens · f(λ) dispersive'},
+  prism:{name:'Prism', desc:'dispersive wedge · TIR'},
+  grating:{name:'Grating', desc:'diffraction orders'},
+  polarizer:{name:'Polarizer', desc:'Malus law'},
+  filter:{name:'Colour glass', desc:'absorptive filter'},
+  blocker:{name:'Blocker', desc:'absorbs all light'},
+  sensor:{name:'Sensor', desc:'measures power + colour'},
+};
+
+/* ---------- geometry helpers ---------- */
+function segDir(angleDeg){ const a=angleDeg*D2R; return {x:Math.cos(a),y:Math.sin(a)}; }
+function getSegment(o){
+  // returns endpoints + tangent + normal for straight-segment optics
+  if(o.type==='lens'){
+    const ax=Math.cos(o.angle*D2R), ay=Math.sin(o.angle*D2R);
+    const tx=-ay, ty=ax;
+    const h=o.aperture/2;
+    return {ax:o.x-tx*h,ay:o.y-ty*h,bx:o.x+tx*h,by:o.y+ty*h,tx,ty,nx:ax,ny:ay};
+  }
+  const t=segDir(o.angle);
+  const h=o.length/2;
+  return {ax:o.x-t.x*h,ay:o.y-t.y*h,bx:o.x+t.x*h,by:o.y+t.y*h,tx:t.x,ty:t.y,nx:-t.y,ny:t.x};
+}
+function prismVerts(o){
+  const A=o.apex*D2R, s=o.size;
+  const w=s*Math.sin(A/2), h=s*Math.cos(A/2);
+  const local=[{x:0,y:2*h/3},{x:-w,y:-h/3},{x:w,y:-h/3}];
+  const a=o.angle*D2R, c=Math.cos(a), sn=Math.sin(a);
+  return local.map(p=>({x:o.x+p.x*c-p.y*sn, y:o.y+p.x*sn+p.y*c}));
+}
+function raySeg(ox,oy,dx,dy,ax,ay,bx,by){
+  const ex=bx-ax, ey=by-ay;
+  // O + tD = A + uE  => t = ((A-O) x E)/(D x E), u = ((A-O) x D)/(D x E)
+  const crossDE=dx*ey-dy*ex;
+  if(Math.abs(crossDE)<1e-9) return null;
+  const crossAE=(ax-ox)*ey-(ay-oy)*ex;
+  const tt=crossAE/crossDE;
+  const uu=((ax-ox)*dy-(ay-oy)*dx)/crossDE;
+  // uu sign: u = ((A-O) x D)/(D x E) with... check orientation: (A-O)xD / (D x E)? Actually u = ((A-O) x D)/(D x E) ??? Let's verify sign: solving gives u = ((Ax-Ox)*Dy - (Ay-Oy)*Dx)/(Dx*Ey - Dy*Ex) * -1? Test simple: ray (0,0)->(1,0), seg (5,-1)-(5,1). Expect t=5,u=0.5. crossDE=1*2-0*0=2. crossAE=(5)*2-( -1)*0=10. tt=10/2=5 ok. uu=((5)*0-(-1)*1)/2=1/2=0.5 ok. Good no sign flip.
+  if(tt>1e-6 && uu>=-1e-6 && uu<=1+1e-6) return {t:tt,u:uu,px:ox+dx*tt,py:oy+dy*tt};
+  return null;
+}
+function pointInTri(px,py,v){
+  const d1=(px-v[1].x)*(v[0].y-v[1].y)-(v[0].x-v[1].x)*(py-v[1].y);
+  const d2=(px-v[2].x)*(v[1].y-v[2].y)-(v[1].x-v[2].x)*(py-v[2].y);
+  const d3=(px-v[0].x)*(v[2].y-v[0].y)-(v[2].x-v[0].x)*(py-v[0].y);
+  const neg=(d1<0)||(d2<0)||(d3<0), pos=(d1>0)||(d2>0)||(d3>0);
+  return !(neg&&pos);
+}
+function edgeOutwardNormal(A,B,cent){
+  let nx=-(B.y-A.y), ny=(B.x-A.x);
+  const l=Math.hypot(nx,ny)||1; nx/=l; ny/=l;
+  const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+  if((mx-cent.x)*nx+(my-cent.y)*ny<0){nx=-nx;ny=-ny;}
+  return {nx,ny};
+}
+
+/* ---------- nearest intersection ---------- */
+function findNearest(ox,oy,dx,dy){
+  let best=null, bestT=Infinity;
+  for(const o of state.objects){
+    if(o.type==='flashlight'||o.type==='laser') continue;
+    if(o.type==='prism'){
+      const v=prismVerts(o);
+      const cent={x:(v[0].x+v[1].x+v[2].x)/3,y:(v[0].y+v[1].y+v[2].y)/3};
+      for(let e=0;e<3;e++){
+        const A=v[e],B=v[(e+1)%3];
+        const hit=raySeg(ox,oy,dx,dy,A.x,A.y,B.x,B.y);
+        if(hit&&hit.t>0.6&&hit.t<bestT){
+          const n=edgeOutwardNormal(A,B,cent);
+          best={obj:o,t:hit.t,px:hit.px,py:hit.py,nx:n.nx,ny:n.ny,edge:e,Ax:A.x,Ay:A.y,Bx:B.x,By:B.y};
+          bestT=hit.t;
+        }
+      }
+    } else if(o.type==='curved'){
+      const nv={x:Math.cos(o.angle*D2R),y:Math.sin(o.angle*D2R)};
+      const R=o.radius; if(Math.abs(R)<20) continue;
+      const Rabs=Math.abs(R);
+      const Cx=o.x+nv.x*R, Cy=o.y+nv.y*R;
+      const ocx=ox-Cx, ocy=oy-Cy;
+      const b=ocx*dx+ocy*dy, c=ocx*ocx+ocy*ocy-Rabs*Rabs;
+      const disc=b*b-c;
+      if(disc<0) continue;
+      const sq=Math.sqrt(disc);
+      const cand=[-b-sq,-b+sq];
+      const tang={x:-nv.y,y:nv.x};
+      for(const t of cand){
+        if(t<0.6||t>=bestT) continue;
+        const px=ox+dx*t, py=oy+dy*t;
+        const vpx=px-o.x, vpy=py-o.y;
+        const along=Math.abs(vpx*tang.x+vpy*tang.y);
+        if(along>o.length/2+1) continue;
+        const toC={x:Cx-px,y:Cy-py};
+        // must be front hemisphere-ish: allow all within aperture, but reject back-side hit (far side of circle behind)
+        // front check: vector from vertex to hit should be roughly opposite/behind? just accept nearest valid
+        best={obj:o,t,px,py,Cx,Cy,Rabs};
+        bestT=t; break;
+      }
+    } else {
+      const s=getSegment(o);
+      const hit=raySeg(ox,oy,dx,dy,s.ax,s.ay,s.bx,s.by);
+      if(hit&&hit.t>0.6&&hit.t<bestT){ best={obj:o,t:hit.t,px:hit.px,py:hit.py,s}; bestT=hit.t; }
+    }
+  }
+  return best;
+}
+
+/* ---------- emission ---------- */
+function rayCountFor(em){
+  const q=state.settings.quality;
+  if(em.type==='laser') return q==='low'?3:q==='high'?7:5;
+  return q==='low'?16:q==='high'?64:34;
+}
+function genRays(em){
+  const n=rayCountFor(em), out=[];
+  const base=em.angle*D2R;
+  if(em.type==='laser'){
+    const px=-Math.sin(base), py=Math.cos(base);
+    for(let i=0;i<n;i++){
+      const f=n===1?0:(i/(n-1)-0.5);
+      out.push({x:em.x+px*f*em.beamWidth, y:em.y+py*f*em.beamWidth, dx:Math.cos(base), dy:Math.sin(base)});
+    }
+  } else {
+    const div=em.divergence*D2R, px=-Math.sin(base), py=Math.cos(base);
+    for(let i=0;i<n;i++){
+      const f=n===1?0.5:i/(n-1);
+      const off=(f-0.5)*em.beamWidth;
+      const ang=base+(f-0.5)*2*div + (Math.random()-0.5)*div*0.12;
+      out.push({x:em.x+px*off+Math.cos(base)*4, y:em.y+py*off+Math.sin(base)*4, dx:Math.cos(ang), dy:Math.sin(ang)});
+    }
+  }
+  return out;
+}
+
+/* ---------- Fresnel ---------- */
+function fresnel(n1,n2,cos1,cos2){
+  const rs=(n1*cos1-n2*cos2)/(n1*cos1+n2*cos2);
+  const rp=(n2*cos1-n1*cos2)/(n2*cos1+n1*cos2);
+  return {Rs:rs*rs, Rp:rp*rp};
+}
+function refractVec(dx,dy,nx,ny,n1,n2){
+  // nx,ny points against incident (cos1 = -dot>0)
+  const cos1=-(dx*nx+dy*ny);
+  const eta=n1/n2;
+  const k=1-eta*eta*(1-cos1*cos1);
+  if(k<0) return null;
+  const cos2=Math.sqrt(k);
+  return {dx:eta*dx+(eta*cos1-cos2)*nx, dy:eta*dy+(eta*cos1-cos2)*ny, cos1, cos2};
+}
+
+/* ---------- main tracer ---------- */
+function computeAll(){
+  segments=[];
+  for(const o of state.objects) if(o.type==='sensor'){o._power=0;o._r=0;o._g=0;o._b=0;o._hits=0;}
+  const maxB=state.settings.bounces;
+  let segGuard=26000;
+  for(const em of state.objects){
+    if(em.type!=='flashlight'&&em.type!=='laser') continue;
+    const rays=genRays(em);
+    const totalPower=(em.intensity/100)*4;
+    if(totalPower<=0.001) continue;
+    if(em.type==='laser'){
+      const lam=em.wavelength, rgb=wavelengthToRGB(lam);
+      for(const r of rays){
+        const per=totalPower/rays.length;
+        // laser: linearly polarised in-plane (p) for crisp polarizer demos
+        traceStack(r.x,r.y,r.dx,r.dy,per,0,lam,rgb,em,maxB,()=>segGuard--);
+        if(segGuard<0) break;
+      }
+    } else {
+      const sum=em.spectrum.reduce((a,b)=>a+b,0);
+      if(sum<1e-6) continue;
+      for(const r of rays){
+        for(let li=0;li<NL;li++){
+          const s=em.spectrum[li]; if(s<0.012) continue;
+          const per=totalPower/rays.length*s/sum;
+          traceStack(r.x,r.y,r.dx,r.dy,per/2,per/2,LAMBDAS[li],LAMBDA_RGB[li],em,maxB,()=>segGuard--);
+          if(segGuard<0) break;
+        }
+        if(segGuard<0) break;
+      }
+    }
+    if(segGuard<0) break;
+  }
+  document.getElementById('statRays').textContent = segments.length.toLocaleString()+' segments · '+state.objects.length+' objects';
+  drawRaysToCache();
+  updateSensorPanel();
+}
+
+function traceStack(ox,oy,dx,dy,p,s,lam,rgb,emitter,maxB,guard){
+  const stack=[{x:ox,y:oy,dx,dy,p,s,depth:0}];
+  const lamUm=lam/1000;
+  while(stack.length){
+    if(guard() <0) return;
+    if(segments.length>26000) return;
+    const cur=stack.pop();
+    const pw=cur.p+cur.s;
+    if(pw<4e-5) continue;
+    if(cur.depth>maxB) continue;
+    const hit=findNearest(cur.x,cur.y,cur.dx,cur.dy);
+    if(!hit){
+      segments.push({x1:cur.x,y1:cur.y,x2:cur.x+cur.dx*3200,y2:cur.y+cur.dy*3200,lam,rgb,power:pw});
+      continue;
+    }
+    segments.push({x1:cur.x,y1:cur.y,x2:hit.px,y2:hit.py,lam,rgb,power:pw});
+    const o=hit.obj;
+    const nd={depth:cur.depth+1};
+    // helpers
+    const reflect=(nx,ny)=>{
+      let nxn=nx,nyn=ny;
+      if(cur.dx*nxn+cur.dy*nyn>0){nxn=-nxn;nyn=-nyn;}
+      const d=cur.dx*nxn+cur.dy*nyn;
+      return {dx:cur.dx-2*d*nxn, dy:cur.dy-2*d*nyn, nx:nxn, ny:nyn};
+    };
+    if(o.type==='mirror'){
+      const r=reflect(hit.s.nx,hit.s.ny);
+      const k=o.refl??0.96;
+      stack.push({x:hit.px+r.dx*0.5,y:hit.py+r.dy*0.5,dx:r.dx,dy:r.dy,p:cur.p*k,s:cur.s*k,...nd});
+    }
+    else if(o.type==='curved'){
+      let nx=hit.px-hit.Cx, ny=hit.py-hit.Cy;
+      const l=Math.hypot(nx,ny)||1; nx/=l; ny/=l;
+      if(cur.dx*nx+cur.dy*ny>0){nx=-nx;ny=-ny;}
+      const d=cur.dx*nx+cur.dy*ny;
+      const rdx=cur.dx-2*d*nx, rdy=cur.dy-2*d*ny;
+      const k=o.refl??0.94;
+      stack.push({x:hit.px+rdx*0.5,y:hit.py+rdy*0.5,dx:rdx,dy:rdy,p:cur.p*k,s:cur.s*k,...nd});
+    }
+    else if(o.type==='blocker'){ /* absorb */ }
+    else if(o.type==='sensor'){
+      o._power+=pw; o._hits=(o._hits||0)+1;
+      o._r+=rgb[0]*pw; o._g+=rgb[1]*pw; o._b+=rgb[2]*pw;
+    }
+    else if(o.type==='polarizer'){
+      const A=o.axis*D2R, c=Math.cos(A), sn=Math.sin(A);
+      // p = in-plane basis? We treat p/s as scene-plane basis independent of incidence for the sheet.
+      // axis angle A measured from p (in-plane). Malus:
+      const c2=c*c, s2=sn*sn;
+      const Itrans=cur.p*c2+cur.s*s2;
+      if(Itrans<4e-5) continue;
+      stack.push({x:hit.px+cur.dx*0.5,y:hit.py+cur.dy*0.5,dx:cur.dx,dy:cur.dy,p:Itrans*c2,s:Itrans*s2,...nd});
+    }
+    else if(o.type==='filter'){
+      const li=Math.round((lam-LAM_MIN)/(LAM_MAX-LAM_MIN)*(NL-1));
+      const liC=clamp(li,0,NL-1);
+      let T=o.transmission[liC]??0.5, R=o.reflect??0.07;
+      const tSum=T+R; if(tSum>1){T/=tSum;R/=tSum;}
+      const pt=cur.p*T, st=cur.s*T, pr=cur.p*R, sr=cur.s*R;
+      if(pt+st>4e-5) stack.push({x:hit.px+cur.dx*0.5,y:hit.py+cur.dy*0.5,dx:cur.dx,dy:cur.dy,p:pt,s:st,...nd});
+      if(pr+sr>4e-5){
+        const r=reflect(hit.s.nx,hit.s.ny);
+        stack.push({x:hit.px+r.dx*0.5,y:hit.py+r.dy*0.5,dx:r.dx,dy:r.dy,p:pr,s:sr,...nd});
+      }
+    }
+    else if(o.type==='lens'){
+      const ax=Math.cos(o.angle*D2R), ay=Math.sin(o.angle*D2R);
+      let nEff={x:ax,y:ay};
+      if(cur.dx*nEff.x+cur.dy*nEff.y<0){nEff={x:-ax,y:-ay};}
+      const tx=-nEff.y, ty=nEff.x;
+      const h=(hit.px-o.x)*tx+(hit.py-o.y)*ty;
+      const nL=glassN(o.glass,lam), nd=N_D[o.glass]||1.52;
+      let f=o.focal; if(Math.abs(f)<15) f=15*Math.sign(f||1);
+      const fLam=f*(nd-1)/(nL-1);
+      const thIn=Math.atan2(nEff.x*cur.dy-nEff.y*cur.dx, nEff.x*cur.dx+nEff.y*cur.dy); // signed? use cross/dot
+      // cross = n x d = nx*dy - ny*dx ; dot = n·d
+      const thOut=thIn - Math.atan(h/fLam);
+      const c=Math.cos(thOut), sn2=Math.sin(thOut);
+      // d_out = nEff*c + perp(nEff)*sn ; perp = (-ny,nx)
+      const dx2=nEff.x*c + (-nEff.y)*sn2, dy2=nEff.y*c + (nEff.x)*sn2;
+      const k=0.96;
+      stack.push({x:hit.px+dx2*0.6,y:hit.py+dy2*0.6,dx:dx2,dy:dy2,p:cur.p*k,s:cur.s*k,...nd});
+    }
+    else if(o.type==='grating'){
+      const sgm=hit.s;
+      const sinIn=cur.dx*sgm.tx+cur.dy*sgm.ty;
+      const dotN=cur.dx*sgm.nx+cur.dy*sgm.ny;
+      const signN=dotN>=0?1:-1;
+      const dPx=1000/o.lpm; // px (1px = 1µm)
+      const orders=[]; let wSum=0;
+      for(let m=-o.maxOrder;m<=o.maxOrder;m++){
+        const sinOut=sinIn + m*lamUm/dPx;
+        if(Math.abs(sinOut)>1) continue;
+        const w=1/(1+Math.abs(m)*1.9); orders.push({m,sinOut,w}); wSum+=w;
+      }
+      const totEff=0.92;
+      for(const od of orders){
+        const eff=od.w/wSum*totEff;
+        const mag=Math.sqrt(1-od.sinOut*od.sinOut);
+        let dx2,dy2;
+        if(o.kind==='transmission'){ dx2=sgm.tx*od.sinOut+sgm.nx*signN*mag; dy2=sgm.ty*od.sinOut+sgm.ny*signN*mag; }
+        else { dx2=sgm.tx*od.sinOut-sgm.nx*signN*mag; dy2=sgm.ty*od.sinOut-sgm.ny*signN*mag; }
+        const l=Math.hypot(dx2,dy2)||1; dx2/=l; dy2/=l;
+        stack.push({x:hit.px+dx2*0.6,y:hit.py+dy2*0.6,dx:dx2,dy:dy2,p:cur.p*eff,s:cur.s*eff,...nd});
+      }
+    }
+    else if(o.type==='prism'){
+      const nG=glassN(o.glass,lam), nA=1.0;
+      let nx=hit.nx, ny=hit.ny;
+      const dot=cur.dx*nx+cur.dy*ny;
+      const entering=dot<0;
+      const n1=entering?nA:nG, n2=entering?nG:nA;
+      // normal against incident:
+      let axn=nx, ayn=ny;
+      if(!entering){axn=-nx;ayn=-ny;}
+      const cos1=Math.abs(dot);
+      const sin1=Math.sqrt(Math.max(0,1-cos1*cos1));
+      const sin2=n1/n2*sin1;
+      if(sin2>1){
+        // TIR
+        if(o.internal){
+          const r=reflect(nx,ny);
+          stack.push({x:hit.px+r.dx*0.5,y:hit.py+r.dy*0.5,dx:r.dx,dy:r.dy,p:cur.p,s:cur.s,...nd});
+        }
+        continue;
+      }
+      const refr=refractVec(cur.dx,cur.dy,axn,ayn,n1,n2);
+      if(!refr) continue;
+      const {Rs,Rp}=fresnel(n1,n2,refr.cos1,refr.cos2);
+      const pt=cur.p*(1-Rp), st=cur.s*(1-Rs), pr=cur.p*Rp, sr=cur.s*Rs;
+      if(pt+st>4e-5) stack.push({x:hit.px+refr.dx*0.6,y:hit.py+refr.dy*0.6,dx:refr.dx,dy:refr.dy,p:pt,s:st,...nd});
+      if((pr+sr>4e-5)){
+        // only keep Fresnel reflection if meaningful or inside (internal toggle gates inside reflections)
+        const inside=!entering;
+        if(!inside || o.internal){
+          const r=reflect(nx,ny);
+          // suppress tiny entry reflection branching explosion: keep if > 1.5% of incident
+          if(pr+sr > pw*0.008) stack.push({x:hit.px+r.dx*0.5,y:hit.py+r.dy*0.5,dx:r.dx,dy:r.dy,p:pr,s:sr,...nd});
+        }
+      }
+    }
+  }
+}
+
+/* ---------- ray cache drawing ---------- */
+function drawRaysToCache(){
+  rayCtx.setTransform(DPR,0,0,DPR,0,0);
+  rayCtx.clearRect(0,0,W,H);
+  if(state.settings.paused) return;
+  rayCtx.globalCompositeOperation='lighter';
+  rayCtx.lineCap='round'; rayCtx.lineJoin='round';
+  const exp=state.settings.exposure;
+  const gain=70*exp;
+  // glow pass then core pass (two loops for correct additive)
+  for(const pass of [{w:4.5,m:0.16},{w:1.6,m:1.0}]){
+    for(let i=0;i<segments.length;i++){
+      const s=segments[i];
+      const a=clamp(s.power*gain*pass.m,0,0.85);
+      if(a<0.004) continue;
+      rayCtx.globalAlpha=a;
+      rayCtx.strokeStyle=`rgb(${s.rgb[0]},${s.rgb[1]},${s.rgb[2]})`;
+      rayCtx.lineWidth=pass.w;
+      rayCtx.beginPath(); rayCtx.moveTo(s.x1,s.y1); rayCtx.lineTo(s.x2,s.y2); rayCtx.stroke();
+    }
+  }
+  rayCtx.globalAlpha=1; rayCtx.globalCompositeOperation='source-over';
+}
+
+/* ---------- scene drawing ---------- */
+function drawGrid(){
+  if(!state.settings.grid) return;
+  ctx.strokeStyle='rgba(120,150,190,0.07)'; ctx.lineWidth=1;
+  const step=40;
+  ctx.beginPath();
+  for(let x=(W/2)%step;x<W;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,H);}
+  for(let y=(H/2)%step;y<H;y+=step){ctx.moveTo(0,y);ctx.lineTo(W,y);}
+  ctx.stroke();
+}
+function drawObjects(){
+  const selId=state.selectedId;
+  for(const o of state.objects) drawObject(o, o.id===selId);
+  // rotation handles for selected
+  const sel=state.objects.find(o=>o.id===selId);
+  if(sel){
+    const hp=handlePos(sel);
+    ctx.save();
+    ctx.strokeStyle='rgba(34,211,238,0.5)'; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(sel.x,sel.y);ctx.lineTo(hp.x,hp.y);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#06202a';ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(hp.x,hp.y,7,0,TAU);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#22d3ee';ctx.beginPath();ctx.arc(hp.x,hp.y,2.2,0,TAU);ctx.fill();
+    ctx.restore();
+  }
+  // sensor labels
+  if(state.settings.labels){
+    for(const o of state.objects) if(o.type==='sensor'){
+      const pwr=o._power||0;
+      const pct=clamp(pwr/4*100,0,999);
+      const label = pwr<0.005 ? 'no light' : pct.toFixed(1)+'%';
+      const r=Math.round(o._r/Math.max(1e-6,pwr)||0), g=Math.round(o._g/Math.max(1e-6,pwr)||0), b=Math.round(o._b/Math.max(1e-6,pwr)||0);
+      ctx.save();
+      ctx.font='11px Inter, sans-serif';
+      const tw=ctx.measureText(label).width;
+      const bx=o.x+12, by=o.y-28;
+      ctx.fillStyle='rgba(8,13,20,0.88)'; ctx.strokeStyle='#223047'; ctx.lineWidth=1;
+      roundRect(bx,by,tw+30,22,7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=`rgb(${clamp(r,0,255)},${clamp(g,0,255)},${clamp(b,0,255)})`;
+      ctx.beginPath();ctx.arc(bx+11,by+11,5,0,TAU);ctx.fill();
+      ctx.fillStyle='#dbe4ef'; ctx.fillText(label,bx+20,by+15);
+      ctx.restore();
+    }
+  }
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function handlePos(o){
+  if(o.type==='flashlight'||o.type==='laser'||o.type==='lens'||o.type==='curved'){
+    const a=o.angle*D2R; return {x:o.x+Math.cos(a)*46, y:o.y+Math.sin(a)*46};
+  } else {
+    const a=(o.angle+90)*D2R; return {x:o.x+Math.cos(a)*42, y:o.y+Math.sin(a)*42};
+  }
+}
+function drawObject(o, sel){
+  ctx.save();
+  if(sel){ctx.shadowColor='rgba(34,211,238,0.55)';ctx.shadowBlur=14;}
+  switch(o.type){
+    case 'flashlight':{
+      const a=o.angle*D2R;
+      ctx.translate(o.x,o.y);ctx.rotate(a);
+      ctx.fillStyle='#1a2433';ctx.strokeStyle=sel?'#22d3ee':'#33445e';ctx.lineWidth=1.5;
+      roundRect(-20,-9,26,18,5);ctx.fill();ctx.stroke();
+      const avg=spectrumAvgColor(o.spectrum);
+      ctx.fillStyle=`rgb(${avg[0]},${avg[1]},${avg[2]})`;
+      roundRect(6,-7,5,14,2);ctx.fill();
+      ctx.fillStyle='#0b1119';ctx.fillRect(-18,-4,8,8);
+      ctx.restore(); break;}
+    case 'laser':{
+      const a=o.angle*D2R, rgb=wavelengthToRGB(o.wavelength);
+      ctx.translate(o.x,o.y);ctx.rotate(a);
+      ctx.fillStyle='#1a2433';ctx.strokeStyle=sel?'#22d3ee':'#33445e';ctx.lineWidth=1.5;
+      roundRect(-16,-7,24,14,4);ctx.fill();ctx.stroke();
+      ctx.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+      ctx.shadowColor=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.9)`;ctx.shadowBlur=10;
+      ctx.beginPath();ctx.arc(10,0,4,0,TAU);ctx.fill();
+      ctx.restore(); break;}
+    case 'mirror':{
+      const s=getSegment(o);
+      ctx.strokeStyle='#0b1119';ctx.lineWidth=7;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.strokeStyle=sel?'#22d3ee':'#cbd5e1';ctx.lineWidth=3.5;
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      // back hatch
+      ctx.strokeStyle='rgba(148,163,184,0.4)';ctx.lineWidth=1;
+      const nx=s.nx, ny=s.ny;
+      ctx.beginPath();
+      for(let t=0;t<=1.001;t+=0.12){const px=lerp(s.ax,s.bx,t),py=lerp(s.ay,s.by,t);ctx.moveTo(px,py);ctx.lineTo(px+nx*7,py+ny*7);}
+      ctx.stroke();
+      ctx.restore(); break;}
+    case 'curved':{
+      const nv={x:Math.cos(o.angle*D2R),y:Math.sin(o.angle*D2R)};
+      const R=o.radius, Rabs=Math.max(20,Math.abs(R));
+      const Cx=o.x+nv.x*R, Cy=o.y+nv.y*R;
+      const toV=Math.atan2(o.y-Cy,o.x-Cx);
+      const half=(o.length/2)/Rabs;
+      ctx.strokeStyle='#0b1119';ctx.lineWidth=7;ctx.lineCap='round';
+      ctx.beginPath();ctx.arc(Cx,Cy,Rabs,toV-half,toV+half);ctx.stroke();
+      ctx.strokeStyle=sel?'#22d3ee':'#cbd5e1';ctx.lineWidth=3.5;
+      ctx.beginPath();ctx.arc(Cx,Cy,Rabs,toV-half,toV+half);ctx.stroke();
+      // focal point
+      const fx=o.x+nv.x*R/2, fy=o.y+nv.y*R/2;
+      ctx.fillStyle='rgba(34,211,238,0.9)';ctx.beginPath();ctx.arc(fx,fy,2.5,0,TAU);ctx.fill();
+      ctx.restore(); break;}
+    case 'lens':{
+      const ax=Math.cos(o.angle*D2R),ay=Math.sin(o.angle*D2R);
+      const tx=-ay,ty=ax,h=o.aperture/2;
+      const top={x:o.x+tx*h,y:o.y+ty*h}, bot={x:o.x-tx*h,y:o.y-ty*h};
+      const convex=o.focal>0;
+      ctx.restore();
+      ctx.save();
+      if(sel){ctx.shadowColor='rgba(34,211,238,0.55)';ctx.shadowBlur=14;}
+      const nx=ax,ny=ay;
+      const t=clamp(22*Math.exp(-Math.abs(o.focal)/160)+6,6,20);
+      ctx.fillStyle=convex?'rgba(125,211,252,0.14)':'rgba(196,181,253,0.12)';
+      ctx.strokeStyle=sel?'#22d3ee':(convex?'#7dd3fc':'#c4b5fd');ctx.lineWidth=1.8;ctx.lineJoin='round';
+      ctx.beginPath();
+      if(convex){
+        ctx.moveTo(top.x,top.y);
+        ctx.quadraticCurveTo(o.x+nx*t,o.y+ny*t,bot.x,bot.y);
+        ctx.quadraticCurveTo(o.x-nx*t,o.y-ny*t,top.x,top.y);
+        ctx.fill();ctx.stroke();
+      } else {
+        // concave: thin centre — two inward arcs, no fill
+        ctx.moveTo(top.x,top.y);
+        ctx.quadraticCurveTo(o.x+nx*t*0.25,o.y+ny*t*0.25,bot.x,bot.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(top.x,top.y);
+        ctx.quadraticCurveTo(o.x-nx*t*0.25,o.y-ny*t*0.25,bot.x,bot.y);
+        ctx.stroke();
+        // end caps
+        ctx.lineWidth=1.4;
+        ctx.beginPath();ctx.moveTo(top.x,top.y);ctx.lineTo(top.x-nx*1.5,top.y-ny*1.5);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(bot.x,bot.y);ctx.lineTo(bot.x-nx*1.5,bot.y-ny*1.5);ctx.stroke();
+      }
+      // focal points
+      const f=o.focal;
+      for(const sgn of [1,-1]){
+        const fx=o.x+ax*f*sgn*0.5, fy=o.y+ay*f*sgn*0.5;
+        if(Math.hypot(fx-o.x,fy-o.y)<600){
+          ctx.fillStyle='rgba(34,211,238,0.55)';
+          ctx.beginPath();ctx.arc(fx,fy,2,0,TAU);ctx.fill();
+        }
+      }
+      ctx.restore(); break;}
+    case 'prism':{
+      const v=prismVerts(o);
+      const g=ctx.createLinearGradient(v[0].x,v[0].y,v[1].x,v[1].y);
+      g.addColorStop(0,'rgba(148,197,255,0.20)');g.addColorStop(1,'rgba(148,197,255,0.06)');
+      ctx.fillStyle=g;ctx.strokeStyle=sel?'#22d3ee':'#8fb4dd';ctx.lineWidth=1.8;ctx.lineJoin='round';
+      ctx.beginPath();ctx.moveTo(v[0].x,v[0].y);ctx.lineTo(v[1].x,v[1].y);ctx.lineTo(v[2].x,v[2].y);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.restore(); break;}
+    case 'grating':{
+      const s=getSegment(o);
+      ctx.strokeStyle=sel?'#22d3ee':'#c4b5fd';ctx.lineWidth=3;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.strokeStyle='rgba(196,181,253,0.55)';ctx.lineWidth=1;
+      ctx.beginPath();
+      for(let t=0;t<=1.001;t+=0.055){const px=lerp(s.ax,s.bx,t),py=lerp(s.ay,s.by,t);ctx.moveTo(px,py);ctx.lineTo(px+s.nx*8,py+s.ny*8);}
+      ctx.stroke();
+      ctx.fillStyle='rgba(196,181,253,0.9)';ctx.font='10px Inter';ctx.fillText((o.lpm)+' l/mm', (s.ax+s.bx)/2+8,(s.ay+s.by)/2-6);
+      ctx.restore(); break;}
+    case 'polarizer':{
+      const s=getSegment(o);
+      ctx.strokeStyle=sel?'#22d3ee':'#fdba74';ctx.lineWidth=3;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      // axis arrows across
+      const a=o.axis*D2R;
+      const ax2=Math.cos(a),ay2=Math.sin(a);
+      ctx.strokeStyle='rgba(253,186,116,0.7)';ctx.lineWidth=1.2;
+      const cx=(s.ax+s.bx)/2, cy=(s.ay+s.by)/2;
+      ctx.beginPath();ctx.moveTo(cx-ax2*16,cy-ay2*16);ctx.lineTo(cx+ax2*16,cy+ay2*16);ctx.stroke();
+      ctx.fillStyle='rgba(253,186,116,0.9)';
+      ctx.beginPath();ctx.arc(cx+ax2*16,cy+ay2*16,2.5,0,TAU);ctx.fill();
+      ctx.beginPath();ctx.arc(cx-ax2*16,cy-ay2*16,2.5,0,TAU);ctx.fill();
+      ctx.restore(); break;}
+    case 'filter':{
+      const s=getSegment(o);
+      const avg=spectrumAvgColor(o.transmission);
+      ctx.strokeStyle=`rgba(${avg[0]},${avg[1]},${avg[2]},0.95)`;ctx.lineWidth=6;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.strokeStyle=sel?'#22d3ee':'rgba(255,255,255,0.35)';ctx.lineWidth=1.2;
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.restore(); break;}
+    case 'blocker':{
+      const s=getSegment(o);
+      ctx.strokeStyle='#020409';ctx.lineWidth=9;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.strokeStyle=sel?'#22d3ee':'#475569';ctx.lineWidth=5;
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.strokeStyle='rgba(148,163,184,0.5)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();ctx.setLineDash([]);
+      ctx.restore(); break;}
+    case 'sensor':{
+      const s=getSegment(o);
+      const pwr=o._power||0;
+      const rr=clamp(Math.round(o._r/Math.max(1e-6,pwr))||20,0,255),gg=clamp(Math.round(o._g/Math.max(1e-6,pwr))||24,0,255),bb=clamp(Math.round(o._b/Math.max(1e-6,pwr))||32,0,255);
+      ctx.strokeStyle='#0b1119';ctx.lineWidth=8;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.strokeStyle=sel?'#22d3ee':(pwr>0.005?`rgb(${rr},${gg},${bb})`:'#64748b');ctx.lineWidth=4;
+      if(pwr>0.005){ctx.shadowColor=`rgba(${rr},${gg},${bb},0.9)`;ctx.shadowBlur=12;}
+      ctx.beginPath();ctx.moveTo(s.ax,s.ay);ctx.lineTo(s.bx,s.by);ctx.stroke();
+      ctx.restore(); break;}
+  }
+  // selection ring at centre
+  if(sel){
+    ctx.save();ctx.strokeStyle='rgba(34,211,238,0.9)';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.arc(o.x,o.y,3,0,TAU);ctx.stroke();ctx.restore();
+  }
+}
+
+/* ---------- frame loop ---------- */
+function frame(){
+  if(needsTrace){computeAll();needsTrace=false;}
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  // vignette bg
+  const g=ctx.createRadialGradient(W/2,H/2,80,W/2,H/2,Math.max(W,H)*0.75);
+  g.addColorStop(0,'#0b1220');g.addColorStop(1,'#070b11');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  drawGrid();
+  if(!state.settings.paused){ctx.drawImage(rayCanvas,0,0,W,H);}
+  drawObjects();
+  requestAnimationFrame(frame);
+}
+function markDirty(){needsTrace=true;}
+
+/* ---------- picking + drag ---------- */
+function distToSeg(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy||1;
+  let t=((px-ax)*dx+(py-ay)*dy)/L2;t=clamp(t,0,1);
+  return Math.hypot(px-(ax+dx*t),py-(ay+dy*t));
+}
+function pick(mx,my){
+  // handle first
+  const sel=state.objects.find(o=>o.id===state.selectedId);
+  if(sel){const hp=handlePos(sel); if(Math.hypot(mx-hp.x,my-hp.y)<12) return {kind:'handle',obj:sel};}
+  for(let i=state.objects.length-1;i>=0;i--){
+    const o=state.objects[i];
+    if(o.type==='flashlight'||o.type==='laser'){ if(Math.hypot(mx-o.x,my-o.y)<18) return {kind:'body',obj:o}; }
+    else if(o.type==='prism'){ const v=prismVerts(o); if(pointInTri(mx,my,v)) return {kind:'body',obj:o};
+      for(let e=0;e<3;e++){const A=v[e],B=v[(e+1)%3]; if(distToSeg(mx,my,A.x,A.y,B.x,B.y)<10) return {kind:'body',obj:o};}
+    }
+    else if(o.type==='curved'){ const nv={x:Math.cos(o.angle*D2R),y:Math.sin(o.angle*D2R)}; const Rabs=Math.abs(o.radius);
+      const Cx=o.x+nv.x*o.radius,Cy=o.y+nv.y*o.radius;
+      const d=Math.abs(Math.hypot(mx-Cx,my-Cy)-Rabs);
+      const tang={x:-nv.y,y:nv.x}; const along=Math.abs((mx-o.x)*tang.x+(my-o.y)*tang.y);
+      if(d<10&&along<o.length/2+8) return {kind:'body',obj:o};
+      if(Math.hypot(mx-o.x,my-o.y)<12) return {kind:'body',obj:o};
+    }
+    else if(o.type==='lens'){ const s=getSegment(o); if(distToSeg(mx,my,s.ax,s.ay,s.bx,s.by)<12) return {kind:'body',obj:o}; }
+    else { const s=getSegment(o); if(distToSeg(mx,my,s.ax,s.ay,s.bx,s.by)<10) return {kind:'body',obj:o}; }
+  }
+  return null;
+}
+let drag=null;
+function evPos(e){const r=canvas.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
+canvas.addEventListener('pointerdown',e=>{
+  const p=evPos(e); const hit=pick(p.x,p.y);
+  canvas.setPointerCapture(e.pointerId);
+  if(hit&&hit.kind==='handle'){ drag={mode:'rotate',obj:hit.obj}; }
+  else if(hit){ state.selectedId=hit.obj.id; drag={mode:'move',obj:hit.obj,dx:hit.obj.x-p.x,dy:hit.obj.y-p.y}; renderProps(); }
+  else { state.selectedId=null; renderProps(); }
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!drag) return;
+  const p=evPos(e), o=drag.obj;
+  if(drag.mode==='move'){o.x=p.x+drag.dx;o.y=p.y+drag.dy;markDirty();syncPosInputs();}
+  else {
+    const ang=Math.atan2(p.y-o.y,p.x-o.x)*R2D;
+    if(o.type==='flashlight'||o.type==='laser'||o.type==='lens'||o.type==='curved') o.angle=Math.round(ang);
+    else o.angle=Math.round(ang-90);
+    markDirty();
+  }
+});
+canvas.addEventListener('pointerup',()=>{if(drag&&drag.mode==='rotate')renderProps();drag=null;});
+window.addEventListener('keydown',e=>{
+  if((e.key==='Delete'||e.key==='Backspace')&&state.selectedId&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='SELECT'){deleteSelected();}
+  if(e.key==='Escape'){state.selectedId=null;renderProps();}
+});
+function deleteSelected(){
+  state.objects=state.objects.filter(o=>o.id!==state.selectedId);
+  state.selectedId=null;markDirty();renderProps();
+}
+
+/* ---------- toolbar ---------- */
+const TOOLS=[
+  {t:'flashlight',label:'Light',svg:'<path d="M3 11h9l-1.5-4h4L17 12l-2.5 5h-4L12 13H3z" />'},
+  {t:'laser',label:'Laser',svg:'<path d="M3 12h12M15 12l4-3v6l-4-3z"/><circle cx="19" cy="12" r="1.6"/>'},
+  {t:'mirror',label:'Mirror',svg:'<path d="M4 18L18 6"/><path d="M6 18l2-2M10 18l2-2M14 18l2-2" />'},
+  {t:'curved',label:'Curved',svg:'<path d="M14 4a10 10 0 0 0 0 16"/><path d="M14 4h6M14 20h6"/>'},
+  {t:'lens',label:'Lens',svg:'<path d="M12 3c2.5 3 2.5 15 0 18M12 3c-2.5 3-2.5 15 0 18"/>'},
+  {t:'prism',label:'Prism',svg:'<path d="M12 5l8 14H4z"/>'},
+  {t:'grating',label:'Grating',svg:'<path d="M5 5v14M9 5v14M13 5v14M17 5v14M4 12h16"/>'},
+  {t:'polarizer',label:'Polar',svg:'<circle cx="12" cy="12" r="7"/><path d="M12 5v14M8 9l8 6M16 9l-8 6"/>'},
+  {t:'filter',label:'Glass',svg:'<rect x="6" y="4" width="12" height="16" rx="2"/><path d="M6 9h12"/>'},
+  {t:'blocker',label:'Block',svg:'<path d="M5 5l14 14M19 5L5 19"/>'},
+  {t:'sensor',label:'Sensor',svg:'<rect x="5" y="8" width="14" height="8" rx="2"/><path d="M9 8V5M15 8V5M9 19v-3M15 19v-3"/>'},
+];
+function buildToolbar(){
+  const tb=document.getElementById('toolbar');tb.innerHTML='';
+  for(const tl of TOOLS){
+    const b=document.createElement('button');
+    b.className='tool-btn flex flex-col items-center gap-1 py-2 rounded-xl bg-[#0f1621] border border-[#1c2940]';
+    b.innerHTML=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9fd8e8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${tl.svg}</svg><span class="text-[10px] text-slate-400">${tl.label}</span>`;
+    b.title=TYPE_META[tl.t].name+' — '+TYPE_META[tl.t].desc;
+    b.onclick=()=>{const o=makeObject(tl.t);state.objects.push(o);state.selectedId=o.id;markDirty();renderProps();};
+    tb.appendChild(b);
+  }
+}
+
+/* ---------- right panel ---------- */
+const propsEl=document.getElementById('props');
+function sliderRow(label,min,max,step,val,unit,fn,opts={}){
+  const wrap=document.createElement('div');wrap.className='mb-2.5';
+  wrap.innerHTML=`<div class="flex items-center justify-between mb-1"><span class="prop-label">${label}</span><span class="val" data-v></span></div>`;
+  const inp=document.createElement('input');inp.type='range';inp.min=min;inp.max=max;inp.step=step;inp.value=val;inp.className='w-full';
+  const vEl=wrap.querySelector('[data-v]');
+  const upd=()=>{vEl.textContent=(+inp.value)+(unit||'');};
+  upd();
+  inp.oninput=()=>{upd();fn(+inp.value);if(!opts.nodirty)markDirty();if(opts.live)opts.live(+inp.value);};
+  inp.onchange=()=>{if(opts.commit)opts.commit(+inp.value);};
+  wrap.appendChild(inp); wrap._sync=(nv)=>{inp.value=nv;upd();};
+  wrap._input=inp;
+  return wrap;
+}
+function selectRow(label,options,val,fn){
+  const wrap=document.createElement('div');wrap.className='mb-2.5';
+  wrap.innerHTML=`<div class="prop-label mb-1">${label}</div>`;
+  const s=document.createElement('select');
+  for(const [v,t] of options){const op=document.createElement('option');op.value=v;op.textContent=t;if(v===val)op.selected=true;s.appendChild(op);}
+  s.onchange=()=>{fn(s.value);markDirty();};
+  wrap.appendChild(s);return wrap;
+}
+function checkRow(label,val,fn,opts={}){
+  const wrap=document.createElement('label');wrap.className='flex items-center justify-between mb-2.5 cursor-pointer text-[12px] text-slate-300';
+  wrap.innerHTML=`<span>${label}</span>`;
+  const c=document.createElement('input');c.type='checkbox';c.checked=val;c.className='w-4 h-4';c.style.accentColor='#22d3ee';
+  c.onchange=()=>{fn(c.checked);if(!opts.nodirty)markDirty();};wrap.appendChild(c);return wrap;
+}
+function segRow(label,options,val,fn){
+  const wrap=document.createElement('div');wrap.className='mb-2.5';
+  wrap.innerHTML=`<div class="prop-label mb-1">${label}</div>`;
+  const row=document.createElement('div');row.className='grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#0c121a] border border-[#1c2940]';
+  for(const [v,t] of options){const b=document.createElement('button');b.textContent=t;b.className='seg-btn text-[11px] py-1.5 rounded-md text-slate-400'+(v===val?' active':'');
+    b.onclick=()=>{fn(v);markDirty();renderProps();};row.appendChild(b);}
+  wrap.appendChild(row);return wrap;
+}
+function spectrumEditor(label,spec,onEdit){
+  const wrap=document.createElement('div');wrap.className='mb-2.5';
+  wrap.innerHTML=`<div class="prop-label mb-1">${label} <span class="normal-case font-normal text-slate-500">— drag to paint</span></div>`;
+  const cv=document.createElement('canvas');cv.width=540;cv.height=150;cv.style.width='100%';cv.style.height='62px';cv.className='rounded-lg border border-[#1c2940] cursor-crosshair';
+  wrap.appendChild(cv);
+  const c=cv.getContext('2d');
+  function draw(){
+    c.clearRect(0,0,cv.width,cv.height);
+    c.fillStyle='#0a0f16';c.fillRect(0,0,cv.width,cv.height);
+    const bw=cv.width/NL;
+    for(let i=0;i<NL;i++){
+      const rgb=LAMBDA_RGB[i];
+      const h=spec[i]*(cv.height-14);
+      c.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+      c.globalAlpha=0.25+0.75*spec[i];
+      c.fillRect(i*bw+1,cv.height-h,bw-2,h);
+      c.globalAlpha=1;
+    }
+    c.fillStyle='rgba(255,255,255,0.75)';c.font='20px Inter';
+  }
+  draw();
+  let down=false;
+  function paint(e){
+    const r=cv.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*cv.width, y=(e.clientY-r.top)/r.height*cv.height;
+    const idx=clamp(Math.floor(x/cv.width*NL),0,NL-1);
+    const v=clamp(1-y/cv.height,0,1);
+    for(let k=-1;k<=1;k++){const j=idx+k;if(j<0||j>=NL)continue;const fall=k===0?1:0.45;spec[j]=clamp(lerp(spec[j],v,fall),0,1);}
+    onEdit();draw();markDirty();
+  }
+  cv.addEventListener('pointerdown',e=>{down=true;cv.setPointerCapture(e.pointerId);paint(e);});
+  cv.addEventListener('pointermove',e=>{if(down)paint(e);});
+  cv.addEventListener('pointerup',()=>down=false);
+  return wrap;
+}
+
+let posSyncFns=[];
+function syncPosInputs(){posSyncFns.forEach(f=>f());}
+function commonPos(o){
+  const frag=document.createElement('div');
+  const r1=sliderRow('Angle',-180,180,1,Math.round(o.angle),'°',v=>{o.angle=v;});
+  posSyncFns.push(()=>{});
+  frag.appendChild(r1);
+  return frag;
+}
+
+function renderProps(){
+  posSyncFns=[];
+  propsEl.innerHTML='';
+  const sel=state.objects.find(o=>o.id===state.selectedId);
+  const title=document.getElementById('propsTitle'), sub=document.getElementById('propsSub');
+  if(!sel){
+    title.textContent='Scene';sub.textContent=state.objects.length+' objects';
+    // scene controls (exposure/grid/labels must NOT retrigger full trace)
+    propsEl.appendChild(sliderRow('Exposure (brightness)',0.2,2.5,0.05,state.settings.exposure,'',v=>{state.settings.exposure=v;drawRaysToCache();},{nodirty:true}));
+    propsEl.appendChild(segRow('Ray quality',[['low','Low'],['med','Medium'],['high','High']],state.settings.quality,v=>state.settings.quality=v));
+    propsEl.appendChild(sliderRow('Max bounces',1,12,1,state.settings.bounces,'',v=>state.settings.bounces=v));
+    propsEl.appendChild(checkRow('Show grid',state.settings.grid,v=>state.settings.grid=v,{nodirty:true}));
+    propsEl.appendChild(checkRow('Sensor labels',state.settings.labels,v=>state.settings.labels=v,{nodirty:true}));
+    const d=document.createElement('div');d.className='divider';propsEl.appendChild(d);
+    const btns=document.createElement('div');btns.className='grid grid-cols-2 gap-2';
+    const b1=document.createElement('button');b1.className='text-[12px] py-2 rounded-lg bg-[#131c29] border border-[#223047] hover:border-cyan-400/40';b1.textContent='Pause light';
+    b1.onclick=togglePause;const b2=document.createElement('button');b2.className='text-[12px] py-2 rounded-lg bg-[#131c29] border border-[#223047] hover:border-rose-400/40';b2.textContent='Clear all';
+    b2.onclick=()=>{state.objects=[];state.selectedId=null;markDirty();renderProps();};
+    btns.appendChild(b1);btns.appendChild(b2);propsEl.appendChild(btns);
+    const h=document.createElement('div');h.className='mt-3 text-[12px] text-slate-400 leading-relaxed rounded-xl p-3 bg-[#0e1520] border border-[#1a2433]';
+    h.innerHTML=`<b class="text-slate-200">Quick start</b><br>1. Add a <b class="text-cyan-300">Light</b> and a <b class="text-cyan-300">Prism</b>.<br>2. Aim the light into the prism.<br>3. Add a <b class="text-cyan-300">Block</b> as a screen to catch the rainbow.<br><br><span class="text-slate-500">Select anything to edit real parameters — focal length, lines/mm, wavelength, spectra…</span>`;
+    propsEl.appendChild(h);
+    return;
+  }
+  const meta=TYPE_META[sel.type];
+  title.textContent=meta.name;sub.textContent=meta.desc;
+  // header buttons duplicate/delete
+  const top=document.createElement('div');top.className='flex gap-2 mb-3';
+  const dup=document.createElement('button');dup.className='flex-1 text-[12px] py-1.5 rounded-lg bg-[#131c29] border border-[#223047] hover:border-cyan-400/40';dup.textContent='Duplicate';
+  dup.onclick=()=>{const c=JSON.parse(JSON.stringify(sel));c.id=uid();c.x+=24;c.y+=24;delete c._power;delete c._r;state.objects.push(c);state.selectedId=c.id;markDirty();renderProps();};
+  const del=document.createElement('button');del.className='flex-1 text-[12px] py-1.5 rounded-lg bg-[#2a1420] border border-[#5b2233] text-rose-200 hover:border-rose-400/50';del.textContent='Delete';
+  del.onclick=deleteSelected;
+  top.appendChild(dup);top.appendChild(del);propsEl.appendChild(top);
+
+  const addPos=()=>{propsEl.appendChild(sliderRow('Rotation',-180,180,1,Math.round(sel.angle),'°',v=>sel.angle=v));};
+
+  if(sel.type==='flashlight'){
+    propsEl.appendChild(selectRow('Spectrum preset',[['whiteLED','White LED'],['sunlight','Sunlight (5800K)'],['tungsten','Tungsten (3000K)'],['red','Red LED'],['green','Green LED'],['blue','Blue LED'],['amber','Amber'],['cyan','Cyan'],['violet','Violet'],['magenta','Magenta'],['custom','Custom…']],sel.preset||'whiteLED',v=>{sel.preset=v;if(v!=='custom')sel.spectrum=presetSpectrum(v);renderProps();}));
+    propsEl.appendChild(spectrumEditor('Emission spectrum',sel.spectrum,()=>{sel.preset='custom';}));
+    propsEl.appendChild(sliderRow('Intensity',0,100,1,sel.intensity,'%',v=>sel.intensity=v));
+    propsEl.appendChild(sliderRow('Beam divergence (half-angle)',1,60,0.5,sel.divergence,'°',v=>sel.divergence=v));
+    propsEl.appendChild(sliderRow('Beam width',2,32,1,sel.beamWidth,'px',v=>sel.beamWidth=v));
+    addPos();
+  }
+  else if(sel.type==='laser'){
+    const prev=document.createElement('div');prev.className='mb-2.5 rounded-xl p-3 border border-[#1c2940] bg-[#0c121a] flex items-center gap-3';
+    const rgb=wavelengthToRGB(sel.wavelength);
+    prev.innerHTML=`<div style="width:34px;height:34px;border-radius:10px;background:rgb(${rgb[0]},${rgb[1]},${rgb[2]});box-shadow:0 0 18px rgb(${rgb[0]},${rgb[1]},${rgb[2]})"></div><div><div class="text-[13px] font-semibold">${sel.wavelength} nm</div><div class="text-[11px] text-slate-500">polarised · collimated</div></div>`;
+    propsEl.appendChild(prev);
+    const dotEl=prev.querySelector('div');
+    const nmEl=prev.querySelectorAll('div')[1];
+    propsEl.appendChild(sliderRow('Wavelength',380,750,1,sel.wavelength,' nm',v=>{sel.wavelength=v;},{live:v=>{const c=wavelengthToRGB(v);dotEl.style.background=`rgb(${c[0]},${c[1]},${c[2]})`;dotEl.style.boxShadow=`0 0 18px rgb(${c[0]},${c[1]},${c[2]})`;nmEl.firstElementChild.textContent=v+' nm';},commit:()=>renderProps()}));
+    propsEl.appendChild(sliderRow('Intensity',0,100,1,sel.intensity,'%',v=>sel.intensity=v));
+    propsEl.appendChild(sliderRow('Beam width',2,20,1,sel.beamWidth,'px',v=>sel.beamWidth=v));
+    // quick colour buttons
+    const q=document.createElement('div');q.className='flex gap-1.5 mb-2.5';
+    for(const [nm,c] of [[405,'#8b5cf6'],[450,'#3b82f6'],[532,'#22c55e'],[650,'#ef4444']]){
+      const b=document.createElement('button');b.className='flex-1 h-7 rounded-lg border border-[#223047] text-[11px]';b.style.background=c+'33';b.style.color=c;b.textContent=nm;
+      b.onclick=()=>{sel.wavelength=nm;markDirty();renderProps();};q.appendChild(b);
+    }
+    propsEl.appendChild(q);addPos();
+  }
+  else if(sel.type==='mirror'){
+    propsEl.appendChild(sliderRow('Length',40,420,2,sel.length,'px',v=>sel.length=v));
+    propsEl.appendChild(sliderRow('Reflectance',80,100,0.5,Math.round((sel.refl??0.96)*100),'%',v=>sel.refl=v/100));
+    addPos();
+  }
+  else if(sel.type==='curved'){
+    const info=document.createElement('div');info.className='text-[11px] text-slate-400 mb-2.5 rounded-lg bg-[#0e1520] border border-[#1a2433] p-2.5';
+    const updInfo=()=>{const f=sel.radius/2;info.innerHTML=`${sel.radius>0?'<b class="text-cyan-300">Concave</b> — focuses light':'<b class="text-violet-300">Convex</b> — spreads light'} · f = R/2 = <b class="text-slate-200">${f.toFixed(0)} px</b>`;};
+    updInfo();
+    propsEl.appendChild(sliderRow('Aperture',60,380,2,sel.length,'px',v=>sel.length=v));
+    propsEl.appendChild(sliderRow('Radius R',-500,500,5,sel.radius,'px',v=>{sel.radius=Math.abs(v)<40?(v<0?-40:40):v;},{live:()=>updInfo()}));
+    propsEl.appendChild(info);
+    propsEl.appendChild(sliderRow('Reflectance',80,100,0.5,Math.round((sel.refl??0.94)*100),'%',v=>sel.refl=v/100));
+    addPos();
+  }
+  else if(sel.type==='lens'){
+    const info=document.createElement('div');info.className='text-[11px] text-slate-400 mb-2.5 rounded-lg bg-[#0e1520] border border-[#1a2433] p-2.5';
+    const updInfo=()=>{const kind=sel.focal>0?'Convex — converges':'Concave — diverges';info.innerHTML=`<b class="${sel.focal>0?'text-sky-300':'text-violet-300'}">${kind}</b> · f = <b class="text-slate-200">${sel.focal} px</b> @ 587nm`;};
+    updInfo();
+    propsEl.appendChild(info);
+    propsEl.appendChild(sliderRow('Focal length (− concave / + convex)',-300,300,2,sel.focal,'px',v=>{sel.focal=v===0?12:v;},{live:()=>updInfo()}));
+    propsEl.appendChild(sliderRow('Aperture',50,300,2,sel.aperture,'px',v=>sel.aperture=v));
+    propsEl.appendChild(selectRow('Glass (dispersion)',[['BK7','BK7 crown'],['SF10','SF10 flint (strong)'],['SILICA','Fused silica'],['ACRYLIC','Acrylic']],sel.glass,v=>sel.glass=v));
+    const note=document.createElement('div');note.className='text-[11px] text-slate-500 leading-relaxed';note.textContent='Focus shifts with colour via Sellmeier n(λ) — try white light to see fringes.';
+    propsEl.appendChild(note);addPos();
+  }
+  else if(sel.type==='prism'){
+    propsEl.appendChild(sliderRow('Size',50,220,2,sel.size,'px',v=>sel.size=v));
+    propsEl.appendChild(sliderRow('Apex angle',25,90,1,sel.apex,'°',v=>sel.apex=v));
+    propsEl.appendChild(selectRow('Glass',[['BK7','BK7 crown'],['SF10','SF10 flint (vivid rainbow)'],['SILICA','Fused silica'],['ACRYLIC','Acrylic']],sel.glass,v=>sel.glass=v));
+    propsEl.appendChild(checkRow('Internal reflections (incl. TIR)',sel.internal,v=>sel.internal=v));
+    const n=glassN(sel.glass,587.6);
+    const info=document.createElement('div');info.className='text-[11px] text-slate-500 leading-relaxed mt-1';info.innerHTML=`n<sub>d</sub> = ${n.toFixed(4)} · critical angle ≈ ${(Math.asin(1/n)*R2D).toFixed(1)}° · Fresnel split at every face.`;
+    propsEl.appendChild(info);addPos();
+  }
+  else if(sel.type==='grating'){
+    propsEl.appendChild(segRow('Type',[['transmission','Transmissive'],['reflective','Reflective']],sel.kind,v=>sel.kind=v));
+    propsEl.appendChild(sliderRow('Groove density',100,1200,10,sel.lpm,'/mm',v=>sel.lpm=v));
+    propsEl.appendChild(sliderRow('Length',60,380,2,sel.length,'px',v=>sel.length=v));
+    propsEl.appendChild(segRow('Orders shown',[[1,'±1'],[2,'±2'],[3,'±3']],sel.maxOrder,v=>sel.maxOrder=v));
+    const d=(1000/sel.lpm).toFixed(2);
+    const info=document.createElement('div');info.className='text-[11px] text-slate-500 leading-relaxed';info.innerHTML=`period d = ${d} µm · sinθ<sub>m</sub> = sinθ<sub>in</sub> + mλ/d`;
+    propsEl.appendChild(info);addPos();
+  }
+  else if(sel.type==='polarizer'){
+    propsEl.appendChild(sliderRow('Length',60,340,2,sel.length,'px',v=>sel.length=v));
+    propsEl.appendChild(sliderRow('Transmission axis',0,180,1,sel.axis,'°',v=>sel.axis=v));
+    const info=document.createElement('div');info.className='text-[11px] text-slate-500 leading-relaxed';info.textContent='Malus: I = Ip·cos²A + Is·sin²A. Cross two at 90° to extinguish. Laser is in-plane polarised; flashlight is unpolarised.';
+    propsEl.appendChild(info);addPos();
+  }
+  else if(sel.type==='filter'){
+    propsEl.appendChild(selectRow('Glass preset',[['red','Red long-pass'],['green','Green band'],['blue','Blue short-pass'],['yellow','Yellow long-pass'],['cyan','Cyan'],['magenta','Magenta'],['nd50','ND 50%'],['uv-block','UV block'],['custom','Custom…']],sel.preset||'red',v=>{sel.preset=v;if(v!=='custom')sel.transmission=filterPreset(v);renderProps();}));
+    propsEl.appendChild(spectrumEditor('Transmittance T(λ)',sel.transmission,()=>{sel.preset='custom';}));
+    propsEl.appendChild(sliderRow('Reflectance',0,50,0.5,Math.round((sel.reflect??0.07)*100),'%',v=>sel.reflect=v/100));
+    propsEl.appendChild(sliderRow('Length',60,340,2,sel.length,'px',v=>sel.length=v));
+    addPos();
+  }
+  else if(sel.type==='blocker'){
+    propsEl.appendChild(sliderRow('Length',40,420,2,sel.length,'px',v=>sel.length=v));
+    addPos();
+  }
+  else if(sel.type==='sensor'){
+    propsEl.appendChild(sliderRow('Length',40,260,2,sel.length,'px',v=>sel.length=v));
+    const pwr=sel._power||0;
+    const pct=(clamp(pwr/4*100,0,999)).toFixed(1);
+    const r=clamp(Math.round(sel._r/Math.max(1e-6,pwr))||0,0,255),g=clamp(Math.round(sel._g/Math.max(1e-6,pwr))||0,0,255),b=clamp(Math.round(sel._b/Math.max(1e-6,pwr))||0,0,255);
+    const card=document.createElement('div');card.className='rounded-xl p-3 bg-[#0e1520] border border-[#1a2433] mb-2.5';
+    card.innerHTML=`<div class="flex items-center gap-2.5"><div data-sdot style="width:30px;height:30px;border-radius:9px;background:rgb(${r},${g},${b});box-shadow:0 0 14px rgb(${r},${g},${b})"></div><div><div data-spow class="text-[15px] font-semibold tabular-nums">${pwr<0.005?'—':pct+'%'}</div><div class="text-[11px] text-slate-500">incident power</div></div></div><div data-smsg class="text-[11px] text-slate-500 mt-2">${pwr<0.005?'No light hitting the active face. Aim a beam at it.':'Colour dot = power-weighted mix of all λ hitting it.'}</div>`;
+    propsEl.appendChild(card);
+    addPos();
+  }
+}
+function updateSensorPanel(){
+  const sel=state.objects.find(o=>o.id===state.selectedId);
+  // live-update sensor card in place (never full re-render — would break slider drags)
+  if(sel&&sel.type==='sensor'){
+    const dot=propsEl.querySelector('[data-sdot]'), pow=propsEl.querySelector('[data-spow]'), msg=propsEl.querySelector('[data-smsg]');
+    if(dot&&pow){
+      const pwr=sel._power||0, pct=(clamp(pwr/4*100,0,999)).toFixed(1);
+      const r=clamp(Math.round(sel._r/Math.max(1e-6,pwr))||0,0,255),g=clamp(Math.round(sel._g/Math.max(1e-6,pwr))||0,0,255),b=clamp(Math.round(sel._b/Math.max(1e-6,pwr))||0,0,255);
+      dot.style.background=`rgb(${r},${g},${b})`;dot.style.boxShadow=`0 0 14px rgb(${r},${g},${b})`;
+      pow.textContent=pwr<0.005?'—':pct+'%';
+      if(msg)msg.textContent=pwr<0.005?'No light hitting the active face. Aim a beam at it.':'Colour dot = power-weighted mix of all λ hitting it.';
+      return;
+    }
+  }
+  if(sel&&sel.type==='sensor') renderProps();
+}
+
+/* ---------- top buttons / help ---------- */
+function togglePause(){
+  state.settings.paused=!state.settings.paused;
+  document.getElementById('pauseLabel').textContent=state.settings.paused?'Resume light':'Pause light';
+  document.getElementById('icoPause').innerHTML=state.settings.paused?'<path d="M7 4l13 8-13 8z"/>':'<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+  drawRaysToCache();
+}
+document.getElementById('btnPause').onclick=togglePause;
+document.getElementById('btnClear').onclick=()=>{state.objects=[];state.selectedId=null;markDirty();renderProps();};
+const helpModal=document.getElementById('helpModal');
+document.getElementById('btnHelp').onclick=()=>{helpModal.style.display='flex';};
+document.getElementById('btnCloseHelp').onclick=()=>{helpModal.style.display='none';};
+helpModal.addEventListener('click',e=>{if(e.target===helpModal)helpModal.style.display='none';});
+
+/* ---------- demo scene ---------- */
+function demo(){
+  const cx=()=>W*0.5, cy=()=>H*0.5;
+  const f={id:uid(),type:'flashlight',x:W*0.16,y:H*0.52,angle:-4,divergence:9,intensity:90,beamWidth:14,spectrum:presetSpectrum('whiteLED'),preset:'whiteLED'};
+  const p={id:uid(),type:'prism',x:W*0.46,y:H*0.5,angle:0,size:120,apex:60,glass:'SF10',internal:true};
+  const b={id:uid(),type:'blocker',x:W*0.80,y:H*0.5,angle:90,length:260};
+  state.objects.push(f,p,b);
+}
+buildToolbar();
+resize();
+demo();
+renderProps();
+markDirty();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
