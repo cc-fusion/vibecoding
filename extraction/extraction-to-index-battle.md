@@ -23,3 +23,5 @@ Resulting index.html file:
 <h4>Model 2 name (N characters used)</h4>
 <a href="model-2-name/file3.html">Title</a>
 </div>
+
+If index.html already exists, do not override the current character counts. Instead, accumulate the character count by adding the newly extracted content's count to the previous value.
