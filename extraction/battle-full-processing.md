@@ -31,4 +31,4 @@ Resulting index.html file:
 </div>
 ```
 
-If index.html already exists, do not override the current character counts. Instead, accumulate the character count by adding the newly extracted content's count to the previous value.
+If index.html already exists, do not override the current character counts. Instead, accumulate the character count by adding the newly extracted content's count to the previous value. Do not add character count of built files; only count extracted content.
