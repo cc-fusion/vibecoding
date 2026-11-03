@@ -1,4 +1,4 @@
-Build a highly polished, fully playable Minecraft-inspired voxel sandbox game.
+Make a highly polished, fully playable Minecraft-inspired voxel sandbox game.
 
 You are highly encouraged to use any tools, libraries, frameworks, and development capabilities available to you. You do not have a maximum sequential tool-calling limit. Start by inspecting the environment and creating a plan. Then execute the plan, implement the game, and test it. Do not stop at planning or a basic prototype.
 
