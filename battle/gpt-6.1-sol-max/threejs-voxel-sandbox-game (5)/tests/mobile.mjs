@@ -1,0 +1,74 @@
+import { chromium } from '@playwright/test';
+import assert from 'node:assert/strict';
+
+const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+let passed = 0;
+const check = (name, condition) => { assert.ok(condition, name); console.log(`PASS ${++passed}: ${name}`); };
+const errors = [];
+try {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => localStorage.setItem('everwild.settings.v1', JSON.stringify({ shadows: false, renderDistance: 3, volume: 0 })));
+  await page.goto('http://localhost:5173');
+  await page.getByRole('button', { name: 'Enter your world', exact: true }).waitFor({ timeout: 90000 });
+  await page.waitForFunction(() => window.__everwild.queue.length === 0, null, { timeout: 90000 });
+  check('Mobile welcome fits the viewport without horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth === 390));
+  await page.evaluate(() => window.__everwild.renderer.setAnimationLoop(null));
+  await page.screenshot({ path: 'artifacts/mobile-welcome.png', timeout: 120000 });
+  await page.evaluate(() => { window.__everwild.previousTime = 0; window.__everwild.renderer.setAnimationLoop(window.__everwild.frame); });
+  await page.getByRole('button', { name: 'Enter your world', exact: true }).click();
+  check('Touch play does not require pointer lock', await page.evaluate(() => window.__everwild.active && !document.pointerLockElement));
+  check('Mobile movement, mining, building, and interaction controls are visible', await page.getByRole('button', { name: 'Mine block', exact: true }).isVisible() && await page.getByRole('button', { name: 'Interact with the world', exact: true }).isVisible());
+  const cdp = await context.newCDPSession(page);
+  async function holdButton(name, predicate, argument) {
+    const box = await page.getByRole('button', { name, exact: true }).boundingBox();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2, id: 1 }] });
+    await page.waitForFunction(predicate, argument, { timeout: 15000 });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
+  const start = await page.evaluate(() => window.__everwild.position.toArray());
+  await holdButton('Move up', origin => Math.hypot(window.__everwild.position.x - origin[0], window.__everwild.position.z - origin[2]) > 0.3, start);
+  check('Native touch movement changes the player position', true);
+  const yaw = await page.evaluate(() => window.__everwild.yaw);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 320, y: 370, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 265, y: 385, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  check('Dragging the world changes first-person look direction', await page.evaluate(previous => Math.abs(window.__everwild.yaw - previous) > 0.05, yaw));
+  await page.locator('.control-hints button').first().click();
+  await page.getByRole('button', { name: 'Craft workbench', exact: true }).click();
+  check('Mobile backpack scrolls and crafts a real workbench', await page.evaluate(() => window.__everwild.inventory[16] === 1));
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await page.getByRole('button', { name: 'Open pause menu' }).click();
+  await page.getByRole('button', { name: 'Make yourself comfortable', exact: true }).click();
+  await page.getByRole('button', { name: 'Creative', exact: true }).click();
+  await page.getByRole('button', { name: 'Rain', exact: true }).click();
+  check('Mobile preferences apply mode and weather immediately', await page.evaluate(() => window.__everwild.settings.mode === 'creative' && window.__everwild.weather === 'rain'));
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
+  await page.getByRole('button', { name: 'Back to the wild', exact: true }).click();
+  await page.getByRole('button', { name: 'Toggle free flight', exact: true }).click();
+  const ground = await page.evaluate(() => window.__everwild.position.y);
+  await holdButton('Jump', height => window.__everwild.position.y > height + 0.5, ground);
+  const high = await page.evaluate(() => window.__everwild.position.y);
+  await holdButton('Fly down', height => window.__everwild.position.y < height - 0.3, high);
+  check('Touch creative flight supports both rising and descending', true);
+  await page.waitForTimeout(600);
+  await page.evaluate(() => window.__everwild.renderer.setAnimationLoop(null));
+  await page.screenshot({ path: 'artifacts/mobile-gameplay.png', timeout: 120000 });
+  check('No mobile runtime errors', errors.length === 0);
+  await context.close();
+
+  const desktop = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+  desktop.on('pageerror', e => errors.push(e.message));
+  await desktop.addInitScript(() => localStorage.setItem('everwild.settings.v1', JSON.stringify({ shadows: false, renderDistance: 3, volume: 0 })));
+  await desktop.goto('http://localhost:5173');
+  await desktop.getByRole('button', { name: 'Enter your world', exact: true }).waitFor({ timeout: 90000 });
+  await desktop.evaluate(() => { window.__everwild.renderer.domElement.requestPointerLock = () => Promise.reject(new Error('Pointer lock denied by test')); });
+  await desktop.getByRole('button', { name: 'Enter your world', exact: true }).click();
+  await desktop.waitForTimeout(350);
+  check('Denied pointer lock activates the playable drag-to-look fallback', await desktop.evaluate(() => window.__everwild.active && window.__everwild.dragLookEnabled));
+  const previous = await desktop.evaluate(() => window.__everwild.yaw);
+  await desktop.mouse.move(600, 400); await desktop.mouse.down(); await desktop.mouse.move(640, 420, { steps: 4 }); await desktop.mouse.up();
+  check('The desktop fallback really rotates the camera', await desktop.evaluate(value => Math.abs(window.__everwild.yaw - value) > 0.02, previous));
+  console.log(`\n${passed} mobile and fallback checks passed.`, errors);
+} finally { await browser.close(); }

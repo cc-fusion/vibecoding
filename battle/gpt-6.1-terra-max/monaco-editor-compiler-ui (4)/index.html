@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Code Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f6f7f9;
+      --surface: #ffffff;
+      --surface-soft: #fafbfc;
+      --editor-surface: #ffffff;
+      --result-surface: #fdfdfe;
+      --border: #e5e8ee;
+      --border-strong: #dce0e8;
+      --text: #252b3a;
+      --muted: #858d9d;
+      --subtle: #a4abba;
+      --accent: #5b5bd6;
+      --accent-hover: #4e4ec4;
+      --accent-soft: #f1f0fc;
+      --accent-line: #e7e6f8;
+      --grip: #cdd2dd;
+      --shadow: 0 2px 8px rgba(32, 39, 58, .025);
+      --popover-shadow: 0 18px 55px rgba(25, 33, 54, .16), 0 3px 12px rgba(25, 33, 54, .06);
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #15181e;
+      --surface: #1e222a;
+      --surface-soft: #242932;
+      --editor-surface: #1e222a;
+      --result-surface: #1c2027;
+      --border: #323844;
+      --border-strong: #3d4452;
+      --text: #eceef5;
+      --muted: #9ba3b3;
+      --subtle: #737d8e;
+      --accent: #8b89f1;
+      --accent-hover: #a19ff7;
+      --accent-soft: #2d2b45;
+      --accent-line: #3e3a61;
+      --grip: #515a6b;
+      --shadow: 0 2px 8px rgba(0, 0, 0, .12);
+      --popover-shadow: 0 18px 55px rgba(0, 0, 0, .38), 0 3px 12px rgba(0, 0, 0, .2);
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      background: var(--page);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible, .splitter:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+      outline-offset: 3px;
+    }
+    svg { display: block; }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      min-height: 0;
+    }
+    .app-header {
+      flex: 0 0 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .app-title {
+      flex: 0 0 auto;
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -.035em;
+      white-space: nowrap;
+    }
+    .toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+    .toolbar-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 13px;
+      border: 1px solid var(--border-strong);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+    }
+    .toolbar-button:hover { background: var(--surface-soft); border-color: var(--grip); }
+    .toolbar-button:active { transform: translateY(1px); }
+    .toolbar-button:disabled { cursor: wait; opacity: .7; transform: none; }
+    .toolbar-button.primary { background: #5b5bd6; border-color: #5b5bd6; color: #fff; padding: 0 16px; }
+    .toolbar-button.primary:hover { background: #4e4ec4; border-color: #4e4ec4; }
+    .toolbar-button.icon-only { width: 38px; padding: 0; border-color: transparent; color: var(--muted); }
+    .toolbar-button.icon-only:hover { color: var(--text); border-color: var(--border); }
+    .button-icon { display: inline-flex; flex: 0 0 auto; }
+    .button-icon svg { width: 16px; height: 16px; }
+    .toolbar-divider { width: 1px; height: 23px; margin: 0 5px; background: var(--border); }
+
+    .workspace-wrap { flex: 1 1 auto; min-height: 0; padding: 26px 30px 30px; }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, var(--split, 54%)) 18px minmax(0, 1fr);
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    .workspace.is-stacked {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, var(--split, 54%)) 18px minmax(0, 1fr);
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      box-shadow: var(--shadow);
+    }
+    .pane-header {
+      display: flex;
+      flex: 0 0 63px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .pane-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .pane-heading-icon { color: #929bad; }
+    .pane-heading-icon svg { width: 17px; height: 17px; }
+    .pane-heading h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+    .pane-actions { display: flex; align-items: center; gap: 15px; min-width: 0; }
+    .save-status { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+    .save-status svg { width: 14px; height: 14px; }
+    .save-status.is-unsaved { color: #bf7b45; }
+    .select-wrap { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+    .select-wrap > svg {
+      position: absolute;
+      right: 9px;
+      width: 13px;
+      height: 13px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .language-select, .setting-select {
+      appearance: none;
+      max-width: 100%;
+      height: 33px;
+      padding: 0 29px 0 11px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .language-select:hover, .setting-select:hover { border-color: var(--grip); }
+    .editor-area { position: relative; flex: 1 1 auto; min-height: 0; background: var(--editor-surface); }
+    #monaco-editor { position: absolute; inset: 0; }
+    .editor-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .loading-ring {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .editor-fallback {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 24px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      background: var(--editor-surface);
+      color: var(--text);
+      font-family: "JetBrains Mono", Consolas, monospace;
+      line-height: 1.75;
+    }
+    .result-area { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--result-surface); }
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .empty-illustration {
+      display: grid;
+      place-items: center;
+      width: 76px;
+      height: 76px;
+      border: 1px solid var(--accent-line);
+      border-radius: 20px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .empty-illustration svg { width: 39px; height: 39px; }
+    .empty-state h3 { margin: 20px 0 7px; font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
+    .empty-state p { max-width: 255px; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.65; }
+    .result-text, .result-frame { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border: 0; }
+    .result-text {
+      overflow: auto;
+      padding: 24px;
+      color: var(--text);
+      font: 13px/1.8 "JetBrains Mono", Consolas, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .result-frame { background: #fff; }
+    .clear-button {
+      padding: 6px 2px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .clear-button:hover { color: var(--text); }
+
+    .splitter { position: relative; min-width: 0; min-height: 0; cursor: col-resize; touch-action: none; }
+    .splitter-grip {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 4px;
+      height: 32px;
+      border-radius: 5px;
+      background: var(--grip);
+      transform: translate(-50%, -50%);
+      transition: background .18s ease, height .18s ease, width .18s ease;
+    }
+    .splitter:hover .splitter-grip, .splitter:focus-visible .splitter-grip, .is-resizing .splitter-grip { background: var(--accent); height: 42px; }
+    .workspace.is-stacked .splitter { cursor: row-resize; }
+    .workspace.is-stacked .splitter-grip { width: 32px; height: 4px; }
+    .workspace.is-stacked .splitter:hover .splitter-grip,
+    .workspace.is-stacked .splitter:focus-visible .splitter-grip,
+    .workspace.is-stacked.is-resizing .splitter-grip { width: 42px; height: 4px; }
+    .workspace.is-resizing .pane { pointer-events: none; }
+    body.is-resizing, body.is-resizing * { user-select: none !important; }
+    body.resize-column, body.resize-column * { cursor: col-resize !important; }
+    body.resize-row, body.resize-row * { cursor: row-resize !important; }
+
+    .settings-dialog {
+      position: fixed;
+      top: 80px;
+      right: 30px;
+      bottom: auto;
+      left: auto;
+      width: min(370px, calc(100vw - 32px));
+      max-width: none;
+      max-height: calc(100dvh - 96px);
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--popover-shadow);
+    }
+    .settings-dialog[open] { animation: panel-in .2s ease both; }
+    .settings-dialog::backdrop { background: rgba(24, 29, 43, .18); }
+    .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 19px 20px; border-bottom: 1px solid var(--border); }
+    .dialog-header h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.025em; }
+    .dialog-close { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
+    .dialog-close:hover { background: var(--surface-soft); color: var(--text); }
+    .dialog-close svg { width: 17px; height: 17px; }
+    .settings-body { padding: 5px 20px 3px; }
+    .settings-section-label { margin: 19px 0 5px; color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 57px; padding: 9px 0; }
+    .setting-copy { min-width: 0; }
+    .setting-title { display: block; color: var(--text); font-size: 12.5px; font-weight: 600; }
+    .setting-description { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+    .setting-select { width: 145px; font-size: 11.5px; font-weight: 500; }
+    .stepper { display: inline-flex; align-items: center; height: 33px; border: 1px solid var(--border); border-radius: 6px; }
+    .stepper button { display: grid; place-items: center; width: 32px; height: 31px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 17px; }
+    .stepper button:hover:not(:disabled) { color: var(--text); background: var(--surface-soft); }
+    .stepper button:disabled { opacity: .35; cursor: not-allowed; }
+    .stepper output { min-width: 43px; text-align: center; color: var(--text); font-size: 11.5px; font-weight: 600; }
+    .toggle { position: relative; display: inline-flex; flex: 0 0 auto; width: 37px; height: 22px; cursor: pointer; }
+    .toggle input { position: absolute; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .toggle-track { width: 100%; height: 100%; border-radius: 999px; background: var(--grip); transition: background .18s ease; }
+    .toggle-track::after { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); content: ""; transition: transform .18s ease; }
+    .toggle input:checked + .toggle-track { background: #5b5bd6; }
+    .toggle input:checked + .toggle-track::after { transform: translateX(15px); }
+    .toggle input:focus-visible + .toggle-track { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 3px; }
+    .dialog-footer { padding: 14px 20px 19px; border-top: 1px solid var(--border); }
+    .reset-button { padding: 3px 0; border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; }
+    .reset-button:hover { text-decoration: underline; }
+    .toast {
+      position: fixed;
+      z-index: 20;
+      bottom: 24px;
+      left: 50%;
+      max-width: calc(100vw - 32px);
+      padding: 11px 15px;
+      border: 1px solid var(--border-strong);
+      border-radius: 7px;
+      background: var(--text);
+      color: var(--surface);
+      box-shadow: var(--popover-shadow);
+      font-size: 12px;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 8px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 760px) {
+      .app-header { flex-basis: 64px; padding: 0 16px; }
+      .workspace-wrap { padding: 14px 16px 16px; }
+      .pane-header { flex-basis: 56px; padding: 0 15px; }
+      .settings-dialog { top: 70px; right: 16px; max-height: calc(100dvh - 82px); }
+      .toolbar-button.secondary .button-label { display: none; }
+      .toolbar-button.secondary { width: 38px; padding: 0; }
+      .toolbar-divider { margin: 0 1px; }
+    }
+    @media (max-width: 480px) {
+      .app-header { gap: 8px; }
+      .app-title { font-size: 15px; }
+      .toolbar { gap: 3px; }
+      .toolbar-button.primary { width: 38px; padding: 0; }
+      .toolbar-button.primary .button-label { display: none; }
+      .toolbar-divider { display: none; }
+      .pane-actions { gap: 9px; }
+      .save-status .save-label { display: none; }
+      .empty-illustration { width: 62px; height: 62px; border-radius: 17px; }
+      .empty-illustration svg { width: 33px; height: 33px; }
+      .empty-state h3 { margin-top: 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1 class="app-title">Code Editor</h1>
+      <nav id="toolbar" class="toolbar" aria-label="Editor actions"></nav>
+    </header>
+
+    <main class="workspace-wrap">
+      <div id="workspace" class="workspace">
+        <section id="editor-pane" class="pane" aria-labelledby="editor-heading">
+          <div class="pane-header">
+            <div class="pane-heading">
+              <span class="pane-heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"></path></svg>
+              </span>
+              <h2 id="editor-heading">Editor</h2>
+            </div>
+            <div class="pane-actions">
+              <span id="save-status" class="save-status" role="status"><span id="save-icon" aria-hidden="true"></span><span id="save-label" class="save-label">Saving...</span></span>
+              <span class="select-wrap">
+                <select id="language-select" class="language-select" aria-label="Editor language"></select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
+              </span>
+            </div>
+          </div>
+          <div class="editor-area">
+            <div id="monaco-editor" aria-label="Code editor"></div>
+            <div id="editor-loading" class="editor-loading"><span class="loading-ring" aria-hidden="true"></span><span>Loading editor...</span></div>
+            <textarea id="editor-fallback" class="editor-fallback" aria-label="Code editor fallback" spellcheck="false" hidden></textarea>
+          </div>
+        </section>
+
+        <div id="splitter" class="splitter" role="separator" tabindex="0" aria-label="Resize editor and result panes" aria-controls="editor-pane result-pane" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="54"><span class="splitter-grip"></span></div>
+
+        <section id="result-pane" class="pane" aria-labelledby="result-heading">
+          <div class="pane-header">
+            <div class="pane-heading">
+              <span class="pane-heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect><path d="M3.5 9h17M7 6.8h.01M10 6.8h.01"></path></svg>
+              </span>
+              <h2 id="result-heading">Result</h2>
+            </div>
+            <button id="clear-result" class="clear-button" type="button" hidden>Clear</button>
+          </div>
+          <div id="result-area" class="result-area" aria-live="polite">
+            <div id="empty-state" class="empty-state">
+              <div class="empty-illustration" aria-hidden="true">
+                <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="8" width="36" height="32" rx="5"></rect><path d="M6 17h36M11 12.5h.01M15 12.5h.01M19 12.5h.01M16 23l4 4-4 4M24 31h8"></path></svg>
+              </div>
+              <h3 id="empty-title">Your result will appear here</h3>
+              <p id="empty-description">Connect a compiler to see output here.</p>
+            </div>
+            <pre id="result-text" class="result-text" tabindex="0" hidden></pre>
+            <iframe id="result-frame" class="result-frame" title="Result preview" sandbox="allow-scripts" hidden></iframe>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-heading">
+    <div class="dialog-header">
+      <h2 id="settings-heading">Editor settings</h2>
+      <button id="close-settings" class="dialog-close" type="button" aria-label="Close settings" autofocus>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <p class="settings-section-label">Appearance</p>
+      <div class="setting-row">
+        <div class="setting-copy"><label class="setting-title" for="app-theme">App theme</label><p class="setting-description">Choose how the workspace looks</p></div>
+        <span class="select-wrap"><select id="app-theme" class="setting-select"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></span>
+      </div>
+      <div class="setting-row">
+        <div class="setting-copy"><label class="setting-title" for="editor-theme">Editor theme</label><p class="setting-description">Choose your code colors</p></div>
+        <span class="select-wrap"><select id="editor-theme" class="setting-select"></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></span>
+      </div>
+      <div class="setting-row">
+        <div class="setting-copy"><span id="font-size-label" class="setting-title">Font size</span><p class="setting-description">Adjust the editor text size</p></div>
+        <div class="stepper" aria-labelledby="font-size-label"><button id="font-decrease" type="button" aria-label="Decrease font size">-</button><output id="font-size-value"></output><button id="font-increase" type="button" aria-label="Increase font size">+</button></div>
+      </div>
+      <p class="settings-section-label">Editor</p>
+      <div class="setting-row">
+        <div class="setting-copy"><label class="setting-title" for="word-wrap">Word wrap</label><p class="setting-description">Wrap long lines to fit the editor</p></div>
+        <label class="toggle"><input id="word-wrap" type="checkbox" aria-label="Word wrap"><span class="toggle-track"></span></label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-copy"><label class="setting-title" for="minimap">Minimap</label><p class="setting-description">Show an overview of your code</p></div>
+        <label class="toggle"><input id="minimap" type="checkbox" aria-label="Minimap"><span class="toggle-track"></span></label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-copy"><label class="setting-title" for="suggestions">Suggestions</label><p class="setting-description">Show completions as you type</p></div>
+        <label class="toggle"><input id="suggestions" type="checkbox" aria-label="Suggestions"><span class="toggle-track"></span></label>
+      </div>
+      <div class="setting-row">
+        <div class="setting-copy"><label class="setting-title" for="parameter-hints">Parameter hints</label><p class="setting-description">Show details inside function calls</p></div>
+        <label class="toggle"><input id="parameter-hints" type="checkbox" aria-label="Parameter hints"><span class="toggle-track"></span></label>
+      </div>
+    </div>
+    <div class="dialog-footer"><button id="reset-settings" class="reset-button" type="button">Reset to defaults</button></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    /* Developer configuration: change defaults here. Existing saved preferences take precedence.
+       Set onRun to a function receiving { code, language, editor, setResult } and returning
+       a string or { type: "text" | "html", content: "..." }. HTML results are sandboxed.
+       The handler is only called by Run.
+       You can also attach a handler later with window.codeEditorApp.setRunner(handler).
+       Add or remove toolbar entries; custom entries can provide onClick({ app, event }). */
+    const CONFIG = {
+      language: "javascript",
+      monacoBase: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min",
+      storage: { code: "code-editor.code.v1", settings: "code-editor.settings.v1" },
+      initialValue: [
+        "/**",
+        " * Start writing your code here.",
+        " * Your changes are saved automatically.",
+        " */",
+        "",
+        "function greet(name) {",
+        "  return `Hello, ${name}!`;",
+        "}",
+        "",
+        "const message = greet(\"world\");",
+        "console.log(message);",
+        ""
+      ].join("\n"),
+      languages: [
+        { value: "javascript", label: "JavaScript" },
+        { value: "typescript", label: "TypeScript" },
+        { value: "python", label: "Python" },
+        { value: "html", label: "HTML" },
+        { value: "css", label: "CSS" },
+        { value: "json", label: "JSON" },
+        { value: "plaintext", label: "Plain text" }
+      ],
+      defaults: {
+        appTheme: "system",
+        editorTheme: "auto",
+        fontSize: 14,
+        wordWrap: false,
+        minimap: false,
+        suggestions: true,
+        parameterHints: true
+      },
+      fontSize: { min: 11, max: 24, lineHeightRatio: 1.8 },
+      layout: { desktopSplit: 0.54, mobileSplit: 0.54, minDesktopPane: 240, minMobilePane: 145, mobileBreakpoint: 760 },
+      themes: {
+        light: "workspace-light",
+        dark: "workspace-dark",
+        choices: [
+          { value: "auto", label: "Match app" },
+          { value: "vs", label: "Light" },
+          { value: "vs-dark", label: "Dark" },
+          { value: "hc-light", label: "High contrast light" },
+          { value: "hc-black", label: "High contrast dark" }
+        ],
+        definitions: {
+          "workspace-light": {
+            base: "vs", inherit: true,
+            rules: [
+              { token: "comment", foreground: "98A2B3", fontStyle: "italic" },
+              { token: "keyword", foreground: "7957C8" },
+              { token: "string", foreground: "21856F" },
+              { token: "number", foreground: "C27842" }
+            ],
+            colors: {
+              "editor.background": "#FFFFFF", "editor.foreground": "#394150",
+              "editorLineNumber.foreground": "#B1B8C5", "editorLineNumber.activeForeground": "#667085",
+              "editorGutter.background": "#FFFFFF", "editor.lineHighlightBackground": "#F8F9FC",
+              "editorCursor.foreground": "#5B5BD6", "editor.selectionBackground": "#E3E6FA",
+              "editorIndentGuide.background1": "#EEF0F4", "editorIndentGuide.activeBackground1": "#D9DEE8"
+            }
+          },
+          "workspace-dark": {
+            base: "vs-dark", inherit: true,
+            rules: [
+              { token: "comment", foreground: "788698", fontStyle: "italic" },
+              { token: "keyword", foreground: "B5A2F3" },
+              { token: "string", foreground: "86CBB6" },
+              { token: "number", foreground: "E7AF7F" }
+            ],
+            colors: {
+              "editor.background": "#1E222A", "editor.foreground": "#D8DDE8",
+              "editorLineNumber.foreground": "#626C7C", "editorLineNumber.activeForeground": "#B0B9C8",
+              "editorGutter.background": "#1E222A", "editor.lineHighlightBackground": "#252A34",
+              "editorCursor.foreground": "#A7A4FA", "editor.selectionBackground": "#403F68",
+              "editorIndentGuide.background1": "#303642", "editorIndentGuide.activeBackground1": "#505A6B"
+            }
+          }
+        }
+      },
+      editorOptions: {
+        folding: true,
+        showFoldingControls: "always",
+        lineNumbers: "on",
+        lineNumbersMinChars: 3,
+        detectIndentation: true,
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        renderLineHighlight: "line",
+        fontFamily: "'JetBrains Mono', Consolas, monospace",
+        fontLigatures: true,
+        padding: { top: 24, bottom: 24 },
+        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+        smoothScrolling: true,
+        ariaLabel: "Code editor"
+      },
+      toolbar: [
+        { id: "run", label: "Run code", icon: "play", variant: "primary" },
+        { id: "openResult", label: "Open result", title: "Open result in new tab", icon: "external", variant: "secondary" },
+        { id: "theme", label: "Toggle color mode", icon: "moon", iconOnly: true, separatorBefore: true },
+        { id: "settings", label: "Editor settings", icon: "settings", iconOnly: true },
+        // Example: { id: "custom", label: "Custom", icon: "code", onClick: ({ app }) => { /* ... */ } }
+      ],
+      onRun: null
+    };
+
+    const ICONS = {
+      play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.7a1 1 0 0 1 1.5-.86l10.3 6.3a2.15 2.15 0 0 1 0 3.67L9 20.1a1 1 0 0 1-1.5-.86V4.7Z"></path></svg>',
+      external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 5h6v6M19 5l-9 9"></path><path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"></path></svg>',
+      moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.2 15.4A8.5 8.5 0 0 1 8.6 3.8 8.5 8.5 0 1 0 20.2 15.4Z"></path></svg>',
+      sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"></path></svg>',
+      settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4Z"></path><path d="M19.2 13.4a7.5 7.5 0 0 0 0-2.8l1.4-1.1-1.5-2.6-1.7.6A7.2 7.2 0 0 0 15 6.1l-.3-1.8h-3l-.4 1.8a7.2 7.2 0 0 0-2.4 1.4l-1.7-.6-1.5 2.6 1.4 1.1a7.5 7.5 0 0 0 0 2.8l-1.4 1.1 1.5 2.6 1.7-.6a7.2 7.2 0 0 0 2.4 1.4l.4 1.8h3l.3-1.8a7.2 7.2 0 0 0 2.4-1.4l1.7.6 1.5-2.6-1.4-1.1Z"></path></svg>',
+      code: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4m8-8 4 4-4 4"></path></svg>',
+      check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12 2.3 2.3 4.8-4.8"></path></svg>',
+      clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
+      warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6m0 4h.01"></path></svg>'
+    };
+
+    const STORAGE = CONFIG.storage;
+    const MONACO_BASE = CONFIG.monacoBase;
+    const $ = (id) => document.getElementById(id);
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const toolbarButtons = new Map();
+    const splitRatios = { desktop: CONFIG.layout.desktopSplit, mobile: CONFIG.layout.mobileSplit };
+    let monacoEditor = null;
+    let fallbackActive = false;
+    let latestCode = readStorage(STORAGE.code) ?? CONFIG.initialValue;
+    let settings = loadSettings();
+    let runner = CONFIG.onRun;
+    let currentResult = null;
+    let resultVersion = 0;
+    let saveTimer = null;
+    let toastTimer = null;
+    let activePointer = null;
+    let isRunning = false;
+
+    function readStorage(key) {
+      try { return localStorage.getItem(key); } catch (error) { return null; }
+    }
+    function writeStorage(key, value) {
+      try { localStorage.setItem(key, value); return true; } catch (error) { return false; }
+    }
+    function defaultSettings() {
+      return { language: CONFIG.language, ...CONFIG.defaults };
+    }
+    function loadSettings() {
+      const defaults = defaultSettings();
+      let saved = {};
+      try { saved = JSON.parse(readStorage(STORAGE.settings) || "{}") || {}; } catch (error) { saved = {}; }
+      const themeNames = new Set(["auto", ...CONFIG.themes.choices.map((item) => item.value), ...Object.keys(CONFIG.themes.definitions)]);
+      const fontSize = Number(saved.fontSize);
+      return {
+        language: typeof saved.language === "string" && saved.language ? saved.language : defaults.language,
+        appTheme: ["system", "light", "dark"].includes(saved.appTheme) ? saved.appTheme : defaults.appTheme,
+        editorTheme: themeNames.has(saved.editorTheme) ? saved.editorTheme : defaults.editorTheme,
+        fontSize: Number.isFinite(fontSize) && fontSize >= CONFIG.fontSize.min && fontSize <= CONFIG.fontSize.max ? fontSize : defaults.fontSize,
+        wordWrap: typeof saved.wordWrap === "boolean" ? saved.wordWrap : defaults.wordWrap,
+        minimap: typeof saved.minimap === "boolean" ? saved.minimap : defaults.minimap,
+        suggestions: typeof saved.suggestions === "boolean" ? saved.suggestions : defaults.suggestions,
+        parameterHints: typeof saved.parameterHints === "boolean" ? saved.parameterHints : defaults.parameterHints
+      };
+    }
+    function saveSettings() { writeStorage(STORAGE.settings, JSON.stringify(settings)); }
+    function setSaveStatus(status) {
+      const info = status === "saved" ? ["Saved", ICONS.check, "Saved in this browser"] : status === "saving" ? ["Saving...", ICONS.clock, "Saving changes"] : ["Not saved", ICONS.warning, "Browser storage is unavailable"];
+      $("save-label").textContent = info[0];
+      $("save-icon").innerHTML = info[1];
+      $("save-status").title = info[2];
+      $("save-status").classList.toggle("is-unsaved", status === "error");
+    }
+    function getCode() {
+      if (monacoEditor) return monacoEditor.getValue();
+      if (fallbackActive) return $("editor-fallback").value;
+      return latestCode;
+    }
+    function saveCode() {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      latestCode = getCode();
+      setSaveStatus(writeStorage(STORAGE.code, latestCode) ? "saved" : "error");
+    }
+    function codeChanged() {
+      latestCode = getCode();
+      setSaveStatus("saving");
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveCode, 350);
+    }
+    function setCode(value) {
+      latestCode = String(value);
+      if (monacoEditor) {
+        if (monacoEditor.getValue() !== latestCode) monacoEditor.setValue(latestCode);
+        else codeChanged();
+      } else {
+        if (fallbackActive) $("editor-fallback").value = latestCode;
+        codeChanged();
+      }
+    }
+    function showToast(message) {
+      const toast = $("toast");
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 3200);
+    }
+
+    const app = {
+      getCode,
+      setCode,
+      getLanguage: () => settings.language,
+      setLanguage,
+      getEditor: () => monacoEditor,
+      setResult,
+      clearResult,
+      run: runCode,
+      setRunner: (callback) => {
+        runner = typeof callback === "function" ? callback : null;
+        if (!currentResult && !isRunning) restorePlaceholder();
+      }
+    };
+    window.codeEditorApp = app;
+
+    const toolbarActions = {
+      run: runCode,
+      openResult,
+      theme: toggleTheme,
+      settings: openSettings
+    };
+    function buildToolbar() {
+      const toolbar = $("toolbar");
+      CONFIG.toolbar.forEach((item) => {
+        if (item.separatorBefore && toolbar.children.length) {
+          const divider = document.createElement("span");
+          divider.className = "toolbar-divider";
+          divider.setAttribute("aria-hidden", "true");
+          toolbar.appendChild(divider);
+        }
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "toolbar-button" + (item.variant ? " " + item.variant : "") + (item.iconOnly ? " icon-only" : "");
+        button.setAttribute("aria-label", item.title || item.label);
+        button.title = item.title || item.label;
+        if (item.icon && ICONS[item.icon]) {
+          const icon = document.createElement("span");
+          icon.className = "button-icon";
+          icon.innerHTML = ICONS[item.icon];
+          button.appendChild(icon);
+        }
+        if (!item.iconOnly) {
+          const label = document.createElement("span");
+          label.className = "button-label";
+          label.textContent = item.label;
+          button.appendChild(label);
+        }
+        button.addEventListener("click", (event) => {
+          if (typeof item.onClick === "function") item.onClick({ app, event });
+          else if (toolbarActions[item.id]) toolbarActions[item.id]();
+        });
+        toolbarButtons.set(item.id, button);
+        toolbar.appendChild(button);
+      });
+      const runButton = toolbarButtons.get("run");
+      if (runButton) {
+        const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd+Enter" : "Ctrl+Enter";
+        runButton.title = "Run code (" + shortcut + ")";
+      }
+    }
+
+    function ensureOption(select, value, label) {
+      if (![...select.options].some((option) => option.value === value)) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label || value;
+        select.appendChild(option);
+      }
+    }
+    function populateSelects() {
+      CONFIG.languages.forEach((item) => ensureOption($("language-select"), item.value, item.label));
+      CONFIG.themes.choices.forEach((item) => ensureOption($("editor-theme"), item.value, item.label));
+      ensureOption($("language-select"), settings.language, settings.language);
+      ensureOption($("editor-theme"), settings.editorTheme, settings.editorTheme);
+    }
+    function setLanguage(language) {
+      if (typeof language !== "string" || !language) return;
+      settings.language = language;
+      ensureOption($("language-select"), language, language);
+      $("language-select").value = language;
+      if (monacoEditor && monacoEditor.getModel()) window.monaco.editor.setModelLanguage(monacoEditor.getModel(), language);
+      saveSettings();
+    }
+    function isDarkMode() { return settings.appTheme === "dark" || (settings.appTheme === "system" && systemTheme.matches); }
+    function applyTheme() {
+      const dark = isDarkMode();
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      const themeButton = toolbarButtons.get("theme");
+      if (themeButton) {
+        const label = dark ? "Switch to light mode" : "Switch to dark mode";
+        themeButton.title = label;
+        themeButton.setAttribute("aria-label", label);
+        const icon = themeButton.querySelector(".button-icon");
+        if (icon) icon.innerHTML = dark ? ICONS.sun : ICONS.moon;
+      }
+      if (monacoEditor) {
+        const theme = settings.editorTheme === "auto" ? (dark ? CONFIG.themes.dark : CONFIG.themes.light) : settings.editorTheme;
+        window.monaco.editor.setTheme(theme);
+      }
+    }
+    function toggleTheme() {
+      settings.appTheme = isDarkMode() ? "light" : "dark";
+      $("app-theme").value = settings.appTheme;
+      applyTheme();
+      saveSettings();
+    }
+    function editorSettings() {
+      return {
+        fontSize: settings.fontSize,
+        lineHeight: Math.round(settings.fontSize * CONFIG.fontSize.lineHeightRatio),
+        wordWrap: settings.wordWrap ? "on" : "off",
+        minimap: { enabled: settings.minimap },
+        quickSuggestions: settings.suggestions,
+        suggestOnTriggerCharacters: settings.suggestions,
+        wordBasedSuggestions: settings.suggestions ? "matchingDocuments" : "off",
+        inlineSuggest: { enabled: settings.suggestions },
+        parameterHints: { enabled: settings.parameterHints }
+      };
+    }
+    function applyEditorSettings() {
+      if (monacoEditor) monacoEditor.updateOptions(editorSettings());
+      const fallback = $("editor-fallback");
+      fallback.style.fontSize = settings.fontSize + "px";
+      fallback.wrap = settings.wordWrap ? "soft" : "off";
+    }
+    function syncSettingsControls() {
+      $("app-theme").value = settings.appTheme;
+      ensureOption($("editor-theme"), settings.editorTheme, settings.editorTheme);
+      $("editor-theme").value = settings.editorTheme;
+      $("font-size-value").textContent = settings.fontSize + " px";
+      $("font-decrease").disabled = settings.fontSize <= CONFIG.fontSize.min;
+      $("font-increase").disabled = settings.fontSize >= CONFIG.fontSize.max;
+      $("word-wrap").checked = settings.wordWrap;
+      $("minimap").checked = settings.minimap;
+      $("suggestions").checked = settings.suggestions;
+      $("parameter-hints").checked = settings.parameterHints;
+      ensureOption($("language-select"), settings.language, settings.language);
+      $("language-select").value = settings.language;
+    }
+    function updateSetting(key, value) {
+      settings[key] = value;
+      syncSettingsControls();
+      applyTheme();
+      applyEditorSettings();
+      saveSettings();
+    }
+    function openSettings() {
+      const dialog = $("settings-dialog");
+      if (!dialog.open) dialog.showModal();
+    }
+
+    function setPlaceholder(title, description) {
+      $("empty-title").textContent = title;
+      $("empty-description").textContent = description;
+    }
+    function restorePlaceholder() {
+      const description = typeof runner === "function" ? "Run your code to see the output here." : "Connect a compiler to see output here.";
+      setPlaceholder("Your result will appear here", description);
+    }
+    function clearResult() {
+      currentResult = null;
+      resultVersion += 1;
+      $("result-text").hidden = true;
+      $("result-text").textContent = "";
+      $("result-frame").hidden = true;
+      $("result-frame").removeAttribute("srcdoc");
+      $("empty-state").hidden = false;
+      $("clear-result").hidden = true;
+      restorePlaceholder();
+    }
+    function setResult(value) {
+      const result = typeof value === "string" ? { type: "text", content: value } : value;
+      if (!result || typeof result !== "object") throw new TypeError("Result must be a string or an object with type and content.");
+      currentResult = { type: result.type === "html" ? "html" : "text", content: String(result.content ?? "") };
+      resultVersion += 1;
+      $("empty-state").hidden = true;
+      $("clear-result").hidden = false;
+      $("result-text").hidden = currentResult.type !== "text";
+      $("result-frame").hidden = currentResult.type !== "html";
+      if (currentResult.type === "html") {
+        $("result-text").textContent = "";
+        $("result-frame").srcdoc = currentResult.content;
+      } else {
+        $("result-frame").removeAttribute("srcdoc");
+        $("result-text").textContent = currentResult.content;
+      }
+    }
+    async function runCode() {
+      if (isRunning) return;
+      if (typeof runner !== "function") {
+        if (!currentResult) setPlaceholder("No compiler connected yet", "Add a compiler to the Run handler to show a result here.");
+        showToast("Connect a compiler to use Run.");
+        return;
+      }
+      isRunning = true;
+      const button = toolbarButtons.get("run");
+      if (button) {
+        button.disabled = true;
+        const label = button.querySelector(".button-label");
+        if (label) label.textContent = "Running";
+      }
+      clearResult();
+      setPlaceholder("Running code...", "Your result will appear here shortly.");
+      $("result-area").setAttribute("aria-busy", "true");
+      const versionAtStart = resultVersion;
+      try {
+        const result = await runner({ code: getCode(), language: settings.language, editor: monacoEditor, setResult });
+        if (result !== undefined && result !== null) setResult(result);
+        else if (resultVersion === versionAtStart) setPlaceholder("No output returned", "The Run handler did not return a result.");
+      } catch (error) {
+        setResult({ type: "text", content: "Error: " + (error && error.message ? error.message : String(error)) });
+        showToast("The Run handler returned an error.");
+      } finally {
+        isRunning = false;
+        $("result-area").removeAttribute("aria-busy");
+        if (button) {
+          button.disabled = false;
+          const label = button.querySelector(".button-label");
+          if (label) label.textContent = "Run code";
+        }
+      }
+    }
+    function openResult() {
+      if (!currentResult) {
+        showToast("There is no result to open yet.");
+        return;
+      }
+      let contentUrl;
+      let pageUrl;
+      if (currentResult.type === "html") {
+        contentUrl = URL.createObjectURL(new Blob([currentResult.content], { type: "text/html;charset=utf-8" }));
+        const page = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Result</title><style>html,body,iframe{width:100%;height:100%;margin:0;border:0}body{overflow:hidden}</style></head><body><iframe title="Result" sandbox="allow-scripts" src="${contentUrl}"></iframe></body></html>`;
+        pageUrl = URL.createObjectURL(new Blob([page], { type: "text/html;charset=utf-8" }));
+      } else {
+        pageUrl = URL.createObjectURL(new Blob([currentResult.content], { type: "text/plain;charset=utf-8" }));
+      }
+      window.open(pageUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => {
+        URL.revokeObjectURL(pageUrl);
+        if (contentUrl) URL.revokeObjectURL(contentUrl);
+      }, 120000);
+    }
+
+    function isStacked() { return window.innerWidth <= CONFIG.layout.mobileBreakpoint; }
+    function updateSplit(pixelValue) {
+      const workspace = $("workspace");
+      const splitter = $("splitter");
+      const stacked = isStacked();
+      const rect = workspace.getBoundingClientRect();
+      const total = stacked ? rect.height : rect.width;
+      const divider = stacked ? splitter.offsetHeight : splitter.offsetWidth;
+      const available = total - divider;
+      if (available <= 0) return;
+      const minimum = Math.min(stacked ? CONFIG.layout.minMobilePane : CONFIG.layout.minDesktopPane, available * .4);
+      const pixels = Math.max(minimum, Math.min(available - minimum, pixelValue));
+      const ratio = pixels / available;
+      splitRatios[stacked ? "mobile" : "desktop"] = ratio;
+      workspace.style.setProperty("--split", (pixels / total * 100) + "%");
+      splitter.setAttribute("aria-valuemin", String(Math.round(minimum / available * 100)));
+      splitter.setAttribute("aria-valuemax", String(Math.round((available - minimum) / available * 100)));
+      splitter.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+      if (monacoEditor) monacoEditor.layout();
+    }
+    function updateLayout() {
+      const stacked = isStacked();
+      const workspace = $("workspace");
+      const splitter = $("splitter");
+      workspace.classList.toggle("is-stacked", stacked);
+      splitter.setAttribute("aria-orientation", stacked ? "horizontal" : "vertical");
+      const rect = workspace.getBoundingClientRect();
+      const available = (stacked ? rect.height - splitter.offsetHeight : rect.width - splitter.offsetWidth);
+      updateSplit(available * splitRatios[stacked ? "mobile" : "desktop"]);
+    }
+    function moveSplitter(event) {
+      if (activePointer !== event.pointerId) return;
+      const rect = $("workspace").getBoundingClientRect();
+      const stacked = isStacked();
+      const divider = stacked ? $("splitter").offsetHeight : $("splitter").offsetWidth;
+      updateSplit((stacked ? event.clientY - rect.top : event.clientX - rect.left) - divider / 2);
+    }
+    function endResize(event) {
+      if (activePointer === null) return;
+      if (event && "pointerId" in event && event.pointerId !== activePointer) return;
+      const splitter = $("splitter");
+      const pointerId = activePointer;
+      activePointer = null;
+      if (splitter.hasPointerCapture && splitter.hasPointerCapture(pointerId)) splitter.releasePointerCapture(pointerId);
+      $("workspace").classList.remove("is-resizing");
+      document.body.classList.remove("is-resizing", "resize-row", "resize-column");
+    }
+
+    function showFallback() {
+      if (monacoEditor || fallbackActive) return;
+      fallbackActive = true;
+      $("editor-loading").hidden = true;
+      $("editor-fallback").value = latestCode;
+      $("editor-fallback").hidden = false;
+      applyEditorSettings();
+      showToast("Monaco could not load. Basic editing is available.");
+    }
+    function createMonaco() {
+      try {
+        Object.entries(CONFIG.themes.definitions).forEach(([name, definition]) => window.monaco.editor.defineTheme(name, definition));
+        const initialCode = getCode();
+        const theme = settings.editorTheme === "auto" ? (isDarkMode() ? CONFIG.themes.dark : CONFIG.themes.light) : settings.editorTheme;
+        monacoEditor = window.monaco.editor.create($("monaco-editor"), {
+          ...CONFIG.editorOptions,
+          ...editorSettings(),
+          value: initialCode,
+          language: settings.language,
+          theme
+        });
+        fallbackActive = false;
+        $("editor-fallback").hidden = true;
+        $("editor-loading").hidden = true;
+        monacoEditor.onDidChangeModelContent(codeChanged);
+        if (toolbarButtons.has("run")) monacoEditor.addCommand(window.monaco.KeyMod.CtrlCmd | window.monaco.KeyCode.Enter, runCode);
+        updateLayout();
+      } catch (error) {
+        console.error("Unable to initialize Monaco:", error);
+        if (monacoEditor) {
+          latestCode = monacoEditor.getValue();
+          monacoEditor.dispose();
+          monacoEditor = null;
+        }
+        fallbackActive = false;
+        showFallback();
+      }
+    }
+    function loadMonaco() {
+      const workerSource = `self.MonacoEnvironment = { baseUrl: '${MONACO_BASE}/' }; importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');`;
+      let workerUrl;
+      try { workerUrl = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" })); }
+      catch (error) { showFallback(); return; }
+      window.MonacoEnvironment = { getWorkerUrl: () => workerUrl };
+      const timeout = setTimeout(showFallback, 14000);
+      const script = document.createElement("script");
+      script.src = MONACO_BASE + "/vs/loader.js";
+      script.onload = () => {
+        if (!window.require || !window.require.config) { clearTimeout(timeout); showFallback(); return; }
+        try {
+          window.require.config({ paths: { vs: MONACO_BASE + "/vs" } });
+          window.require(["vs/editor/editor.main"], () => { clearTimeout(timeout); createMonaco(); }, () => { clearTimeout(timeout); showFallback(); });
+        } catch (error) { clearTimeout(timeout); showFallback(); }
+      };
+      script.onerror = () => { clearTimeout(timeout); showFallback(); };
+      document.head.appendChild(script);
+    }
+
+    buildToolbar();
+    populateSelects();
+    syncSettingsControls();
+    applyTheme();
+    applyEditorSettings();
+    updateLayout();
+    restorePlaceholder();
+    saveCode();
+
+    $("language-select").addEventListener("change", (event) => setLanguage(event.target.value));
+    $("app-theme").addEventListener("change", (event) => updateSetting("appTheme", event.target.value));
+    $("editor-theme").addEventListener("change", (event) => updateSetting("editorTheme", event.target.value));
+    $("font-decrease").addEventListener("click", () => updateSetting("fontSize", Math.max(CONFIG.fontSize.min, settings.fontSize - 1)));
+    $("font-increase").addEventListener("click", () => updateSetting("fontSize", Math.min(CONFIG.fontSize.max, settings.fontSize + 1)));
+    [["word-wrap", "wordWrap"], ["minimap", "minimap"], ["suggestions", "suggestions"], ["parameter-hints", "parameterHints"]].forEach(([id, key]) => {
+      $(id).addEventListener("change", (event) => updateSetting(key, event.target.checked));
+    });
+    $("reset-settings").addEventListener("click", () => {
+      settings = defaultSettings();
+      syncSettingsControls();
+      setLanguage(settings.language);
+      applyTheme();
+      applyEditorSettings();
+      saveSettings();
+      showToast("Editor settings reset.");
+    });
+    $("close-settings").addEventListener("click", () => $("settings-dialog").close());
+    $("settings-dialog").addEventListener("click", (event) => {
+      if (event.target !== event.currentTarget) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.currentTarget.close();
+    });
+    $("settings-dialog").addEventListener("close", () => toolbarButtons.get("settings")?.focus());
+    $("clear-result").addEventListener("click", clearResult);
+    $("editor-fallback").addEventListener("input", () => { if (fallbackActive) codeChanged(); });
+
+    $("splitter").addEventListener("pointerdown", (event) => {
+      if (activePointer !== null) return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      event.preventDefault();
+      activePointer = event.pointerId;
+      $("workspace").classList.add("is-resizing");
+      document.body.classList.add("is-resizing", isStacked() ? "resize-row" : "resize-column");
+      if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId);
+    });
+    window.addEventListener("pointermove", moveSplitter);
+    window.addEventListener("pointerup", endResize);
+    window.addEventListener("pointercancel", endResize);
+    window.addEventListener("blur", endResize);
+    $("splitter").addEventListener("lostpointercapture", endResize);
+    $("splitter").addEventListener("keydown", (event) => {
+      const stacked = isStacked();
+      const negative = stacked ? "ArrowUp" : "ArrowLeft";
+      const positive = stacked ? "ArrowDown" : "ArrowRight";
+      if (![negative, positive, "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const rect = $("workspace").getBoundingClientRect();
+      const available = stacked ? rect.height - event.currentTarget.offsetHeight : rect.width - event.currentTarget.offsetWidth;
+      const current = available * splitRatios[stacked ? "mobile" : "desktop"];
+      updateSplit(event.key === "Home" ? 0 : event.key === "End" ? available : current + (event.key === positive ? 1 : -1) * available * .02);
+    });
+    window.addEventListener("resize", updateLayout);
+    window.addEventListener("pagehide", saveCode);
+    document.addEventListener("keydown", (event) => {
+      if (!toolbarButtons.has("run") || $("settings-dialog").open || $("monaco-editor").contains(event.target)) return;
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); runCode(); }
+    });
+    if (systemTheme.addEventListener) systemTheme.addEventListener("change", () => { if (settings.appTheme === "system") applyTheme(); });
+    else systemTheme.addListener(() => { if (settings.appTheme === "system") applyTheme(); });
+    loadMonaco();
+  </script>
+</body>
+</html>

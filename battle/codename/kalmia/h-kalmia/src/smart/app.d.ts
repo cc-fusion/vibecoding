@@ -1,0 +1,1 @@
+export function mountSmartEditor(root: HTMLElement): () => void;

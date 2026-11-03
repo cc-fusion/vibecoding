@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TerraVox — Voxel Sandbox</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Underwater & Hurt Vignettes -->
+    <div id="underwater-overlay" class="screen-tint tint-water hidden"></div>
+    <div id="hurt-overlay" class="screen-tint tint-hurt"></div>
+
+    <!-- In-Game HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="hud-top">
+        <div class="world-context" id="hud-context">
+          <span id="hud-clock">Day 1 · 07:30</span>
+          <span class="context-sep">·</span>
+          <span id="hud-biome">Emerald Plains</span>
+        </div>
+
+        <div id="hud-goal" class="goal-card">
+          <div class="goal-label" id="goal-title">Gather Timber</div>
+          <div class="goal-desc" id="goal-hint">Hold Left-Click on a tree trunk to collect 3 Logs</div>
+        </div>
+      </div>
+
+      <div id="hud-diagnostics" class="diagnostics-box hidden"></div>
+
+      <!-- Crosshair -->
+      <div class="crosshair" id="crosshair">
+        <span class="ch-h"></span>
+        <span class="ch-v"></span>
+      </div>
+      <div id="mining-hint" class="mining-hint hidden"></div>
+
+      <!-- Toast Notification -->
+      <div id="toast-banner" class="toast-banner hidden"></div>
+
+      <!-- Bottom Status & Hotbar -->
+      <div class="hud-bottom">
+        <div id="held-item-banner" class="held-item-banner"></div>
+
+        <div id="survival-bars" class="survival-bars">
+          <div id="hearts-row" class="stat-row" aria-label="Health"></div>
+          <div id="hunger-row" class="stat-row" aria-label="Hunger"></div>
+        </div>
+        <div id="oxygen-row" class="stat-row oxygen-row hidden" aria-label="Oxygen"></div>
+
+        <div class="hotbar-wrap">
+          <div id="hotbar" class="hotbar"></div>
+          <button id="hud-bag-btn" class="hud-icon-btn" title="Inventory & Crafting (E)">E · Bag</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Title & World Manager Screen -->
+    <div id="title-screen" class="overlay-screen">
+      <div class="menu-panel title-panel">
+        <div class="brand-header">
+          <h1 class="game-logo">TERRAVOX</h1>
+          <p class="game-tagline">Explore biomes, gather resources, craft tools, and shape your world.</p>
+        </div>
+
+        <!-- Main Title Actions -->
+        <div id="title-main-view" class="panel-section">
+          <button id="btn-continue-world" class="btn btn-primary btn-large hidden">Continue World</button>
+          <button id="btn-open-new-world" class="btn btn-primary btn-large">New World</button>
+          <div id="saved-worlds-section" class="saved-worlds-section hidden">
+            <div class="section-heading">Saved Worlds</div>
+            <div id="saved-worlds-list" class="saved-worlds-list"></div>
+          </div>
+          <div class="row-actions">
+            <button id="btn-title-controls" class="btn btn-secondary">Controls</button>
+            <button id="btn-title-settings" class="btn btn-secondary">Settings</button>
+          </div>
+        </div>
+
+        <!-- Create New World View -->
+        <div id="title-create-view" class="panel-section hidden">
+          <h2 class="modal-subtitle">Create New World</h2>
+
+          <label class="field-group">
+            <span class="field-label">World Name</span>
+            <input id="input-world-name" type="text" class="text-input" maxlength="28" value="New Frontier" />
+          </label>
+
+          <label class="field-group">
+            <span class="field-label">World Seed</span>
+            <div class="input-with-btn">
+              <input id="input-world-seed" type="text" class="text-input" maxlength="32" placeholder="Leave blank or roll a seed" />
+              <button id="btn-random-seed" type="button" class="btn btn-secondary btn-compact">Random</button>
+            </div>
+          </label>
+
+          <div class="seed-presets">
+            <button type="button" class="preset-btn" data-seed="EmeraldValley">Emerald Valley</button>
+            <button type="button" class="preset-btn" data-seed="FrostpeakCrags">Alpine Peaks</button>
+            <button type="button" class="preset-btn" data-seed="SunlitOasis">Golden Dunes</button>
+          </div>
+
+          <div class="field-group">
+            <span class="field-label">Game Mode</span>
+            <div class="segmented-control" id="create-mode-toggle">
+              <button type="button" class="seg-btn active" data-mode="survival">
+                <strong>Survival</strong>
+                <small>Gather, craft &amp; endure the night</small>
+              </button>
+              <button type="button" class="seg-btn" data-mode="creative">
+                <strong>Creative</strong>
+                <small>Unlimited blocks &amp; flight</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="row-actions">
+            <button id="btn-cancel-create" type="button" class="btn btn-secondary">Back</button>
+            <button id="btn-start-world" type="button" class="btn btn-primary">Create &amp; Play</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inventory, Crafting & Creative Palette Modal (E) -->
+    <div id="inventory-modal" class="overlay-screen modal-backdrop hidden">
+      <div class="inventory-dialog">
+        <div class="dialog-header">
+          <div class="inv-tabs">
+            <button id="tab-btn-crafting" class="inv-tab active" type="button">Crafting</button>
+            <button id="tab-btn-creative" class="inv-tab hidden" type="button">Block Catalog</button>
+          </div>
+          <div id="station-indicator" class="station-indicator">Hand Crafting</div>
+          <button id="btn-close-inventory" class="close-btn" type="button" aria-label="Close">✕</button>
+        </div>
+
+        <div class="inventory-body">
+          <!-- Left Pane: Crafting Recipes OR Creative Catalog -->
+          <div id="pane-crafting" class="crafting-pane">
+            <div class="craft-filter-bar">
+              <div id="craft-categories" class="category-pills"></div>
+              <label class="craftable-toggle">
+                <input type="checkbox" id="chk-craftable-only" />
+                <span>Craftable</span>
+              </label>
+            </div>
+            <div id="recipe-list" class="recipe-list"></div>
+          </div>
+
+          <div id="pane-creative" class="creative-pane hidden">
+            <div class="pane-caption">Click any block or tool to place a stack into your selected slot.</div>
+            <div id="creative-grid" class="slot-grid creative-grid"></div>
+          </div>
+
+          <!-- Right Pane: Player Backpack & Hotbar -->
+          <div class="backpack-pane">
+            <div class="pane-header-row">
+              <span class="pane-title">Backpack</span>
+              <span id="cursor-item-label" class="cursor-item-label">Click slot to move · Shift+Click quick transfer</span>
+            </div>
+            <div id="backpack-grid" class="slot-grid"></div>
+
+            <div class="pane-title hotbar-section-title">Hotbar</div>
+            <div id="modal-hotbar-grid" class="slot-grid"></div>
+
+            <div class="inv-footer-actions">
+              <button id="btn-drop-selected" type="button" class="btn btn-secondary btn-compact">Drop Held (Q)</button>
+              <div id="creative-quick-bar" class="creative-time-bar hidden">
+                <button type="button" class="preset-btn" data-time="dawn">Dawn</button>
+                <button type="button" class="preset-btn" data-time="noon">Noon</button>
+                <button type="button" class="preset-btn" data-time="sunset">Sunset</button>
+                <button type="button" class="preset-btn" data-time="night">Night</button>
+                <button type="button" class="preset-btn" id="btn-toggle-weather">Weather</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating Drag/Selected Stack Preview -->
+      <div id="floating-slot" class="floating-slot hidden">
+        <img id="floating-slot-img" alt="" />
+        <span id="floating-slot-count"></span>
+      </div>
+    </div>
+
+    <!-- Pause Menu (Esc) -->
+    <div id="pause-modal" class="overlay-screen modal-backdrop hidden">
+      <div class="menu-panel pause-panel">
+        <h2 class="modal-subtitle" id="pause-world-title">World Paused</h2>
+        <div class="panel-section">
+          <button id="btn-resume" class="btn btn-primary btn-large">Resume Game</button>
+          <button id="btn-save-now" class="btn btn-secondary">Save World</button>
+          <div class="row-actions">
+            <button id="btn-pause-controls" class="btn btn-secondary">Controls</button>
+            <button id="btn-pause-settings" class="btn btn-secondary">Settings</button>
+          </div>
+          <button id="btn-exit-title" class="btn btn-danger">Save &amp; Exit to Title</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Dialog -->
+    <div id="settings-modal" class="overlay-screen modal-backdrop hidden">
+      <div class="menu-panel settings-panel">
+        <div class="dialog-header">
+          <h2 class="modal-subtitle">Settings</h2>
+          <button id="btn-close-settings" class="close-btn" type="button">✕</button>
+        </div>
+
+        <div class="settings-list">
+          <label class="setting-row">
+            <span>View Distance</span>
+            <select id="sel-render-distance" class="select-input">
+              <option value="3">Near (Fastest)</option>
+              <option value="5">Balanced</option>
+              <option value="7">Far (Scenic)</option>
+            </select>
+          </label>
+
+          <label class="setting-row">
+            <span>Game Mode</span>
+            <select id="sel-game-mode" class="select-input">
+              <option value="survival">Survival</option>
+              <option value="creative">Creative</option>
+            </select>
+          </label>
+
+          <label class="setting-row">
+            <span>Sound Effects</span>
+            <input id="rng-sfx" type="range" min="0" max="100" value="75" />
+          </label>
+
+          <label class="setting-row">
+            <span>Ambient Music</span>
+            <input id="rng-music" type="range" min="0" max="100" value="35" />
+          </label>
+
+          <label class="setting-row">
+            <span>Mouse Sensitivity</span>
+            <input id="rng-sens" type="range" min="30" max="200" value="100" />
+          </label>
+
+          <label class="setting-row">
+            <span>Peaceful Nights (No Hostiles)</span>
+            <input id="chk-peaceful" type="checkbox" />
+          </label>
+
+          <label class="setting-row">
+            <span>Show Survival Goals</span>
+            <input id="chk-goals" type="checkbox" checked />
+          </label>
+
+          <label class="setting-row">
+            <span>Show Coordinates &amp; FPS (F3)</span>
+            <input id="chk-diagnostics" type="checkbox" />
+          </label>
+        </div>
+
+        <button id="btn-done-settings" class="btn btn-primary">Done</button>
+      </div>
+    </div>
+
+    <!-- Controls Guide Dialog -->
+    <div id="controls-modal" class="overlay-screen modal-backdrop hidden">
+      <div class="menu-panel controls-panel">
+        <div class="dialog-header">
+          <h2 class="modal-subtitle">Controls</h2>
+          <button id="btn-close-controls" class="close-btn" type="button">✕</button>
+        </div>
+
+        <div class="controls-grid">
+          <div class="key-row"><kbd>W A S D</kbd><span>Move / Swim</span></div>
+          <div class="key-row"><kbd>Mouse</kbd><span>Look Around</span></div>
+          <div class="key-row"><kbd>Space</kbd><span>Jump / Swim Up</span></div>
+          <div class="key-row"><kbd>2× Space</kbd><span>Toggle Flight (Creative)</span></div>
+          <div class="key-row"><kbd>Shift</kbd><span>Sneak (Safe Ledge Walk)</span></div>
+          <div class="key-row"><kbd>Ctrl / 2× W</kbd><span>Sprint</span></div>
+          <div class="key-row"><kbd>Left Click</kbd><span>Mine Block / Attack</span></div>
+          <div class="key-row"><kbd>Right Click</kbd><span>Place Block / Eat / Use</span></div>
+          <div class="key-row"><kbd>E</kbd><span>Inventory &amp; Crafting</span></div>
+          <div class="key-row"><kbd>1 – 9 / Wheel</kbd><span>Select Hotbar Slot</span></div>
+          <div class="key-row"><kbd>Q</kbd><span>Drop Held Item</span></div>
+          <div class="key-row"><kbd>F3</kbd><span>Toggle Coordinates &amp; FPS</span></div>
+        </div>
+
+        <button id="btn-done-controls" class="btn btn-primary">Got It</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

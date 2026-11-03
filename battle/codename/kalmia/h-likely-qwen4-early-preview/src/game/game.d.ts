@@ -1,0 +1,1 @@
+export declare function initGame(container: HTMLElement): unknown;

@@ -1,0 +1,47 @@
+diff --git a/include/taichi/common/serialization.h b/include/taichi/common/serialization.h
+index 5681920..67bfccd 100644
+--- a/include/taichi/common/serialization.h
++++ b/include/taichi/common/serialization.h
+@@ -121,9 +121,11 @@ using is_unit_t = typename is_unit<T>::type;
+   (std::is_same<typename std::remove_reference<decltype(serializer)>::type, \
+                 T>())
+ 
++#ifndef __EMSCRIPTEN__
+ static_assert(
+     sizeof(std::size_t) == sizeof(uint64_t),
+     "sizeof(std::size_t) should be 8. Try compiling with 64bit mode.");
++#endif
+ 
+ template <typename T, typename S>
+ struct IO {
+diff --git a/include/taichi/math/svd.cpp b/include/taichi/math/svd.cpp
+index 7580f8d..84808e2 100644
+--- a/include/taichi/math/svd.cpp
++++ b/include/taichi/math/svd.cpp
+@@ -25,7 +25,7 @@ void eigen_svd(const MatrixND<dim, T> &m,
+   Eigen::Matrix<T, dim, dim> e_m(dim, dim);
+   e_m = to_eigen(m);
+   Eigen::JacobiSVD<Eigen::Matrix<T, dim, dim>> e_svd(
+-      e_m, Eigen::ComputeThinU | Eigen::ComputeThinV);
++      e_m, Eigen::ComputeFullU | Eigen::ComputeFullV);
+   s = MatrixND<dim, T>(0.0_f);
+   for (int i = 0; i < dim; ++i)
+     s[i][i] = e_svd.singularValues()(i);
+diff --git a/src/system/timer.cpp b/src/system/timer.cpp
+index 1df2247..3e6515d 100644
+--- a/src/system/timer.cpp
++++ b/src/system/timer.cpp
+@@ -155,9 +155,13 @@ uint64 Time::get_cycles() {
+ #else
+ 
+ uint64 Time::get_cycles() {
++#ifdef __EMSCRIPTEN__
++  return static_cast<uint64>(get_time() * 1e9);
++#else
+   unsigned int lo, hi;
+   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+   return ((uint64)hi << 32) | lo;
++#endif
+ }
+ 
+ #endif

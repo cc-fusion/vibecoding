@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Code Editor</title>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       CONFIGURATION
+       Everything you are likely to customize lives in this script block.
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <script>
+    const CONFIG = {
+      // Monaco language id, e.g. 'javascript', 'typescript', 'python', 'cpp', 'java', 'go', 'rust', 'html', 'json'.
+      language: 'javascript',
+
+      // Shown the first time the page opens. Afterwards the user's own code is restored from localStorage.
+      defaultCode: `function greet(name) {
+  return "Hello, " + name + "!";
+}
+
+console.log(greet("world"));
+`,
+
+      // Prefix for all localStorage keys. Change it if several editors share one origin.
+      storageKey: 'code-editor',
+
+      // Color mode on first visit: 'system' | 'light' | 'dark'. The toolbar toggle overrides it per user.
+      colorMode: 'system',
+
+      // Themes offered in the settings dialog. Built-ins: vs, vs-dark, hc-light, hc-black.
+      // Add `data` to register a custom Monaco theme, e.g.
+      //   { id: 'midnight', name: 'Midnight', data: { base: 'vs-dark', inherit: true, rules: [], colors: { 'editor.background': '#0b1020' } } },
+      themes: [
+        { id: 'vs',       name: 'Light' },
+        { id: 'vs-dark',  name: 'Dark' },
+        { id: 'hc-light', name: 'High contrast light' },
+        { id: 'hc-black', name: 'High contrast dark' },
+      ],
+
+      // Defaults for the user-adjustable settings (changed in the settings dialog, saved per user).
+      settings: {
+        lightTheme: 'vs',        // editor theme used in light mode
+        darkTheme: 'vs-dark',    // editor theme used in dark mode
+        fontSize: 14,
+        wordWrap: false,
+        minimap: true,
+        suggestions: true,
+        parameterHints: true,
+      },
+
+      // Fixed Monaco options. Full list:
+      // https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.IStandaloneEditorConstructionOptions.html
+      editorOptions: {
+        folding: true,
+        lineNumbers: 'on',
+        detectIndentation: true,      // follow the code's own indentation instead of forcing a tab/space size
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        smoothScrolling: true,
+        renderWhitespace: 'selection',
+        bracketPairColorization: { enabled: true },
+        fixedOverflowWidgets: true,
+        padding: { top: 12 },
+      },
+
+      // Sandbox flags for the result <iframe> (used when compile() calls result.html()).
+      resultSandbox: 'allow-scripts allow-forms allow-modals allow-popups',
+
+      // Layout
+      mobileBreakpoint: 768,   // below this width the editor stacks on top of the result
+      defaultSplit: 0.5,       // initial share of the editor pane (0–1)
+
+      // Where Monaco is loaded from. 0.52.x is the last release whose AMD build works from a CDN
+      // without a bundler. Point this at your own copy to self-host.
+      monacoBase: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min',
+    };
+
+    /* Toolbar buttons, rendered left to right.
+     * Delete an entry to remove a button, add one to create your own.
+     *   id        unique id
+     *   icon      key of ICONS (see the application section) or an inline <svg> string — may be a function of `state`
+     *   label     visible text; omit for an icon-only button
+     *   title     tooltip and accessible name — may be a function of `state`
+     *   variant   'primary' | 'default'
+     *   disabled  boolean or function of `state`
+     *   onClick   receives `app` (app.run(), app.result, app.editor, app.getCode(), app.setCode(), …)
+     * `state` is { running, hasResult, colorMode }. Use { separator: true } to insert a divider.
+     */
+    const TOOLBAR = [
+      {
+        id: 'run',
+        icon: state => (state.running ? 'spinner' : 'play'),
+        label: 'Run',
+        title: () => `Run (${MOD}+Enter)`,
+        variant: 'primary',
+        disabled: state => state.running,
+        onClick: app => app.run(),
+      },
+      {
+        id: 'open',
+        icon: 'external',
+        title: 'Open result in new tab',
+        disabled: state => !state.hasResult,
+        onClick: app => app.openResult(),
+      },
+      { separator: true },
+      {
+        id: 'theme',
+        icon: state => (state.colorMode === 'dark' ? 'sun' : 'moon'),
+        title: state => (state.colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'),
+        onClick: app => app.toggleColorMode(),
+      },
+      {
+        id: 'settings',
+        icon: 'settings',
+        title: 'Editor settings',
+        onClick: app => app.openSettings(),
+      },
+      // Example — a button that restores the default code:
+      // { id: 'reset', icon: 'reset', title: 'Reset code', onClick: app => app.setCode(CONFIG.defaultCode) },
+    ];
+
+    /* Compiler hook — called when the user presses Run (never automatically).
+     *   code    current editor content
+     *   result  the result panel:
+     *             result.text(str)     show plain text (stdout, compiler messages, …)
+     *             result.append(str)   append text — handy for streaming output
+     *             result.error(str)    show an error message
+     *             result.html(doc)     render an HTML document in the sandboxed iframe
+     *             result.clear()       empty the panel
+     * Anything thrown here is shown with result.error().
+     */
+    async function compile(code, result) {
+      // TODO: connect your compiler. For example:
+      //   const response = await fetch('/api/compile', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ language: CONFIG.language, code }),
+      //   });
+      //   result.text(await response.text());
+      result.text('No compiler is connected yet.\n\nImplement compile() in index.html to run code.');
+    }
+  </script>
+
+  <!-- Apply the color mode before the first paint to avoid a flash of the wrong theme. -->
+  <script>
+    (function () {
+      let mode = CONFIG.colorMode;
+      try { mode = JSON.parse(localStorage.getItem(CONFIG.storageKey + ':color-mode')) || mode; } catch (e) {}
+      if (mode !== 'light' && mode !== 'dark') {
+        mode = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.classList.toggle('dark', mode === 'dark');
+      document.documentElement.style.colorScheme = mode;
+    })();
+  </script>
+
+  <!-- Tailwind is available for your own additions. `dark:` variants follow the toolbar toggle. -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style type="text/tailwindcss">
+    @custom-variant dark (&:where(.dark, .dark *));
+  </style>
+
+  <style>
+    /* ---- Theme tokens: tweak colors here ---- */
+    :root {
+      --bg: #eef0f3;
+      --surface: #ffffff;
+      --surface-2: #f3f4f6;
+      --border: #e2e5ea;
+      --text: #1b1f24;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --on-accent: #ffffff;
+      --danger: #c92a2a;
+      --hover: rgba(17, 24, 39, 0.06);
+      --focus: rgba(37, 99, 235, 0.45);
+      --switch-off: #cdd2da;
+      --shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+    }
+    .dark {
+      --bg: #0d0f12;
+      --surface: #16181c;
+      --surface-2: #1e2126;
+      --border: #2b2f36;
+      --text: #e6e8eb;
+      --muted: #98a1ad;
+      --accent: #3b82f6;
+      --accent-hover: #5b95f8;
+      --on-accent: #ffffff;
+      --danger: #f87171;
+      --hover: rgba(255, 255, 255, 0.07);
+      --focus: rgba(96, 165, 250, 0.5);
+      --switch-off: #3b4049;
+      --shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    }
+
+    /* ---- Base ---- */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    [hidden] { display: none !important; }
+    svg { display: block; }
+
+    /* ---- App shell ---- */
+    .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+    .topbar {
+      flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      height: 52px; padding: 0 10px 0 16px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .topbar h1 { margin: 0; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toolbar { display: flex; align-items: center; gap: 4px; flex: none; }
+    .toolbar-sep { width: 1px; height: 22px; margin: 0 6px; background: var(--border); }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 36px; min-width: 36px; padding: 0 12px;
+      border: 0; border-radius: 9px; background: transparent; color: var(--text);
+      font: inherit; font-weight: 500; line-height: 1; cursor: pointer; white-space: nowrap;
+      transition: background-color .15s, color .15s, opacity .15s;
+    }
+    .btn:hover { background: var(--hover); }
+    .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn:disabled:hover { background: transparent; }
+    .btn.icon-only { width: 36px; padding: 0; }
+    .btn svg { width: 18px; height: 18px; flex: none; }
+    .btn-primary { background: var(--accent); color: var(--on-accent); padding: 0 14px 0 12px; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: .7; }
+    .btn-primary:disabled:hover { background: var(--accent); }
+    .btn-ghost { color: var(--muted); }
+    .btn-ghost:hover { color: var(--text); }
+
+    /* ---- Workspace: editor | resizer | result ---- */
+    .workspace { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .desktop .workspace { flex-direction: row; }
+    .pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--surface); }
+    .pane-editor { flex: 0 0 var(--split, 50%); }
+    .pane-result { flex: 1 1 0; }
+    #editor { position: absolute; inset: 0; }
+
+    .editor-status {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
+      padding: 24px; text-align: center; color: var(--muted);
+    }
+    .editor-status svg { width: 18px; height: 18px; }
+
+    /* ---- Resize handle ---- */
+    .resizer {
+      position: relative; z-index: 5; flex: none; height: 6px; background: var(--border);
+      cursor: row-resize; touch-action: none; user-select: none;
+      transition: background-color .15s;
+    }
+    .desktop .resizer { width: 6px; height: auto; cursor: col-resize; }
+    .resizer::before { content: ''; position: absolute; inset: -3px 0; }   /* larger hit area */
+    .desktop .resizer::before { inset: 0 -3px; }
+    .resizer::after {
+      content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 36px; height: 2px; border-radius: 2px; background: var(--muted); opacity: .55;
+    }
+    .desktop .resizer::after { width: 2px; height: 36px; }
+    .resizer:hover, .resizer.is-active, .resizer:focus-visible { background: var(--accent); outline: none; }
+    .resizer:hover::after, .resizer.is-active::after, .resizer:focus-visible::after { background: var(--on-accent); opacity: 1; }
+    /* While dragging: keep pointer events flowing to the window, not the editor or iframe */
+    body.is-resizing { cursor: row-resize; user-select: none; }
+    .desktop body.is-resizing { cursor: col-resize; }
+    body.is-resizing #editor, body.is-resizing .result-frame { pointer-events: none; }
+
+    /* ---- Result pane ---- */
+    .result-empty {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 24px; text-align: center; color: var(--muted);
+    }
+    .result-empty svg { width: 28px; height: 28px; opacity: .6; margin-bottom: 4px; }
+    .result-empty p { margin: 0; }
+    .result-empty .keys { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+    kbd {
+      display: inline-block; min-width: 22px; padding: 2px 6px; text-align: center;
+      font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--text); background: var(--surface-2);
+      border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px;
+    }
+    .result-text {
+      position: absolute; inset: 0; margin: 0; padding: 16px; overflow: auto;
+      font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text);
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .result-text.is-error { color: var(--danger); }
+    .result-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+
+    /* ---- Settings dialog ---- */
+    .settings {
+      width: min(460px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
+      margin: auto; padding: 0;
+      border: 1px solid var(--border); border-radius: 16px;
+      background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+    }
+    .settings::backdrop { background: rgba(0, 0, 0, .45); }
+    .settings form { display: flex; flex-direction: column; max-height: inherit; }
+    .settings-header {
+      flex: none; display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 12px 12px 22px; border-bottom: 1px solid var(--border);
+    }
+    .settings-header h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    .settings-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 22px; }
+    .settings-group + .settings-group { border-top: 1px solid var(--border); }
+    .settings-group h3 {
+      margin: 16px 0 4px; font-size: 11px; font-weight: 600;
+      letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+    }
+    .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; }
+    .setting-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .setting-desc { font-size: 12px; color: var(--muted); }
+    .settings-footer {
+      flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 12px 12px 12px 14px; border-top: 1px solid var(--border);
+    }
+
+    .field {
+      height: 34px; min-width: 150px; padding: 0 10px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface-2); color: var(--text); font: inherit;
+    }
+    .field:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+    .stepper {
+      display: inline-flex; align-items: stretch; height: 34px; overflow: hidden;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2);
+    }
+    .stepper button {
+      width: 32px; display: flex; align-items: center; justify-content: center;
+      border: 0; background: transparent; color: var(--text); cursor: pointer;
+    }
+    .stepper button:hover { background: var(--hover); }
+    .stepper button svg { width: 14px; height: 14px; }
+    .stepper input {
+      width: 46px; border: 0; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+      background: transparent; color: var(--text); font: inherit; text-align: center;
+      -moz-appearance: textfield; appearance: textfield;
+    }
+    .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .stepper input:focus-visible, .stepper button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+    .switch {
+      appearance: none; -webkit-appearance: none; position: relative; flex: none; margin: 0;
+      width: 40px; height: 22px; border: 0; border-radius: 11px; background: var(--switch-off); cursor: pointer;
+      transition: background-color .2s;
+    }
+    .switch::after {
+      content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .2s;
+    }
+    .switch:checked { background: var(--accent); }
+    .switch:checked::after { transform: translateX(18px); }
+    .switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin .8s linear infinite; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: 0s !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Code Editor</h1>
+      <nav class="toolbar" id="toolbar" aria-label="Toolbar"></nav>
+    </header>
+
+    <main class="workspace" id="workspace">
+      <section class="pane pane-editor" aria-label="Code editor">
+        <div id="editor"></div>
+        <div class="editor-status" id="editor-status"></div>
+      </section>
+
+      <div class="resizer" id="resizer" role="separator" tabindex="0"
+           aria-label="Resize panels" aria-orientation="vertical"
+           aria-valuemin="15" aria-valuemax="85" aria-valuenow="50"
+           title="Drag to resize · Double-click to reset"></div>
+
+      <section class="pane pane-result" id="result-pane" aria-label="Result">
+        <div class="result-empty" id="result-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 4.5v15a1 1 0 0 0 1.5.87l13-7.5a1 1 0 0 0 0-1.74l-13-7.5A1 1 0 0 0 6 4.5z"/>
+          </svg>
+          <p>Run your code to see the result here</p>
+          <p class="keys"><kbd data-mod>Ctrl</kbd><span>+</span><kbd>Enter</kbd></p>
+        </div>
+        <pre class="result-text" id="result-text" tabindex="0" aria-live="polite" hidden></pre>
+        <iframe class="result-frame" id="result-frame" title="Result" hidden></iframe>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="settings" id="settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog">
+      <div class="settings-header">
+        <h2 id="settings-title">Editor settings</h2>
+        <button class="btn icon-only" id="settings-close" type="submit" value="close" aria-label="Close"></button>
+      </div>
+      <div class="settings-body" id="settings-body"></div>
+      <div class="settings-footer">
+        <button class="btn btn-ghost" id="settings-reset" type="button">Reset to defaults</button>
+        <button class="btn btn-primary" type="submit" value="close">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    /* ═══════════════════════════════════════════════════════════════════════
+       APPLICATION — you normally don't need to change anything below.
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    // ---- Icons (24×24). Add your own here and reference them by key in TOOLBAR. ----
+    const outline = paths => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+    const ICONS = {
+      play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4.5v15a1 1 0 0 0 1.5.87l13-7.5a1 1 0 0 0 0-1.74l-13-7.5A1 1 0 0 0 6 4.5z"/></svg>',
+      spinner: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
+      external: outline('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
+      sun: outline('<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>'),
+      moon: outline('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
+      settings: outline('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
+      close: outline('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+      minus: outline('<path d="M5 12h14"/>'),
+      plus: outline('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+      reset: outline('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'),
+    };
+
+    // ---- Helpers ----
+    const IS_MAC = /Mac|iPhone|iPad|iPod/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '');
+    const MOD = IS_MAC ? '⌘' : 'Ctrl';
+    const $ = id => document.getElementById(id);
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+    const resolveOption = (value, state) => (typeof value === 'function' ? value(state) : value);
+    const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const storage = {
+      key: name => `${CONFIG.storageKey}:${name}`,
+      get(name, fallback = null) {
+        try {
+          const raw = localStorage.getItem(this.key(name));
+          return raw === null ? fallback : JSON.parse(raw);
+        } catch { return fallback; }
+      },
+      set(name, value) {
+        try { localStorage.setItem(this.key(name), JSON.stringify(value)); } catch {}
+      },
+    };
+
+    const els = {
+      toolbar: $('toolbar'),
+      workspace: $('workspace'),
+      editor: $('editor'),
+      editorStatus: $('editor-status'),
+      resizer: $('resizer'),
+      resultPane: $('result-pane'),
+      resultEmpty: $('result-empty'),
+      resultText: $('result-text'),
+      resultFrame: $('result-frame'),
+      dialog: $('settings-dialog'),
+      settingsBody: $('settings-body'),
+      settingsReset: $('settings-reset'),
+      settingsClose: $('settings-close'),
+    };
+
+    const state = { running: false, hasResult: false, colorMode: 'light' };
+    let editor = null;             // Monaco editor instance once loaded
+    let settings = loadSettings();
+    let lastResult = null;         // { kind: 'text' | 'html', content, isError }
+
+    // ---- Color mode (app chrome + editor theme) ----
+    const systemDark = matchMedia('(prefers-color-scheme: dark)');
+    const resolveColorMode = () => {
+      const preferred = storage.get('color-mode') || CONFIG.colorMode;
+      if (preferred === 'light' || preferred === 'dark') return preferred;
+      return systemDark.matches ? 'dark' : 'light';
+    };
+    const currentTheme = () => (state.colorMode === 'dark' ? settings.darkTheme : settings.lightTheme);
+
+    function applyColorMode(mode) {
+      state.colorMode = mode;
+      document.documentElement.classList.toggle('dark', mode === 'dark');
+      document.documentElement.style.colorScheme = mode;
+      document.querySelector('meta[name="theme-color"]').content =
+        getComputedStyle(document.documentElement).getPropertyValue('--surface').trim();
+      if (editor) monaco.editor.setTheme(currentTheme());
+      updateToolbar();
+    }
+    function setColorMode(mode) {
+      storage.set('color-mode', mode);
+      applyColorMode(mode);
+    }
+    // Follow the system until the user picks a mode explicitly.
+    systemDark.addEventListener('change', () => {
+      if (!storage.get('color-mode')) applyColorMode(resolveColorMode());
+    });
+
+    // ---- Settings ----
+    // To add a setting: add a default to CONFIG.settings, a field here, and map it in editorOptionsFromSettings().
+    const SETTINGS_FIELDS = [
+      { group: 'Appearance' },
+      { key: 'lightTheme', type: 'select', label: 'Light mode theme', options: () => CONFIG.themes },
+      { key: 'darkTheme',  type: 'select', label: 'Dark mode theme',  options: () => CONFIG.themes },
+      { key: 'fontSize',   type: 'number', label: 'Font size', min: 8, max: 40 },
+      { group: 'Editing' },
+      { key: 'wordWrap',       type: 'toggle', label: 'Word wrap',       desc: 'Wrap long lines instead of scrolling sideways' },
+      { key: 'minimap',        type: 'toggle', label: 'Minimap',         desc: 'Show a code overview beside the scrollbar' },
+      { key: 'suggestions',    type: 'toggle', label: 'Suggestions',     desc: 'Show completions while typing' },
+      { key: 'parameterHints', type: 'toggle', label: 'Parameter hints', desc: 'Show function signatures while typing' },
+    ];
+
+    function editorOptionsFromSettings(s) {
+      return {
+        fontSize: s.fontSize,
+        wordWrap: s.wordWrap ? 'on' : 'off',
+        minimap: { enabled: s.minimap },
+        quickSuggestions: s.suggestions,
+        suggestOnTriggerCharacters: s.suggestions,
+        parameterHints: { enabled: s.parameterHints },
+      };
+    }
+
+    function loadSettings() {
+      const saved = storage.get('settings');
+      const s = { ...CONFIG.settings, ...(saved && typeof saved === 'object' ? saved : {}) };
+      const themeIds = CONFIG.themes.map(t => t.id);
+      if (!themeIds.includes(s.lightTheme)) s.lightTheme = CONFIG.settings.lightTheme;
+      if (!themeIds.includes(s.darkTheme)) s.darkTheme = CONFIG.settings.darkTheme;
+      s.fontSize = clamp(Number(s.fontSize) || CONFIG.settings.fontSize, 8, 40);
+      return s;
+    }
+
+    function applySettings() {
+      storage.set('settings', settings);
+      if (!editor) return;
+      editor.updateOptions(editorOptionsFromSettings(settings));
+      monaco.editor.setTheme(currentTheme());
+    }
+
+    function updateSetting(key, value) {
+      settings[key] = value;
+      applySettings();
+    }
+
+    function renderSettings() {
+      els.settingsBody.innerHTML = '';
+      let group = null;
+      const newGroup = title => {
+        group = document.createElement('section');
+        group.className = 'settings-group';
+        if (title) group.innerHTML = `<h3>${title}</h3>`;
+        els.settingsBody.appendChild(group);
+      };
+      for (const field of SETTINGS_FIELDS) {
+        if (field.group) { newGroup(field.group); continue; }
+        if (!group) newGroup();
+        const id = `setting-${field.key}`;
+        const row = document.createElement('div');
+        row.className = 'setting';
+        row.innerHTML = `<label class="setting-text" for="${id}"><span>${field.label}</span>${
+          field.desc ? `<span class="setting-desc">${field.desc}</span>` : ''}</label>`;
+        row.appendChild(createControl(field, id));
+        group.appendChild(row);
+      }
+    }
+
+    function createControl(field, id) {
+      if (field.type === 'select') {
+        const select = document.createElement('select');
+        select.className = 'field';
+        select.id = id;
+        for (const option of field.options()) select.add(new Option(option.name, option.id));
+        select.value = settings[field.key];
+        select.addEventListener('change', () => updateSetting(field.key, select.value));
+        return select;
+      }
+      if (field.type === 'number') {
+        const wrap = document.createElement('div');
+        wrap.className = 'stepper';
+        wrap.innerHTML = `
+          <button type="button" aria-label="Decrease ${field.label.toLowerCase()}">${ICONS.minus}</button>
+          <input id="${id}" type="number" min="${field.min}" max="${field.max}" step="1" value="${settings[field.key]}" />
+          <button type="button" aria-label="Increase ${field.label.toLowerCase()}">${ICONS.plus}</button>`;
+        const [dec, inc] = wrap.querySelectorAll('button');
+        const input = wrap.querySelector('input');
+        const commit = value => {
+          const n = clamp(Math.round(Number(value)) || settings[field.key], field.min, field.max);
+          input.value = n;
+          updateSetting(field.key, n);
+        };
+        dec.addEventListener('click', () => commit(settings[field.key] - 1));
+        inc.addEventListener('click', () => commit(settings[field.key] + 1));
+        input.addEventListener('change', () => commit(input.value));
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(input.value); }   // don't close the dialog
+        });
+        return wrap;
+      }
+      const toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.className = 'switch';
+      toggle.id = id;
+      toggle.setAttribute('role', 'switch');
+      toggle.checked = Boolean(settings[field.key]);
+      toggle.addEventListener('change', () => updateSetting(field.key, toggle.checked));
+      return toggle;
+    }
+
+    function openSettings() {
+      renderSettings();
+      els.dialog.showModal();
+    }
+    els.settingsClose.innerHTML = ICONS.close;
+    els.settingsReset.addEventListener('click', () => {
+      settings = { ...CONFIG.settings };
+      applySettings();
+      renderSettings();
+    });
+    els.dialog.addEventListener('click', e => { if (e.target === els.dialog) els.dialog.close(); });
+
+    // ---- Toolbar ----
+    const toolbarButtons = new Map();   // button config → element
+
+    function renderToolbar() {
+      els.toolbar.innerHTML = '';
+      toolbarButtons.clear();
+      for (const button of TOOLBAR) {
+        if (button.separator) {
+          const sep = document.createElement('span');
+          sep.className = 'toolbar-sep';
+          sep.setAttribute('aria-hidden', 'true');
+          els.toolbar.appendChild(sep);
+          continue;
+        }
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = ['btn', button.variant === 'primary' ? 'btn-primary' : '', button.label ? '' : 'icon-only'].join(' ').trim();
+        el.dataset.id = button.id;
+        el.addEventListener('click', () => button.onClick && button.onClick(app));
+        els.toolbar.appendChild(el);
+        toolbarButtons.set(button, el);
+      }
+      updateToolbar();
+    }
+
+    function updateToolbar() {
+      for (const [button, el] of toolbarButtons) {
+        const iconKey = resolveOption(button.icon, state) || '';
+        const title = resolveOption(button.title, state) || button.label || '';
+        if (el.dataset.icon !== iconKey) {
+          el.dataset.icon = iconKey;
+          el.innerHTML = (ICONS[iconKey] || iconKey) + (button.label ? `<span>${button.label}</span>` : '');
+        }
+        el.title = title;
+        el.setAttribute('aria-label', title);
+        el.disabled = Boolean(resolveOption(button.disabled, state));
+      }
+    }
+
+    // ---- Result panel ----
+    function showResult(kind) {
+      els.resultEmpty.hidden = kind !== 'empty';
+      els.resultText.hidden = kind !== 'text';
+      els.resultFrame.hidden = kind !== 'html';
+      const hasResult = kind !== 'empty';
+      if (state.hasResult !== hasResult) {
+        state.hasResult = hasResult;
+        updateToolbar();
+      }
+    }
+
+    const result = {
+      text(str = '') {
+        lastResult = { kind: 'text', content: String(str), isError: false };
+        els.resultText.classList.remove('is-error');
+        els.resultText.textContent = lastResult.content;
+        showResult('text');
+      },
+      error(str = '') {
+        lastResult = { kind: 'text', content: String(str), isError: true };
+        els.resultText.classList.add('is-error');
+        els.resultText.textContent = lastResult.content;
+        showResult('text');
+      },
+      append(str = '') {
+        if (!lastResult || lastResult.kind !== 'text') return this.text(str);
+        lastResult.content += String(str);
+        els.resultText.append(String(str));
+        els.resultText.scrollTop = els.resultText.scrollHeight;
+      },
+      html(doc = '') {
+        lastResult = { kind: 'html', content: String(doc) };
+        els.resultFrame.srcdoc = lastResult.content;
+        showResult('html');
+      },
+      clear() {
+        lastResult = null;
+        els.resultText.textContent = '';
+        els.resultFrame.removeAttribute('srcdoc');
+        showResult('empty');
+      },
+    };
+
+    function textDocument({ content, isError }) {
+      const dark = state.colorMode === 'dark';
+      const color = isError ? (dark ? '#f87171' : '#c92a2a') : (dark ? '#e6e8eb' : '#1b1f24');
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Result</title><style>body{margin:0;padding:16px;background:${
+        dark ? '#16181c' : '#ffffff'};color:${color};font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body>${
+        escapeHtml(content)}</body></html>`;
+    }
+
+    function openResult() {
+      if (!lastResult) return;
+      const doc = lastResult.kind === 'html' ? lastResult.content : textDocument(lastResult);
+      // The blob URL is intentionally kept alive so the new tab can be reloaded.
+      const url = URL.createObjectURL(new Blob([doc], { type: 'text/html' }));
+      const tab = window.open(url, '_blank');
+      if (tab) tab.opener = null;
+    }
+
+    // ---- Run ----
+    async function run() {
+      if (state.running || !editor) return;
+      state.running = true;
+      els.resultPane.setAttribute('aria-busy', 'true');
+      updateToolbar();
+      saveCode();
+      try {
+        await compile(editor.getValue(), result);
+      } catch (err) {
+        console.error(err);
+        result.error(err && err.message ? err.message : String(err));
+      } finally {
+        state.running = false;
+        els.resultPane.removeAttribute('aria-busy');
+        updateToolbar();
+      }
+    }
+
+    // ---- Code persistence (restored on load, never executed) ----
+    let saveTimer = null;
+    function saveCode() {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      if (editor) storage.set('code', editor.getValue());
+    }
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveCode, 400);
+    }
+    window.addEventListener('pagehide', saveCode);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveCode(); });
+
+    // ---- Layout: side by side on desktop, stacked on mobile ----
+    const desktopQuery = matchMedia(`(min-width: ${CONFIG.mobileBreakpoint}px)`);
+    const isDesktop = () => desktopQuery.matches;
+    const split = { desktop: CONFIG.defaultSplit, mobile: CONFIG.defaultSplit, ...storage.get('split', {}) };
+    const SPLIT_MIN = 0.15, SPLIT_MAX = 0.85;
+
+    function setSplit(ratio, persist = true) {
+      ratio = clamp(ratio, SPLIT_MIN, SPLIT_MAX);
+      split[isDesktop() ? 'desktop' : 'mobile'] = ratio;
+      els.workspace.style.setProperty('--split', `${(ratio * 100).toFixed(2)}%`);
+      els.resizer.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+      if (persist) storage.set('split', split);
+    }
+
+    function applyLayout() {
+      const desktop = isDesktop();
+      document.documentElement.classList.toggle('desktop', desktop);
+      els.resizer.setAttribute('aria-orientation', desktop ? 'vertical' : 'horizontal');
+      setSplit(split[desktop ? 'desktop' : 'mobile'], false);
+    }
+    desktopQuery.addEventListener('change', applyLayout);
+
+    els.resizer.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      try { els.resizer.setPointerCapture(e.pointerId); } catch {}
+      els.resizer.classList.add('is-active');
+      document.body.classList.add('is-resizing');   // turns off pointer events on the editor and iframe
+
+      const onMove = ev => {
+        const rect = els.workspace.getBoundingClientRect();
+        const ratio = isDesktop()
+          ? (ev.clientX - rect.left) / rect.width
+          : (ev.clientY - rect.top) / rect.height;
+        setSplit(ratio, false);
+      };
+      const onEnd = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onEnd);
+        window.removeEventListener('pointercancel', onEnd);
+        els.resizer.classList.remove('is-active');
+        document.body.classList.remove('is-resizing');
+        storage.set('split', split);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onEnd);
+      window.addEventListener('pointercancel', onEnd);
+    });
+    els.resizer.addEventListener('dblclick', () => setSplit(CONFIG.defaultSplit));
+    els.resizer.addEventListener('keydown', e => {
+      const current = split[isDesktop() ? 'desktop' : 'mobile'];
+      const step = e.shiftKey ? 0.1 : 0.02;
+      const actions = {
+        ArrowLeft: () => setSplit(current - step),
+        ArrowUp: () => setSplit(current - step),
+        ArrowRight: () => setSplit(current + step),
+        ArrowDown: () => setSplit(current + step),
+        Home: () => setSplit(SPLIT_MIN),
+        End: () => setSplit(SPLIT_MAX),
+        Enter: () => setSplit(CONFIG.defaultSplit),
+      };
+      if (actions[e.key]) { e.preventDefault(); actions[e.key](); }
+    });
+
+    // ---- Monaco ----
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error(`Could not load ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadMonaco() {
+      await loadScript(`${CONFIG.monacoBase}/vs/loader.js`);
+      require.config({ paths: { vs: `${CONFIG.monacoBase}/vs` } });
+      // Browsers refuse cross-origin workers, so bootstrap them through a same-origin blob script.
+      const workerUrl = URL.createObjectURL(new Blob([
+        `self.MonacoEnvironment={baseUrl:'${CONFIG.monacoBase}/'};importScripts('${CONFIG.monacoBase}/vs/base/worker/workerMain.js');`,
+      ], { type: 'text/javascript' }));
+      window.MonacoEnvironment = { getWorkerUrl: () => workerUrl };
+      return new Promise((resolve, reject) => require(['vs/editor/editor.main'], () => resolve(window.monaco), reject));
+    }
+
+    async function initEditor() {
+      els.editorStatus.innerHTML = `${ICONS.spinner}<span>Loading editor…</span>`;
+      try {
+        const monaco = await loadMonaco();
+        for (const theme of CONFIG.themes) if (theme.data) monaco.editor.defineTheme(theme.id, theme.data);
+
+        const savedCode = storage.get('code');
+        editor = monaco.editor.create(els.editor, {
+          value: typeof savedCode === 'string' ? savedCode : CONFIG.defaultCode,
+          language: CONFIG.language,
+          theme: currentTheme(),
+          ...CONFIG.editorOptions,
+          ...editorOptionsFromSettings(settings),
+        });
+
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => app.run());
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveCode);
+        editor.onDidChangeModelContent(scheduleSave);
+
+        els.editorStatus.remove();
+        if (isDesktop()) editor.focus();
+      } catch (err) {
+        console.error(err);
+        els.editorStatus.textContent = 'The editor could not be loaded. Check your connection and reload the page.';
+      }
+    }
+
+    // ---- Keyboard shortcuts outside the editor ----
+    window.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (editor && editor.hasTextFocus()) return;   // Monaco handles its own keybindings
+      if (e.key === 'Enter') { e.preventDefault(); run(); }
+      else if (e.key.toLowerCase() === 's') { e.preventDefault(); saveCode(); }
+    });
+
+    // ---- Public API (used by toolbar buttons; also exposed as window.app) ----
+    const app = {
+      get editor() { return editor; },
+      get monaco() { return window.monaco; },
+      get settings() { return settings; },
+      state,
+      result,
+      run,
+      openResult,
+      openSettings,
+      setColorMode,
+      toggleColorMode: () => setColorMode(state.colorMode === 'dark' ? 'light' : 'dark'),
+      getCode: () => (editor ? editor.getValue() : ''),
+      setCode: code => {
+        if (!editor) return;
+        editor.setValue(String(code));
+        const model = editor.getModel();
+        if (model) model.detectIndentation(true, 4);
+        saveCode();
+      },
+      updateToolbar,
+    };
+    window.app = app;
+
+    // ---- Boot ----
+    document.querySelectorAll('[data-mod]').forEach(el => { el.textContent = MOD; });
+    els.resultFrame.setAttribute('sandbox', CONFIG.resultSandbox);
+    applyColorMode(resolveColorMode());
+    applyLayout();
+    renderToolbar();
+    initEditor();
+  </script>
+</body>
+</html>

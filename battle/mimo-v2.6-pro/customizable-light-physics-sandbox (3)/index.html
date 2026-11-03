@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optical Bench — Spectral Ray Sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0C10;
+    --panel:#101419;
+    --panel-2:#151A21;
+    --line:#222A33;
+    --line-soft:#1A2029;
+    --txt:#E8EDF4;
+    --muted:#8B96A5;
+    --dim:#5E6875;
+    --accent:#FF7A2F;
+    --accent-soft:rgba(255,122,47,.16);
+    --good:#5FD3B2;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);
+    font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased;
+  }
+  #app{display:grid;grid-template-rows:52px 1fr 30px;height:100vh}
+
+  /* ---------- top bar ---------- */
+  #topbar{
+    display:flex;align-items:center;gap:18px;padding:0 16px;
+    background:linear-gradient(180deg,#12161C,#0D1116);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:10px;min-width:212px}
+  .brand svg{display:block}
+  .brand .name{font-weight:600;letter-spacing:.16em;font-size:11.5px;text-transform:uppercase}
+  .brand .sub{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.08em;margin-top:1px}
+  .tsep{width:1px;height:26px;background:var(--line)}
+  .ctl{display:flex;align-items:center;gap:9px}
+  .ctl label{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;height:22px;background:transparent;cursor:pointer;width:112px;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:#29323C;border-radius:2px}
+  input[type=range]::-moz-range-track{height:3px;background:#29323C;border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--txt);
+    margin-top:-5px;border:none;box-shadow:0 1px 3px rgba(0,0,0,.5)
+  }
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--txt);border:none}
+  input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:2px}
+  .val{font-family:var(--mono);font-size:11px;color:var(--txt);min-width:42px;text-align:right}
+  .spacer{flex:1}
+  select, input[type=number]{
+    background:var(--panel-2);color:var(--txt);border:1px solid var(--line);
+    border-radius:5px;padding:5px 8px;font-family:var(--mono);font-size:11px;outline:none;
+  }
+  select:focus-visible,input[type=number]:focus-visible{border-color:var(--accent)}
+  .btn{
+    background:var(--panel-2);color:var(--txt);border:1px solid var(--line);border-radius:6px;
+    padding:6px 11px;font-family:var(--sans);font-size:11.5px;font-weight:500;cursor:pointer;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  .btn:hover{background:#1B222B;border-color:#2E3844}
+  .btn.ghost{background:transparent}
+  .btn.danger:hover{border-color:#7A3030;color:#FF9E9E;background:rgba(180,60,60,.12)}
+  .btn.accent{background:var(--accent-soft);border-color:rgba(255,122,47,.45);color:#FFB27A}
+  .btn.accent:hover{background:rgba(255,122,47,.26)}
+
+  /* ---------- layout ---------- */
+  main{display:grid;grid-template-columns:76px 1fr 312px;min-height:0}
+  #rail{
+    background:var(--panel);border-right:1px solid var(--line);
+    padding:10px 0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:2px;
+  }
+  .rail-title{font-size:8.5px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin:6px 0 6px}
+  .tool{
+    width:60px;padding:8px 2px 6px;border-radius:8px;border:1px solid transparent;background:transparent;
+    color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .tool:hover{background:#171D25;color:var(--txt)}
+  .tool.active{background:var(--accent-soft);border-color:rgba(255,122,47,.4);color:#FFC09A}
+  .tool span{font-size:8.5px;letter-spacing:.08em;text-transform:uppercase}
+  .tool svg{width:19px;height:19px;display:block}
+
+  #stage{position:relative;background:#080A0D;min-width:0;overflow:hidden}
+  canvas#scene{display:block;width:100%;height:100%;cursor:crosshair}
+  #empty{
+    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;pointer-events:none;text-align:center;
+  }
+  #empty .big{font-size:15px;letter-spacing:.02em;color:var(--muted);font-weight:500}
+  #empty .small{font-family:var(--mono);font-size:11px;color:var(--dim)}
+
+  /* ---------- properties ---------- */
+  #panel{
+    background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;
+    display:flex;flex-direction:column;
+  }
+  .p-head{padding:15px 16px 13px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+  .p-head .t{font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .p-head .m{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.06em;margin-top:3px}
+  .p-body{padding:6px 0 22px}
+  .sec{padding:13px 16px 5px}
+  .sec-h{
+    font-size:9px;letter-spacing:.19em;text-transform:uppercase;color:var(--dim);
+    display:flex;align-items:center;gap:8px;margin-bottom:9px
+  }
+  .sec-h::after{content:'';flex:1;height:1px;background:var(--line-soft)}
+  .row{display:flex;align-items:center;gap:10px;padding:5px 16px}
+  .row>label{flex:0 0 96px;font-size:11px;color:var(--muted);line-height:1.25}
+  .row .ctl2{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+  .row input[type=range]{flex:1;width:auto;min-width:0}
+  .row .val{min-width:52px}
+  .row select{flex:1}
+  .xy{display:flex;gap:6px;flex:1}
+  .xy input{width:100%;flex:1}
+  .hint{font-family:var(--mono);font-size:9.5px;color:var(--dim);line-height:1.55;padding:7px 16px 2px;white-space:pre-line}
+  .p-actions{display:flex;gap:8px;padding:16px}
+  .p-actions .btn{flex:1}
+  .empty-panel{padding:44px 22px;text-align:center;color:var(--dim)}
+  .empty-panel .big{color:var(--muted);font-size:13px;margin-bottom:8px;font-weight:500}
+  .empty-panel .small{font-family:var(--mono);font-size:10.5px;line-height:1.7}
+
+  /* spectrum editor */
+  .spec-ed{padding:2px 16px 8px}
+  .spec-ed canvas{
+    width:100%;height:82px;display:block;border-radius:6px;border:1px solid var(--line);
+    background:#0C1015;cursor:crosshair;touch-action:none
+  }
+  .spec-ed .foot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px}
+  .spec-ed .foot .lbl{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.05em}
+  .swatch{width:22px;height:22px;border-radius:5px;border:1px solid var(--line);flex:0 0 auto}
+
+  /* sensor readout */
+  .readout{margin:2px 16px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0C1015}
+  .readout canvas{display:block;width:100%;height:86px}
+  .rgrid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
+  .rcell{padding:9px 11px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .rcell:nth-child(2n){border-right:none}
+  .rcell .k{font-size:8.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim)}
+  .rcell .v{font-family:var(--mono);font-size:14px;margin-top:3px;color:var(--txt)}
+  .rcell .v small{font-size:9.5px;color:var(--muted);letter-spacing:.04em}
+
+  /* ---------- status bar ---------- */
+  #status{
+    display:flex;align-items:center;gap:16px;padding:0 14px;background:#0C1014;
+    border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--dim);
+  }
+  #status .k{color:var(--muted)}
+  #status .dot{width:3px;height:3px;border-radius:50%;background:#2C3540}
+
+  .toggle{
+    position:relative;width:34px;height:19px;border-radius:10px;background:#242D37;border:1px solid var(--line);
+    cursor:pointer;flex:0 0 auto;transition:background .18s
+  }
+  .toggle::after{
+    content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
+    background:#7C8896;transition:transform .18s,background .18s
+  }
+  .toggle.on{background:var(--accent-soft);border-color:rgba(255,122,47,.5)}
+  .toggle.on::after{transform:translateX(15px);background:var(--accent)}
+
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#222B35;border-radius:5px;border:2px solid var(--panel)}
+  ::-webkit-scrollbar-thumb:hover{background:#2E3A46}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <path d="M13 3.2 22.2 20.2H3.8L13 3.2Z" stroke="#FF7A2F" stroke-width="1.3" stroke-linejoin="round"/>
+        <path d="M1.2 13h7.4" stroke="#E8EDF4" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M20.4 8.6 25 5.4M21 12.6h4.6M20.4 16.6 25 19.8" stroke="#FF7A2F" stroke-width="1.1" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="name">Optical Bench</div>
+        <div class="sub">spectral ray sandbox</div>
+      </div>
+    </div>
+    <div class="tsep"></div>
+    <div class="ctl">
+      <label>Exposure</label>
+      <input type="range" id="exposure" min="0.15" max="5" step="0.05" value="1">
+      <div class="val" id="exposureVal">1.00</div>
+    </div>
+    <div class="ctl">
+      <label>Quality</label>
+      <select id="quality">
+        <option value="low">Low</option>
+        <option value="med" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label>Grid</label>
+      <div class="toggle on" id="gridToggle"></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="resetScene">Reset bench</button>
+    <button class="btn ghost danger" id="clearScene">Clear</button>
+  </header>
+
+  <main>
+    <nav id="rail">
+      <div class="rail-title">Sources</div>
+      <button class="tool" data-add="flashlight" title="Flashlight — broad spectrum with adjustable divergence">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h5l3 3v2l-3 3H4z"/><path d="M16 9.5 20 8M17 12h4M16 14.5 20 16"/><path d="M4 6v12"/></svg>
+        <span>Flash</span>
+      </button>
+      <button class="tool" data-add="laser" title="Laser — monochromatic, polarized">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="9" height="6" rx="1"/><path d="M12 12h9"/><path d="M15 9v6M18 9v6"/></svg>
+        <span>Laser</span>
+      </button>
+      <div class="rail-title">Optics</div>
+      <button class="tool" data-add="mirror" title="Mirror — flat or curved">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 19 5"/><path d="M7 20 20 7"/><path d="M6 12 9 15M10 8 13 11"/></svg>
+        <span>Mirror</span>
+      </button>
+      <button class="tool" data-add="lens" title="Lens — convex / concave, set focal length">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3.2 2.6 4.6 5.6 4.6 9S15.2 18.4 12 21c-3.2-2.6-4.6-5.6-4.6-9S8.8 5.6 12 3Z"/><path d="M2 12h3M19 12h3"/></svg>
+        <span>Lens</span>
+      </button>
+      <button class="tool" data-add="prism" title="Prism — dispersive, with internal reflection">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 21 20H3L12 4Z"/><path d="M2 13h6"/><path d="M17 15h5M17 17.5h5M17 12.5h5"/></svg>
+        <span>Prism</span>
+      </button>
+      <button class="tool" data-add="grating" title="Diffraction grating — transmission or reflective">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18"/><path d="M10 5v14M13 5v14M16 5v14M19 5v14"/><path d="M2 12h4"/></svg>
+        <span>Grating</span>
+      </button>
+      <button class="tool" data-add="polarizer" title="Polarizer — linear, with extinction ratio">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="16" rx="1"/><path d="M8 8h8M8 11h8M8 14h8M8 17h8"/></svg>
+        <span>Polar</span>
+      </button>
+      <button class="tool" data-add="glass" title="Colored glass — spectral filter with reflectance">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="1"/><path d="M10 3v18M14 3v18" opacity=".55"/></svg>
+        <span>Glass</span>
+      </button>
+      <button class="tool" data-add="blocker" title="Light blocker — opaque baffle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v6M9 9v6M12 9v6M15 9v6M18 9v6" opacity=".5"/></svg>
+        <span>Block</span>
+      </button>
+      <div class="rail-title">Measure</div>
+      <button class="tool" data-add="sensor" title="Sensor — spectral power meter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M7 15l2.5-4 2.5 3 2-5 2.5 6"/></svg>
+        <span>Sensor</span>
+      </button>
+    </nav>
+
+    <div id="stage">
+      <canvas id="scene"></canvas>
+      <div id="empty">
+        <div class="big">The bench is empty</div>
+        <div class="small">Add a source from the rail, then place optics in the beam.</div>
+      </div>
+    </div>
+
+    <aside id="panel"></aside>
+  </main>
+
+  <footer id="status">
+    <span><span class="k">rays</span> <span id="stRays">0</span></span>
+    <div class="dot"></div>
+    <span><span class="k">elements</span> <span id="stObjs">0</span></span>
+    <div class="dot"></div>
+    <span id="stSel">no selection</span>
+    <div class="spacer"></div>
+    <span>drag to move · drag the knob to rotate · wheel to zoom · R rotates · Del removes</span>
+  </footer>
+</div>
+
+<script>
+/* =====================================================================
+   OPTICAL BENCH — 2D spectral ray tracer
+   Physics: Sellmeier/Cauchy dispersion, exact Snell + Fresnel, Stokes /
+   coherency-matrix polarization, grating equation (k-tangential
+   conservation + blaze envelope), Planck blackbody spectra, Beer-Lambert
+   absorption, CIE 1931 colour matching for spectral rendering.
+   ===================================================================== */
+
+/* ------------------------------ math ------------------------------ */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const deg = r => r * 180 / Math.PI;
+const rad = d => d * Math.PI / 180;
+function halton(i, b) { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; }
+function sinc(x) { return Math.abs(x) < 1e-9 ? 1 : Math.sin(x) / x; }
+
+/* --------------------------- spectral colour --------------------------- */
+const LAM_MIN = 380, LAM_MAX = 780, SRC_MIN = 390, SRC_MAX = 720;
+
+function gauss(x, mu, s1, s2) {
+  const s = x < mu ? s1 : s2;
+  const t = (x - mu) / s;
+  return Math.exp(-0.5 * t * t);
+}
+// Wyman et al. multi-lobe Gaussian fit to CIE 1931 2° CMFs
+function cmf(wl) {
+  const x = 1.056 * gauss(wl, 599.8, 37.9, 31.0) + 0.362 * gauss(wl, 442.0, 16.0, 26.7) - 0.065 * gauss(wl, 501.1, 20.4, 26.2);
+  const y = 0.821 * gauss(wl, 568.8, 46.9, 40.5) + 0.286 * gauss(wl, 530.9, 16.3, 31.1);
+  const z = 1.217 * gauss(wl, 437.0, 11.8, 36.0) + 0.681 * gauss(wl, 459.0, 26.0, 13.8);
+  return [x, y, z];
+}
+function xyzToLinearRgb(x, y, z) {
+  return [
+    3.2406 * x - 1.5372 * y - 0.4986 * z,
+    -0.9689 * x + 1.8758 * y + 0.0415 * z,
+    0.0557 * x - 0.2040 * y + 1.0570 * z
+  ];
+}
+// display colour per nanometre, white-balanced so equal radiant power across
+// the visible renders as neutral white (illuminant E convention)
+const SPEC_RGB = (() => {
+  const n = LAM_MAX - LAM_MIN + 1;
+  const lin = new Float64Array(n * 3);
+  let sr = 0, sg = 0, sb = 0, cnt = 0;
+  for (let i = 0; i < n; i++) {
+    const wl = LAM_MIN + i;
+    const c = xyzToLinearRgb(...cmf(wl));
+    lin[i * 3] = Math.max(0, c[0]); lin[i * 3 + 1] = Math.max(0, c[1]); lin[i * 3 + 2] = Math.max(0, c[2]);
+  }
+  for (let wl = SRC_MIN; wl <= SRC_MAX; wl += 4) {
+    const i = wl - LAM_MIN; sr += lin[i * 3]; sg += lin[i * 3 + 1]; sb += lin[i * 3 + 2]; cnt++;
+  }
+  const kr = cnt / (sr || 1), kg = cnt / (sg || 1), kb = cnt / (sb || 1);
+  const out = new Float64Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    out[i * 3] = Math.pow(clamp(lin[i * 3] * kr, 0, 1), 1 / 2.2);
+    out[i * 3 + 1] = Math.pow(clamp(lin[i * 3 + 1] * kg, 0, 1), 1 / 2.2);
+    out[i * 3 + 2] = Math.pow(clamp(lin[i * 3 + 2] * kb, 0, 1), 1 / 2.2);
+  }
+  return out;
+})();
+function specRGB(wl) {
+  const i = clamp(Math.round(wl), LAM_MIN, LAM_MAX) - LAM_MIN;
+  return [SPEC_RGB[i * 3], SPEC_RGB[i * 3 + 1], SPEC_RGB[i * 3 + 2]];
+}
+function wlCss(wl) {
+  const c = specRGB(wl);
+  return `rgb(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)})`;
+}
+// photopic luminous efficiency V(λ) (CIE 1924 analytic fit)
+function vLambda(wl) {
+  return 1.056 * gauss(wl, 559.0, 42.0, 60.0) + 0.362 * gauss(wl, 505.0, 18.0, 26.0) - 0.065 * gauss(wl, 530.0, 20.0, 26.0);
+}
+
+/* ------------------------- material models ------------------------- */
+function sellmeier(B, C, wl) {
+  const l2 = (wl / 1000) * (wl / 1000);
+  let s = 1;
+  for (let i = 0; i < 3; i++) s += B[i] * l2 / (l2 - C[i]);
+  return Math.sqrt(Math.max(1, s));
+}
+const GLASSES = {
+  bk7: { name: 'N-BK7 crown', sell: { B: [1.03961212, 0.231792344, 1.01046945], C: [0.00600069867, 0.0200179144, 103.560653] }, nd: 1.5168 },
+  sf11: { name: 'N-SF11 flint', sell: { B: [1.73759695, 0.313747346, 1.89878101], C: [0.013188707, 0.0623068142, 155.23629] }, nd: 1.7847 },
+  fsilica: { name: 'Fused silica', sell: { B: [0.6961663, 0.4079426, 0.8974794], C: [0.00467914826, 0.0135120631, 97.9340025] }, nd: 1.4585 },
+  sapphire: { name: 'Sapphire', sell: { B: [1.4313493, 0.65054713, 5.3414021], C: [0.0052799261, 0.0142382647, 325.017834] }, nd: 1.7682 },
+  water: { name: 'Water', cauchy: [1.324, 0.0032, 0], nd: 1.333 },
+  diamond: { name: 'Diamond', cauchy: [2.385, 0.0128, 0], nd: 2.417 },
+  acrylic: { name: 'Acrylic', cauchy: [1.485, 0.0040, 0], nd: 1.491 }
+};
+function glassN(key, wl) {
+  const g = GLASSES[key] || GLASSES.bk7;
+  if (g.sell) return sellmeier(g.sell.B, g.sell.C, wl);
+  const [A, B, C] = g.cauchy;
+  const l2 = (wl / 1000) * (wl / 1000);
+  return A + B / l2 + C / (l2 * l2);
+}
+const METALS = {
+  aluminum: { name: 'Aluminium', pts: [[380, .92], [420, .92], [480, .91], [550, .91], [620, .91], [700, .91], [780, .92]] },
+  silver: { name: 'Silver', pts: [[380, .93], [420, .96], [480, .98], [550, .98], [620, .98], [700, .98], [780, .99]] },
+  gold: { name: 'Gold', pts: [[380, .30], [420, .38], [480, .55], [520, .66], [560, .80], [600, .89], [650, .95], [700, .97], [780, .98]] },
+  chrome: { name: 'Chrome', pts: [[380, .60], [450, .58], [520, .57], [580, .57], [650, .58], [720, .59], [780, .60]] },
+  custom: { name: 'Custom', pts: null }
+};
+
+/* --------------------------- spectrum helpers --------------------------- */
+function specVal(pts, wl) {
+  if (!pts || !pts.length) return 0;
+  if (wl < pts[0][0] || wl > pts[pts.length - 1][0]) return 0;
+  for (let i = 1; i < pts.length; i++) {
+    if (wl <= pts[i][0]) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      const t = (wl - x0) / Math.max(1e-6, x1 - x0);
+      return lerp(y0, y1, t);
+    }
+  }
+  return pts[pts.length - 1][1];
+}
+function planckPts(T) {
+  const h = 6.626e-34, c = 2.998e8, k = 1.381e-23;
+  const p = [];
+  for (let wl = LAM_MIN; wl <= LAM_MAX; wl += 5) {
+    const l = wl * 1e-9;
+    const v = (2 * h * c * c / Math.pow(l, 5)) / (Math.exp(h * c / (l * k * T)) - 1);
+    p.push([wl, v]);
+  }
+  const m = Math.max(...p.map(q => q[1]));
+  return p.map(q => [q[0], q[1] / m]);
+}
+function gaussPts(mu, s1, s2, amp) {
+  const p = [];
+  for (let wl = LAM_MIN; wl <= LAM_MAX; wl += 4) p.push([wl, amp * gauss(wl, mu, s1, s2)]);
+  return p;
+}
+function mergePts(list) {
+  const p = [];
+  for (let wl = LAM_MIN; wl <= LAM_MAX; wl += 3) {
+    let v = 0;
+    for (const pts of list) v += specVal(pts, wl);
+    p.push([wl, v]);
+  }
+  const m = Math.max(...p.map(q => q[1])) || 1;
+  return p.map(q => [q[0], q[1] / m]);
+}
+const SPD_PRESETS = {
+  whiteled: { name: 'White LED', pts: mergePts([gaussPts(450, 11, 13, 0.95), gaussPts(578, 62, 82, 1.0)]) },
+  sunlight: { name: 'Sunlight (AM1.5)', pts: mergePts([planckPts(5778)]) },
+  daylight: { name: 'Daylight D65', pts: mergePts([planckPts(6500)]) },
+  tungsten: { name: 'Tungsten 2856 K', pts: mergePts([planckPts(2856)]) },
+  halogen: { name: 'Halogen 3000 K', pts: mergePts([planckPts(3000)]) },
+  neon: { name: 'Sodium vapour', pts: mergePts([gaussPts(589.0, 0.55, 0.6, 1), gaussPts(589.6, 0.55, 0.6, 0.55)]) },
+  mercury: { name: 'Mercury vapour', pts: mergePts([gaussPts(404.7, 1.1, 1.2, 0.55), gaussPts(435.8, 1.1, 1.2, 1), gaussPts(546.1, 1.1, 1.2, 0.9), gaussPts(578, 1.6, 1.8, 0.55)]) },
+  rgb: { name: 'RGB mix', pts: mergePts([gaussPts(452, 12, 14, 0.85), gaussPts(525, 15, 17, 0.95), gaussPts(630, 16, 18, 0.8)]) },
+  red: { name: 'Red LED 630 nm', pts: mergePts([gaussPts(630, 13, 15, 1)]) },
+  green: { name: 'Green LED 525 nm', pts: mergePts([gaussPts(525, 15, 17, 1)]) },
+  blue: { name: 'Blue LED 455 nm', pts: mergePts([gaussPts(455, 12, 14, 1)]) }
+};
+const FILTER_PRESETS = {
+  clear: { name: 'Clear', pts: [[380, 1], [780, 1]] },
+  red: { name: 'Red long-pass', pts: [[380, 0], [560, 0], [590, 0.12], [620, 0.72], [650, 0.92], [780, 0.95]] },
+  green: { name: 'Green band-pass', pts: [[380, 0], [470, 0], [500, 0.55], [530, 0.92], [560, 0.6], [600, 0], [780, 0]] },
+  blue: { name: 'Blue short-pass', pts: [[380, 0.9], [450, 0.92], [490, 0.5], [520, 0.06], [560, 0], [780, 0]] },
+  orange: { name: 'Amber long-pass', pts: [[380, 0], [520, 0], [550, 0.35], [580, 0.86], [620, 0.94], [780, 0.95]] },
+  irblock: { name: 'IR-cut / heat glass', pts: [[380, 0], [400, 0.55], [420, 0.9], [660, 0.92], [700, 0.5], [730, 0], [780, 0]] },
+  nd: { name: 'ND 0.6 (25 % T)', pts: [[380, 0.25], [780, 0.25]] },
+  uvblock: { name: 'UV-block', pts: [[380, 0], [400, 0.3], [420, 0.88], [780, 0.93]] }
+};
+
+/* ------------------------------ objects ------------------------------ */
+let _uid = 1;
+const uid = () => 'e' + (_uid++);
+
+const DEFAULTS = {
+  laser: { power: 1.1, wl: 632.8, linewidth: 0.2, radius: 4, divergence: 0.8, polAngle: 0, polType: 'linear', preset: 'hene' },
+  flashlight: { power: 1, divergence: 12, radius: 12, spd: 'whiteled', points: SPD_PRESETS.whiteled.pts.map(p => p.slice()) },
+  mirror: { width: 190, curvature: 0, metal: 'aluminum', reflect: 0.92, custom: 0.95 },
+  lens: { diameter: 165, focal: 230, shape: 'biconvex', glass: 'bk7' },
+  prism: { size: 150, apex: 60, glass: 'sf11', internal: 1 },
+  polarizer: { width: 170, axis: 0, extinction: 0.0004 },
+  grating: { width: 190, lines: 600, orders: 3, blaze: 0, slit: 0.55, mode: 'transmission' },
+  glass: { width: 92, height: 210, reflect: 0.07, filter: 'red', points: FILTER_PRESETS.red.pts.map(p => p.slice()) },
+  blocker: { width: 230, height: 16, reflect: 0 },
+  sensor: { width: 230, block: false }
+};
+
+function attachPhysics(o) {
+  o.nAt = wl => (o.type === 'glass' ? 1.5 : glassN(o.p.glass || 'bk7', wl));
+  o.absorb = wl => {
+    if (o.type !== 'glass') return 0;
+    const T = clamp(specVal(o.p.points, wl), 1e-4, 1);
+    return -Math.log(T) / Math.max(1, o.p.width * 0.55);
+  };
+  return o;
+}
+function makeObj(type, x, y, rot) {
+  return attachPhysics({
+    id: uid(), type, x, y, rot: rot || 0,
+    p: JSON.parse(JSON.stringify(DEFAULTS[type])),
+    hist: new Float64Array(48), total: 0, peak: 0
+  });
+}
+
+/* ------------------------------ geometry ------------------------------ */
+// every element exposes boundary surfaces; a surface is flat (a→b) or a
+// circular arc (centre, radius, start angle a0, signed sweep sw)
+function surfSeg(obj, ax, ay, bx, by, role, extra) {
+  return Object.assign({ obj, kind: 'seg', ax, ay, bx, by, role }, extra || {});
+}
+function surfArc(obj, cx, cy, r, a0, sw, role, extra) {
+  const a = { x: cx + r * Math.cos(a0), y: cy + r * Math.sin(a0) };
+  const b = { x: cx + r * Math.cos(a0 + sw), y: cy + r * Math.sin(a0 + sw) };
+  return Object.assign({ obj, kind: 'arc', cx, cy, r, a0, sw, ax: a.x, ay: a.y, bx: b.x, by: b.y, role }, extra || {});
+}
+function arcFromPole(obj, px, py, ox, oy, R, halfW, role, extra) {
+  // pole (px,py), outward unit (ox,oy), signed radius R (>0 convex toward outward)
+  const rr = Math.abs(R);
+  const cx = px - ox * R, cy = py - oy * R;
+  const phi = Math.atan2(oy, ox) + (R > 0 ? 0 : Math.PI);
+  const alpha = Math.asin(clamp(halfW / rr, 0, 0.999));
+  return surfArc(obj, cx, cy, rr, phi - alpha, 2 * alpha, role, extra);
+}
+
+function surfacesOf(o) {
+  const R = rad(o.rot), cs = Math.cos(R), sn = Math.sin(R);
+  const T = (lx, ly) => ({ x: o.x + lx * cs - ly * sn, y: o.y + lx * sn + ly * cs });
+  const out = [];
+  const P = o.p;
+
+  switch (o.type) {
+    case 'mirror': {
+      const w = P.width / 2;
+      if (Math.abs(P.curvature) < 2) {
+        const a = T(-w, 0), b = T(w, 0);
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'mirror'));
+      } else {
+        // pole at local origin, reflective face is local -y.
+        // R > 0 : concave  (centre of curvature on the reflective side)
+        // R < 0 : convex
+        const rr = Math.abs(P.curvature);
+        const sgn = P.curvature > 0 ? 1 : -1;
+        const hw = Math.min(w, rr * 0.98);
+        const phi = sgn > 0 ? Math.PI / 2 : -Math.PI / 2;
+        const alpha = Math.asin(clamp(hw / rr, 0, 0.999));
+        const loc = surfArc(o, 0, -sgn * rr, rr, phi - alpha, 2 * alpha, 'mirror');
+        const c = T(loc.cx, loc.cy), a = T(loc.ax, loc.ay), b = T(loc.bx, loc.by);
+        out.push(Object.assign({}, loc, { cx: c.x, cy: c.y, ax: a.x, ay: a.y, bx: b.x, by: b.y }));
+      }
+      break;
+    }
+    case 'lens': {
+      const D = P.diameter / 2;
+      const n = glassN(P.glass, 589.3);
+      let Rr = Math.abs(P.focal) * (n - 1) * (P.shape.startsWith('plano') ? 1 : 2);
+      Rr = clamp(Rr, D * 1.02, 6000);
+      const sgn = P.shape.includes('concave') ? -1 : 1;
+      const sag = Rr - Math.sqrt(Math.max(0, Rr * Rr - D * D));
+      const t = sgn > 0 ? 2 * sag : Math.max(1.2, P.diameter * 0.05);
+      const half = t / 2;
+      const r1 = sgn > 0 ? Rr : -Rr;
+      const r2 = P.shape.startsWith('plano') ? Infinity : (sgn > 0 ? Rr : -Rr);
+      const rotArc = (s) => {
+        const f = (x, y) => T(x, y);
+        const c = f(s.cx, s.cy), a = f(s.ax, s.ay), b = f(s.bx, s.by);
+        return Object.assign({}, s, { cx: c.x, cy: c.y, ax: a.x, ay: a.y, bx: b.x, by: b.y });
+      };
+      if (r1 === Infinity) {
+        const a = T(-half, -D), b = T(-half, D);
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'dielectric'));
+      } else {
+        out.push(rotArc(arcFromPole(o, 0, 0, 0, 0, 0, 0, 'dielectric'))); // placeholder replaced below
+        out.pop();
+        const rr = Math.abs(r1);
+        const cx = -half + (r1 > 0 ? rr : -rr) * 0; // pole at (-half,0), outward (-1,0)
+        const polex = -half, poley = 0, ox = -1, oy = 0;
+        const ccx = polex - ox * r1, ccy = poley - oy * r1;
+        const phi = Math.atan2(oy, ox) + (r1 > 0 ? 0 : Math.PI);
+        const alpha = Math.asin(clamp(D / rr, 0, 0.999));
+        out.push(rotArc(surfArc(o, ccx, ccy, rr, phi - alpha, 2 * alpha, 'dielectric')));
+      }
+      if (r2 === Infinity) {
+        const a = T(half, -D), b = T(half, D);
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'dielectric'));
+      } else {
+        const rr = Math.abs(r2);
+        const polex = half, poley = 0, ox = 1, oy = 0;
+        const ccx = polex - ox * r2, ccy = poley - oy * r2;
+        const phi = Math.atan2(oy, ox) + (r2 > 0 ? 0 : Math.PI);
+        const alpha = Math.asin(clamp(D / rr, 0, 0.999));
+        out.push(rotArc(surfArc(o, ccx, ccy, rr, phi - alpha, 2 * alpha, 'dielectric')));
+      }
+      // rim segments
+      const rr2 = Math.abs(r1), rr3 = Math.abs(r2);
+      const e1x = -half + (r1 > 0 ? rr2 - rr2 * Math.cos(Math.asin(clamp(D / rr2, 0, .999))) : -(rr2 - rr2 * Math.cos(Math.asin(clamp(D / rr2, 0, .999)))));
+      const e2x = r2 === Infinity ? half : half + (r2 > 0 ? -(rr3 - rr3 * Math.cos(Math.asin(clamp(D / rr3, 0, .999)))) : (rr3 - rr3 * Math.cos(Math.asin(clamp(D / rr3, 0, .999)))));
+      if (Math.abs(e2x - e1x) > 0.4) {
+        let a = T(e1x, -D), b = T(e2x, -D);
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'dielectric'));
+        a = T(e1x, D); b = T(e2x, D);
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'dielectric'));
+      }
+      break;
+    }
+    case 'prism': {
+      const A = rad(P.apex), L = P.size;
+      const p0 = { x: 0, y: 0 };
+      const p1 = { x: L * Math.sin(A / 2), y: L * Math.cos(A / 2) };
+      const p2 = { x: -L * Math.sin(A / 2), y: L * Math.cos(A / 2) };
+      const gc = { x: (p0.x + p1.x + p2.x) / 3, y: (p0.y + p1.y + p2.y) / 3 };
+      const pts = [p0, p1, p2].map(q => T(q.x - gc.x, q.y - gc.y));
+      for (let i = 0; i < 3; i++) {
+        const a = pts[i], b = pts[(i + 1) % 3];
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'dielectric'));
+      }
+      break;
+    }
+    case 'glass': {
+      const w = P.width / 2, h = P.height / 2;
+      const c = [T(-w, -h), T(w, -h), T(w, h), T(-w, h)];
+      for (let i = 0; i < 4; i++) {
+        const a = c[i], b = c[(i + 1) % 4];
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, 'dielectric'));
+      }
+      break;
+    }
+    case 'polarizer':
+    case 'grating':
+    case 'blocker':
+    case 'sensor': {
+      const w = P.width / 2;
+      const h = (P.height || 14) / 2;
+      const role = o.type;
+      if (o.type === 'blocker') {
+        const c = [T(-w, -h), T(w, -h), T(w, h), T(-w, h)];
+        for (let i = 0; i < 4; i++) out.push(surfSeg(o, c[i].x, c[i].y, c[(i + 1) % 4].x, c[(i + 1) % 4].y, 'blocker'));
+      } else {
+        const a = T(-w, 0), b = T(w, 0);
+        out.push(surfSeg(o, a.x, a.y, b.x, b.y, role));
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+function allSurfaces() {
+  const l = [];
+  for (const o of objects) { const s = surfacesOf(o); for (const q of s) l.push(q); }
+  return l;
+}
+
+/* --------------------------- intersection --------------------------- */
+function intersectSeg(r, s) {
+  const ex = s.bx - s.ax, ey = s.by - s.ay;
+  const den = r.dx * ey - r.dy * ex;
+  if (Math.abs(den) < 1e-9) return null;
+  const wx = s.ax - r.x, wy = s.ay - r.y;
+  const t = (wx * ey - wy * ex) / den;
+  if (t < 1e-4) return null;
+  const u = (wx * r.dy - wy * r.dx) / den;
+  if (u < -0.0005 || u > 1.0005) return null;
+  const L = Math.hypot(ex, ey) || 1;
+  let nx = -ey / L, ny = ex / L;
+  if (nx * r.dx + ny * r.dy > 0) { nx = -nx; ny = -ny; }
+  return { t, x: r.x + r.dx * t, y: r.y + r.dy * t, nx, ny, surf: s };
+}
+function normAng(a) { while (a > Math.PI) a -= TAU; while (a <= -Math.PI) a += TAU; return a; }
+function intersectArc(r, s) {
+  const fx = r.x - s.cx, fy = r.y - s.cy;
+  const b = fx * r.dx + fy * r.dy;
+  const c = fx * fx + fy * fy - s.r * s.r;
+  const disc = b * b - c;
+  if (disc < 0) return null;
+  const sq = Math.sqrt(disc);
+  let t = -b - sq;
+  if (t < 1e-4) t = -b + sq;
+  if (t < 1e-4) return null;
+  const x = r.x + r.dx * t, y = r.y + r.dy * t;
+  const ang = Math.atan2(y - s.cy, x - s.cx);
+  const d = normAng(ang - s.a0);
+  if (s.sw > 0) { if (d < -0.002 || d > s.sw + 0.002) return null; }
+  else { if (d > 0.002 || d < s.sw - 0.002) return null; }
+  let nx = (x - s.cx) / s.r, ny = (y - s.cy) / s.r;
+  if (nx * r.dx + ny * r.dy > 0) { nx = -nx; ny = -ny; }
+  return { t, x, y, nx, ny, surf: s };
+}
+function intersect(r, s) { return s.kind === 'arc' ? intersectArc(r, s) : intersectSeg(r, s); }
+
+/* ---------------------------- polarization ----------------------------
+   Each ray carries a Stokes vector (I,Q,U,V) in the basis
+   e1 = in-plane transverse  (p / TM),  e2 = out-of-plane (s / TE).
+   Optical elements act on the coherency matrix J = M J M†.
+   -------------------------------------------------------------------- */
+function rotStokes(Q, U, V, dd) {
+  const c = Math.cos(2 * dd), s = Math.sin(2 * dd);
+  return [Q * c - U * s, Q * s + U * c, V];
+}
+function spawn(parent, dx, dy, I, Q, U, V, meta) {
+  const d0 = Math.atan2(parent.dy, parent.dx), d1 = Math.atan2(dy, dx);
+  let dd = d1 - d0;
+  dd = normAng(dd);
+  const [q, u, v] = rotStokes(Q, U, V, dd);
+  return {
+    x: parent.x + dx * 0.03, y: parent.y + dy * 0.03,
+    dx, dy, wl: parent.wl, I, Q: q, U: u, V: v,
+    inObj: meta && meta.inObj !== undefined ? meta.inObj : parent.inObj,
+    ix: meta && meta.ix !== undefined ? meta.ix : parent.ix,
+    iy: meta && meta.iy !== undefined ? meta.iy : parent.iy
+  };
+}
+
+function fresnel(n1, n2, cosi) {
+  const s2 = (n1 / n2) * (n1 / n2) * Math.max(0, 1 - cosi * cosi);
+  if (s2 >= 1) return null;
+  const cost = Math.sqrt(1 - s2);
+  const rs = (n1 * cosi - n2 * cost) / (n1 * cosi + n2 * cost);
+  const rp = (n1 * cost - n2 * cosi) / (n1 * cost + n2 * cosi);
+  return { Rs: rs * rs, Rp: rp * rp, cost, s2 };
+}
+
+function interact(r, hit) {
+  const s = hit.surf, o = s.obj, P = o.p;
+  const out = [];
+
+  switch (s.role) {
+    case 'blocker': {
+      if (P.reflect > 0.001) {
+        const dx = r.dx - 2 * (r.dx * hit.nx + r.dy * hit.ny) * hit.nx;
+        const dy = r.dy - 2 * (r.dx * hit.nx + r.dy * hit.ny) * hit.ny;
+        out.push(spawn(r, dx, dy, r.I * P.reflect, r.Q, r.U, -r.V, null));
+      }
+      break;
+    }
+    case 'sensor': {
+      const cos = Math.abs(r.dx * hit.nx + r.dy * hit.ny);
+      const e = r.I * cos;
+      const bin = clamp(Math.floor((r.wl - LAM_MIN) / (LAM_MAX - LAM_MIN) * 48), 0, 47);
+      o.hist[bin] += e;
+      o.total += e;
+      if (!P.block) out.push(spawn(r, r.dx, r.dy, r.I, r.Q, r.U, r.V, null));
+      break;
+    }
+    case 'polarizer': {
+      // Linear polariser: Jones operator M = AAᵀ + √ε(I − AAᵀ) applied to the
+      // coherency matrix J = M J M. Axis angle is measured in the transverse
+      // basis: 0° = polarised within the bench plane (p), 90° = out of plane (s).
+      const b = rad(P.axis), cb = Math.cos(b), sb = Math.sin(b);
+      const e = Math.sqrt(clamp(P.extinction, 1e-6, 1));
+      const m11 = cb * cb + e * sb * sb;
+      const m12 = cb * sb * (1 - e);
+      const m22 = sb * sb + e * cb * cb;
+      const J11 = (r.I + r.Q) / 2, J22 = (r.I - r.Q) / 2, Jr = r.U / 2, Ji = r.V / 2;
+      const X11 = m11 * m11 * J11 + 2 * m11 * m12 * Jr + m12 * m12 * J22;
+      const X22 = m12 * m12 * J11 + 2 * m12 * m22 * Jr + m22 * m22 * J22;
+      const X12 = m11 * m12 * J11 + (m11 * m22 + m12 * m12) * Jr + m12 * m22 * J22;
+      const Y12 = Ji * (m12 * m12 - m11 * m22);
+      out.push(spawn(r, r.dx, r.dy, X11 + X22, X11 - X22, 2 * X12, -2 * Y12, null));
+      break;
+    }
+    case 'mirror': {
+      const refl = clamp(P.metal === 'custom'
+        ? P.custom
+        : specVal(METALS[P.metal].pts, r.wl) * (P.reflect / 0.92), 0, 1);
+      const dn = r.dx * hit.nx + r.dy * hit.ny;
+      const dx = r.dx - 2 * dn * hit.nx, dy = r.dy - 2 * dn * hit.ny;
+      out.push(spawn(r, dx, dy, r.I * refl, r.Q * refl, r.U * refl, -r.V * refl, null));
+      break;
+    }
+    case 'grating': {
+      const d = 1000 / P.lines;                 // grating period, nm
+      const tx = -hit.ny, ty = hit.nx;
+      const kt = r.dx * tx + r.dy * ty;         // tangential wave number (|k|=1)
+      const kn = r.dx * hit.nx + r.dy * hit.ny;
+      const M = Math.round(P.orders);
+      const lam = r.wl;
+      // reference direction for the facet envelope
+      const thI = Math.asin(clamp(kt, -1, 1));
+      const ktRef = P.mode === 'reflection' ? Math.sin(2 * rad(P.blaze) - thI) : kt;
+      const cand = [];
+      let sum = 0;
+      for (let m = -M; m <= M; m++) {
+        const kt2 = kt + m * lam / d;
+        if (Math.abs(kt2) >= 0.9995) continue;
+        const kn2 = Math.sqrt(1 - kt2 * kt2);
+        const sgn = P.mode === 'reflection' ? -Math.sign(kn || 1) : Math.sign(kn || -1);
+        const dx = tx * kt2 + hit.nx * kn2 * sgn;
+        const dy = ty * kt2 + hit.ny * kn2 * sgn;
+        const arg = Math.PI * P.slit * d / lam * (kt2 - ktRef);
+        const eta = sinc(arg) * sinc(arg);
+        cand.push({ m, dx, dy, eta });
+        sum += eta;
+      }
+      if (sum <= 1e-6) break;
+      for (const c of cand) {
+        const w = c.eta / sum * r.I;
+        if (w < 0.0025) continue;
+        out.push(spawn(r, c.dx, c.dy, w, r.Q * (c.eta / sum), r.U * (c.eta / sum), r.V * (c.eta / sum), null));
+      }
+      break;
+    }
+    case 'dielectric': {
+      const inside = r.inObj === o;
+      if (inside) {
+        const dist = Math.hypot(hit.x - r.ix, hit.y - r.iy);
+        const a = o.absorb ? o.absorb(r.wl) : 0;
+        if (a > 0 && dist > 0) {
+          const att = Math.exp(-a * dist);
+          r.I *= att; r.Q *= att; r.U *= att; r.V *= att;
+          if (r.I < 0.002) break;
+        }
+      }
+      const nGlass = o.nAt(r.wl);
+      const n1 = inside ? nGlass : 1.000293;
+      const n2 = inside ? 1.000293 : nGlass;
+      const cosi = clamp(-(r.dx * hit.nx + r.dy * hit.ny), -1, 1);
+      const f = fresnel(n1, n2, Math.abs(cosi));
+      let Rp, Rs, Tp, Ts;
+      if (!f) { Rp = 1; Rs = 1; Tp = 0; Ts = 0; }
+      else {
+        let k = 1;
+        if (o.type === 'prism') k = clamp(P.internal, 0, 1);
+        else if (o.type === 'glass') {
+          // scale the Fresnel curve so that normal-incidence reflectance
+          // matches the requested value, keeping the angular dependence
+          const r0 = Math.pow((nGlass - 1) / (nGlass + 1), 2);
+          k = clamp(P.reflect / Math.max(1e-6, r0), 0, 1);
+        }
+        Rp = clamp(f.Rp * k, 0, 1); Rs = clamp(f.Rs * k, 0, 1);
+        Tp = 1 - Rp; Ts = 1 - Rs;
+      }
+      // reflected branch
+      if (r.I * Math.max(Rp, Rs) > 0.003) {
+        const dn = r.dx * hit.nx + r.dy * hit.ny;
+        const dx = r.dx - 2 * dn * hit.nx, dy = r.dy - 2 * dn * hit.ny;
+        const J11 = (r.I + r.Q) / 2 * Rp, J22 = (r.I - r.Q) / 2 * Rs;
+        const cr = Math.sqrt(Math.max(0, Rp * Rs));
+        out.push(spawn(r, dx, dy, J11 + J22, J11 - J22, r.U * cr, -r.V * cr, { inObj: r.inObj, ix: r.ix, iy: r.iy }));
+      }
+      // transmitted branch
+      if (r.I * Math.max(Tp, Ts) > 0.003 && f) {
+        const eta = n1 / n2;
+        const cosiA = Math.abs(cosi);
+        const kx = eta * r.dx + (eta * cosiA - f.cost) * hit.nx;
+        const ky = eta * r.dy + (eta * cosiA - f.cost) * hit.ny;
+        const L = Math.hypot(kx, ky) || 1;
+        const dx = kx / L, dy = ky / L;
+        const J11 = (r.I + r.Q) / 2 * Tp, J22 = (r.I - r.Q) / 2 * Ts;
+        const cr = Math.sqrt(Math.max(0, Tp * Ts));
+        out.push(spawn(r, dx, dy, J11 + J22, J11 - J22, r.U * cr, r.V * cr,
+          inside ? { inObj: null, ix: 0, iy: 0 } : { inObj: o, ix: hit.x, iy: hit.y }));
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+/* ------------------------------- emitters ------------------------------- */
+function buildCDF(points) {
+  const N = 220, lo = SRC_MIN, hi = SRC_MAX;
+  const cdf = new Float64Array(N + 1);
+  let acc = 0;
+  for (let i = 0; i < N; i++) {
+    const l0 = lo + (hi - lo) * i / N, l1 = lo + (hi - lo) * (i + 1) / N;
+    acc += 0.5 * (specVal(points, l0) + specVal(points, l1)) * (l1 - l0);
+    cdf[i + 1] = acc;
+  }
+  const tot = acc || 1;
+  for (let i = 0; i <= N; i++) cdf[i] /= tot;
+  return { cdf, lo, hi, N };
+}
+function sampleCDF(c, u) {
+  let lo = 0, hi = c.N;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (c.cdf[m + 1] < u) lo = m + 1; else hi = m; }
+  const t = (u - c.cdf[lo]) / Math.max(1e-9, c.cdf[lo + 1] - c.cdf[lo]);
+  return clamp(c.lo + (c.hi - c.lo) * (lo + t) / c.N, c.lo, c.hi);
+}
+const QUAL = {
+  low: { bins: 8, dirs: 26, laser: 9 },
+  med: { bins: 12, dirs: 46, laser: 15 },
+  high: { bins: 18, dirs: 84, laser: 24 }
+};
+let GAIN = 34;
+
+function emitFlashlight(o, q) {
+  const P = o.p, rays = [];
+  const R = rad(o.rot), cs = Math.cos(R), sn = Math.sin(R);
+  const c = buildCDF(P.points);
+  const half = rad(P.divergence) / 2;
+  const per = P.power / (q.bins * q.dirs) * GAIN;
+  for (let j = 0; j < q.dirs; j++) {
+    // direction + emitter position are shared by every spectral bin so a
+    // polychromatic beam stays white until a dispersive element separates it
+    const u = (j + halton(j + 1, 3)) / q.dirs;
+    const a = (u * 2 - 1) * half;
+    const rr = (halton(j + 1, 5) * 2 - 1) * P.radius;
+    const ox = -rr * sn, oy = rr * cs;
+    const dx = Math.cos(R + a), dy = Math.sin(R + a);
+    for (let i = 0; i < q.bins; i++) {
+      const wl = sampleCDF(c, (i + halton(i + 1, 2) * 0.98) / q.bins);
+      rays.push({ x: o.x + ox, y: o.y + oy, dx, dy, wl, I: per, Q: 0, U: 0, V: 0, inObj: null, ix: 0, iy: 0 });
+    }
+  }
+  return rays;
+}
+function emitLaser(o, q) {
+  const P = o.p, rays = [];
+  const R = rad(o.rot), cs = Math.cos(R), sn = Math.sin(R);
+  const half = rad(P.divergence) / 1000;   // mrad → rad half angle
+  const pol = rad(P.polAngle);
+  const bins = Math.max(1, Math.min(4, Math.round(P.linewidth / 0.15) + 1));
+  const k = q.laser;
+  let idx = 0;
+  for (let b = 0; b < bins; b++) {
+    const off = bins === 1 ? 0 : (b / (bins - 1) - 0.5) * P.linewidth * 2;
+    const wl = P.wl + off;
+    for (let j = 0; j < k; j++, idx++) {
+      // gaussian beam profile across the aperture
+      const g = Math.sqrt(-2 * Math.log(1 - (j + 0.5) / k * 0.985));
+      const rr = (j % 2 ? 1 : -1) * g * P.radius / 2;
+      const a = (halton(idx + 1, 3) * 2 - 1) * half;
+      const ox = -rr * sn, oy = rr * cs;
+      const dx = Math.cos(R + a), dy = Math.sin(R + a);
+      const I = P.power / (bins * k) * GAIN * 1.9;
+      const Q = Math.cos(2 * pol) * I, U = Math.sin(2 * pol) * I;
+      rays.push({ x: o.x + ox, y: o.y + oy, dx, dy, wl, I, Q, U, V: 0, inObj: null, ix: 0, iy: 0 });
+    }
+  }
+  return rays;
+}
+
+/* -------------------------------- tracing -------------------------------- */
+const MAX_DEPTH = 16, MIN_I = 0.0035, MAX_DIST = 5200;
+let rayCount = 0;
+
+function drawSeg(g, r, t) {
+  const c = specRGB(r.wl);
+  const a = clamp(r.I * state.exposure, 0, 1.6);
+  if (a < 0.0025) return;
+  g.strokeStyle = `rgb(${Math.min(255, (c[0] * a * 255) | 0)},${Math.min(255, (c[1] * a * 255) | 0)},${Math.min(255, (c[2] * a * 255) | 0)})`;
+  g.beginPath();
+  g.moveTo(r.x, r.y);
+  g.lineTo(r.x + r.dx * t, r.y + r.dy * t);
+  g.stroke();
+}
+
+function traceScene(g) {
+  const q = QUAL[state.quality];
+  const surfs = allSurfaces();
+  let rays = [];
+  for (const o of objects) {
+    if (o.type === 'flashlight') rays = rays.concat(emitFlashlight(o, q));
+    else if (o.type === 'laser') rays = rays.concat(emitLaser(o, q));
+  }
+  for (const o of objects) if (o.type === 'sensor') {
+    for (let i = 0; i < o.hist.length; i++) o.hist[i] *= 0.82;
+    o.total *= 0.82;
+  }
+  g.lineCap = 'round';
+  g.lineWidth = 1.35;
+  rayCount = 0;
+  for (let depth = 0; depth < MAX_DEPTH && rays.length; depth++) {
+    const next = [];
+    for (const r of rays) {
+      if (r.I < MIN_I) continue;
+      rayCount++;
+      let best = null;
+      for (let i = 0; i < surfs.length; i++) {
+        const h = intersect(r, surfs[i]);
+        if (h && (!best || h.t < best.t)) best = h;
+      }
+      if (!best) { drawSeg(g, r, MAX_DIST); continue; }
+      drawSeg(g, r, best.t);
+      const produced = interact(r, best);
+      for (const nr of produced) if (nr.I > MIN_I) next.push(nr);
+    }
+    rays = next;
+    if (rays.length > 9000) rays.length = 9000;
+  }
+}
+
+/* ------------------------------ rendering ------------------------------ */
+const cv = document.getElementById('scene');
+const ctx = cv.getContext('2d');
+const beam = document.createElement('canvas');
+const bctx = beam.getContext('2d');
+let DPR = Math.min(2, window.devicePixelRatio || 1);
+
+const state = {
+  exposure: 1, quality: 'med', grid: true,
+  cam: { x: 0, y: 0, zoom: 1 },
+  selected: null, drag: null
+};
+
+function resize() {
+  const st = document.getElementById('stage');
+  const w = st.clientWidth, h = st.clientHeight;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = w * DPR; cv.height = h * DPR;
+  beam.width = w * DPR; beam.height = h * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+function toWorld(px, py) {
+  return { x: (px - state.cam.x) / state.cam.zoom, y: (py - state.cam.y) / state.cam.zoom };
+}
+
+function drawGrid(g, w, h) {
+  const z = state.cam.zoom;
+  const step = 48;
+  const x0 = -state.cam.x / z, y0 = -state.cam.y / z;
+  const sx = Math.floor(x0 / step) * step, sy = Math.floor(y0 / step) * step;
+  g.fillStyle = '#12171E';
+  for (let x = sx; x < x0 + w / z; x += step) {
+    for (let y = sy; y < y0 + h / z; y += step) {
+      const px = x * z + state.cam.x, py = y * z + state.cam.y;
+      g.fillRect(px - 1, py - 1, 2, 2);
+    }
+  }
+}
+
+/* ------------------------------ object drawing ------------------------------ */
+function label(g, o, text) {
+  g.save();
+  g.translate(o.x, o.y);
+  g.font = '500 10px "IBM Plex Mono", monospace';
+  g.fillStyle = 'rgba(180,196,214,.42)';
+  g.textAlign = 'center';
+  g.fillText(text, 0, 46);
+  g.restore();
+}
+function drawObject(g, o, selected) {
+  const P = o.p;
+  g.save();
+  g.translate(o.x, o.y);
+  g.rotate(rad(o.rot));
+  const line = '#7E8B9B';
+  switch (o.type) {
+    case 'flashlight': {
+      const grd = g.createLinearGradient(-52, 0, 6, 0);
+      grd.addColorStop(0, '#1B222B'); grd.addColorStop(1, '#2B3540');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.moveTo(-52, -13); g.lineTo(2, -13); g.lineTo(8, -17); g.lineTo(8, 17); g.lineTo(2, 13); g.lineTo(-52, 13);
+      g.closePath(); g.fill();
+      g.strokeStyle = '#3A4551'; g.lineWidth = 1; g.stroke();
+      g.fillStyle = '#0B0E12'; g.fillRect(-38, -7, 26, 14);
+      g.fillStyle = 'rgba(255,214,170,.9)';
+      g.fillRect(6, -15, 2, 30);
+      break;
+    }
+    case 'laser': {
+      const grd = g.createLinearGradient(-46, 0, 14, 0);
+      grd.addColorStop(0, '#171C24'); grd.addColorStop(1, '#2A333E');
+      g.fillStyle = grd;
+      g.beginPath(); g.roundRect(-46, -10, 58, 20, 3); g.fill();
+      g.strokeStyle = '#3A4551'; g.lineWidth = 1; g.stroke();
+      g.fillStyle = '#0A0D11'; g.fillRect(6, -6, 8, 12);
+      g.fillStyle = wlCss(P.wl); g.fillRect(12, -5, 2, 10);
+      g.fillStyle = 'rgba(255,255,255,.10)'; g.fillRect(-40, -7, 8, 14);
+      break;
+    }
+    case 'mirror': {
+      const w = P.width / 2;
+      if (Math.abs(P.curvature) >= 2) {
+        const rr = Math.abs(P.curvature);
+        const sgn = P.curvature > 0 ? 1 : -1;
+        const cy = -sgn * rr;
+        const phi = sgn > 0 ? Math.PI / 2 : -Math.PI / 2;
+        const alpha = Math.asin(clamp(Math.min(w, rr * .98) / rr, 0, .999));
+        g.lineWidth = 4.5;
+        g.strokeStyle = '#C3CDDA';
+        g.beginPath();
+        g.arc(0, cy, rr, phi - alpha, phi + alpha);
+        g.stroke();
+        g.lineWidth = 1.2; g.strokeStyle = 'rgba(255,122,47,.5)';
+        g.beginPath(); g.arc(0, cy, rr - 5 * sgn, phi - alpha, phi + alpha); g.stroke();
+      } else {
+        g.fillStyle = '#C3CDDA'; g.fillRect(-w, -2, P.width, 4);
+        g.strokeStyle = 'rgba(255,122,47,.55)'; g.lineWidth = 1.2;
+        g.beginPath(); g.moveTo(-w, -5.5); g.lineTo(w, -5.5); g.stroke();
+        g.strokeStyle = '#48535F'; g.lineWidth = 1;
+        for (let x = -w + 6; x < w; x += 11) { g.beginPath(); g.moveTo(x, 3); g.lineTo(x - 6, 11); g.stroke(); }
+      }
+      break;
+    }
+    case 'lens': {
+      const D = P.diameter / 2;
+      const n = glassN(P.glass, 589.3);
+      const Rr = clamp(Math.abs(P.focal) * (n - 1) * (P.shape.startsWith('plano') ? 1 : 2), D * 1.02, 6000);
+      const sgn = P.shape.includes('concave') ? -1 : 1;
+      const sag = Rr - Math.sqrt(Math.max(0, Rr * Rr - D * D));
+      const t = sgn > 0 ? 2 * sag : Math.max(1.2, P.diameter * 0.05);
+      const h = t / 2;
+      const r1 = sgn > 0 ? Rr : -Rr;
+      const r2 = P.shape.startsWith('plano') ? Infinity : (sgn > 0 ? Rr : -Rr);
+      const surfX = (y, poleX, ox, R) => {
+        if (R === Infinity) return poleX;
+        const rr = Math.abs(R), ccx = poleX - ox * R;
+        return ccx + ox * Math.sign(R) * Math.sqrt(Math.max(0, rr * rr - y * y));
+      };
+      g.beginPath();
+      const N = 26;
+      for (let i = 0; i <= N; i++) {
+        const y = -D + 2 * D * i / N;
+        const x = surfX(y, -h, -1, r1);
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      for (let i = N; i >= 0; i--) g.lineTo(surfX(-D + 2 * D * i / N, h, 1, r2), -D + 2 * D * i / N);
+      g.closePath();
+      const lg = g.createLinearGradient(-h, -D, h, D);
+      lg.addColorStop(0, 'rgba(130,190,235,.17)');
+      lg.addColorStop(1, 'rgba(110,165,215,.08)');
+      g.fillStyle = lg; g.fill();
+      g.strokeStyle = 'rgba(150,205,245,.55)'; g.lineWidth = 1.3; g.stroke();
+      break;
+    }
+    case 'prism': {
+      const A = rad(P.apex), L = P.size;
+      const p0 = { x: 0, y: 0 }, p1 = { x: L * Math.sin(A / 2), y: L * Math.cos(A / 2) }, p2 = { x: -L * Math.sin(A / 2), y: L * Math.cos(A / 2) };
+      const cx = (p0.x + p1.x + p2.x) / 3, cy = (p0.y + p1.y + p2.y) / 3;
+      g.beginPath();
+      g.moveTo(p0.x - cx, p0.y - cy); g.lineTo(p1.x - cx, p1.y - cy); g.lineTo(p2.x - cx, p2.y - cy);
+      g.closePath();
+      const gr = g.createLinearGradient(-L / 2, -L / 2, L / 2, L / 2);
+      gr.addColorStop(0, 'rgba(140,195,235,.16)'); gr.addColorStop(1, 'rgba(110,160,210,.07)');
+      g.fillStyle = gr; g.fill();
+      g.strokeStyle = 'rgba(160,210,245,.55)'; g.lineWidth = 1.3; g.stroke();
+      break;
+    }
+    case 'polarizer': {
+      const w = P.width / 2;
+      g.fillStyle = 'rgba(120,150,190,.10)'; g.fillRect(-w, -9, P.width, 18);
+      g.strokeStyle = 'rgba(150,185,225,.55)'; g.lineWidth = 1.1;
+      g.strokeRect(-w, -9, P.width, 18);
+      g.strokeStyle = 'rgba(180,210,240,.35)';
+      for (let x = -w + 5; x < w; x += 7) { g.beginPath(); g.moveTo(x, -7); g.lineTo(x, 7); g.stroke(); }
+      break;
+    }
+    case 'grating': {
+      const w = P.width / 2;
+      g.strokeStyle = P.mode === 'reflection' ? '#B9C4D1' : 'rgba(160,205,245,.7)';
+      g.lineWidth = 2.2;
+      g.beginPath(); g.moveTo(-w, 0); g.lineTo(w, 0); g.stroke();
+      g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.30)';
+      const per = clamp(240 / P.lines, 3, 16);
+      for (let x = -w; x <= w; x += per) { g.beginPath(); g.moveTo(x, -6); g.lineTo(x, 6); g.stroke(); }
+      if (P.mode === 'reflection') {
+        g.strokeStyle = 'rgba(120,135,150,.5)';
+        for (let x = -w + 4; x < w; x += 9) { g.beginPath(); g.moveTo(x, 2); g.lineTo(x - 5, 9); g.stroke(); }
+      }
+      break;
+    }
+    case 'glass': {
+      const w = P.width / 2, h = P.height / 2;
+      const tints = { red: 'rgba(215,90,80,', green: 'rgba(90,200,130,', blue: 'rgba(80,130,235,', orange: 'rgba(235,150,70,' };
+      const key = P.filter;
+      const base = tints[key] || 'rgba(150,170,200,';
+      g.fillStyle = base + '0.14)';
+      g.fillRect(-w, -h, P.width, P.height);
+      g.strokeStyle = base + '0.5)'; g.lineWidth = 1.2;
+      g.strokeRect(-w, -h, P.width, P.height);
+      g.fillStyle = 'rgba(255,255,255,.05)';
+      g.fillRect(-w + 3, -h + 3, 6, P.height - 6);
+      break;
+    }
+    case 'blocker': {
+      const w = P.width / 2, h = P.height / 2;
+      g.fillStyle = '#1A2028'; g.fillRect(-w, -h, P.width, P.height);
+      g.strokeStyle = '#2E3843'; g.lineWidth = 1; g.strokeRect(-w, -h, P.width, P.height);
+      g.strokeStyle = 'rgba(255,255,255,.06)';
+      for (let x = -w + 4; x < w; x += 8) { g.beginPath(); g.moveTo(x, -h); g.lineTo(x - h, h); g.stroke(); }
+      break;
+    }
+    case 'sensor': {
+      const w = P.width / 2;
+      g.fillStyle = '#161C24'; g.fillRect(-w, -7, P.width, 14);
+      g.strokeStyle = '#39434F'; g.lineWidth = 1; g.strokeRect(-w, -7, P.width, 14);
+      const bins = 26;
+      for (let i = 0; i < bins; i++) {
+        const v = o.hist[Math.floor(i / bins * 48)] + o.hist[Math.floor(i / bins * 48) + 1];
+        const hh = clamp(v * 26, 0, 22);
+        g.fillStyle = wlCss(LAM_MIN + (LAM_MAX - LAM_MIN) * (i + .5) / bins);
+        g.fillRect(-w + 3 + i * (P.width - 6) / bins, -9 - hh, (P.width - 6) / bins - 1, hh);
+      }
+      g.fillStyle = 'rgba(255,255,255,.10)'; g.fillRect(-w, -7, 3, 14);
+      break;
+    }
+  }
+  g.restore();
+
+  if (o.type === 'flashlight') label(g, o, `${spdName(o)} · ${P.divergence.toFixed(0)}° cone`);
+  else if (o.type === 'laser') label(g, o, `${P.wl.toFixed(1)} nm · ${P.power.toFixed(2)} W`);
+  else if (o.type === 'lens') label(g, o, `f = ${P.focal.toFixed(0)} mm · ${P.shape.replace('bicon', 'bi')}`);
+  else if (o.type === 'mirror') label(g, o, Math.abs(P.curvature) < 2 ? `flat · ${(P.metal === 'custom' ? P.custom : P.reflect).toFixed(2)} R` : `${P.curvature > 0 ? 'concave' : 'convex'} · R = ${Math.abs(P.curvature).toFixed(0)} mm`);
+  else if (o.type === 'prism') label(g, o, `${P.apex.toFixed(0)}° · ${GLASSES[P.glass].name}`);
+  else if (o.type === 'grating') label(g, o, `${P.lines} l/mm · ${P.mode}`);
+  else if (o.type === 'polarizer') label(g, o, `axis ${P.axis.toFixed(0)}° · ER ${Math.round(1 / P.extinction)}:1`);
+  else if (o.type === 'glass') label(g, o, `${(P.reflect * 100).toFixed(0)}% R · ${FILTER_PRESETS[P.filter] ? FILTER_PRESETS[P.filter].name : 'custom'}`);
+  else if (o.type === 'blocker') label(g, o, `baffle`);
+  else if (o.type === 'sensor') label(g, o, `sensor · ${o.total > 0.0005 ? 'E = ' + o.total.toFixed(2) : 'dark'}`);
+
+  if (selected) {
+    g.save();
+    g.translate(o.x, o.y); g.rotate(rad(o.rot));
+    const b = bboxOf(o);
+    g.strokeStyle = 'rgba(255,122,47,.85)';
+    g.lineWidth = 1;
+    g.setLineDash([4, 4]);
+    g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+    g.setLineDash([]);
+    // rotation handle
+    g.strokeStyle = 'rgba(255,122,47,.55)';
+    g.beginPath(); g.moveTo(0, b.y0); g.lineTo(0, b.y0 - 26); g.stroke();
+    g.fillStyle = '#FF7A2F';
+    g.beginPath(); g.arc(0, b.y0 - 30, 5.5, 0, TAU); g.fill();
+    g.restore();
+  }
+}
+function spdName(o) {
+  for (const k in SPD_PRESETS) if (SPD_PRESETS[k].pts === o.p.points || o.p.spd === k) return SPD_PRESETS[k].name;
+  return 'Custom';
+}
+function bboxOf(o) {
+  const s = surfacesOf(o);
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  const R = rad(-o.rot), cs = Math.cos(R), sn = Math.sin(R);
+  const add = (x, y) => {
+    const lx = (x - o.x) * cs - (y - o.y) * sn, ly = (x - o.x) * sn + (y - o.y) * cs;
+    x0 = Math.min(x0, lx); x1 = Math.max(x1, lx); y0 = Math.min(y0, ly); y1 = Math.max(y1, ly);
+  };
+  for (const q of s) {
+    add(q.ax, q.ay); add(q.bx, q.by);
+    if (q.kind === 'arc') {
+      for (let i = 1; i < 8; i++) add(q.cx + q.r * Math.cos(q.a0 + q.sw * i / 8), q.cy + q.r * Math.sin(q.a0 + q.sw * i / 8));
+    }
+  }
+  if (x0 > x1) { x0 = -30; x1 = 30; y0 = -30; y1 = 30; }
+  return { x0: x0 - 6, y0: y0 - 6, x1: x1 + 6, y1: y1 + 6 };
+}
+
+/* ------------------------------- picking ------------------------------- */
+function distToObj(o, wx, wy) {
+  if (o.type === 'flashlight' || o.type === 'laser') return Math.hypot(wx - o.x, wy - o.y);
+  let best = 1e9;
+  for (const s of surfacesOf(o)) {
+    const n = 12;
+    for (let i = 0; i < n; i++) {
+      let ax, ay, bx, by;
+      if (s.kind === 'arc') {
+        ax = s.cx + s.r * Math.cos(s.a0 + s.sw * i / n); ay = s.cy + s.r * Math.sin(s.a0 + s.sw * i / n);
+        bx = s.cx + s.r * Math.cos(s.a0 + s.sw * (i + 1) / n); by = s.cy + s.r * Math.sin(s.a0 + s.sw * (i + 1) / n);
+      } else {
+        ax = s.ax; ay = s.ay; bx = s.bx; by = s.by;
+      }
+      const ex = bx - ax, ey = by - ay;
+      const L2 = ex * ex + ey * ey || 1;
+      const t = clamp(((wx - ax) * ex + (wy - ay) * ey) / L2, 0, 1);
+      const d = Math.hypot(wx - (ax + ex * t), wy - (ay + ey * t));
+      if (d < best) best = d;
+    }
+  }
+  return best;
+}
+function pick(wx, wy) {
+  for (let i = objects.length - 1; i >= 0; i--) {
+    const o = objects[i];
+    if (distToObj(o, wx, wy) < 15 / state.cam.zoom) return o;
+  }
+  return null;
+}
+
+/* ------------------------------ scene setup ------------------------------ */
+let objects = [];
+function defaultScene() {
+  objects = [];
+  _uid = 1;
+  const fl = makeObj('flashlight', 250, 190, 0);
+  fl.p.divergence = 9;
+  fl.p.radius = 14;
+  fl.p.power = 1.2;
+  objects.push(fl);
+  const pr = makeObj('prism', 620, 230, 25);
+  pr.p.size = 150; pr.p.apex = 60; pr.p.glass = 'sf11';
+  objects.push(pr);
+  const se = makeObj('sensor', 768, 552, 163);
+  se.p.width = 250;
+  objects.push(se);
+  state.selected = pr.id;
+}
+function emptyScene() { objects = []; state.selected = null; }
+
+/* ------------------------------ main loop ------------------------------ */
+function frame() {
+  const w = cv.width / DPR, h = cv.height / DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#080A0D';
+  ctx.fillRect(0, 0, w, h);
+
+  if (state.grid) drawGrid(ctx, w, h);
+
+  // beams
+  bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  bctx.clearRect(0, 0, w, h);
+  bctx.save();
+  bctx.translate(state.cam.x, state.cam.y);
+  bctx.scale(state.cam.zoom, state.cam.zoom);
+  bctx.globalCompositeOperation = 'lighter';
+  traceScene(bctx);
+  bctx.restore();
+
+  ctx.save();
+  ctx.translate(state.cam.x, state.cam.y);
+  ctx.scale(state.cam.zoom, state.cam.zoom);
+  for (const o of objects) drawObject(ctx, o, o.id === state.selected);
+  ctx.restore();
+
+  // glow + core
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  try {
+    ctx.filter = 'blur(5px)';
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(beam, 0, 0, w, h);
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+  } catch (e) { ctx.globalAlpha = 1; }
+  ctx.drawImage(beam, 0, 0, w, h);
+  ctx.restore();
+
+  document.getElementById('stRays').textContent = rayCount.toLocaleString();
+  document.getElementById('stObjs').textContent = objects.length;
+  document.getElementById('empty').style.display = objects.length ? 'none' : 'flex';
+  if (sensorCanvas) drawSensorReadout();
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------ UI helpers ------------------------------ */
+function el(tag, cls, txt) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+function fmt(v, d) { return Number(v).toFixed(d === undefined ? 2 : d); }
+
+function row(labelText, control) {
+  const r = el('div', 'row');
+  r.appendChild(el('label', '', labelText));
+  const c = el('div', 'ctl2');
+  c.appendChild(control);
+  r.appendChild(c);
+  return r;
+}
+function slider(min, max, step, value, onInput, digits) {
+  const wrap = el('div', 'ctl2');
+  wrap.style.flex = '1';
+  const inp = document.createElement('input');
+  inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = value;
+  const val = el('div', 'val', fmt(value, digits));
+  inp.addEventListener('input', () => {
+    val.textContent = fmt(+inp.value, digits);
+    onInput(+inp.value);
+  });
+  wrap.appendChild(inp); wrap.appendChild(val);
+  return { wrap, inp, val };
+}
+function selectEl(options, value, onChange) {
+  const s = document.createElement('select');
+  for (const [v, t] of options) {
+    const op = document.createElement('option');
+    op.value = v; op.textContent = t;
+    if (v === value) op.selected = true;
+    s.appendChild(op);
+  }
+  s.addEventListener('change', () => onChange(s.value));
+  return s;
+}
+function toggleEl(value, onChange) {
+  const t = el('div', 'toggle' + (value ? ' on' : ''));
+  t.addEventListener('click', () => {
+    const on = !t.classList.contains('on');
+    t.classList.toggle('on', on);
+    onChange(on);
+  });
+  return t;
+}
+
+/* spectrum editor ------------------------------------------------------- */
+function makeSpectrumEditor(points, onChange, opts) {
+  opts = opts || {};
+  const wrap = el('div', 'spec-ed');
+  const c = document.createElement('canvas');
+  const W = 280, H = 82;
+  c.width = W * 2; c.height = H * 2;
+  const g = c.getContext('2d');
+  g.scale(2, 2);
+  wrap.appendChild(c);
+  const foot = el('div', 'foot');
+  const lbl = el('div', 'lbl', opts.hint || 'drag points · right-click removes');
+  foot.appendChild(lbl);
+  wrap.appendChild(foot);
+
+  let drag = -1;
+  const pos = e => {
+    const r = c.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) / r.width * W,
+      y: (e.clientY - r.top) / r.height * H
+    };
+  };
+  const xToLam = x => LAM_MIN + clamp(x, 0, W) / W * (LAM_MAX - LAM_MIN);
+  const yToVal = y => clamp(1 - y / H, 0, 1);
+  const lamToX = l => (l - LAM_MIN) / (LAM_MAX - LAM_MIN) * W;
+
+  function draw() {
+    g.clearRect(0, 0, W, H);
+    for (let x = 0; x < W; x += 2) {
+      g.fillStyle = wlCss(LAM_MIN + x / W * (LAM_MAX - LAM_MIN));
+      g.globalAlpha = 0.22;
+      g.fillRect(x, H - 9, 2, 9);
+      g.globalAlpha = 1;
+    }
+    g.strokeStyle = '#1A2129';
+    for (let i = 1; i < 4; i++) {
+      g.beginPath(); g.moveTo(0, H * i / 4); g.lineTo(W, H * i / 4); g.stroke();
+      g.beginPath(); g.moveTo(W * i / 4, 0); g.lineTo(W * i / 4, H); g.stroke();
+    }
+    // curve
+    const pts = points.slice().sort((a, b) => a[0] - b[0]);
+    g.beginPath();
+    for (let x = 0; x <= W; x += 2) {
+      const v = specVal(pts, xToLam(x));
+      const y = H - 9 - v * (H - 14);
+      if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.lineTo(W, H - 9); g.lineTo(0, H - 9); g.closePath();
+    g.fillStyle = 'rgba(255,122,47,.14)';
+    g.fill();
+    g.beginPath();
+    for (let x = 0; x <= W; x += 2) {
+      const v = specVal(pts, xToLam(x));
+      const y = H - 9 - v * (H - 14);
+      if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.strokeStyle = '#FF9B5C'; g.lineWidth = 1.6; g.stroke();
+    for (let i = 0; i < points.length; i++) {
+      const px = lamToX(points[i][0]), py = H - 9 - points[i][1] * (H - 14);
+      g.beginPath(); g.arc(px, py, i === drag ? 4.6 : 3.4, 0, TAU);
+      g.fillStyle = i === drag ? '#FFD9BE' : '#FF9B5C'; g.fill();
+      g.strokeStyle = '#0C1015'; g.lineWidth = 1.2; g.stroke();
+    }
+    g.fillStyle = 'rgba(150,168,190,.55)';
+    g.font = '8px "IBM Plex Mono", monospace';
+    g.fillText('380', 2, H - 11);
+    g.fillText('580', W / 2 - 6, H - 11);
+    g.fillText('780 nm', W - 32, H - 11);
+  }
+  const nearest = p => {
+    let bi = -1, bd = 12;
+    for (let i = 0; i < points.length; i++) {
+      const px = lamToX(points[i][0]), py = H - 9 - points[i][1] * (H - 14);
+      const d = Math.hypot(px - p.x, py - p.y);
+      if (d < bd) { bd = d; bi = i; }
+    }
+    return bi;
+  };
+  c.addEventListener('pointerdown', e => {
+    const p = pos(e);
+    if (e.button === 2) {
+      const i = nearest(p);
+      if (i >= 0 && points.length > 2) { points.splice(i, 1); onChange(); draw(); }
+      return;
+    }
+    let i = nearest(p);
+    if (i < 0 && e.altKey) {
+      points.push([xToLam(p.x), yToVal(p.y)]);
+      points.sort((a, b) => a[0] - b[0]);
+      i = nearest(p);
+    }
+    drag = i;
+    c.setPointerCapture(e.pointerId);
+    draw();
+  });
+  c.addEventListener('pointermove', e => {
+    if (drag < 0 || drag >= points.length) return;
+    const p = pos(e);
+    let lo = LAM_MIN, hi = LAM_MAX;
+    if (drag > 0) lo = points[drag - 1][0] + 2;
+    if (drag < points.length - 1) hi = points[drag + 1][0] - 2;
+    points[drag] = [clamp(xToLam(p.x), lo, hi), yToVal(p.y)];
+    onChange();
+    draw();
+  });
+  c.addEventListener('pointerup', e => { drag = -1; draw(); });
+  c.addEventListener('contextmenu', e => e.preventDefault());
+  draw();
+  return { el: wrap, draw };
+}
+
+/* ------------------------------ property panel ------------------------------ */
+let sensorCanvas = null, sensorObj = null;
+
+function section(title) {
+  const s = el('div', 'sec');
+  s.appendChild(el('div', 'sec-h', title));
+  return s;
+}
+
+function buildPanel() {
+  const panel = document.getElementById('panel');
+  panel.innerHTML = '';
+  sensorCanvas = null; sensorObj = null;
+  const o = objects.find(x => x.id === state.selected);
+  document.getElementById('stSel').textContent = o ? `${TITLE[o.type]} selected` : 'no selection';
+
+  if (!o) {
+    const e = el('div', 'empty-panel');
+    e.appendChild(el('div', 'big', 'Nothing selected'));
+    e.appendChild(el('div', 'small', 'Click an element on the bench\nto edit its optical properties.'));
+    panel.appendChild(e);
+    return;
+  }
+  const P = o.p;
+  const head = el('div', 'p-head');
+  head.appendChild(el('div', 't', TITLE[o.type]));
+  head.appendChild(el('div', 'm', `${o.id.toUpperCase()} · ${o.type === 'laser' || o.type === 'flashlight' ? 'SOURCE' : 'ELEMENT'}`));
+  panel.appendChild(head);
+  const body = el('div', 'p-body');
+
+  const upd = () => { };
+
+  /* --- placement --- */
+  const s1 = section('Placement');
+  const xy = el('div', 'xy');
+  const xi = document.createElement('input'); xi.type = 'number'; xi.value = Math.round(o.x); xi.step = 10;
+  const yi = document.createElement('input'); yi.type = 'number'; yi.value = Math.round(o.y); yi.step = 10;
+  xi.addEventListener('input', () => { o.x = +xi.value; });
+  yi.addEventListener('input', () => { o.y = +yi.value; });
+  xy.appendChild(xi); xy.appendChild(yi);
+  s1.appendChild(row('Position', xy));
+  const rot = slider(-180, 180, 1, o.rot, v => o.rot = v, 0);
+  s1.appendChild(row('Rotation', rot.wrap));
+  body.appendChild(s1);
+
+  /* --- type-specific --- */
+  if (o.type === 'flashlight') {
+    const s = section('Spectrum');
+    const sw = el('div', 'swatch');
+    const updateSwatch = () => {
+      let r = 0, g2 = 0, b = 0, tot = 0;
+      for (let wl = 390; wl <= 720; wl += 4) {
+        const v = specVal(P.points, wl), c = specRGB(wl);
+        r += c[0] * v; g2 += c[1] * v; b += c[2] * v; tot += v;
+      }
+      const m = Math.max(r, g2, b, 1e-6);
+      sw.style.background = `rgb(${Math.round(r / m * 255)},${Math.round(g2 / m * 255)},${Math.round(b / m * 255)})`;
+    };
+    const presetSel = selectEl(Object.keys(SPD_PRESETS).map(k => [k, SPD_PRESETS[k].name]).concat([['custom', 'Custom']]), P.spd || 'custom', v => {
+      if (v !== 'custom') { P.points = SPD_PRESETS[v].pts.map(p => p.slice()); P.spd = v; }
+      buildPanel();
+    });
+    s.appendChild(row('Preset', presetSel));
+    const ed = makeSpectrumEditor(P.points, () => { P.spd = 'custom'; updateSwatch(); }, { hint: 'drag nodes to shape the SPD · alt-click adds' });
+    s.appendChild(ed.el);
+    s.appendChild(row('Emission', sw));
+    body.appendChild(s);
+    updateSwatch();
+
+    const s2 = section('Beam');
+    s2.appendChild(row('Power', slider(0.05, 3, 0.01, P.power, v => P.power = v, 2).wrap));
+    s2.appendChild(row('Divergence', slider(0, 90, 0.5, P.divergence, v => P.divergence = v, 1).wrap));
+    s2.appendChild(row('Emitter ⌀', slider(2, 90, 1, P.radius, v => P.radius = v, 0).wrap));
+    body.appendChild(s2);
+    body.appendChild(el('div', 'hint', 'Divergence is the full cone angle. Rays sample\nthe source spectrum by inverse-CDF, so narrow\nline sources keep their lines.'));
+  }
+
+  if (o.type === 'laser') {
+    const s = section('Emission');
+    s.appendChild(row('Preset', selectEl([
+      ['custom', 'Custom'], ['hene', 'He-Ne 632.8 nm'], ['ndyag', 'Nd:YAG 532 nm'],
+      ['405', 'Diode 405 nm'], ['445', 'Diode 445 nm'], ['520', 'Diode 520 nm'],
+      ['650', 'Diode 650 nm'], ['589', 'Sodium D 589 nm']
+    ], P.preset, v => {
+      const map = { hene: 632.8, ndyag: 532, 405: 405, 445: 445, 520: 520, 650: 650, 589: 589 };
+      if (map[v]) P.wl = map[v];
+      P.preset = v;
+      buildPanel();
+    })));
+    const sw = el('div', 'swatch'); sw.style.background = wlCss(P.wl);
+    const wlS = slider(380, 720, 0.5, P.wl, v => { P.wl = v; sw.style.background = wlCss(v); }, 1);
+    s.appendChild(row('Wavelength', wlS.wrap));
+    s.appendChild(row('Colour', sw));
+    s.appendChild(row('Power', slider(0.05, 3, 0.01, P.power, v => P.power = v, 2).wrap));
+    body.appendChild(s);
+    const s2 = section('Beam');
+    s2.appendChild(row('Beam radius', slider(1, 40, 0.5, P.radius, v => P.radius = v, 1).wrap));
+    s2.appendChild(row('Divergence', slider(0, 20, 0.1, P.divergence, v => P.divergence = v, 1).wrap));
+    s2.appendChild(row('Line width', slider(0, 6, 0.05, P.linewidth, v => P.linewidth = v, 2).wrap));
+    body.appendChild(s2);
+    const s3 = section('Polarization');
+    s3.appendChild(row('Linear axis', slider(0, 180, 1, P.polAngle, v => P.polAngle = v, 0).wrap));
+    body.appendChild(s3);
+    body.appendChild(el('div', 'hint', 'Axis 0° lies in the drawing plane, 90° is\nperpendicular to it. Divergence in mrad.'));
+  }
+
+  if (o.type === 'mirror') {
+    const s = section('Surface');
+    s.appendChild(row('Geometry', selectEl([['flat', 'Flat'], ['concave', 'Curved — concave'], ['convex', 'Curved — convex']],
+      Math.abs(P.curvature) < 2 ? 'flat' : (P.curvature > 0 ? 'concave' : 'convex'), v => {
+        if (v === 'flat') P.curvature = 0;
+        else P.curvature = (v === 'concave' ? 1 : -1) * (Math.abs(P.curvature) < 2 ? 260 : Math.abs(P.curvature));
+        buildPanel();
+      })));
+    if (Math.abs(P.curvature) >= 2) {
+      s.appendChild(row('Curvature R', slider(-1200, 1200, 5, P.curvature, v => { P.curvature = v; }, 0).wrap));
+    }
+    s.appendChild(row('Width', slider(40, 600, 2, P.width, v => P.width = v, 0).wrap));
+    s.appendChild(row('Coating', selectEl(Object.keys(METALS).map(k => [k, METALS[k].name]), P.metal, v => { P.metal = v; buildPanel(); })));
+    if (P.metal === 'custom') {
+      s.appendChild(row('Reflectance', slider(0, 1, 0.01, P.custom, v => P.custom = v, 2).wrap));
+    } else {
+      s.appendChild(row('Reflectance', slider(0, 1, 0.01, P.reflect, v => P.reflect = v, 2).wrap));
+    }
+    body.appendChild(s);
+    body.appendChild(el('div', 'hint', 'Metal coatings use their real spectral\nreflectance curve; the slider scales it.'));
+  }
+
+  if (o.type === 'lens') {
+    const s = section('Optics');
+    s.appendChild(row('Shape', selectEl([
+      ['biconvex', 'Biconvex'], ['biconcave', 'Biconcave'],
+      ['planoconvex', 'Plano-convex'], ['planoconcave', 'Plano-concave']
+    ], P.shape, v => { P.shape = v; buildPanel(); })));
+    s.appendChild(row('Focal length', slider(-900, 1400, 5, P.focal, v => P.focal = v, 0).wrap));
+    s.appendChild(row('Diameter', slider(40, 420, 2, P.diameter, v => P.diameter = v, 0).wrap));
+    s.appendChild(row('Glass', selectEl(Object.keys(GLASSES).map(k => [k, GLASSES[k].name]), P.glass, v => { P.glass = v; buildPanel(); })));
+    body.appendChild(s);
+    const n = glassN(P.glass, 589.3);
+    body.appendChild(el('div', 'hint', `Surface curvature solved from the lensmaker\nformula. n(589 nm) = ${n.toFixed(4)} · dispersion is\nSellmeier, so white light focuses by colour.`));
+  }
+
+  if (o.type === 'prism') {
+    const s = section('Geometry');
+    s.appendChild(row('Apex angle', slider(10, 120, 1, P.apex, v => P.apex = v, 0).wrap));
+    s.appendChild(row('Side length', slider(60, 320, 2, P.size, v => P.size = v, 0).wrap));
+    s.appendChild(row('Material', selectEl(Object.keys(GLASSES).map(k => [k, GLASSES[k].name]), P.glass, v => { P.glass = v; buildPanel(); })));
+    body.appendChild(s);
+    const s2 = section('Internal reflection');
+    s2.appendChild(row('Strength', slider(0, 1, 0.01, P.internal, v => P.internal = v, 2).wrap));
+    body.appendChild(s2);
+    const n = glassN(P.glass, 589.3), nd = glassN(P.glass, 486.1), nr = glassN(P.glass, 656.3);
+    body.appendChild(el('div', 'hint', `Fresnel reflection at every interface, scaled by\nthe strength above. n(F) = ${nd.toFixed(4)} · n(C) = ${nr.toFixed(4)}\nAbbe Vd = ${(((n - 1) / (nd - nr)).toFixed(2))} · total internal reflection\noccurs beyond the critical angle.`));
+  }
+
+  if (o.type === 'polarizer') {
+    const s = section('Polarizer');
+    s.appendChild(row('Axis', slider(0, 180, 1, P.axis, v => P.axis = v, 0).wrap));
+    s.appendChild(row('Extinction', slider(1, 4000, 1, Math.round(1 / P.extinction), v => P.extinction = 1 / v, 0).wrap));
+    s.appendChild(row('Width', slider(40, 480, 2, P.width, v => P.width = v, 0).wrap));
+    body.appendChild(s);
+    body.appendChild(el('div', 'hint', 'Axis 0° transmits light polarised in the\nplane of the bench; 90° passes the\nout-of-plane component. Extinction is the\nratio of blocked to transmitted intensity.'));
+  }
+
+  if (o.type === 'grating') {
+    const s = section('Grating');
+    s.appendChild(row('Mode', selectEl([['transmission', 'Transmission'], ['reflection', 'Reflection']], P.mode, v => { P.mode = v; buildPanel(); })));
+    s.appendChild(row('Line density', slider(50, 2400, 10, P.lines, v => P.lines = v, 0).wrap));
+    s.appendChild(row('Max order', slider(1, 6, 1, P.orders, v => P.orders = v, 0).wrap));
+    s.appendChild(row('Blaze angle', slider(-45, 45, 0.5, P.blaze, v => P.blaze = v, 1).wrap));
+    s.appendChild(row('Slit ratio', slider(0.05, 1, 0.01, P.slit, v => P.slit = v, 2).wrap));
+    s.appendChild(row('Width', slider(40, 480, 2, P.width, v => P.width = v, 0).wrap));
+    body.appendChild(s);
+    body.appendChild(el('div', 'hint', 'Orders follow d·sinθ = m·λ, with a single-facet\nenvelope sinc²(π·a·d/λ·Δsinθ) for the blaze.\nEvanescent orders are cut off.'));
+  }
+
+  if (o.type === 'glass') {
+    const s = section('Filter');
+    s.appendChild(row('Preset', selectEl(Object.keys(FILTER_PRESETS).map(k => [k, FILTER_PRESETS[k].name]).concat([['custom', 'Custom']]), P.filter, v => {
+      if (v !== 'custom') P.points = FILTER_PRESETS[v].pts.map(p => p.slice());
+      P.filter = v;
+      buildPanel();
+    })));
+    const ed = makeSpectrumEditor(P.points, () => { P.filter = 'custom'; }, { hint: 'internal transmittance vs wavelength' });
+    s.appendChild(ed.el);
+    body.appendChild(s);
+    const s2 = section('Surface');
+    s2.appendChild(row('Reflectance', slider(0, 1, 0.01, P.reflect, v => P.reflect = v, 2).wrap));
+    s2.appendChild(row('Thickness', slider(20, 420, 2, P.width, v => P.width = v, 0).wrap));
+    s2.appendChild(row('Height', slider(60, 620, 2, P.height, v => P.height = v, 0).wrap));
+    body.appendChild(s2);
+    body.appendChild(el('div', 'hint', 'Transmission follows Beer–Lambert through\nthe slab; the curve is the internal\ntransmittance for the full path.'));
+  }
+
+  if (o.type === 'blocker') {
+    const s = section('Baffle');
+    s.appendChild(row('Length', slider(30, 700, 2, P.width, v => P.width = v, 0).wrap));
+    s.appendChild(row('Thickness', slider(4, 90, 1, P.height, v => P.height = v, 0).wrap));
+    s.appendChild(row('Reflectance', slider(0, 1, 0.01, P.reflect, v => P.reflect = v, 2).wrap));
+    body.appendChild(s);
+  }
+
+  if (o.type === 'sensor') {
+    const s = section('Sensor');
+    s.appendChild(row('Length', slider(40, 700, 2, P.width, v => P.width = v, 0).wrap));
+    s.appendChild(row('Blocks light', toggleEl(P.block, v => P.block = v)));
+    body.appendChild(s);
+    const s3 = section('Spectral power');
+    const rd = el('div', 'readout');
+    const sc = document.createElement('canvas');
+    sc.width = 560; sc.height = 172;
+    rd.appendChild(sc);
+    const grid = el('div', 'rgrid');
+    const c1 = el('div', 'rcell'); c1.appendChild(el('div', 'k', 'Irradiance')); const v1 = el('div', 'v'); c1.appendChild(v1);
+    const c2 = el('div', 'rcell'); c2.appendChild(el('div', 'k', 'Peak λ')); const v2 = el('div', 'v'); c2.appendChild(v2);
+    const c3 = el('div', 'rcell'); c3.appendChild(el('div', 'k', 'Luminous flux')); const v3 = el('div', 'v'); c3.appendChild(v3);
+    const c4 = el('div', 'rcell'); c4.appendChild(el('div', 'k', 'Colour')); const v4 = el('div', 'v'); c4.appendChild(v4);
+    grid.appendChild(c1); grid.appendChild(c2); grid.appendChild(c3); grid.appendChild(c4);
+    rd.appendChild(grid);
+    s3.appendChild(rd);
+    body.appendChild(s3);
+    body.appendChild(el('div', 'hint', 'Bars are the incident spectrum weighted by\nthe cosine of incidence. Flux uses the CIE\nphotopic curve, Km = 683 lm/W.'));
+    sensorCanvas = sc; sensorObj = o;
+    o._cells = { v1, v2, v3, v4 };
+  }
+
+  const act = el('div', 'p-actions');
+  const dup = el('button', 'btn', 'Duplicate');
+  dup.addEventListener('click', () => {
+    const c = JSON.parse(JSON.stringify(o));
+    c.id = uid(); c.x += 34; c.y += 34;
+    c.hist = new Float64Array(48); c.total = 0;
+    objects.push(attachPhysics(c));
+    state.selected = c.id;
+    buildPanel();
+  });
+  const del = el('button', 'btn danger', 'Delete');
+  del.addEventListener('click', () => {
+    objects = objects.filter(x => x.id !== o.id);
+    state.selected = null;
+    buildPanel();
+  });
+  act.appendChild(dup); act.appendChild(del);
+  body.appendChild(act);
+  panel.appendChild(body);
+}
+
+function drawSensorReadout() {
+  const o = sensorObj;
+  if (!o || !sensorCanvas) return;
+  const g = sensorCanvas.getContext('2d');
+  const W = sensorCanvas.width, H = sensorCanvas.height;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#0C1015'; g.fillRect(0, 0, W, H);
+  const n = 48;
+  let max = 1e-6;
+  for (let i = 0; i < n; i++) max = Math.max(max, o.hist[i]);
+  const bw = W / n;
+  for (let i = 0; i < n; i++) {
+    const h = (o.hist[i] / max) * (H - 26);
+    g.fillStyle = wlCss(LAM_MIN + (LAM_MAX - LAM_MIN) * (i + .5) / n);
+    g.fillRect(i * bw + 1, H - 22 - h, bw - 2, h);
+    g.fillStyle = 'rgba(255,255,255,.05)';
+    g.fillRect(i * bw + 1, H - 22, bw - 2, 3);
+  }
+  g.fillStyle = 'rgba(140,160,182,.6)';
+  g.font = '500 17px "IBM Plex Mono", monospace';
+  for (const wl of [400, 500, 600, 700]) {
+    const x = (wl - LAM_MIN) / (LAM_MAX - LAM_MIN) * W;
+    g.fillText(String(wl), clamp(x - 12, 2, W - 30), H - 5);
+  }
+  if (!o._cells) return;
+  const lum = 683 * (() => {
+    let s = 0;
+    for (let i = 0; i < n; i++) {
+      const wl = LAM_MIN + (LAM_MAX - LAM_MIN) * (i + .5) / n;
+      s += o.hist[i] * vLambda(wl);
+    }
+    return s;
+  })();
+  let r = 0, gg = 0, b = 0, tot = 0, peakI = 0, peakV = 0;
+  for (let i = 0; i < n; i++) {
+    const wl = LAM_MIN + (LAM_MAX - LAM_MIN) * (i + .5) / n;
+    const v = o.hist[i], c = specRGB(wl);
+    r += c[0] * v; gg += c[1] * v; b += c[2] * v; tot += v;
+    if (v > peakV) { peakV = v; peakI = wl; }
+  }
+  const m = Math.max(r, gg, b, 1e-6);
+  o._cells.v1.innerHTML = `${o.total.toFixed(2)} <small>rel.</small>`;
+  o._cells.v2.innerHTML = o.total > 0.001 ? `${peakI.toFixed(0)} <small>nm</small>` : '—';
+  o._cells.v3.innerHTML = o.total > 0.001 ? `${(lum * 40).toFixed(1)} <small>lm</small>` : '—';
+  o._cells.v4.innerHTML = `<span style="display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;background:${o.total > 0.001 ? `rgb(${Math.round(r / m * 255)},${Math.round(gg / m * 255)},${Math.round(b / m * 255)})` : '#1A2029'}"></span>`;
+}
+
+const TITLE = {
+  flashlight: 'Flashlight', laser: 'Laser', mirror: 'Mirror', lens: 'Lens', prism: 'Prism',
+  polarizer: 'Polarizer', grating: 'Diffraction grating', glass: 'Colored glass',
+  blocker: 'Light blocker', sensor: 'Sensor'
+};
+
+/* ------------------------------ mouse ------------------------------ */
+let panning = false, panStart = null, camStart = null;
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const w = toWorld(px, py);
+  const o = objects.find(x => x.id === state.selected);
+  // rotation handle
+  if (o) {
+    const R = rad(o.rot), cs = Math.cos(R), sn = Math.sin(R);
+    const b = bboxOf(o);
+    const hx = o.x + 0 * cs - (b.y0 - 30) * sn, hy = o.y + 0 * sn + (b.y0 - 30) * cs;
+    if (Math.hypot(w.x - hx, w.y - hy) < 12 / state.cam.zoom) {
+      state.drag = { mode: 'rotate', obj: o, start: Math.atan2(w.y - o.y, w.x - o.x), r0: o.rot };
+      cv.setPointerCapture(e.pointerId);
+      return;
+    }
+  }
+  const hit = pick(w.x, w.y);
+  if (hit) {
+    state.selected = hit.id;
+    state.drag = { mode: 'move', obj: hit, dx: w.x - hit.x, dy: w.y - hit.y };
+    buildPanel();
+    cv.setPointerCapture(e.pointerId);
+  } else {
+    state.selected = null;
+    buildPanel();
+    panning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    camStart = { x: state.cam.x, y: state.cam.y };
+    cv.setPointerCapture(e.pointerId);
+    cv.style.cursor = 'grabbing';
+  }
+});
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect();
+  const w = toWorld(e.clientX - r.left, e.clientY - r.top);
+  if (state.drag) {
+    const o = state.drag.obj;
+    if (state.drag.mode === 'move') { o.x = w.x - state.drag.dx; o.y = w.y - state.drag.dy; }
+    else {
+      const a = Math.atan2(w.y - o.y, w.x - o.x);
+      o.rot = state.drag.r0 + deg(a - state.drag.start);
+    }
+    return;
+  }
+  if (panning) {
+    state.cam.x = camStart.x + (e.clientX - panStart.x);
+    state.cam.y = camStart.y + (e.clientY - panStart.y);
+    return;
+  }
+  cv.style.cursor = pick(w.x, w.y) ? 'move' : 'crosshair';
+});
+function endDrag(e) {
+  if (state.drag) {
+    state.drag = null;
+    buildPanel();
+  }
+  if (panning) { panning = false; cv.style.cursor = 'crosshair'; }
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top;
+  const before = toWorld(px, py);
+  const f = Math.exp(-e.deltaY * 0.0015);
+  state.cam.zoom = clamp(state.cam.zoom * f, 0.25, 4);
+  state.cam.x = px - before.x * state.cam.zoom;
+  state.cam.y = py - before.y * state.cam.zoom;
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT') return;
+  const o = objects.find(x => x.id === state.selected);
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (o) { objects = objects.filter(x => x.id !== o.id); state.selected = null; buildPanel(); }
+    e.preventDefault();
+  } else if (e.key === 'r' || e.key === 'R') {
+    if (o) { o.rot += e.shiftKey ? -15 : 15; buildPanel(); }
+  } else if (e.key === 'd' || e.key === 'D') {
+    if (o) {
+      const c = JSON.parse(JSON.stringify(o));
+      c.id = uid(); c.x += 34; c.y += 34; c.hist = new Float64Array(48); c.total = 0;
+      objects.push(attachPhysics(c)); state.selected = c.id; buildPanel();
+    }
+  } else if (e.key === 'Escape') { state.selected = null; buildPanel(); }
+});
+
+/* ------------------------------ controls ------------------------------ */
+document.getElementById('exposure').addEventListener('input', e => {
+  state.exposure = +e.target.value;
+  document.getElementById('exposureVal').textContent = state.exposure.toFixed(2);
+});
+document.getElementById('quality').addEventListener('change', e => {
+  state.quality = e.target.value;
+});
+document.getElementById('gridToggle').addEventListener('click', e => {
+  state.grid = !state.grid;
+  e.currentTarget.classList.toggle('on', state.grid);
+});
+document.getElementById('resetScene').addEventListener('click', () => {
+  defaultScene(); buildPanel();
+  state.cam = { x: 0, y: 0, zoom: 1 };
+});
+document.getElementById('clearScene').addEventListener('click', () => {
+  emptyScene(); buildPanel();
+});
+document.querySelectorAll('.tool').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const type = btn.dataset.add;
+    const w = cv.width / DPR, h = cv.height / DPR;
+    const c = toWorld(w / 2, h / 2);
+    const o = makeObj(type, c.x, c.y, 0);
+    if (type === 'sensor') o.rot = 0;
+    objects.push(o);
+    state.selected = o.id;
+    buildPanel();
+  });
+});
+
+/* ------------------------------ boot ------------------------------ */
+defaultScene();
+resize();
+buildPanel();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

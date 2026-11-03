@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPECTRA · BENCH — Spectral Ray Optics Sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E12; --panel:#11161C; --raised:#161C24; --line:#212A33;
+    --text:#DCE4EC; --muted:#8593A1; --dim:#5C6B78;
+    --accent:#4CD7E8; --warm:#FFB454; --danger:#FF6B6B;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--disp); font-size:13px; overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{
+    display:grid;
+    grid-template-columns:78px 1fr 340px;
+    grid-template-rows:58px 1fr;
+    height:100vh;
+  }
+  /* ---------- top bar ---------- */
+  #topbar{
+    grid-column:1/4; display:flex; align-items:center; gap:22px;
+    padding:0 18px; background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:11px; min-width:212px}
+  .brand svg{width:30px; height:30px; flex:none}
+  .brand-name{font-size:14px; font-weight:700; letter-spacing:.22em; line-height:1.1}
+  .brand-sub{font-family:var(--mono); font-size:9px; letter-spacing:.19em; color:var(--dim); text-transform:uppercase; margin-top:2px}
+  .ctrls{display:flex; align-items:center; gap:20px; flex:1; min-width:0}
+  .ctl{display:flex; align-items:center; gap:9px}
+  .ml{font-family:var(--mono); font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); white-space:nowrap}
+  .num{font-family:var(--mono); font-size:11px; color:var(--text); font-variant-numeric:tabular-nums; min-width:44px}
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; background:transparent; height:18px; width:112px; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:2px; background:var(--line); border-radius:2px}
+  input[type=range]::-moz-range-track{height:2px; background:var(--line); border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:12px; height:12px; border-radius:50%;
+    background:var(--accent); margin-top:-5px; border:0; transition:transform .12s cubic-bezier(.2,.7,.3,1);
+  }
+  input[type=range]::-moz-range-thumb{width:12px; height:12px; border-radius:50%; background:var(--accent); border:0}
+  input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.22)}
+  input[type=range]:focus-visible{outline:1px solid var(--accent); outline-offset:3px}
+  .btn{
+    font-family:var(--mono); font-size:10px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--text); background:var(--raised); border:1px solid var(--line);
+    padding:8px 13px; border-radius:3px; cursor:pointer;
+    transition:background .12s ease, border-color .12s ease, color .12s ease;
+  }
+  .btn:hover{background:#1D242D; border-color:#2C3742}
+  .btn.ghost{background:transparent; color:var(--muted)}
+  .btn.ghost:hover{color:var(--text)}
+  .btn.danger:hover{color:var(--danger); border-color:#44262A}
+  .btn:focus-visible{outline:1px solid var(--accent); outline-offset:2px}
+  /* ---------- rail ---------- */
+  #rail{
+    background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center; padding:12px 0 10px; gap:3px;
+    overflow-y:auto;
+  }
+  #rail::-webkit-scrollbar{width:0}
+  .tool{
+    width:60px; height:52px; border:0; background:transparent; border-radius:4px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+    color:var(--dim); cursor:pointer; position:relative;
+    transition:color .12s ease, background .12s ease;
+  }
+  .tool svg{width:21px; height:21px; stroke:currentColor; fill:none; stroke-width:1.35; stroke-linecap:round; stroke-linejoin:round}
+  .tool span{font-family:var(--mono); font-size:8px; letter-spacing:.1em; text-transform:uppercase}
+  .tool:hover{color:var(--text); background:#171E26}
+  .tool.active{color:var(--accent); background:#12222A}
+  .tool.active::before{content:''; position:absolute; left:0; top:11px; bottom:11px; width:2px; background:var(--accent); border-radius:0 2px 2px 0}
+  .tool:focus-visible{outline:1px solid var(--accent); outline-offset:-2px}
+  .rail-sep{width:34px; height:1px; background:var(--line); margin:9px 0}
+  /* ---------- stage ---------- */
+  #stage{position:relative; overflow:hidden; background:var(--bg)}
+  #view{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:crosshair}
+  #hint{
+    position:absolute; left:16px; bottom:14px; font-family:var(--mono); font-size:10px;
+    letter-spacing:.09em; color:var(--dim); pointer-events:none;
+  }
+  #zoom{
+    position:absolute; right:16px; bottom:14px; font-family:var(--mono); font-size:10px;
+    color:var(--dim); pointer-events:none; font-variant-numeric:tabular-nums;
+  }
+  /* ---------- panel ---------- */
+  #panel{background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; overflow-x:hidden}
+  #panel::-webkit-scrollbar{width:8px}
+  #panel::-webkit-scrollbar-thumb{background:#1D242D; border-radius:4px}
+  #panel::-webkit-scrollbar-track{background:transparent}
+  .p-sec{padding:18px 20px; border-bottom:1px solid var(--line)}
+  .p-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:4px}
+  .p-title{font-size:16px; font-weight:700; letter-spacing:.01em}
+  .p-type{font-family:var(--mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent)}
+  .p-note{font-family:var(--mono); font-size:10px; line-height:1.65; color:var(--dim); margin:6px 0 0}
+  .field{padding:16px 20px; border-bottom:1px solid var(--line)}
+  .field:last-child{border-bottom:0}
+  .f-top{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:9px}
+  .f-val{font-family:var(--mono); font-size:12px; color:var(--text); font-variant-numeric:tabular-nums}
+  .f-val u{color:var(--dim); text-decoration:none; font-size:9px; letter-spacing:.08em; margin-left:3px}
+  .field input[type=range]{width:100%}
+  .seg{display:flex; gap:4px}
+  .seg button{
+    flex:1; font-family:var(--mono); font-size:9px; letter-spacing:.11em; text-transform:uppercase;
+    padding:8px 4px; background:var(--raised); border:1px solid var(--line); color:var(--muted);
+    border-radius:3px; cursor:pointer; transition:all .12s ease;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:#12222A; border-color:#2A4A55; color:var(--accent)}
+  select{
+    width:100%; font-family:var(--mono); font-size:11px; color:var(--text);
+    background:var(--raised); border:1px solid var(--line); border-radius:3px; padding:9px 10px; cursor:pointer;
+  }
+  select:focus-visible{outline:1px solid var(--accent); outline-offset:1px}
+  .xy{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .xy .field{border:0; padding:0}
+  .spec-band{padding:16px 20px 18px; border-bottom:1px solid var(--line)}
+  .spec-canvas-wrap{position:relative; margin-top:10px; border:1px solid var(--line); border-radius:3px; overflow:hidden; background:#0A0D11}
+  #specCanvas{display:block; width:100%; height:104px; cursor:ns-resize}
+  .spec-axis{display:flex; justify-content:space-between; font-family:var(--mono); font-size:8px; color:var(--dim); letter-spacing:.08em; margin-top:5px}
+  .chips{display:flex; flex-wrap:wrap; gap:5px; margin-top:11px}
+  .chip{
+    font-family:var(--mono); font-size:9px; letter-spacing:.07em; padding:6px 9px; border-radius:3px;
+    background:var(--raised); border:1px solid var(--line); color:var(--muted); cursor:pointer; transition:all .12s ease;
+  }
+  .chip:hover{color:var(--text); border-color:#2C3742}
+  .chip.on{color:var(--warm); border-color:#4A3A22; background:#1D1810}
+  .objlist{display:flex; flex-direction:column}
+  .objrow{
+    display:flex; align-items:center; gap:10px; padding:9px 20px; cursor:pointer;
+    border-left:2px solid transparent; transition:background .12s ease;
+  }
+  .objrow:hover{background:#151B23}
+  .objrow.sel{background:#12222A; border-left-color:var(--accent)}
+  .objrow .dot{width:6px; height:6px; border-radius:50%; flex:none}
+  .objrow .nm{flex:1; font-size:12px}
+  .objrow .sp{font-family:var(--mono); font-size:9px; color:var(--dim); letter-spacing:.08em}
+  .sensor-grid{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line); border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .sensor-cell{background:var(--panel); padding:13px 20px}
+  .sensor-cell .k{font-family:var(--mono); font-size:8px; letter-spacing:.15em; text-transform:uppercase; color:var(--dim)}
+  .sensor-cell .v{font-family:var(--mono); font-size:17px; margin-top:4px; font-variant-numeric:tabular-nums}
+  .sensor-cell .v u{font-size:9px; color:var(--dim); text-decoration:none; margin-left:3px; letter-spacing:.08em}
+  #sensorSpec{display:block; width:100%; height:78px}
+  .row-btns{display:flex; gap:7px; padding:16px 20px}
+  .row-btns .btn{flex:1; text-align:center}
+  .kbd{font-family:var(--mono); font-size:9px; color:var(--dim); letter-spacing:.06em}
+  .kbd b{color:var(--muted); font-weight:500}
+  @media (max-width:1080px){
+    #app{grid-template-columns:70px 1fr 300px}
+    .brand{min-width:150px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M16 5 L27 24 H5 Z" fill="none" stroke="#4CD7E8" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M2 15 H11" stroke="#DCE4EC" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M20.5 17 L30 12" stroke="#FF6B6B" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M21 19 L30.5 16" stroke="#FFB454" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M21.5 21 L30 21" stroke="#4CD7E8" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M21.8 23 L29.5 25.5" stroke="#7B8CFF" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="brand-name">SPECTRA</div>
+        <div class="brand-sub">Bench · Ray Optics</div>
+      </div>
+    </div>
+    <div class="ctrls">
+      <label class="ctl"><span class="ml">Ray density</span><input type="range" id="gq" min="40" max="400" step="20" value="160"><span class="num" id="gqv">160</span></label>
+      <label class="ctl"><span class="ml">Exposure</span><input type="range" id="ge" min="-1" max="1.3" step="0.05" value="0"><span class="num" id="gev">1.0×</span></label>
+      <div style="flex:1"></div>
+      <button class="btn ghost" id="clearBtn">Clear all</button>
+      <button class="btn" id="resetBtn">Reset scene</button>
+    </div>
+  </header>
+
+  <nav id="rail"></nav>
+
+  <main id="stage">
+    <canvas id="view"></canvas>
+    <div id="hint"></div>
+    <div id="zoom">100%</div>
+  </main>
+
+  <aside id="panel"><div id="panelBody"></div></aside>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   SPECTRA · BENCH
+   2D spectral ray optics: CIE colour, Sellmeier dispersion,
+   Fresnel + Snell, grating equation, Gaussian beam divergence.
+   ============================================================ */
+
+const LMIN = 380, LMAX = 780, NBIN = 20;
+const DEG = Math.PI / 180;
+
+/* ---------------- 1. COLOUR SCIENCE (CIE 1931 2°, Wyman fit) -------- */
+function cieFit(w){
+  let t1 = (w - 442.0) * ((w < 442.0) ? 0.0624 : 0.0374);
+  let t2 = (w - 599.8) * ((w < 599.8) ? 0.0264 : 0.0323);
+  let t3 = (w - 501.1) * ((w < 501.1) ? 0.0490 : 0.0382);
+  const x = 0.362 * Math.exp(-0.5 * t1 * t1) + 1.056 * Math.exp(-0.5 * t2 * t2) - 0.065 * Math.exp(-0.5 * t3 * t3);
+  t1 = (w - 568.8) * ((w < 568.8) ? 0.0213 : 0.0247);
+  t2 = (w - 530.9) * ((w < 530.9) ? 0.0613 : 0.0322);
+  const y = 0.821 * Math.exp(-0.5 * t1 * t1) + 0.286 * Math.exp(-0.5 * t2 * t2);
+  t1 = (w - 437.0) * ((w < 437.0) ? 0.0845 : 0.0278);
+  t2 = (w - 459.0) * ((w < 459.0) ? 0.0385 : 0.0725);
+  const z = 1.217 * Math.exp(-0.5 * t1 * t1) + 0.681 * Math.exp(-0.5 * t2 * t2);
+  return [x, y, z];
+}
+function xyzToLinear(x, y, z){
+  return [
+     3.2406 * x - 1.5372 * y - 0.4986 * z,
+    -0.9689 * x + 1.8758 * y + 0.0415 * z,
+     0.0557 * x - 0.2040 * y + 1.0570 * z
+  ];
+}
+function srgb(c){
+  c = Math.max(0, c);
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(Math.min(1, c), 1 / 2.4) - 0.055;
+}
+function rgbCss(r, g, b, a){
+  return 'rgba(' + Math.round(Math.max(0, Math.min(1, r)) * 255) + ',' +
+                   Math.round(Math.max(0, Math.min(1, g)) * 255) + ',' +
+                   Math.round(Math.max(0, Math.min(1, b)) * 255) + ',' + (a === undefined ? 1 : a) + ')';
+}
+/* per-bin linear RGB for unit radiometric power (CIE luminous weighting included) */
+const BIN_NM = [], BIN_RGB = [];
+for (let i = 0; i < NBIN; i++){
+  const nm = LMIN + (i + 0.5) * (LMAX - LMIN) / NBIN;
+  const c = cieFit(nm);
+  BIN_NM.push(nm);
+  BIN_RGB.push(xyzToLinear(c[0], c[1], c[2]));
+}
+function wlToRgb(nm, bright){
+  const c = xyzToLinear.apply(null, cieFit(nm));
+  const m = Math.max(c[0], c[1], c[2], 1e-5);
+  const k = (bright === undefined ? 1 : bright) / m;
+  return [srgb(c[0] * k), srgb(c[1] * k), srgb(c[2] * k)];
+}
+/* spectral weights -> display colour, hue-preserving tone map */
+function specColor(spec, dens, exposure){
+  let r = 0, g = 0, b = 0;
+  for (let i = 0; i < NBIN; i++){
+    const w = spec[i];
+    if (w > 0){ r += w * BIN_RGB[i][0]; g += w * BIN_RGB[i][1]; b += w * BIN_RGB[i][2]; }
+  }
+  const m = Math.max(r, g, b, 1e-6);
+  /* dens is radiant power per mm of beam width (mW/mm); 0.7 maps it to a
+     comfortable display range, the exponential is the photographic tone curve */
+  const f = (1 - Math.exp(-0.7 * exposure * dens * m)) / m;
+  return [srgb(r * f), srgb(g * f), srgb(b * f)];
+}
+
+/* ---------------- 2. SPECTRA ---------------- */
+function evalSpectrum(knots, nm){
+  if (nm <= knots[0].nm) return knots[0].v;
+  const last = knots[knots.length - 1];
+  if (nm >= last.nm) return last.v;
+  for (let i = 1; i < knots.length; i++){
+    const a = knots[i - 1], b = knots[i];
+    if (nm <= b.nm){
+      const t = (nm - a.nm) / (b.nm - a.nm);
+      return a.v + (b.v - a.v) * t;
+    }
+  }
+  return 0;
+}
+function sampleSpectrum(knots){
+  const w = new Float32Array(NBIN);
+  let sum = 0;
+  for (let i = 0; i < NBIN; i++){
+    const v = Math.max(0, evalSpectrum(knots, BIN_NM[i]));
+    w[i] = v; sum += v;
+  }
+  if (sum <= 0){ w.fill(1 / NBIN); sum = 1; }
+  for (let i = 0; i < NBIN; i++) w[i] /= sum;
+  return w;
+}
+/* monochromatic spectrum projected onto the two nearest wavelength bins */
+function monoSpec(wl){
+  const step = (LMAX - LMIN) / NBIN;
+  const t = (wl - LMIN) / step - 0.5;
+  const i0 = Math.floor(t), f = t - i0;
+  const s = new Float32Array(NBIN);
+  const a = Math.max(0, Math.min(NBIN - 1, i0));
+  const b = Math.max(0, Math.min(NBIN - 1, i0 + 1));
+  if (a === b) s[a] = 1;
+  else { s[a] = 1 - f; s[b] = f; }
+  return s;
+}
+/* laser line: narrow lines are exact, broad lines are sampled across bins */
+function laserSpec(o){
+  const sigma = Math.max(0.004, o.linewidth / 2.3548);
+  if (sigma < 3) return monoSpec(o.wl);
+  const ks = [];
+  for (let nm = LMIN; nm <= LMAX; nm += (LMAX - LMIN) / 80)
+    ks.push({ nm: nm, v: gauss(nm, o.wl, sigma, 1) });
+  return sampleSpectrum(ks);
+}
+function planck(nm, T){
+  const l = nm * 1e-9;
+  const h = 6.62607015e-34, c = 2.99792458e8, k = 1.380649e-23;
+  return (2 * h * c * c) / Math.pow(l, 5) / (Math.exp(h * c / (l * k * T)) - 1);
+}
+function planckKnots(T, scale){
+  const ks = [];
+  for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: planck(nm, T) * scale });
+  const mx = Math.max.apply(null, ks.map(k => k.v));
+  return ks.map(k => ({ nm: k.nm, v: Math.min(1, k.v / mx) }));
+}
+function knotsFrom(vals, step){
+  return vals.map((v, i) => ({ nm: LMIN + i * step, v: v }));
+}
+const gauss = (nm, c, s, a) => a * Math.exp(-0.5 * Math.pow((nm - c) / s, 2));
+
+function presetSpectrum(name){
+  switch(name){
+    case 'White LED': {
+      const ks = [];
+      for (let nm = LMIN; nm <= LMAX; nm += 30)
+        ks.push({ nm: nm, v: Math.min(1, gauss(nm, 452, 11, 0.92) + gauss(nm, 585, 62, 0.72) + 0.02) });
+      return ks;
+    }
+    case 'Sunlight': return planckKnots(5778, 1);
+    case 'Incandescent': return planckKnots(2856, 1);
+    case 'Halogen': return planckKnots(3200, 1);
+    case 'Fluorescent': {
+      const ks = [];
+      for (let nm = LMIN; nm <= LMAX; nm += 20)
+        ks.push({ nm: nm, v: Math.min(1, 0.16 + gauss(nm, 405, 6, 0.85) + gauss(nm, 436, 6, 0.75) +
+          gauss(nm, 546, 7, 1.0) + gauss(nm, 588, 9, 0.55) + gauss(nm, 615, 12, 0.35)) });
+      return ks;
+    }
+    case 'Sodium': {
+      const ks = [];
+      for (let nm = LMIN; nm <= LMAX; nm += 20)
+        ks.push({ nm: nm, v: Math.min(1, gauss(nm, 589, 4, 1) + gauss(nm, 589.6, 5, 0.55) + 0.02) });
+      return ks;
+    }
+    case 'RGB LED': {
+      const ks = [];
+      for (let nm = LMIN; nm <= LMAX; nm += 20)
+        ks.push({ nm: nm, v: Math.min(1, gauss(nm, 452, 13, 0.9) + gauss(nm, 525, 17, 0.85) + gauss(nm, 630, 17, 0.9)) });
+      return ks;
+    }
+    case 'Green 550': {
+      const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 20) ks.push({ nm: nm, v: gauss(nm, 550, 6, 1) }); return ks;
+    }
+    case 'Candle': return planckKnots(1900, 1);
+  }
+  return planckKnots(5778, 1);
+}
+function presetGlass(name){
+  switch(name){
+    case 'Clear': { const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: 0.94 }); return ks; }
+    case 'Amber': { const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: Math.min(1, 0.03 + 0.95 / (1 + Math.exp((520 - nm) / 22))) }); return ks; }
+    case 'Blue': { const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: Math.min(1, 0.02 + 0.95 / (1 + Math.exp((470 - nm) / 26))) * (1 - 0.65 / (1 + Math.exp((620 - nm) / 26))) }); return ks; }
+    case 'Red filter': { const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: 0.02 + 0.96 / (1 + Math.exp((590 - nm) / 16)) }); return ks; }
+    case 'Green filter': { const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: 0.02 + 0.96 * Math.exp(-0.5 * Math.pow((nm - 530) / 55, 2)) }); return ks; }
+    case 'IR blocker': { const ks = []; for (let nm = LMIN; nm <= LMAX; nm += 40) ks.push({ nm: nm, v: 0.9 - 0.25 / (1 + Math.exp((640 - nm) / 30)) }); return ks; }
+  }
+  return presetGlass('Clear');
+}
+const SOURCE_PRESETS = ['White LED','Sunlight','Incandescent','Halogen','Fluorescent','Sodium','RGB LED','Green 550','Candle'];
+const GLASS_PRESETS = ['Clear','Amber','Blue','Red filter','Green filter','IR blocker'];
+
+/* ---------------- 3. REFRACTIVE MATERIALS ---------------- */
+const MATERIALS = {
+  'BK7':        { sellmeier: [[1.03961212,0.231792344,1.01046945],[0.00600069867,0.0200179144,103.560653]] },
+  'SF10':       { sellmeier: [[1.62153902,0.256287842,1.64447552],[0.0122241457,0.0595736775,147.468793]] },
+  'Fused silica':{ sellmeier: [[0.6961663,0.4079426,0.8974794],[0.00684043,0.1162414,9.896161]] },
+  'Sapphire':   { sellmeier: [[1.43134930,0.65054713,5.3414021],[0.0052799261,0.0142382647,325.017834]] },
+  'Water':      { cauchy: [1.324, 0.0032] },
+  'Acrylic':    { cauchy: [1.485, 0.0042] },
+  'Diamond':    { cauchy: [2.386, 0.0112] }
+};
+function nOf(mat, nm){
+  const m = MATERIALS[mat] || MATERIALS['BK7'];
+  const l = nm / 1000;
+  if (m.sellmeier){
+    const B = m.sellmeier[0], C = m.sellmeier[1];
+    let s = 1;
+    for (let i = 0; i < 3; i++) s += B[i] * l * l / (l * l - C[i]);
+    return Math.sqrt(Math.max(1.0001, s));
+  }
+  const l2 = l * l;
+  return m.cauchy[0] + m.cauchy[1] / l2;
+}
+
+/* ---------------- 4. GEOMETRY / OPTICS HELPERS ---------------- */
+function norm(v){ const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; }
+function reflect(I, N){
+  const d = I[0] * N[0] + I[1] * N[1];
+  return [I[0] - 2 * d * N[0], I[1] - 2 * d * N[1]];
+}
+function refract(I, N, n1, n2){
+  let nx = N[0], ny = N[1];
+  let ci = I[0] * nx + I[1] * ny;
+  if (ci > 0){ nx = -nx; ny = -ny; ci = -ci; }
+  const eta = n1 / n2;
+  const k = 1 - eta * eta * (1 - ci * ci);
+  if (k < 0) return null;
+  const f = eta * ci - Math.sqrt(k);
+  return norm([eta * I[0] + f * nx, eta * I[1] + f * ny]);
+}
+function fresnel(I, N, n1, n2, pol){
+  let ci = I[0] * N[0] + I[1] * N[1];
+  ci = Math.abs(ci);
+  const si2 = (n1 / n2) * (n1 / n2) * (1 - ci * ci);
+  if (si2 >= 1) return 1;
+  const ct = Math.sqrt(1 - si2);
+  const rs = (n1 * ci - n2 * ct) / (n1 * ci + n2 * ct);
+  const rp = (n1 * ct - n2 * ci) / (n1 * ct + n2 * ci);
+  const Rs = rs * rs, Rp = rp * rp;
+  if (pol === null || pol === undefined) return 0.5 * (Rs + Rp);
+  /* pol angle: 0 -> p (in plane), 90deg -> s (out of plane) */
+  const wp = Math.cos(pol) * Math.cos(pol), ws = Math.sin(pol) * Math.sin(pol);
+  return wp * Rp + ws * Rs;
+}
+function raySeg(ox, oy, dx, dy, ax, ay, bx, by){
+  const ex = bx - ax, ey = by - ay;
+  const den = dx * ey - dy * ex;
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((ax - ox) * ey - (ay - oy) * ex) / den;
+  const u = ((ax - ox) * dy - (ay - oy) * dx) / den;
+  if (t > 1e-6 && u >= 0 && u <= 1) return { t: t, u: u };
+  return null;
+}
+function rayCircle(ox, oy, dx, dy, cx, cy, R){
+  const fx = ox - cx, fy = oy - cy;
+  const b = 2 * (fx * dx + fy * dy);
+  const c = fx * fx + fy * fy - R * R;
+  const d = b * b - 4 * c;
+  if (d < 0) return null;
+  const s = Math.sqrt(d);
+  const t1 = (-b - s) / 2, t2 = (-b + s) / 2;
+  const out = [];
+  if (t1 > 1e-6) out.push(t1);
+  if (t2 > 1e-6) out.push(t2);
+  return out;
+}
+/* surface:  x = x0 + k*y^2/2   (optical axis = local x, transverse = local y) */
+function rayParabola(ox, oy, dx, dy, x0, k){
+  const a = k * dy * dy / 2;
+  const b = k * oy * dy - dx;
+  const c = x0 + k * oy * oy / 2 - ox;
+  const roots = [];
+  if (Math.abs(a) < 1e-12){
+    if (Math.abs(b) < 1e-12) return roots;
+    roots.push(-c / b);
+  } else {
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return roots;
+    const s = Math.sqrt(disc);
+    roots.push((-b - s) / (2 * a), (-b + s) / (2 * a));
+  }
+  return roots.filter(t => t > 1e-6);
+}
+
+/* ---------------- 5. SCENE MODEL ---------------- */
+let uid = 1;
+const DEFAULTS = {
+  flashlight: { power: 200, diverge: 8, profile: 'gaussian', radius: 12 },
+  laser:      { power: 5, wl: 632.8, linewidth: 0.02, radius: 1.0, extraDiv: 0 },
+  polarizer:  { axis: 0, aperture: 140 },
+  lens:       { shape: 'convex', focal: 260, aperture: 130, thickness: 16, glass: 'BK7' },
+  mirror:     { length: 170, reflect: 0.94 },
+  cmirror:    { radius: 420, shape: 'concave', halfAngle: 26, reflect: 0.94 },
+  grating:    { kind: 'transmission', grooves: 600, blaze: 550, maxOrder: 3, efficiency: 0.85, aperture: 130 },
+  prism:      { apex: 60, size: 160, glass: 'BK7', coating: 0, split: true },
+  glass:      { width: 70, height: 130, reflect: 0.07 },
+  blocker:    { width: 22, height: 150 },
+  sensor:     { aperture: 180 }
+};
+const TYPE_LABEL = {
+  flashlight:'Flashlight', laser:'Laser', polarizer:'Polarizer', lens:'Lens',
+  mirror:'Flat mirror', cmirror:'Curved mirror', grating:'Diffraction grating',
+  prism:'Prism', glass:'Coloured glass', blocker:'Blocker', sensor:'Sensor'
+};
+function makeObject(type, x, y, rot){
+  const o = { id: uid++, type: type, x: x, y: y, rot: rot || 0 };
+  for (const k in DEFAULTS[type]) o[k] = DEFAULTS[type][k];
+  if (type === 'flashlight' || type === 'laser') o.spectrum = presetSpectrum(type === 'laser' ? 'Green 550' : 'White LED');
+  if (type === 'glass') o.spectrum = presetGlass('Clear');
+  if (type === 'sensor') o.acc = { power: 0, bins: new Float32Array(NBIN) };
+  return o;
+}
+function toW(o, lx, ly){ const c = Math.cos(o.rot), s = Math.sin(o.rot); return [o.x + lx * c - ly * s, o.y + lx * s + ly * c]; }
+function dirW(o, lx, ly){ const c = Math.cos(o.rot), s = Math.sin(o.rot); return [lx * c - ly * s, lx * s + ly * c]; }
+function toL(o, wx, wy){ const c = Math.cos(-o.rot), s = Math.sin(-o.rot); const dx = wx - o.x, dy = wy - o.y; return [dx * c - dy * s, dx * s + dy * c]; }
+function dirL(o, wx, wy){ const c = Math.cos(-o.rot), s = Math.sin(-o.rot); return [wx * c - wy * s, wx * s + wy * c]; }
+
+function prismVerts(o){
+  const W = o.size, A = o.apex * DEG;
+  const H = (W / 2) / Math.tan(A / 2);
+  return [[0, -2 * H / 3], [-W / 2, H / 3], [W / 2, H / 3]];
+}
+function localBounds(o){
+  switch(o.type){
+    case 'flashlight': return { x0: -42, x1: 26, y0: -o.radius - 8, y1: o.radius + 8 };
+    case 'laser': return { x0: -26, x1: 16, y0: -12, y1: 12 };
+    case 'polarizer': return { x0: -7, x1: 7, y0: -o.aperture / 2, y1: o.aperture / 2 };
+    case 'lens': return { x0: -o.thickness, x1: o.thickness, y0: -o.aperture / 2, y1: o.aperture / 2 };
+    case 'mirror': return { x0: -9, x1: 9, y0: -o.length / 2, y1: o.length / 2 };
+    case 'cmirror': {
+      const mag = Math.abs(o.radius);
+      const ext = mag * (1 - Math.cos(o.halfAngle * DEG));
+      const half = mag * Math.sin(o.halfAngle * DEG) + 12;
+      return o.shape === 'concave'
+        ? { x0: -ext - 14, x1: 14, y0: -half, y1: half }
+        : { x0: -14, x1: ext + 14, y0: -half, y1: half };
+    }
+    case 'grating': return { x0: -9, x1: 9, y0: -o.aperture / 2, y1: o.aperture / 2 };
+    case 'prism': { const v = prismVerts(o); return { x0: Math.min(v[0][0],v[1][0],v[2][0]) - 8, x1: Math.max(v[0][0],v[1][0],v[2][0]) + 8, y0: Math.min(v[0][1],v[1][1],v[2][1]) - 8, y1: Math.max(v[0][1],v[1][1],v[2][1]) + 8 }; }
+    case 'glass': return { x0: -o.width / 2, x1: o.width / 2, y0: -o.height / 2, y1: o.height / 2 };
+    case 'blocker': return { x0: -o.width / 2, x1: o.width / 2, y0: -o.height / 2, y1: o.height / 2 };
+    case 'sensor': return { x0: -6, x1: 10, y0: -o.aperture / 2, y1: o.aperture / 2 };
+  }
+  return { x0: -20, x1: 20, y0: -20, y1: 20 };
+}
+
+/* ---------------- 6. RAY TRACER ---------------- */
+const MAX_SEG = 14000, MAX_DEPTH = 14;
+let SEGS = [];
+let exposure = 1.0, rayDensity = 160, truncated = false;
+
+function pushSeg(x1, y1, x2, y2, spec, dens){
+  if (SEGS.length >= MAX_SEG){ truncated = true; return; }
+  SEGS.push({ x1: x1, y1: y1, x2: x2, y2: y2, c: specColor(spec, dens, exposure), d: dens });
+}
+function splitBands(spec, maxBands){
+  const idx = [];
+  for (let i = 0; i < NBIN; i++) if (spec[i] > 2e-3) idx.push(i);
+  if (idx.length <= 1){
+    const wl = idx.length ? BIN_NM[idx[0]] : 550;
+    return [{ wl: wl, spec: spec, frac: 1 }];
+  }
+  const nb = Math.min(maxBands, idx.length), out = [];
+  for (let b = 0; b < nb; b++){
+    const s = Math.floor(b * idx.length / nb), e = Math.floor((b + 1) * idx.length / nb);
+    let sum = 0, wlsum = 0;
+    const sp = new Float32Array(NBIN);
+    for (let i = s; i < e; i++){ const k = idx[i]; sp[k] = spec[k]; sum += spec[k]; wlsum += spec[k] * BIN_NM[k]; }
+    if (sum <= 1e-6) continue;
+    for (let k = 0; k < NBIN; k++) sp[k] /= sum;
+    out.push({ wl: wlsum / sum, spec: sp, frac: sum });
+  }
+  return out;
+}
+function emit(o, q){
+  const N = o.type === 'laser' ? Math.max(12, Math.round(rayDensity * 0.22)) : rayDensity;
+  const spec = o.type === 'laser' ? laserSpec(o) : sampleSpectrum(o.spectrum);
+  const width = o.type === 'laser' ? Math.max(0.2, o.radius * 2) : Math.max(1, o.radius * 2);
+  let totalW = 0;
+  const items = [];
+  for (let i = 0; i < N; i++){
+    const u = (i + 0.5) / N * 2 - 1;
+    if (o.type === 'flashlight'){
+      const th = u * o.diverge * DEG;
+      const w = o.profile === 'gaussian' ? Math.exp(-2 * u * u) : 1;
+      items.push({ off: u * o.radius, ang: th, w: w });
+    } else {
+      const r = u * o.radius;
+      const w = Math.exp(-2 * (r / o.radius) * (r / o.radius));
+      /* geometric-ray model of a Gaussian beam: theta = r / zR, zR = pi*w0^2/lambda */
+      const lam = o.wl * 1e-6;              /* mm */
+      const zR = Math.PI * o.radius * o.radius / lam;
+      const thDiv = Math.hypot(o.radius / zR, (o.extraDiv || 0) / 1000);
+      items.push({ off: r, ang: u * thDiv, w: w });
+    }
+    totalW += items[i].w;
+  }
+  const dens = o.power / width;            /* mW per mm of emitter aperture */
+  for (const it of items){
+    const p = o.power * it.w / totalW;
+    const d = dirW(o, Math.cos(it.ang), Math.sin(it.ang));
+    const pos = toW(o, 0, it.off);
+    q.push({ x: pos[0], y: pos[1], dx: d[0], dy: d[1], spec: spec, power: p, dens: dens, pol: null, med: 1, depth: 0 });
+  }
+}
+
+function hitTest(o, r){
+  const L = { x: 0, y: 0, dx: 0, dy: 0 };
+  const p = toL(o, r.x, r.y), d = dirL(o, r.dx, r.dy);
+  L.x = p[0]; L.y = p[1]; L.dx = d[0]; L.dy = d[1];
+  const mk = (t, nx, ny, extra) => {
+    const wp = toW(o, L.x + t * L.dx, L.y + t * L.dy);
+    const wn = dirW(o, nx, ny);
+    return Object.assign({ t: t, p: wp, n: norm(wn) }, extra || {});
+  };
+  switch(o.type){
+    case 'mirror': case 'polarizer': case 'grating': case 'sensor': {
+      const len = (o.type === 'mirror') ? o.length / 2 : (o.type === 'sensor') ? o.aperture / 2 : o.aperture / 2;
+      const h = raySeg(L.x, L.y, L.dx, L.dy, 0, -len, 0, len);
+      if (!h) return null;
+      /* the bar lies along local y, so its normal lies along local x */
+      return mk(h.t, (L.dx > 0 ? -1 : 1), 0);
+    }
+    case 'cmirror': {
+      /* centre of curvature sits on the light side for a concave mirror */
+      const mag = Math.abs(o.radius);
+      const concave = o.shape === 'concave';
+      const Rc = concave ? -mag : mag;
+      const phi0 = concave ? 0 : Math.PI;
+      const sol = rayCircle(L.x, L.y, L.dx, L.dy, Rc, 0, mag);
+      if (!sol) return null;
+      for (const t of sol){
+        const x = L.x + t * L.dx, y = L.y + t * L.dy;
+        let d = Math.atan2(y, x - Rc) - phi0;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        if (Math.abs(d) > o.halfAngle * DEG) continue;
+        const nrm = norm([x - Rc, y]);
+        if (nrm[0] * L.dx + nrm[1] * L.dy > 0){ nrm[0] = -nrm[0]; nrm[1] = -nrm[1]; }
+        return mk(t, nrm[0], nrm[1]);
+      }
+      return null;
+    }
+    case 'lens': {
+      /* symmetric lens whose curvature is solved from the lensmaker equation */
+      const halfT = o.thickness / 2, apt = o.aperture / 2;
+      const sign = o.focal < 0 ? -1 : 1;
+      const n = nOf(o.glass, 587);
+      const R = solveRadius(Math.max(20, Math.abs(o.focal)), n, o.thickness) * sign;
+      const k1 = 1 / R, k2 = -1 / R;
+      const surf = [[-halfT, k1, 1], [halfT, k2, -1]];
+      let best = null;
+      for (let ci = 0; ci < 2; ci++){
+        const x0 = surf[ci][0], k = surf[ci][1], s = surf[ci][2];
+        for (const t of rayParabola(L.x, L.y, L.dx, L.dy, x0, k)){
+          const y = L.y + t * L.dy;
+          if (Math.abs(y) > apt) continue;
+          const nrm = norm([-s, s * y * k]);
+          if (nrm[0] * L.dx + nrm[1] * L.dy > 0){ nrm[0] = -nrm[0]; nrm[1] = -nrm[1]; }
+          if (!best || t < best.t) best = mk(t, nrm[0], nrm[1], { surf: ci });
+        }
+      }
+      return best;
+    }
+    case 'prism': case 'glass': case 'blocker': {
+      const pts = (o.type === 'prism') ? prismVerts(o)
+        : (o.type === 'glass') ? [[-o.width/2,-o.height/2],[o.width/2,-o.height/2],[o.width/2,o.height/2],[-o.width/2,o.height/2]]
+        : [[-o.width/2,-o.height/2],[o.width/2,-o.height/2],[o.width/2,o.height/2],[-o.width/2,o.height/2]];
+      let best = null;
+      for (let i = 0; i < pts.length; i++){
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        const h = raySeg(L.x, L.y, L.dx, L.dy, a[0], a[1], b[0], b[1]);
+        if (!h) continue;
+        const ex = b[0] - a[0], ey = b[1] - a[1];
+        let nx = ey / Math.hypot(ex, ey), ny = -ex / Math.hypot(ex, ey);
+        const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        if (nx * mx + ny * my < 0){ nx = -nx; ny = -ny; }
+        if (!best || h.t < best.t) best = mk(h.t, nx, ny);
+      }
+      return best;
+    }
+  }
+  return null;
+}
+function solveRadius(f, n, thick){
+  /* lensmaker with thickness: 1/f = (n-1)[2/R - (n-1)d/(n R^2)]  -> Newton on R */
+  let R = 2 * (n - 1) * f;
+  for (let i = 0; i < 40; i++){
+    const g = (n - 1) * (2 / R - (n - 1) * thick / (n * R * R)) - 1 / f;
+    const gp = (n - 1) * (-2 / (R * R) + 2 * (n - 1) * thick / (n * R * R * R));
+    if (Math.abs(gp) < 1e-12) break;
+    const step = g / gp;
+    R -= step;
+    if (!isFinite(R) || Math.abs(R) < 1) R = 2 * (n - 1) * f;
+    if (Math.abs(step) < 1e-9) break;
+  }
+  return R;
+}
+
+function trace(){
+  SEGS = [];
+  truncated = false;
+  const q = [];
+  for (const o of objects){
+    if (o.type === 'sensor') o.acc = { power: 0, bins: new Float32Array(NBIN) };
+    if (o.type === 'flashlight' || o.type === 'laser') emit(o, q);
+  }
+  let qi = 0;
+  while (qi < q.length && SEGS.length < MAX_SEG){
+    const r = q[qi++];
+    if (r.depth > MAX_DEPTH || r.power < 1e-5) continue;
+    let best = null;
+    for (const o of objects){
+      if (o.type === 'flashlight' || o.type === 'laser') continue;
+      const h = hitTest(o, r);
+      if (h && (!best || h.t < best.t)){ best = h; best.obj = o; }
+    }
+    const FAR = 6000;
+    const ex = best ? best.p[0] : r.x + r.dx * FAR;
+    const ey = best ? best.p[1] : r.y + r.dy * FAR;
+    pushSeg(r.x, r.y, ex, ey, r.spec, r.dens);
+    if (!best) continue;
+    handleHit(r, best, q);
+  }
+}
+function handleHit(r, hit, q){
+  const o = hit.obj, I = [r.dx, r.dy], N = hit.n;
+  const child = (dir, spec, power, med, pol) => {
+    if (power < 1e-5) return;
+    /* the drawn brightness follows the beam: losses and spectral splits dim it */
+    const ratio = r.power > 0 ? power / r.power : 1;
+    q.push({ x: hit.p[0] + dir[0] * 0.05, y: hit.p[1] + dir[1] * 0.05, dx: dir[0], dy: dir[1],
+             spec: spec, power: power, dens: r.dens * ratio,
+             pol: (pol === undefined ? r.pol : pol), med: med, depth: r.depth + 1 });
+  };
+  switch(o.type){
+    case 'blocker': return;
+    case 'sensor': {
+      o.acc.power += r.power;
+      for (let i = 0; i < NBIN; i++) o.acc.bins[i] += r.power * r.spec[i];
+      return;
+    }
+    case 'mirror': case 'cmirror': {
+      child(reflect(I, N), r.spec, r.power * o.reflect, r.med, r.pol);
+      return;
+    }
+    case 'polarizer': {
+      const axis = o.axis * DEG;
+      let p = r.power;
+      if (r.pol === null || r.pol === undefined) p *= 0.5;
+      else {
+        const c = Math.cos(r.pol - axis);
+        p *= c * c;
+      }
+      if (p < 1e-5) return;
+      child(I, r.spec, p, r.med, axis);
+      return;
+    }
+    case 'grating': {
+      const d = 1e6 / o.grooves;      /* nm per line */
+      const t = norm([-N[1], N[0]]);
+      const ut = I[0] * t[0] + I[1] * t[1];
+      const bands = splitBands(r.spec, 4);
+      for (const b of bands){
+        const orders = [];
+        let sum = 0;
+        for (let m = -o.maxOrder; m <= o.maxOrder; m++){
+          const ut2 = ut + m * b.wl / d;
+          if (Math.abs(ut2) > 0.9999) continue;
+          const nn = Math.sqrt(1 - ut2 * ut2);
+          /* blazed grating envelope: sinc^2, peak where m*lambda = lambda_blaze */
+          const x = m * b.wl / o.blaze - 1;
+          const sinc = Math.abs(x) < 1e-6 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x);
+          let e = sinc * sinc;
+          if (m === 0) e = Math.max(e, 0.03);
+          if (e < 1e-4) continue;
+          orders.push({ m: m, ut: ut2, nn: nn, e: e });
+          sum += e;
+        }
+        if (sum <= 0) continue;
+        for (const od of orders){
+          const nx = od.ut * t[0], ny = od.ut * t[1];
+          let dir;
+          if (o.kind === 'reflection'){
+            dir = norm([nx + od.nn * N[0], ny + od.nn * N[1]]);
+            if (dir[0] * N[0] + dir[1] * N[1] < 0){ dir = [-dir[0], -dir[1]]; }
+          } else {
+            const s = (I[0] * N[0] + I[1] * N[1]) < 0 ? -1 : 1;
+            dir = norm([nx + s * od.nn * N[0], ny + s * od.nn * N[1]]);
+          }
+          const P = r.power * b.frac * (od.e / sum) * o.efficiency;
+          child(dir, b.spec, P, r.med, r.pol);
+        }
+      }
+      return;
+    }
+    case 'glass': {
+      /* slab: Fresnel at each face, Beer-Lambert absorption applied on entry */
+      const inside = r.med > 1.001;
+      const bands = splitBands(r.spec, 5);
+      for (const b of bands){
+        const nG = nOf('BK7', b.wl);
+        const n1 = inside ? nG : 1, n2 = inside ? 1 : nG;
+        const Rw = Math.max(fresnel(I, N, n1, n2, r.pol), o.reflect);
+        const Td = refract(I, N, n1, n2);
+        child(reflect(I, N), b.spec, r.power * b.frac * Rw, r.med, r.pol);
+        if (Td){
+          const absorb = inside ? 1 : Math.max(0, evalSpectrum(o.spectrum, b.wl));
+          child(Td, b.spec, r.power * b.frac * (1 - Rw) * absorb, n2, r.pol);
+        }
+      }
+      return;
+    }
+    case 'lens': case 'prism': {
+      const mat = o.glass;
+      const inside = r.med > 1.001;
+      const nOut = inside ? 1 : null;
+      const bands = splitBands(r.spec, (o.type === 'prism') ? 8 : 5);
+      for (const b of bands){
+        const nG = nOf(mat, b.wl);
+        const n1 = inside ? nG : 1, n2 = inside ? 1 : nG;
+        const Rf = fresnel(I, N, n1, n2, r.pol);
+        /* user-set internal coating adds to the Fresnel reflectance */
+        const extra = (o.type === 'prism' && inside) ? o.coating : 0;
+        const Rw = Rf + (1 - Rf) * extra;
+        const Td = refract(I, N, n1, n2);
+        const canSplit = o.split !== false;
+        if (Rw > 0.02 && (canSplit || !Td)){
+          child(reflect(I, N), b.spec, r.power * b.frac * Rw, r.med, r.pol);
+        }
+        if (Td){
+          let T = 1 - Rw;
+          if (!Td) T = 0;
+          child(Td, b.spec, r.power * b.frac * T, n2, r.pol);
+        }
+      }
+      return;
+    }
+  }
+}
+
+/* ---------------- 7. RENDERER ---------------- */
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d');
+const view = { cx: 0, cy: 0, zoom: 0.8 };
+let dpr = Math.min(2, window.devicePixelRatio || 1);
+let stageW = 0, stageH = 0;
+const texture = new Image();
+texture.crossOrigin = 'anonymous';
+texture.src = 'https://images.pexels.com/photos/2271100/pexels-photo-2271100.jpeg?auto=compress&cs=tinysrgb&fit=crop&h=627&w=1200';
+let texReady = false;
+texture.onload = () => { texReady = true; draw(); };
+texture.onerror = () => { texReady = false; };
+
+function resize(){
+  const st = document.getElementById('stage');
+  stageW = st.clientWidth; stageH = st.clientHeight;
+  canvas.width = Math.round(stageW * dpr);
+  canvas.height = Math.round(stageH * dpr);
+  draw();
+}
+function w2s(x, y){ return [(x - view.cx) * view.zoom + stageW / 2, (y - view.cy) * view.zoom + stageH / 2]; }
+function s2w(x, y){ return [(x - stageW / 2) / view.zoom + view.cx, (y - stageH / 2) / view.zoom + view.cy]; }
+
+function drawTable(){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0B0E12';
+  ctx.fillRect(0, 0, stageW, stageH);
+  if (texReady){
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.globalCompositeOperation = 'lighter';
+    const p = ctx.createPattern(texture, 'repeat');
+    if (p){ ctx.fillStyle = p; ctx.fillRect(0, 0, stageW, stageH); }
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#0B0E12';
+    ctx.fillRect(0, 0, stageW, stageH);
+    ctx.restore();
+  }
+  /* breadboard hole grid, 25 mm pitch */
+  const pitch = 25 * view.zoom;
+  if (pitch > 7){
+    const [wx0, wy0] = s2w(0, 0), [wx1, wy1] = s2w(stageW, stageH);
+    const startX = Math.floor(wx0 / 25) * 25, startY = Math.floor(wy0 / 25) * 25;
+    ctx.fillStyle = '#151B22';
+    for (let x = startX; x <= wx1; x += 25){
+      for (let y = startY; y <= wy1; y += 25){
+        const s = w2s(x, y);
+        ctx.beginPath(); ctx.arc(s[0], s[1], 1.5, 0, 6.2832); ctx.fill();
+      }
+    }
+    ctx.strokeStyle = 'rgba(32,42,52,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = startX; x <= wx1; x += 125){ const s = w2s(x, 0); ctx.moveTo(s[0], 0); ctx.lineTo(s[0], stageH); }
+    for (let y = startY; y <= wy1; y += 125){ const s = w2s(0, y); ctx.moveTo(0, s[1]); ctx.lineTo(stageW, s[1]); }
+    ctx.stroke();
+  }
+  const g = ctx.createRadialGradient(stageW / 2, stageH / 2, Math.min(stageW, stageH) * 0.25, stageW / 2, stageH / 2, Math.max(stageW, stageH) * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, stageW, stageH);
+}
+
+function drawLight(){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (const s of SEGS){
+    const a = w2s(s.x1, s.y1), b = w2s(s.x2, s.y2);
+    const col = s.c;
+    const bright = Math.min(1, s.d / 2.2);
+    const w = 1.1 + 1.9 * bright;
+    ctx.strokeStyle = rgbCss(col[0], col[1], col[2], 0.13);
+    ctx.lineWidth = w * 5.5 * Math.min(1.6, 0.5 + view.zoom * 0.6);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    ctx.strokeStyle = rgbCss(col[0], col[1], col[2], 0.92);
+    ctx.lineWidth = w * Math.min(1.5, 0.55 + view.zoom * 0.5);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function hatch(x1, y1, x2, y2, n, len){
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++){
+    const t = i / n;
+    const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
+    ctx.moveTo(x, y); ctx.lineTo(x + len, y + len * 0.7);
+  }
+  ctx.stroke();
+}
+
+function drawObject(o, state){
+  const z = view.zoom;
+  const px = 1 / z;
+  const c = w2s(o.x, o.y);
+  ctx.save();
+  ctx.translate(c[0], c[1]);
+  ctx.rotate(o.rot);
+  ctx.scale(z, z);
+  const sel = state === 'sel', hov = state === 'hov';
+  const stroke = sel ? '#4CD7E8' : (hov ? '#A9BAC7' : '#63737F');
+  const fill = 'rgba(24,32,41,0.92)';
+  ctx.lineWidth = px * 1.4;
+  ctx.lineJoin = 'round';
+  const body = (path, f) => {
+    ctx.beginPath(); path();
+    if (f !== false){ ctx.fillStyle = f || fill; ctx.fill(); }
+    ctx.strokeStyle = stroke; ctx.stroke();
+  };
+  switch(o.type){
+    case 'flashlight': {
+      body(() => {
+        ctx.moveTo(-42, -o.radius - 8); ctx.lineTo(4, -o.radius - 8);
+        ctx.quadraticCurveTo(18, -o.radius - 2, 18, 0);
+        ctx.quadraticCurveTo(18, o.radius + 2, 4, o.radius + 8);
+        ctx.lineTo(-42, o.radius + 8); ctx.closePath();
+      });
+      ctx.strokeStyle = sel ? '#4CD7E8' : '#7E8FA0'; ctx.lineWidth = px * 2;
+      ctx.beginPath(); ctx.moveTo(16, -o.radius); ctx.lineTo(16, o.radius); ctx.stroke();
+      ctx.lineWidth = px * 1.2; ctx.strokeStyle = '#3A4652';
+      ctx.beginPath(); ctx.moveTo(-24, -o.radius - 8); ctx.lineTo(-24, o.radius + 8); ctx.stroke();
+      break;
+    }
+    case 'laser': {
+      body(() => { ctx.rect(-26, -11, 34, 22); });
+      body(() => { ctx.rect(8, -6, 8, 12); }, 'rgba(30,40,50,0.95)');
+      ctx.fillStyle = sel ? '#4CD7E8' : '#4A5A67';
+      ctx.beginPath(); ctx.arc(-16, 0, 2.6, 0, 6.2832); ctx.fill();
+      break;
+    }
+    case 'polarizer': {
+      body(() => { ctx.rect(-7, -o.aperture / 2, 14, o.aperture); }, 'rgba(28,38,48,0.86)');
+      ctx.save();
+      ctx.beginPath(); ctx.rect(-7, -o.aperture / 2, 14, o.aperture); ctx.clip();
+      ctx.strokeStyle = 'rgba(120,145,163,0.5)'; ctx.lineWidth = px;
+      for (let y = -o.aperture / 2 - 20; y < o.aperture / 2 + 20; y += 7){
+        ctx.beginPath(); ctx.moveTo(-7, y); ctx.lineTo(7, y + 14); ctx.stroke();
+      }
+      ctx.restore();
+      /* transmission axis indicator */
+      const a = (o.axis - o.rot) * DEG;
+      ctx.save(); ctx.rotate(a);
+      ctx.strokeStyle = '#FFB454'; ctx.lineWidth = px * 1.6;
+      ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(20, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(13, -3.6); ctx.moveTo(20, 0); ctx.lineTo(13, 3.6); ctx.stroke();
+      ctx.restore();
+      break;
+    }
+    case 'lens': {
+      const halfT = o.thickness / 2, apt = o.aperture / 2;
+      const sign = o.focal < 0 ? -1 : 1;
+      const n = nOf(o.glass, 587);
+      const R = solveRadius(Math.max(20, Math.abs(o.focal)), n, o.thickness) * sign;
+      const k1 = 1 / R, k2 = -1 / R;
+      const path = () => {
+        ctx.moveTo(-halfT, -apt);
+        for (let i = 0; i <= 18; i++){ const y = -apt + 2 * apt * i / 18; ctx.lineTo(-halfT + y * y * k1 / 2, y); }
+        for (let i = 18; i >= 0; i--){ const y = -apt + 2 * apt * i / 18; ctx.lineTo(halfT + y * y * k2 / 2, y); }
+        ctx.closePath();
+      };
+      body(path, 'rgba(88,140,175,0.16)');
+      ctx.strokeStyle = sel ? 'rgba(76,215,232,0.8)' : 'rgba(120,175,205,0.55)';
+      ctx.lineWidth = px; ctx.beginPath();
+      ctx.moveTo(0, -apt - 8); ctx.lineTo(0, apt + 8); ctx.stroke();
+      break;
+    }
+    case 'mirror': {
+      ctx.strokeStyle = stroke; ctx.lineWidth = px * 3.2;
+      ctx.beginPath(); ctx.moveTo(0, -o.length / 2); ctx.lineTo(0, o.length / 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(150,170,186,0.85)'; ctx.lineWidth = px * 1.2;
+      ctx.beginPath(); ctx.moveTo(3, -o.length / 2); ctx.lineTo(3, o.length / 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(90,110,126,0.55)'; ctx.lineWidth = px;
+      hatch(3, -o.length / 2, 3, o.length / 2, Math.round(o.length / 22), 9);
+      break;
+    }
+    case 'cmirror': {
+      const mag = Math.abs(o.radius);
+      const concave = o.shape === 'concave';
+      const Rc = concave ? -mag : mag;
+      const phi0 = concave ? 0 : Math.PI;
+      const a0 = phi0 - o.halfAngle * DEG, a1 = phi0 + o.halfAngle * DEG;
+      const pt = (a) => [Rc + mag * Math.cos(a), mag * Math.sin(a)];
+      ctx.beginPath();
+      for (let i = 0; i <= 44; i++){
+        const p = pt(a0 + (a1 - a0) * i / 44);
+        if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+      }
+      ctx.strokeStyle = stroke; ctx.lineWidth = px * 3; ctx.stroke();
+      ctx.strokeStyle = 'rgba(90,110,126,0.5)'; ctx.lineWidth = px;
+      ctx.beginPath();
+      for (let i = 0; i <= 30; i++){
+        const a = a0 + (a1 - a0) * i / 30;
+        const p = pt(a);
+        const dir = concave ? 1 : -1;      /* hatch on the non-reflecting side */
+        const nx = dir * (p[0] - Rc) / mag, ny = dir * p[1] / mag;
+        ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + nx * 9, p[1] + ny * 9);
+      }
+      ctx.stroke();
+      break;
+    }
+    case 'grating': {
+      body(() => { ctx.rect(-8, -o.aperture / 2, 16, o.aperture); }, 'rgba(28,38,48,0.9)');
+      ctx.strokeStyle = 'rgba(120,150,170,0.75)'; ctx.lineWidth = px;
+      const n = 22;
+      for (let i = 0; i <= n; i++){
+        const y = -o.aperture / 2 + o.aperture * i / n;
+        ctx.beginPath();
+        if (o.kind === 'reflection'){ ctx.moveTo(-8, y); ctx.lineTo(2, y); }
+        else { ctx.moveTo(-8, y); ctx.lineTo(8, y); }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'prism': {
+      const v = prismVerts(o);
+      const path = () => { ctx.moveTo(v[0][0], v[0][1]); ctx.lineTo(v[1][0], v[1][1]); ctx.lineTo(v[2][0], v[2][1]); ctx.closePath(); };
+      body(path, 'rgba(92,142,178,0.14)');
+      ctx.strokeStyle = sel ? 'rgba(76,215,232,0.75)' : 'rgba(130,180,210,0.55)';
+      ctx.lineWidth = px; ctx.beginPath();
+      ctx.moveTo(v[0][0], v[0][1]); ctx.lineTo((v[1][0] + v[2][0]) / 2, (v[1][1] + v[2][1]) / 2); ctx.stroke();
+      if (o.coating > 0.01){
+        ctx.strokeStyle = 'rgba(255,180,84,' + (0.25 + o.coating * 0.6) + ')';
+        ctx.lineWidth = px * 2.4;
+        ctx.beginPath(); ctx.moveTo(v[1][0], v[1][1]); ctx.lineTo(v[2][0], v[2][1]); ctx.stroke();
+      }
+      break;
+    }
+    case 'glass': {
+      body(() => { ctx.rect(-o.width / 2, -o.height / 2, o.width, o.height); }, 'rgba(84,132,166,0.18)');
+      ctx.strokeStyle = 'rgba(120,170,200,0.4)'; ctx.lineWidth = px;
+      ctx.beginPath(); ctx.moveTo(-o.width / 2 + 8, -o.height / 2 + 8); ctx.lineTo(-o.width / 2 + 8, o.height / 2 - 8); ctx.stroke();
+      break;
+    }
+    case 'blocker': {
+      body(() => { ctx.rect(-o.width / 2, -o.height / 2, o.width, o.height); }, 'rgba(12,16,21,0.96)');
+      ctx.save();
+      ctx.beginPath(); ctx.rect(-o.width / 2, -o.height / 2, o.width, o.height); ctx.clip();
+      ctx.strokeStyle = 'rgba(110,130,146,0.45)'; ctx.lineWidth = px;
+      for (let y = -o.height / 2 - 30; y < o.height / 2 + 30; y += 8){
+        ctx.beginPath(); ctx.moveTo(-o.width / 2, y); ctx.lineTo(o.width / 2, y + o.width * 0.8); ctx.stroke();
+      }
+      ctx.restore();
+      break;
+    }
+    case 'sensor': {
+      ctx.strokeStyle = sel ? '#4CD7E8' : '#8FA3B2'; ctx.lineWidth = px * 3.4;
+      ctx.beginPath(); ctx.moveTo(0, -o.aperture / 2); ctx.lineTo(0, o.aperture / 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(22,30,38,0.95)';
+      ctx.beginPath(); ctx.rect(2, -o.aperture / 2 - 12, 9, o.aperture + 24); ctx.fill();
+      ctx.strokeStyle = stroke; ctx.lineWidth = px; ctx.stroke();
+      /* live spectral readout above the bar */
+      if (o.acc && o.acc.power > 0){
+        const bins = o.acc.bins;
+        let mx = 0;
+        for (let i = 0; i < NBIN; i++) mx = Math.max(mx, bins[i]);
+        const H = 46, W = 54;
+        const x0 = -W / 2, y0 = -o.aperture / 2 - 20 - H;
+        ctx.fillStyle = 'rgba(11,14,18,0.82)';
+        ctx.fillRect(x0 - 6, y0 - 6, W + 12, H + 12);
+        for (let i = 0; i < NBIN; i++){
+          const h = mx > 0 ? (bins[i] / mx) * H : 0;
+          const cc = wlToRgb(BIN_NM[i], 1);
+          ctx.fillStyle = rgbCss(cc[0], cc[1], cc[2], 0.95);
+          ctx.fillRect(x0 + i * (W / NBIN), y0 + H - h, W / NBIN - 0.6, h);
+        }
+        ctx.strokeStyle = 'rgba(60,74,86,0.9)'; ctx.lineWidth = px;
+        ctx.strokeRect(x0 - 6, y0 - 6, W + 12, H + 12);
+      }
+      break;
+    }
+  }
+  /* selection furniture */
+  if (sel){
+    const b = localBounds(o);
+    ctx.strokeStyle = 'rgba(76,215,232,0.32)';
+    ctx.lineWidth = px;
+    ctx.setLineDash([4 * px, 4 * px]);
+    ctx.strokeRect(b.x0 - 8, b.y0 - 8, b.x1 - b.x0 + 16, b.y1 - b.y0 + 16);
+    ctx.setLineDash([]);
+    /* rotation handle along +x */
+    const hx = b.x1 + 30;
+    ctx.strokeStyle = 'rgba(255,180,84,0.6)';
+    ctx.beginPath(); ctx.moveTo(b.x1 + 8, 0); ctx.lineTo(hx, 0); ctx.stroke();
+    ctx.fillStyle = '#FFB454';
+    ctx.beginPath(); ctx.arc(hx, 0, 5.5, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#0B0E12';
+    ctx.beginPath(); ctx.arc(hx, 0, 2, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+
+let selected = null, hovered = null, tool = 'select';
+function draw(){
+  drawTable();
+  drawLight();
+  for (const o of objects){
+    drawObject(o, o === selected ? 'sel' : (o === hovered ? 'hov' : ''));
+  }
+}
+
+/* ---------------- 8. INTERACTION ---------------- */
+let objects = [];
+function pick(wx, wy){
+  for (let i = objects.length - 1; i >= 0; i--){
+    const o = objects[i];
+    const p = toL(o, wx, wy), b = localBounds(o);
+    const pad = 10 / view.zoom;
+    if (p[0] > b.x0 - pad && p[0] < b.x1 + pad && p[1] > b.y0 - pad && p[1] < b.y1 + pad) return o;
+  }
+  return null;
+}
+function nearHandle(o, wx, wy){
+  if (!o) return false;
+  const b = localBounds(o), hx = b.x1 + 30;
+  const p = toL(o, wx, wy);
+  return Math.hypot(p[0] - hx, p[1]) < 16 / view.zoom;
+}
+let drag = null;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  const rect = canvas.getBoundingClientRect();
+  const [wx, wy] = s2w(e.clientX - rect.left, e.clientY - rect.top);
+  if (e.button === 1 || e.button === 2 || e.shiftKey && e.button === 0 && tool === 'select' && e.altKey){
+    drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, cx: view.cx, cy: view.cy };
+    return;
+  }
+  if (tool !== 'select'){
+    const o = makeObject(tool, wx, wy, 0);
+    objects.push(o);
+    selected = o;
+    setTool('select');
+    updatePanel();
+    retrace();
+    return;
+  }
+  const target = pick(wx, wy);
+  if (target && nearHandle(target, wx, wy)){
+    drag = { mode: 'rot', obj: target };
+    return;
+  }
+  if (target){
+    selected = target;
+    drag = { mode: 'move', obj: target, dx: wx - target.x, dy: wy - target.y, moved: false };
+    updatePanel();
+    draw();
+    return;
+  }
+  selected = null;
+  drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, cx: view.cx, cy: view.cy };
+  updatePanel();
+  draw();
+});
+canvas.addEventListener('pointermove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const [wx, wy] = s2w(e.clientX - rect.left, e.clientY - rect.top);
+  if (drag){
+    if (drag.mode === 'pan'){
+      view.cx = drag.cx - (e.clientX - drag.sx) / view.zoom;
+      view.cy = drag.cy - (e.clientY - drag.sy) / view.zoom;
+      draw();
+    } else if (drag.mode === 'move'){
+      drag.obj.x = wx - drag.dx; drag.obj.y = wy - drag.dy; drag.moved = true;
+      retrace();
+    } else if (drag.mode === 'rot'){
+      drag.obj.rot = Math.atan2(wy - drag.obj.y, wx - drag.obj.x);
+      retrace();
+      updatePanelValues();
+    }
+    return;
+  }
+  const h = pick(wx, wy);
+  if (h !== hovered){ hovered = h; draw(); }
+  canvas.style.cursor = (h && nearHandle(h, wx, wy)) ? 'grab' : (h ? 'move' : (tool === 'select' ? 'default' : 'crosshair'));
+});
+canvas.addEventListener('pointerup', e => {
+  if (drag && drag.mode === 'move' && drag.moved) updatePanelValues();
+  drag = null;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const [wx, wy] = s2w(mx, my);
+  const k = Math.exp(-e.deltaY * 0.0012);
+  view.zoom = Math.max(0.12, Math.min(8, view.zoom * k));
+  const [nx, ny] = s2w(mx, my);
+  view.cx += wx - nx; view.cy += wy - ny;
+  document.getElementById('zoom').textContent = Math.round(view.zoom * 100) + '%';
+  draw();
+}, { passive: false });
+
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selected){
+    objects = objects.filter(o => o !== selected);
+    selected = null;
+    updatePanel(); retrace();
+    e.preventDefault();
+  } else if (e.key === 'Escape'){
+    setTool('select');
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown'){
+    if (selected){
+      const d = e.shiftKey ? 25 : 2;
+      if (e.key === 'ArrowLeft') selected.x -= d;
+      if (e.key === 'ArrowRight') selected.x += d;
+      if (e.key === 'ArrowUp') selected.y -= d;
+      if (e.key === 'ArrowDown') selected.y += d;
+      retrace(); updatePanelValues();
+      e.preventDefault();
+    }
+  }
+});
+
+/* ---------------- 9. TOOLS / RAIL ---------------- */
+const ICONS = {
+  select: '<path d="M5 3l13 8-5.6 1.6L9.6 18z"/><path d="M13 13l5 6"/>',
+  flashlight: '<path d="M4 8h8l6-3v14l-6-3H4z"/><path d="M18 9.5h3M18 12h3.6M18 14.5h3"/>',
+  laser: '<rect x="3" y="8" width="11" height="8" rx="1"/><path d="M14 12h7"/><circle cx="6.5" cy="12" r="1.2"/>',
+  polarizer: '<rect x="8" y="3" width="8" height="18" rx="1"/><path d="M8 7l8 4M8 11l8 4M8 15l8 4"/>',
+  lens: '<path d="M12 3c4 3 4 15 0 18c-4-3-4-15 0-18z"/><path d="M3 12h3M18 12h3"/>',
+  cmirror: '<path d="M6 3c6 3 6 15 0 18"/><path d="M9 5.5l-3-2M9 12H6M9 18.5l-3 2"/>',
+  mirror: '<path d="M8 3l8 18"/><path d="M5 6l3-1.4M3 12l3-1.4M2 18l3-1.4"/>',
+  grating: '<rect x="7" y="3" width="10" height="18" rx="1"/><path d="M10 4v16M13 4v16M16 4v16"/>',
+  prism: '<path d="M12 3l9 17H3z"/><path d="M6 13h4M14 13h4"/>',
+  glass: '<rect x="6" y="4" width="12" height="16" rx="1"/><path d="M9 7v10"/>',
+  blocker: '<rect x="8" y="3" width="8" height="18" rx="1"/><path d="M8 8l8 4M8 12l8 4M8 16l8 4"/>',
+  sensor: '<rect x="4" y="6" width="6" height="12" rx="1"/><path d="M10 12h6"/><path d="M17 8v8"/>'
+};
+const TOOLS = [
+  ['select', 'Select'], ['flashlight', 'Flash'], ['laser', 'Laser'], ['polarizer', 'Polar'],
+  ['lens', 'Lens'], ['cmirror', 'Curve'], ['mirror', 'Mirror'], ['grating', 'Grating'],
+  ['prism', 'Prism'], ['glass', 'Glass'], ['blocker', 'Block'], ['sensor', 'Sensor']
+];
+function buildRail(){
+  const rail = document.getElementById('rail');
+  let html = '';
+  TOOLS.forEach((t, i) => {
+    if (i === 1) html += '<div class="rail-sep"></div>';
+    html += '<button class="tool' + (t[0] === tool ? ' active' : '') + '" data-tool="' + t[0] + '" title="' + t[1] + '">' +
+      '<svg viewBox="0 0 24 24">' + ICONS[t[0]] + '</svg><span>' + t[1] + '</span></button>';
+  });
+  rail.innerHTML = html;
+  rail.querySelectorAll('.tool').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+}
+function setTool(t){
+  tool = t;
+  document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  const hints = {
+    select: 'Drag to move · orange handle rotates · Del removes · wheel zooms',
+    flashlight: 'Click the table to place a flashlight',
+    laser: 'Click the table to place a laser',
+    polarizer: 'Click to place a polarizing filter',
+    lens: 'Click to place a lens',
+    cmirror: 'Click to place a curved mirror',
+    mirror: 'Click to place a flat mirror',
+    grating: 'Click to place a diffraction grating',
+    prism: 'Click to place a prism',
+    glass: 'Click to place coloured glass',
+    blocker: 'Click to place a light blocker',
+    sensor: 'Click to place a sensor'
+  };
+  document.getElementById('hint').textContent = hints[t] || '';
+  canvas.style.cursor = t === 'select' ? 'default' : 'crosshair';
+}
+
+/* ---------------- 10. PANEL / INSPECTOR ---------------- */
+const panelBody = document.getElementById('panelBody');
+function fmt(v, d){ return Number(v).toFixed(d === undefined ? 0 : d); }
+function slider(label, prop, min, max, step, unit, dec){
+  const v = selected[prop];
+  return '<div class="field"><div class="f-top"><span class="ml">' + label + '</span>' +
+    '<span class="f-val" data-out="' + prop + '">' + fmt(v, dec) + (unit ? '<u>' + unit + '</u>' : '') + '</span></div>' +
+    '<input type="range" data-prop="' + prop + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '"></div>';
+}
+function seg(label, prop, options){
+  return '<div class="field"><div class="f-top"><span class="ml">' + label + '</span></div><div class="seg" data-seg="' + prop + '">' +
+    options.map(o => '<button data-val="' + o[0] + '" class="' + (String(selected[prop]) === String(o[0]) ? 'on' : '') + '">' + o[1] + '</button>').join('') +
+    '</div></div>';
+}
+function selectField(label, prop, options){
+  return '<div class="field"><div class="f-top"><span class="ml">' + label + '</span></div><select data-prop="' + prop + '">' +
+    options.map(o => '<option value="' + o + '"' + (selected[prop] === o ? ' selected' : '') + '>' + o + '</option>').join('') + '</select></div>';
+}
+function coordFields(){
+  return '<div class="field"><div class="xy">' +
+    '<div><div class="f-top"><span class="ml">Position X</span><span class="f-val" data-out="x">' + fmt(selected.x) + '<u>mm</u></span></div>' +
+    '<input type="range" data-prop="x" min="-700" max="700" step="1" value="' + selected.x + '"></div>' +
+    '<div><div class="f-top"><span class="ml">Position Y</span><span class="f-val" data-out="y">' + fmt(selected.y) + '<u>mm</u></span></div>' +
+    '<input type="range" data-prop="y" min="-450" max="450" step="1" value="' + selected.y + '"></div>' +
+    '</div></div>' +
+    slider('Rotation', 'rotDeg', -180, 180, 1, '°', 0);
+}
+function spectrumBand(kind){
+  const isGlass = kind === 'glass';
+  return '<div class="spec-band">' +
+    '<div class="f-top"><span class="ml">' + (isGlass ? 'Transmittance spectrum' : 'Spectral power distribution') + '</span>' +
+    '<span class="f-val" style="font-size:10px;color:var(--dim)">' + (isGlass ? '380 – 780 nm' : '380 – 780 nm') + '</span></div>' +
+    '<div class="spec-canvas-wrap"><canvas id="specCanvas"></canvas></div>' +
+    '<div class="spec-axis"><span>380</span><span>480</span><span>580</span><span>680</span><span>780 nm</span></div>' +
+    '<div class="chips" id="presetChips">' +
+      (isGlass ? GLASS_PRESETS : SOURCE_PRESETS).map(p => '<button class="chip" data-preset="' + p + '">' + p + '</button>').join('') +
+    '</div>' +
+    '<p class="p-note">Drag the curve to shape it · double-click a point to delete.</p>' +
+    '</div>';
+}
+function sensorSection(o){
+  const acc = o.acc;
+  const widthCm = o.aperture / 10;
+  const irr = acc.power / Math.max(0.01, widthCm);
+  let peak = 0, mx = 0;
+  for (let i = 0; i < NBIN; i++) if (acc.bins[i] > mx){ mx = acc.bins[i]; peak = i; }
+  return '<div class="sensor-grid">' +
+    '<div class="sensor-cell"><div class="k">Incident power</div><div class="v" data-sens="power">' + fmt(acc.power, 2) + '<u>mW</u></div></div>' +
+    '<div class="sensor-cell"><div class="k">Irradiance</div><div class="v" data-sens="irr">' + fmt(irr, 2) + '<u>mW/cm²</u></div></div>' +
+    '<div class="sensor-cell"><div class="k">Peak wavelength</div><div class="v" data-sens="peak">' + (mx > 0 ? fmt(BIN_NM[peak], 0) : '—') + '<u>nm</u></div></div>' +
+    '<div class="sensor-cell"><div class="k">Aperture</div><div class="v" data-sens="apt">' + fmt(o.aperture, 0) + '<u>mm</u></div></div>' +
+    '</div><div class="field"><div class="f-top"><span class="ml">Measured spectrum</span><span class="ml" data-sens="small">' + fmt(acc.power, 2) + ' mW</span></div>' +
+    '<canvas id="sensorSpec"></canvas></div>';
+}
+function refreshSensor(){
+  const o = selected;
+  const acc = o.acc;
+  const widthCm = Math.max(0.01, o.aperture / 10);
+  let peak = 0, mx = 0;
+  for (let i = 0; i < NBIN; i++) if (acc.bins[i] > mx){ mx = acc.bins[i]; peak = i; }
+  panelBody.querySelectorAll('[data-sens]').forEach(el => {
+    const k = el.dataset.sens;
+    if (k === 'power') el.innerHTML = fmt(acc.power, 2) + '<u>mW</u>';
+    else if (k === 'irr') el.innerHTML = fmt(acc.power / widthCm, 2) + '<u>mW/cm²</u>';
+    else if (k === 'peak') el.innerHTML = (mx > 0 ? fmt(BIN_NM[peak], 0) : '—') + '<u>nm</u>';
+    else if (k === 'apt') el.innerHTML = fmt(o.aperture, 0) + '<u>mm</u>';
+    else if (k === 'small') el.textContent = fmt(acc.power, 2) + ' mW';
+  });
+}
+function updatePanel(){
+  if (!selected){
+    const counts = {};
+    objects.forEach(o => { counts[o.type] = (counts[o.type] || 0) + 1; });
+    panelBody.innerHTML =
+      '<div class="p-sec"><div class="p-head"><div class="p-title">Scene</div><div class="p-type">' + objects.length + ' elements</div></div>' +
+      '<p class="p-note">Sources are traced spectrally: every ray carries 20 wavelength bins, so prisms and gratings split real colours and bright sources render brighter.</p></div>' +
+      '<div class="p-sec" style="padding:0"><div class="objlist">' +
+        (objects.length ? objects.map(o =>
+          '<div class="objrow" data-id="' + o.id + '"><span class="dot" style="background:' + (o.type === 'flashlight' || o.type === 'laser' ? '#FFB454' : '#4CD7E8') + '"></span>' +
+          '<span class="nm">' + TYPE_LABEL[o.type] + '</span><span class="sp">' + fmt(o.x) + ', ' + fmt(o.y) + '</span></div>').join('')
+          : '<div class="p-sec"><p class="p-note" style="margin:0">No elements yet — pick a tool on the left and click the table.</p></div>') +
+      '</div></div>' +
+      '<div class="p-sec"><div class="f-top"><span class="ml">Model</span></div>' +
+      '<p class="p-note">CIE 1931 colour matching · Sellmeier dispersion (BK7, SF10, SiO₂, sapphire) · exact Fresnel with polarization · lensmaker equation · grating equation k<sub>t</sub> = k<sub>t,0</sub> + mλ/d · Gaussian beam divergence exp(−2θ²/θ₀²).</p></div>' +
+      '<div class="p-sec"><div class="kbd"><b>Middle / right drag</b> pans · <b>Wheel</b> zooms · <b>Arrows</b> nudge · <b>Shift + arrows</b> nudge 25 mm · <b>Del</b> removes</div></div>';
+    panelBody.querySelectorAll('.objrow').forEach(r => {
+      r.addEventListener('click', () => {
+        selected = objects.find(o => o.id === Number(r.dataset.id));
+        updatePanel(); draw();
+      });
+    });
+    return;
+  }
+  const o = selected;
+  o.rotDeg = Math.round(o.rot / DEG * 10) / 10;
+  if (o.type === 'lens') o.shape = o.focal < 0 ? 'concave' : 'convex';
+  let html = '<div class="p-sec"><div class="p-head"><div class="p-title">' + TYPE_LABEL[o.type] + '</div><div class="p-type">Element</div></div></div>';
+  html += coordFields();
+  switch(o.type){
+    case 'flashlight':
+      html += slider('Radiant power', 'power', 1, 1200, 1, 'mW', 0);
+      html += slider('Beam radius', 'radius', 2, 60, 1, 'mm', 0);
+      html += slider('Divergence half-angle', 'diverge', 0.2, 60, 0.2, '°', 1);
+      html += seg('Angular profile', 'profile', [['gaussian', 'Gaussian'], ['uniform', 'Top-hat']]);
+      html += spectrumBand('source');
+      break;
+    case 'laser':
+      html += slider('Radiant power', 'power', 0.1, 200, 0.1, 'mW', 1);
+      html += slider('Wavelength', 'wl', 380, 780, 0.5, 'nm', 1);
+      html += slider('Beam waist w₀', 'radius', 0.1, 8, 0.1, 'mm', 1);
+      html += slider('Extra divergence', 'extraDiv', 0, 20, 0.1, 'mrad', 1);
+      html += slider('Linewidth', 'linewidth', 0.01, 20, 0.01, 'nm', 2);
+      html += '<div class="field"><div class="f-top"><span class="ml">Spectral lines</span></div><div class="chips" id="lineChips">' +
+        [['HeNe 632.8', 632.8], ['Nd:YAG 532', 532], ['Ar⁺ 488', 488], ['Ar⁺ 514.5', 514.5], ['Diode 650', 650], ['Diode 405', 405], ['Na 589', 589]]
+          .map(l => '<button class="chip" data-wl="' + l[1] + '">' + l[0] + '</button>').join('') + '</div></div>';
+      break;
+    case 'polarizer':
+      html += slider('Aperture', 'aperture', 30, 400, 1, 'mm', 0);
+      html += slider('Transmission axis', 'axis', -90, 90, 1, '°', 0);
+      break;
+    case 'lens':
+      html += seg('Profile', 'shape', [['convex', 'Convex'], ['concave', 'Concave']]);
+      html += slider('Focal length', 'focal', -800, 800, 5, 'mm', 0);
+      html += slider('Aperture', 'aperture', 30, 400, 1, 'mm', 0);
+      html += slider('Centre thickness', 'thickness', 2, 50, 1, 'mm', 0);
+      html += selectField('Glass', 'glass', Object.keys(MATERIALS));
+      break;
+    case 'mirror':
+      html += slider('Length', 'length', 40, 500, 5, 'mm', 0);
+      html += slider('Reflectance', 'reflect', 0.05, 1, 0.01, '', 2);
+      break;
+    case 'cmirror':
+      html += seg('Profile', 'shape', [['concave', 'Concave'], ['convex', 'Convex']]);
+      html += slider('Radius of curvature', 'radius', 80, 1500, 10, 'mm', 0);
+      html += slider('Angular aperture', 'halfAngle', 6, 60, 1, '°', 0);
+      html += slider('Reflectance', 'reflect', 0.05, 1, 0.01, '', 2);
+      break;
+    case 'grating':
+      html += seg('Type', 'kind', [['transmission', 'Transmission'], ['reflection', 'Reflection']]);
+      html += slider('Groove density', 'grooves', 50, 2400, 10, 'l/mm', 0);
+      html += slider('Blaze wavelength', 'blaze', 380, 780, 1, 'nm', 0);
+      html += slider('Max diffraction order', 'maxOrder', 1, 6, 1, '', 0);
+      html += slider('Efficiency', 'efficiency', 0.1, 1, 0.01, '', 2);
+      html += slider('Aperture', 'aperture', 30, 400, 1, 'mm', 0);
+      break;
+    case 'prism':
+      html += slider('Apex angle', 'apex', 10, 120, 1, '°', 0);
+      html += slider('Base width', 'size', 40, 400, 5, 'mm', 0);
+      html += selectField('Glass', 'glass', Object.keys(MATERIALS));
+      html += slider('Internal coating reflectivity', 'coating', 0, 1, 0.01, '', 2);
+      html += seg('Secondary reflections', 'split', [[true, 'Trace'], [false, 'Primary only']]);
+      break;
+    case 'glass':
+      html += slider('Width', 'width', 5, 300, 1, 'mm', 0);
+      html += slider('Height', 'height', 20, 500, 5, 'mm', 0);
+      html += slider('Surface reflectance', 'reflect', 0, 1, 0.01, '', 2);
+      html += spectrumBand('glass');
+      break;
+    case 'blocker':
+      html += slider('Width', 'width', 2, 200, 1, 'mm', 0);
+      html += slider('Height', 'height', 20, 500, 5, 'mm', 0);
+      break;
+    case 'sensor':
+      html += slider('Aperture', 'aperture', 20, 500, 5, 'mm', 0);
+      html += sensorSection(o);
+      break;
+  }
+  html += '<div class="row-btns"><button class="btn danger" id="delBtn">Delete element</button></div>';
+  panelBody.innerHTML = html;
+  bindPanel();
+  if (o.type === 'flashlight' || o.type === 'glass') initSpectrumEditor(o.type === 'glass' ? 'glass' : 'source');
+  if (o.type === 'sensor') drawSensorChart(o);
+}
+function drawSensorChart(o){
+  const cv = document.getElementById('sensorSpec');
+  if (!cv) return;
+  const w = cv.clientWidth, h = 78;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  c.fillStyle = '#0A0D11'; c.fillRect(0, 0, w, h);
+  let mx = 0;
+  for (let i = 0; i < NBIN; i++) mx = Math.max(mx, o.acc.bins[i]);
+  const bw = w / NBIN;
+  for (let i = 0; i < NBIN; i++){
+    const hh = mx > 0 ? (o.acc.bins[i] / mx) * (h - 8) : 0;
+    const cc = wlToRgb(BIN_NM[i], 1);
+    c.fillStyle = rgbCss(cc[0], cc[1], cc[2], 0.92);
+    c.fillRect(i * bw + 0.5, h - hh, bw - 1, hh);
+    if (hh < 1){ c.fillStyle = 'rgba(70,84,96,0.6)'; c.fillRect(i * bw + 0.5, h - 1, bw - 1, 1); }
+  }
+  c.strokeStyle = 'rgba(46,58,70,0.9)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(0, h - 0.5); c.lineTo(w, h - 0.5); c.stroke();
+}
+function updatePanelValues(){
+  if (!selected) return;
+  panelBody.querySelectorAll('[data-out]').forEach(el => {
+    const p = el.dataset.out;
+    if (p === 'senspow') return;
+    let v = selected[p];
+    if (p === 'rotDeg') v = Math.round(selected.rot / DEG * 10) / 10;
+    if (v === undefined) return;
+    const unit = el.querySelector('u');
+    const dec = (p === 'reflect' || p === 'efficiency' || p === 'coating') ? 2 : (p === 'wl' || p === 'linewidth' || p === 'radius' && selected.type === 'laser') ? 2 : (p === 'x' || p === 'y') ? 0 : (p === 'diverge' ? 1 : 0);
+    el.innerHTML = fmt(v, dec) + (unit ? unit.outerHTML : '');
+  });
+  panelBody.querySelectorAll('input[type=range][data-prop]').forEach(inp => {
+    const p = inp.dataset.prop;
+    if (p === 'rotDeg') inp.value = Math.round(selected.rot / DEG * 10) / 10;
+    else if (selected[p] !== undefined) inp.value = selected[p];
+  });
+}
+function bindPanel(){
+  panelBody.querySelectorAll('input[type=range][data-prop]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const p = inp.dataset.prop;
+      const v = parseFloat(inp.value);
+      if (p === 'rotDeg') selected.rot = v * DEG;
+      else selected[p] = v;
+      if (p === 'x' || p === 'y' || p === 'rotDeg') updatePanelValues();
+      else updatePanelValues();
+      retrace();
+    });
+  });
+  panelBody.querySelectorAll('select[data-prop]').forEach(sel => {
+    sel.addEventListener('change', () => { selected[sel.dataset.prop] = sel.value; retrace(); });
+  });
+  panelBody.querySelectorAll('.seg[data-seg]').forEach(segEl => {
+    segEl.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const p = segEl.dataset.seg;
+        let v = b.dataset.val;
+        if (v === 'true') v = true; else if (v === 'false') v = false;
+        if (p === 'shape' && selected.type === 'lens'){
+          /* lens profile is carried by the sign of the focal length */
+          selected.focal = v === 'convex' ? Math.abs(selected.focal) : -Math.abs(selected.focal);
+          selected.shape = v;
+          updatePanel(); retrace();
+          return;
+        }
+        selected[p] = v;
+        segEl.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+        retrace();
+      });
+    });
+  });
+  const del = document.getElementById('delBtn');
+  if (del) del.addEventListener('click', () => {
+    objects = objects.filter(x => x !== selected);
+    selected = null; updatePanel(); retrace();
+  });
+  const lines = document.getElementById('lineChips');
+  if (lines){
+    const mark = () => lines.querySelectorAll('.chip').forEach(x =>
+      x.classList.toggle('on', Math.abs(parseFloat(x.dataset.wl) - selected.wl) < 0.6));
+    mark();
+    lines.querySelectorAll('.chip').forEach(b => {
+      b.addEventListener('click', () => {
+        selected.wl = parseFloat(b.dataset.wl);
+        mark(); updatePanelValues(); retrace();
+      });
+    });
+  }
+}
+
+/* ---------------- 11. SPECTRUM EDITOR ---------------- */
+let specState = null;
+function initSpectrumEditor(kind){
+  const cv = document.getElementById('specCanvas');
+  if (!cv || !selected) return;
+  const knots = selected.spectrum;
+  specState = { cv: cv, kind: kind, drag: null };
+  const chips = document.getElementById('presetChips');
+  const applyPreset = (name) => {
+    const target = kind === 'glass' ? presetGlass(name) : presetSpectrum(name);
+    const from = target.map(k => evalSpectrum(selected.spectrum, k.nm));
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce){ selected.spectrum = target; drawSpec(); retrace(); return; }
+    const t0 = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / 150);
+      const e = t * (2 - t);
+      selected.spectrum = target.map((k, i) => ({ nm: k.nm, v: from[i] + (k.v - from[i]) * e }));
+      drawSpec();
+      if (t < 1) requestAnimationFrame(step); else { selected.spectrum = target; retrace(); }
+    };
+    requestAnimationFrame(step);
+  };
+  chips.querySelectorAll('.chip').forEach(b => {
+    if (selected.presetName === b.dataset.preset) b.classList.add('on');
+    b.addEventListener('click', () => {
+      chips.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === b));
+      selected.presetName = b.dataset.preset;
+      applyPreset(b.dataset.preset);
+    });
+  });
+  const geom = () => {
+    const r = cv.getBoundingClientRect();
+    return { w: r.width, h: r.height };
+  };
+  const nmToX = (nm, w) => (nm - LMIN) / (LMAX - LMIN) * w;
+  const xToNm = (x, w) => LMIN + (x / w) * (LMAX - LMIN);
+  const vToY = (v, h) => h - v * (h - 12) - 4;
+  const yToV = (y, h) => Math.max(0, Math.min(1, (h - 4 - y) / (h - 12)));
+
+  function drawSpec(){
+    const g = geom(), w = g.w, h = g.h;
+    cv.width = w * dpr; cv.height = h * dpr;
+    const c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = '#0A0D11'; c.fillRect(0, 0, w, h);
+    /* spectral backdrop */
+    const grad = c.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i <= 40; i++){
+      const nm = LMIN + (LMAX - LMIN) * i / 40;
+      const cc = wlToRgb(nm, 1);
+      grad.addColorStop(i / 40, rgbCss(cc[0], cc[1], cc[2], 1));
+    }
+    c.globalAlpha = 0.16; c.fillStyle = grad; c.fillRect(0, 0, w, h); c.globalAlpha = 1;
+    /* grid */
+    c.strokeStyle = 'rgba(42,54,66,0.65)'; c.lineWidth = 1;
+    for (let i = 1; i < 4; i++){
+      const y = vToY(i / 4, h);
+      c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke();
+    }
+    for (let nm = 420; nm <= 780; nm += 60){
+      const x = nmToX(nm, w);
+      c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke();
+    }
+    /* filled curve */
+    const k = selected.spectrum;
+    c.beginPath();
+    c.moveTo(0, vToY(k[0].v, h));
+    for (let i = 0; i < k.length; i++) c.lineTo(nmToX(k[i].nm, w), vToY(k[i].v, h));
+    c.lineTo(w, vToY(k[k.length - 1].v, h));
+    c.lineTo(w, h); c.lineTo(0, h); c.closePath();
+    const fill = c.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i <= 24; i++){
+      const nm = LMIN + (LMAX - LMIN) * i / 24;
+      const cc = wlToRgb(nm, 1);
+      fill.addColorStop(i / 24, rgbCss(cc[0], cc[1], cc[2], 0.42));
+    }
+    c.fillStyle = fill; c.fill();
+    /* stroke */
+    const stroke = c.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i <= 24; i++){
+      const nm = LMIN + (LMAX - LMIN) * i / 24;
+      const cc = wlToRgb(nm, 1);
+      stroke.addColorStop(i / 24, rgbCss(cc[0], cc[1], cc[2], 1));
+    }
+    c.strokeStyle = stroke; c.lineWidth = 1.8;
+    c.beginPath();
+    c.moveTo(nmToX(k[0].nm, w), vToY(k[0].v, h));
+    for (let i = 1; i < k.length; i++) c.lineTo(nmToX(k[i].nm, w), vToY(k[i].v, h));
+    c.stroke();
+    /* knots */
+    for (const p of k){
+      const x = nmToX(p.nm, w), y = vToY(p.v, h);
+      c.beginPath(); c.arc(x, y, 3.6, 0, 6.2832);
+      c.fillStyle = '#0A0D11'; c.fill();
+      c.strokeStyle = '#DCE4EC'; c.lineWidth = 1.4; c.stroke();
+    }
+    /* resulting colour swatch */
+    const spec = sampleSpectrum(k);
+    const col = specColor(spec, 1.2, 1);
+    c.fillStyle = rgbCss(col[0], col[1], col[2], 1);
+    c.fillRect(w - 26, 8, 18, 18);
+    c.strokeStyle = 'rgba(220,228,236,0.35)'; c.lineWidth = 1;
+    c.strokeRect(w - 26, 8, 18, 18);
+  }
+  specState.draw = drawSpec;
+  const pos = (e) => {
+    const r = cv.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
+  };
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId);
+    const p = pos(e);
+    const k = selected.spectrum;
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < k.length; i++){
+      const d = Math.abs(nmToX(k[i].nm, p.w) - p.x);
+      if (d < bd){ bd = d; best = i; }
+    }
+    if (e.detail === 2){
+      if (k.length > 2) k.splice(best, 1);
+      drawSpec(); retrace();
+      return;
+    }
+    if (bd > 16){
+      const nm = xToNm(p.x, p.w);
+      k.push({ nm: nm, v: yToV(p.y, p.h) });
+      k.sort((a, b) => a.nm - b.nm);
+      best = k.findIndex(q => q.nm === nm);
+    }
+    specState.drag = best;
+    k[best].v = yToV(p.y, p.h);
+    drawSpec(); retrace();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (specState.drag === null || specState.drag === undefined) return;
+    const p = pos(e);
+    const k = selected.spectrum;
+    const i = specState.drag;
+    if (!k[i]) return;
+    const nm = xToNm(p.x, p.w);
+    if (i > 0 && i < k.length - 1){
+      k[i].nm = Math.max(k[i - 1].nm + 4, Math.min(k[i + 1].nm - 4, nm));
+    }
+    k[i].v = yToV(p.y, p.h);
+    drawSpec(); retrace();
+  });
+  const stop = () => { specState.drag = null; };
+  cv.addEventListener('pointerup', stop);
+  cv.addEventListener('pointercancel', stop);
+  cv.addEventListener('dblclick', e => e.preventDefault());
+  drawSpec();
+}
+
+/* ---------------- 12. GLOBAL CONTROLS + INIT ---------------- */
+function retrace(){
+  trace();
+  draw();
+  if (selected && selected.type === 'sensor'){ drawSensorChart(selected); refreshSensor(); }
+}
+document.getElementById('gq').addEventListener('input', e => {
+  rayDensity = parseInt(e.target.value, 10);
+  document.getElementById('gqv').textContent = rayDensity;
+  retrace();
+});
+document.getElementById('ge').addEventListener('input', e => {
+  exposure = Math.pow(10, parseFloat(e.target.value));
+  document.getElementById('gev').textContent = exposure.toFixed(2) + '×';
+  retrace();
+});
+document.getElementById('clearBtn').addEventListener('click', () => {
+  objects = []; selected = null; updatePanel(); retrace();
+});
+document.getElementById('resetBtn').addEventListener('click', () => {
+  demoScene(); selected = null; updatePanel(); retrace();
+});
+
+function demoScene(){
+  objects = [];
+  uid = 1;
+  /* white flashlight -> polarizer -> SF10 prism -> spectral fan on the sensor */
+  const flash = makeObject('flashlight', -560, -30, 0);
+  flash.power = 520; flash.diverge = 5.5; flash.radius = 13;
+  flash.spectrum = presetSpectrum('White LED');
+  objects.push(flash);
+  const pol = makeObject('polarizer', -380, -30, 0);
+  pol.aperture = 200; pol.axis = 0;
+  objects.push(pol);
+  const prism = makeObject('prism', -60, -20, 0);
+  prism.apex = 40; prism.size = 190; prism.glass = 'SF10';
+  objects.push(prism);
+  const sens = makeObject('sensor', 290, 200, Math.PI / 2);
+  sens.aperture = 220;
+  objects.push(sens);
+  view.cx = 40; view.cy = 30;
+  view.zoom = Math.max(0.35, Math.min(1, (stageW || 900) / 1500));
+  document.getElementById('zoom').textContent = Math.round(view.zoom * 100) + '%';
+}
+
+buildRail();
+setTool('select');
+window.addEventListener('resize', () => { dpr = Math.min(2, window.devicePixelRatio || 1); resize(); });
+resize();
+demoScene();
+updatePanel();
+retrace();
+</script>
+</body>
+</html>

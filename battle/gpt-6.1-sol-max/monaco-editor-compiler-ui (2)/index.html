@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="A customizable code editor workspace powered by Monaco.">
+  <title>Code Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script>
+    // Customize defaults here. Saved user preferences take precedence.
+    // Custom buttons accept { id, label, icon, onClick(context) }.
+    // onRun receives { code, language, signal, setResult, editor, monaco }.
+    // Return a string or { type: 'text' | 'html', content: '...' } from onRun.
+    window.EDITOR_CONFIG = {
+      language: 'javascript',
+      fileName: null,
+      defaultCode: [
+        '// A little code to get you started.',
+        '',
+        'const greeting = "Hello, world!";',
+        'console.log(greeting);',
+        '',
+        '// Make it your own.',
+        'function greet(name) {',
+        '  return `Hello, ${name}!`;',
+        '}',
+        '',
+        'const people = [',
+        '  { name: "Alex", language: "JavaScript" },',
+        '  { name: "Sam", language: "Python" },',
+        '  { name: "Jordan", language: "TypeScript" }',
+        '];',
+        '',
+        'people.forEach(({ name, language }) => {',
+        '  const message = greet(name);',
+        '  console.log(message);',
+        '  console.log(`Let\'s write some ${language}.`);',
+        '});',
+        ''
+      ].join('\n'),
+      appearance: 'system',
+      themes: { light: 'soft-light', dark: 'soft-dark' },
+      themeOptions: [
+        { id: 'soft-light', label: 'Soft light' },
+        { id: 'soft-dark', label: 'Soft dark' },
+        { id: 'vs', label: 'Visual Studio light' },
+        { id: 'vs-dark', label: 'Visual Studio dark' },
+        { id: 'hc-light', label: 'High contrast light' },
+        { id: 'hc-black', label: 'High contrast dark' }
+      ],
+      customThemes: {},
+      languages: [
+        { id: 'javascript', label: 'JavaScript', fileName: 'main.js' },
+        { id: 'typescript', label: 'TypeScript', fileName: 'main.ts' },
+        { id: 'python', label: 'Python', fileName: 'main.py' },
+        { id: 'html', label: 'HTML', fileName: 'index.html' },
+        { id: 'css', label: 'CSS', fileName: 'styles.css' },
+        { id: 'json', label: 'JSON', fileName: 'data.json' },
+        { id: 'markdown', label: 'Markdown', fileName: 'readme.md' },
+        { id: 'plaintext', label: 'Plain text', fileName: 'untitled.txt' }
+      ],
+      editor: {
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+        fontLigatures: true,
+        lineHeight: 1.8,
+        lineNumbers: 'on',
+        lineNumbersMinChars: 3,
+        folding: true,
+        showFoldingControls: 'mouseover',
+        detectIndentation: true,
+        automaticLayout: true,
+        wordWrap: 'on',
+        minimap: { enabled: false, maxColumn: 80, showSlider: 'mouseover' },
+        quickSuggestions: true,
+        suggestOnTriggerCharacters: true,
+        wordBasedSuggestions: 'currentDocument',
+        snippetSuggestions: 'inline',
+        inlineSuggest: { enabled: false },
+        parameterHints: { enabled: true },
+        autoDetectHighContrast: false,
+        glyphMargin: false,
+        lineDecorationsWidth: 20,
+        scrollBeyondLastLine: false,
+        smoothScrolling: true,
+        cursorSmoothCaretAnimation: 'on',
+        cursorBlinking: 'smooth',
+        padding: { top: 23, bottom: 23 },
+        renderLineHighlight: 'line',
+        renderLineHighlightOnlyWhenFocus: true,
+        overviewRulerLanes: 0,
+        overviewRulerBorder: false,
+        hideCursorInOverviewRuler: true,
+        roundedSelection: true,
+        stickyScroll: { enabled: false },
+        bracketPairColorization: { enabled: false },
+        guides: { indentation: true, bracketPairs: false },
+        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, alwaysConsumeMouseWheel: false },
+        ariaLabel: 'Code editor'
+      },
+      layout: {
+        width: '100%',
+        height: '100dvh',
+        desktopSplit: 0.55,
+        mobileSplit: 0.55,
+        mobileBreakpoint: 760,
+        minPaneSize: 220,
+        mobileMinPaneSize: 155,
+        keyboardResizeStep: 0.02
+      },
+      storage: { enabled: true, key: 'code-editor.workspace.v1', debounce: 350 },
+      keyboardShortcuts: { run: true, save: true, settings: true },
+      monacoBaseUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs',
+      // HTML results stay sandboxed; source code is never used as iframe content.
+      result: { sandbox: 'allow-scripts' },
+      toolbar: [
+        { id: 'run', label: 'Run code', icon: 'play', variant: 'primary', shortcut: true },
+        { id: 'open-result', label: 'Open result', icon: 'external' },
+        { id: 'separator', type: 'separator' },
+        { id: 'theme', label: 'Switch theme', icon: 'moon', iconOnly: true },
+        { id: 'settings', label: 'Settings', icon: 'settings' }
+      ],
+      onRun: null
+    };
+
+    (() => {
+      const config = window.EDITOR_CONFIG;
+      let appearance = config.appearance;
+      try {
+        if (config.storage.enabled) {
+          const saved = JSON.parse(localStorage.getItem(config.storage.key) || 'null');
+          if (['system', 'light', 'dark'].includes(saved?.preferences?.appearance)) {
+            appearance = saved.preferences.appearance;
+          }
+        }
+      } catch (_) {}
+      const dark = appearance === 'dark' || (appearance === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <style>
+    :root {
+      --page: #f7f8fa;
+      --panel: #ffffff;
+      --panel-soft: #fbfbfd;
+      --text: #30323c;
+      --text-secondary: #747682;
+      --muted: #a3a5af;
+      --border: #e5e6ec;
+      --border-soft: #eff0f4;
+      --hover: #f1f0f6;
+      --accent: #7960d5;
+      --accent-hover: #6b51c7;
+      --accent-soft: #f0ecfb;
+      --accent-text: #7960c9;
+      --green: #7b9d8d;
+      --danger: #c65d65;
+      --shadow: 0 3px 15px #24253903;
+      --split-ratio: 0.55;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--text);
+      background: var(--page);
+      font-synthesis: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    :root[data-theme='dark'] {
+      --page: #13151c;
+      --panel: #1b1d26;
+      --panel-soft: #1e202a;
+      --text: #e5e5ed;
+      --text-secondary: #9698a9;
+      --muted: #6e7184;
+      --border: #30323f;
+      --border-soft: #292b37;
+      --hover: #2a2939;
+      --accent: #967ce8;
+      --accent-hover: #a38aef;
+      --accent-soft: #2c263f;
+      --accent-text: #b19aee;
+      --green: #8eb6a2;
+      --danger: #e58e96;
+      --shadow: 0 3px 15px #00000010;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button, select, input { font: inherit; }
+    button { cursor: pointer; }
+    button, input, select { -webkit-tap-highlight-color: transparent; }
+    button:disabled { cursor: default; }
+    button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      outline-offset: 3px;
+    }
+    button { color: inherit; }
+    button svg, .icon { width: 17px; height: 17px; flex-shrink: 0; }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .app {
+      width: var(--app-width, 100%);
+      height: var(--app-height, 100dvh);
+      min-height: 480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      background: var(--page);
+      transition: background-color 180ms ease;
+    }
+    .topbar {
+      height: 84px;
+      min-height: 84px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 28px;
+    }
+    .topbar h1 { font-size: 19px; font-weight: 650; letter-spacing: -0.65px; margin: 0; white-space: nowrap; }
+    .toolbar-actions { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .toolbar-button {
+      height: 37px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      color: var(--text-secondary);
+      transition: background 150ms, color 150ms, transform 150ms;
+    }
+    .toolbar-button:hover { background: var(--hover); color: var(--text); }
+    .toolbar-button:active { transform: translateY(1px); }
+    .toolbar-button.icon-only { width: 37px; padding: 0; }
+    .toolbar-button.primary { color: #fff; background: var(--accent); padding: 0 13px; box-shadow: 0 2px 3px #5e3fa512; }
+    .toolbar-button.primary:hover { background: var(--accent-hover); }
+    .toolbar-button.primary:disabled { opacity: 0.7; }
+    .toolbar-button.primary > svg { width: 14px; height: 14px; }
+    .toolbar-separator { height: 21px; width: 1px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+    .run-shortcut { display: inline-flex; align-items: center; gap: 3px; margin-left: 5px; padding: 3px 4px; border-radius: 3px; background: #ffffff1a; font-size: 10px; font-weight: 400; color: #ffffffe0; }
+    .run-shortcut svg { width: 11px; height: 11px; }
+    .workbench {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+      margin: 0 24px 24px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      animation: workspace-enter 420ms cubic-bezier(.2,.8,.2,1) both;
+    }
+    .split-view { flex: 1; min-height: 0; min-width: 0; display: flex; }
+    .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--panel); }
+    .editor-pane { flex: 0 0 calc((100% - 9px) * var(--split-ratio)); }
+    .result-pane { flex: 1; }
+    .pane-header { height: 53px; min-height: 53px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-soft); padding: 0 19px; gap: 12px; }
+    .editor-pane .pane-header { padding-left: 0; }
+    .file-tab { height: 53px; min-width: 0; display: inline-flex; align-items: center; gap: 9px; padding: 0 22px; border-bottom: 2px solid var(--accent); font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .file-tab svg { width: 15px; height: 17px; flex-shrink: 0; color: var(--accent-text); }
+    .file-tab span { overflow: hidden; text-overflow: ellipsis; }
+    .pane-heading { display: inline-flex; align-items: center; gap: 9px; }
+    .pane-heading svg { width: 16px; height: 16px; color: var(--text-secondary); }
+    .pane-heading h2 { margin: 0; font-size: 12px; font-weight: 550; }
+    .language-picker { position: relative; display: flex; align-items: center; flex-shrink: 0; }
+    .language-picker select { appearance: none; border: 0; background: transparent; color: var(--text-secondary); padding: 7px 20px 7px 8px; font-size: 11px; cursor: pointer; max-width: 143px; border-radius: 4px; }
+    .language-picker select:hover { background: var(--hover); }
+    .language-picker > svg { width: 12px; height: 12px; position: absolute; right: 3px; pointer-events: none; color: var(--muted); }
+    option { background: var(--panel); color: var(--text); }
+    .clear-button { border: 0; background: transparent; display: flex; align-items: center; gap: 6px; padding: 6px 0 6px 7px; font-size: 11px; color: var(--text-secondary); border-radius: 4px; }
+    .clear-button svg { width: 13px; height: 13px; }
+    .clear-button:hover:not(:disabled) { color: var(--accent-text); }
+    .clear-button:disabled { color: var(--muted); opacity: 0.7; }
+    .editor-body { flex: 1; min-height: 0; position: relative; }
+    #monaco-editor { position: absolute; inset: 0; }
+    .editor-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 12px; color: var(--text-secondary); background: var(--panel); z-index: 2; }
+    .spinner { display: inline-block; width: 15px; height: 15px; border: 1.5px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 750ms linear infinite; }
+    .fallback-editor { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: 0; background: var(--panel); color: var(--text); padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.8; tab-size: initial; outline: none; }
+    .editor-error { position: absolute; bottom: 12px; left: 12px; right: 12px; z-index: 3; padding: 10px 12px; border: 1px solid var(--border); background: var(--panel-soft); border-radius: 6px; color: var(--text-secondary); display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 11px; }
+    .editor-error button { color: var(--accent-text); background: none; border: 0; font-weight: 550; padding: 4px; }
+    .divider { flex: 0 0 9px; display: flex; align-items: center; justify-content: center; background: var(--panel-soft); border-left: 1px solid var(--border-soft); border-right: 1px solid var(--border-soft); cursor: col-resize; touch-action: none; z-index: 4; transition: background 150ms; }
+    .divider::after { content: ''; width: 3px; height: 28px; border-radius: 3px; background: var(--border); transition: background 150ms, height 150ms; }
+    .divider:hover, .divider:focus-visible, body.resizing .divider { background: var(--accent-soft); }
+    .divider:hover::after, .divider:focus-visible::after, body.resizing .divider::after { background: var(--accent); height: 40px; }
+    .result-body { flex: 1; min-height: 0; position: relative; overflow: auto; display: flex; }
+    .empty-state { margin: auto; padding: 36px 25px 64px; text-align: center; max-width: 360px; animation: content-enter 240ms ease-out; }
+    .empty-illustration { width: 78px; height: 73px; margin: 0 auto 23px; color: var(--accent); }
+    .empty-illustration .illustration-fill { fill: var(--accent-soft); }
+    .empty-illustration .illustration-border { stroke: color-mix(in srgb, var(--accent) 32%, var(--panel)); }
+    .empty-state h3 { margin: 0 0 10px; font-size: 16px; font-weight: 550; letter-spacing: -0.4px; }
+    .empty-state p { font-size: 12px; line-height: 21px; color: var(--text-secondary); margin: 0 auto; max-width: 260px; }
+    .empty-state code { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-text); }
+    .result-text { margin: 0; padding: 25px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/23px 'JetBrains Mono', monospace; color: var(--text); width: 100%; animation: content-enter 200ms ease-out; }
+    .result-text.is-error { color: var(--danger); }
+    .result-frame { border: 0; width: 100%; height: 100%; background: #fff; }
+    .statusbar { height: 34px; min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 0 15px; border-top: 1px solid var(--border); background: var(--panel); font-size: 10px; color: var(--text-secondary); }
+    .save-status { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+    .save-status svg { width: 12px; height: 12px; color: var(--green); }
+    .save-status.unsaved svg { color: var(--muted); }
+    .save-status.storage-error svg { color: var(--danger); }
+    .statusbar-right { display: flex; align-items: center; gap: 19px; }
+    .cursor-position { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .keyboard-hint { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); white-space: nowrap; }
+    kbd { font: inherit; }
+    .keyboard-hint kbd { min-width: 20px; line-height: 15px; text-align: center; padding: 0 3px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-secondary); background: var(--panel-soft); font-size: 9px; }
+    .keyboard-hint > span { margin-left: 3px; }
+    .drag-shield { position: fixed; inset: 0; z-index: 90; cursor: col-resize; touch-action: none; }
+    body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
+    body.resizing .editor-body, body.resizing .result-body, body.resizing iframe { pointer-events: none !important; }
+    body.resizing.is-mobile, body.resizing.is-mobile *, body.is-mobile .drag-shield { cursor: row-resize !important; }
+    .app.is-mobile .split-view { flex-direction: column; }
+    .app.is-mobile .divider { cursor: row-resize; border: 0; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
+    .app.is-mobile .divider::after { width: 28px; height: 3px; }
+    .app.is-mobile .divider:hover::after { width: 40px; height: 3px; }
+    .settings-dialog { width: 406px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: 0 24px 90px #10112035; overflow: auto; margin: auto; }
+    .settings-dialog[open] { animation: dialog-enter 200ms cubic-bezier(.2,.8,.2,1); }
+    .settings-dialog::backdrop { background: #15172352; backdrop-filter: blur(3px); animation: backdrop-enter 200ms ease-out; }
+    .settings-header { display: flex; align-items: center; justify-content: space-between; padding: 23px 25px 19px; }
+    .settings-header h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.5px; margin: 0; }
+    .close-button { width: 27px; height: 27px; border: 0; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: none; }
+    .close-button:hover { background: var(--hover); }
+    .settings-content { padding: 0 25px; }
+    .settings-section { padding: 17px 0 20px; border-top: 1px solid var(--border-soft); }
+    .settings-section h3 { font-size: 9px; letter-spacing: 1.1px; font-weight: 650; color: var(--muted); text-transform: uppercase; margin: 0 0 15px; }
+    .theme-segment { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border: 1px solid var(--border); border-radius: 7px; background: var(--page); gap: 3px; margin-bottom: 18px; }
+    .theme-segment label { position: relative; cursor: pointer; }
+    .theme-segment input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+    .theme-segment label > span { display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 4px; height: 32px; font-size: 11px; color: var(--text-secondary); border: 1px solid transparent; transition: background 150ms, color 150ms; }
+    .theme-segment svg { width: 13px; height: 13px; }
+    .theme-segment input:checked + span { color: var(--accent-text); background: var(--panel); border-color: var(--border); box-shadow: 0 1px 3px #11111105; }
+    .theme-segment input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; min-height: 36px; }
+    .setting-row + .setting-row { margin-top: 15px; }
+    .setting-label { font-size: 12px; font-weight: 450; }
+    .setting-description { display: block; font-size: 10px; color: var(--text-secondary); line-height: 17px; font-weight: 400; margin-top: 2px; }
+    .theme-select { width: 163px; padding: 8px 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); color: var(--text-secondary); font-size: 11px; cursor: pointer; }
+    .font-stepper { display: flex; align-items: center; height: 32px; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+    .font-stepper button { width: 30px; align-self: stretch; background: var(--panel-soft); border: 0; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+    .font-stepper button:hover { background: var(--hover); }
+    .font-stepper svg { width: 12px; height: 12px; }
+    .font-stepper input { width: 35px; padding: 0; border: 0; background: none; text-align: right; color: var(--text); font-size: 11px; appearance: textfield; -moz-appearance: textfield; }
+    .font-stepper input::-webkit-inner-spin-button, .font-stepper input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+    .font-stepper .unit { font-size: 10px; padding: 0 9px 0 4px; color: var(--muted); }
+    .switch { position: relative; width: 31px; height: 18px; flex-shrink: 0; }
+    .switch input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+    .switch-track { position: absolute; inset: 0; border-radius: 20px; background: var(--border); transition: background 180ms; }
+    .switch-track::after { content: ''; position: absolute; width: 12px; height: 12px; top: 3px; left: 3px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #00000012; transition: transform 180ms; }
+    .switch input:checked + .switch-track { background: var(--accent); }
+    .switch input:checked + .switch-track::after { transform: translateX(13px); }
+    .switch input:focus-visible + .switch-track { outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 3px; }
+    .layout-setting { margin-top: 15px; }
+    .layout-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+    .layout-label output { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .layout-range { width: 100%; height: 4px; display: block; margin: 15px 0 4px; accent-color: var(--accent); cursor: pointer; }
+    .settings-footer { display: flex; align-items: center; justify-content: space-between; padding: 17px 25px; border-top: 1px solid var(--border-soft); }
+    .reset-button { background: none; border: 0; color: var(--text-secondary); padding: 6px 0; font-size: 11px; }
+    .reset-button:hover { color: var(--accent-text); }
+    .done-button { border: 0; background: var(--accent); color: white; border-radius: 6px; padding: 9px 21px; font-size: 11px; font-weight: 500; }
+    .done-button:hover { background: var(--accent-hover); }
+    .toast { position: fixed; left: 50%; bottom: 45px; transform: translateX(-50%); max-width: calc(100vw - 40px); display: flex; align-items: center; gap: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 5px 25px #10112015; padding: 12px 17px; font-size: 12px; z-index: 150; animation: toast-enter 200ms ease-out; }
+    .toast svg { width: 15px; height: 15px; color: var(--accent-text); flex-shrink: 0; }
+    @keyframes workspace-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes content-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes dialog-enter { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes backdrop-enter { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes toast-enter { from { opacity: 0; transform: translate(-50%, 7px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .app.is-mobile { min-height: 580px; }
+    .app.is-mobile .topbar { padding: 0 17px; height: 70px; min-height: 70px; gap: 12px; }
+    .app.is-mobile .topbar h1 { font-size: 18px; }
+    .app.is-mobile .toolbar-actions { gap: 5px; overflow-x: auto; scrollbar-width: none; padding: 3px; margin-right: -3px; }
+    .app.is-mobile .toolbar-actions::-webkit-scrollbar { display: none; }
+    .app.is-mobile .toolbar-button { flex-shrink: 0; }
+    .app.is-mobile .toolbar-button:not(.primary) { width: 34px; height: 34px; padding: 0; }
+    .app.is-mobile .toolbar-button:not(.primary) .button-label { display: none; }
+    .app.is-mobile .toolbar-button.primary { height: 34px; padding: 0 11px; gap: 6px; }
+    .app.is-mobile .run-shortcut, .app.is-mobile .toolbar-separator { display: none; }
+    .app.is-mobile .workbench { margin: 0 12px 12px; border-radius: 8px; }
+    .app.is-mobile .pane-header, .app.is-mobile .file-tab { height: 44px; min-height: 44px; }
+    .app.is-mobile .file-tab { padding: 0 16px; }
+    .app.is-mobile .pane-header { padding-right: 16px; padding-left: 16px; }
+    .app.is-mobile .empty-state { padding: 23px 20px 27px; }
+    .app.is-mobile .empty-illustration { width: 61px; height: 57px; margin-bottom: 15px; }
+    .app.is-mobile .empty-state h3 { font-size: 15px; margin-bottom: 7px; }
+    .app.is-mobile .empty-state p { font-size: 11px; line-height: 19px; }
+    .app.is-mobile .statusbar { padding: 0 12px; }
+    .app.is-mobile .keyboard-hint { display: none; }
+    .app.is-compact .topbar { padding: 0 12px; gap: 7px; }
+    .app.is-compact .topbar h1 { font-size: 17px; }
+    .app.is-compact .toolbar-actions { gap: 3px; }
+    .app.is-compact .run-code-suffix { display: none; }
+    .app.is-compact .toolbar-button.primary { padding: 0 10px; }
+    @media (max-width: 760px) {
+      .settings-dialog { max-height: calc(100dvh - 24px); }
+    }
+    @media (max-width: 380px) {
+      .settings-header { padding-left: 20px; padding-right: 20px; }
+      .settings-content { padding: 0 20px; }
+      .settings-footer { padding-left: 20px; padding-right: 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="topbar">
+      <h1>Code Editor</h1>
+      <nav class="toolbar-actions" id="toolbar" aria-label="Editor actions"></nav>
+    </header>
+
+    <section class="workbench" aria-label="Code workspace">
+      <div class="split-view" id="split-view">
+        <section class="pane editor-pane" id="editor-pane" aria-label="Source code">
+          <header class="pane-header">
+            <div class="file-tab">
+              <svg viewBox="0 0 20 22" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="M11.5 2.5H4.75A1.75 1.75 0 0 0 3 4.25v13.5c0 .97.78 1.75 1.75 1.75h10.5c.97 0 1.75-.78 1.75-1.75V8z"/><path d="M11.5 2.5V8H17M7 11l-2 2 2 2m6-4 2 2-2 2m-2-5-2 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="file-name">main.js</span>
+            </div>
+            <div class="language-picker">
+              <select id="language-select" aria-label="Editor language"></select>
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m5 6.5 3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </header>
+          <div class="editor-body">
+            <div id="monaco-editor"></div>
+            <div class="editor-loading" id="editor-loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading editor...</div>
+            <textarea class="fallback-editor" id="fallback-editor" aria-label="Code editor (basic mode)" autocomplete="off" autocapitalize="off" spellcheck="false" hidden></textarea>
+            <div class="editor-error" id="editor-error" hidden><span>Monaco could not load. Basic editing is available.</span><button type="button" id="retry-editor">Retry</button></div>
+          </div>
+        </section>
+
+        <div class="divider" id="divider" role="separator" tabindex="0" aria-label="Resize code and result panels. Use arrow keys, or double-click to reset." aria-orientation="vertical" aria-controls="editor-pane result-pane" aria-valuemin="20" aria-valuemax="80" aria-valuenow="55"></div>
+
+        <section class="pane result-pane" id="result-pane" aria-label="Code result">
+          <header class="pane-header">
+            <div class="pane-heading">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="m6 7 3 3-3 3m5 0h3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <h2>Result</h2>
+            </div>
+            <button class="clear-button" id="clear-result" type="button" disabled title="Clear result">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.6 8h5.8l.6-8M6.5 7v3.5M9.5 7v3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Clear
+            </button>
+          </header>
+          <div class="result-body" id="result-body" aria-busy="false">
+            <div class="empty-state" id="result-empty">
+              <svg class="empty-illustration" viewBox="0 0 90 83" fill="none" aria-hidden="true">
+                <rect class="illustration-fill" x="17" y="10" width="61" height="56" rx="7"/>
+                <path class="illustration-border" d="M24 9h45a6 6 0 0 1 6 6v42" stroke-width="1.3" stroke-linecap="round"/>
+                <rect x="11.5" y="20.5" width="60" height="48" rx="6" fill="var(--panel)" class="illustration-border" stroke-width="1.5"/>
+                <path class="illustration-border" d="M12 33h59" stroke-width="1.3"/>
+                <circle cx="20" cy="27" r="1.4" fill="currentColor" opacity=".6"/>
+                <circle cx="25.5" cy="27" r="1.4" fill="currentColor" opacity=".35"/>
+                <circle cx="31" cy="27" r="1.4" fill="currentColor" opacity=".2"/>
+                <path d="m25 43 7 6-7 6m14 0h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M72 72v6m-3-3h6" stroke="currentColor" stroke-opacity=".45" stroke-width="1.3" stroke-linecap="round"/>
+                <circle cx="8" cy="12" r="2" stroke="currentColor" stroke-opacity=".3" stroke-width="1.2"/>
+              </svg>
+              <h3 id="empty-title">Your output starts here</h3>
+              <p id="empty-description">Connect a compiler to turn your code into results.</p>
+            </div>
+            <pre class="result-text" id="result-text" aria-label="Compiler output" tabindex="0" hidden></pre>
+            <iframe class="result-frame" id="result-frame" title="Code output" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+          </div>
+          <span class="sr-only" id="result-announcement" role="status" aria-live="polite"></span>
+        </section>
+      </div>
+
+      <footer class="statusbar">
+        <span class="save-status" id="save-status" role="status" aria-live="polite"></span>
+        <div class="statusbar-right">
+          <span class="cursor-position" id="cursor-position">Ln 1, Col 1</span>
+          <span class="keyboard-hint" id="keyboard-hint"><kbd id="shortcut-modifier">Ctrl</kbd><kbd>Enter</kbd><span>to run</span></span>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <div class="drag-shield" id="drag-shield" hidden></div>
+
+  <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+    <header class="settings-header">
+      <h2 id="settings-title">Editor settings</h2>
+      <button class="close-button" id="close-settings" type="button" aria-label="Close settings"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 6 8 8m0-8-8 8" stroke-linecap="round"/></svg></button>
+    </header>
+    <div class="settings-content">
+      <section class="settings-section" aria-labelledby="appearance-heading">
+        <h3 id="appearance-heading">Appearance</h3>
+        <div class="theme-segment" role="group" aria-label="Application appearance">
+          <label><input type="radio" name="appearance" value="system"><span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><rect x="2" y="2.5" width="12" height="8" rx="1.5"/><path d="M5 13.5h6m-3-3v3" stroke-linecap="round"/></svg>System</span></label>
+          <label><input type="radio" name="appearance" value="light"><span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="8" cy="8" r="2.8"/><path d="M8 1v1m0 12v1M1 8h1m12 0h1M3 3l1 1m8 8 1 1M3 13l1-1m8-8 1-1" stroke-linecap="round"/></svg>Light</span></label>
+          <label><input type="radio" name="appearance" value="dark"><span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M13.5 9.2A5.8 5.8 0 0 1 6.8 2.5a5.7 5.7 0 1 0 6.7 6.7Z" stroke-linejoin="round"/></svg>Dark</span></label>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="editor-theme">Editor theme<span class="setting-description" id="editor-theme-description">For light mode</span></label>
+          <select class="theme-select" id="editor-theme"></select>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="font-size">Font size</label>
+          <div class="font-stepper">
+            <button type="button" id="font-decrease" aria-label="Decrease font size"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h8" stroke-linecap="round"/></svg></button>
+            <input type="number" id="font-size" min="10" max="28" step="1" aria-label="Editor font size in pixels"><span class="unit">px</span>
+            <button type="button" id="font-increase" aria-label="Increase font size"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h8M8 4v8" stroke-linecap="round"/></svg></button>
+          </div>
+        </div>
+      </section>
+      <section class="settings-section" aria-labelledby="editing-heading">
+        <h3 id="editing-heading">Editing</h3>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-word-wrap">Word wrap<span class="setting-description">Keep long lines in view.</span></label>
+          <label class="switch"><input type="checkbox" id="setting-word-wrap" role="switch" aria-label="Word wrap"><span class="switch-track"></span></label>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-minimap">Minimap<span class="setting-description">See an overview of your code.</span></label>
+          <label class="switch"><input type="checkbox" id="setting-minimap" role="switch" aria-label="Minimap"><span class="switch-track"></span></label>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-suggestions">Suggestions<span class="setting-description">Show completions as you type.</span></label>
+          <label class="switch"><input type="checkbox" id="setting-suggestions" role="switch" aria-label="Suggestions"><span class="switch-track"></span></label>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="setting-parameter-hints">Parameter hints<span class="setting-description">A little help with function arguments.</span></label>
+          <label class="switch"><input type="checkbox" id="setting-parameter-hints" role="switch" aria-label="Parameter hints"><span class="switch-track"></span></label>
+        </div>
+      </section>
+      <section class="settings-section" aria-labelledby="layout-heading">
+        <h3 id="layout-heading">Workspace</h3>
+        <div class="layout-setting">
+          <div class="layout-label"><label id="layout-label" for="layout-range">Editor width</label><output id="layout-value" for="layout-range">55%</output></div>
+          <input class="layout-range" id="layout-range" type="range" min="20" max="80" value="55" aria-label="Editor panel size">
+        </div>
+      </section>
+    </div>
+    <footer class="settings-footer"><button class="reset-button" type="button" id="reset-settings">Reset settings</button><button class="done-button" type="button" id="done-settings">Done</button></footer>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const config = window.EDITOR_CONFIG;
+      const $ = (id) => document.getElementById(id);
+      const icons = {
+        play: '<path d="m7 4 10 6-10 6V4Z" stroke-linejoin="round"/>',
+        external: '<path d="M12 3h5v5m-.5-4.5L9 11M9 4H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-4" stroke-linecap="round" stroke-linejoin="round"/>',
+        moon: '<path d="M17 11.4A7.1 7.1 0 0 1 8.6 3a7 7 0 1 0 8.4 8.4Z" stroke-linejoin="round"/>',
+        sun: '<circle cx="10" cy="10" r="3.5"/><path d="M10 1v2m0 14v2M1 10h2m14 0h2M3.6 3.6 5 5m10 10 1.4 1.4M3.6 16.4 5 15M15 5l1.4-1.4" stroke-linecap="round"/>',
+        settings: '<path d="m8 2-.6 2.1-1.7 1.1-2.1-.4-1.5 2.6L3.6 9v2l-1.5 1.6 1.5 2.6 2.1-.4 1.7 1 .6 2.2h3l.6-2.1 1.7-1.1 2.1.4 1.5-2.6L16.4 11V9l1.5-1.6-1.5-2.6-2.1.4-1.7-1L12 2H8Z" stroke-linejoin="round"/><circle cx="10" cy="10" r="3"/>',
+        check: '<circle cx="10" cy="10" r="7.2"/><path d="m6.7 10 2.1 2.1 4.5-4.5" stroke-linecap="round" stroke-linejoin="round"/>',
+        clock: '<circle cx="10" cy="10" r="7.2"/><path d="M10 6v4l2.5 1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+        info: '<circle cx="10" cy="10" r="7.2"/><path d="M10 9v5m0-8v.1" stroke-linecap="round"/>',
+        enter: '<path d="M16 4v7H4m4-4-4 4 4 4" stroke-linecap="round" stroke-linejoin="round"/>',
+        download: '<path d="M10 2v11m-4-4 4 4 4-4M3 14v3h14v-3" stroke-linecap="round" stroke-linejoin="round"/>',
+        copy: '<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M13 7V3H3v10h4" stroke-linejoin="round"/>',
+        plus: '<path d="M10 4v12M4 10h12" stroke-linecap="round"/>'
+      };
+      const icon = (name) => '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">' + (icons[name] || icons.plus) + '</svg>';
+      const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+      const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+      const modifier = isMac ? 'Cmd' : 'Ctrl';
+      const toolbarButtons = config.toolbar.map((button) => ({ ...button }));
+      let editor = null;
+      let monacoInstance = null;
+      let result = null;
+      let compiler = config.onRun;
+      let isRunning = false;
+      let runController = null;
+      let saveTimer = null;
+      let toastTimer = null;
+      let drag = null;
+      let monacoLoading = false;
+      let loadTimer = null;
+      let workerUrl = null;
+      let resolveReady;
+      const ready = new Promise((resolve) => { resolveReady = resolve; });
+
+      function defaults() {
+        return {
+          appearance: config.appearance,
+          themes: { ...config.themes },
+          fontSize: config.editor.fontSize,
+          wordWrap: config.editor.wordWrap !== 'off',
+          minimap: config.editor.minimap.enabled,
+          suggestions: config.editor.quickSuggestions !== false,
+          parameterHints: config.editor.parameterHints.enabled
+        };
+      }
+
+      let stored = null;
+      let storageAvailable = config.storage.enabled;
+      try {
+        if (config.storage.enabled) stored = JSON.parse(localStorage.getItem(config.storage.key) || 'null');
+      } catch (_) { storageAvailable = false; }
+
+      const state = {
+        code: typeof stored?.code === 'string' ? stored.code : config.defaultCode,
+        language: typeof stored?.language === 'string' ? stored.language : config.language,
+        preferences: defaults(),
+        splits: { desktop: config.layout.desktopSplit, mobile: config.layout.mobileSplit },
+        mobile: false
+      };
+
+      if (stored?.preferences && typeof stored.preferences === 'object') {
+        const saved = stored.preferences;
+        if (['system', 'light', 'dark'].includes(saved.appearance)) state.preferences.appearance = saved.appearance;
+        if (Number.isFinite(saved.fontSize)) state.preferences.fontSize = Math.max(10, Math.min(28, saved.fontSize));
+        for (const key of ['wordWrap', 'minimap', 'suggestions', 'parameterHints']) {
+          if (typeof saved[key] === 'boolean') state.preferences[key] = saved[key];
+        }
+        for (const mode of ['light', 'dark']) {
+          if (config.themeOptions.some((theme) => theme.id === saved.themes?.[mode]) || Object.hasOwn(config.customThemes, saved.themes?.[mode] || '')) {
+            state.preferences.themes[mode] = saved.themes[mode];
+          }
+        }
+      }
+      for (const mode of ['desktop', 'mobile']) {
+        if (Number.isFinite(stored?.splits?.[mode])) state.splits[mode] = Math.max(0.2, Math.min(0.8, stored.splits[mode]));
+      }
+
+      const api = {
+        config,
+        ready,
+        getEditor: () => editor,
+        getCode: () => editor ? editor.getValue() : state.code,
+        getLanguage: () => state.language,
+        setCode(value) {
+          if (typeof value !== 'string') throw new TypeError('Code must be a string.');
+          state.code = value;
+          if (editor) editor.setValue(value);
+          $('fallback-editor').value = value;
+          scheduleSave();
+        },
+        setLanguage,
+        setAppearance,
+        setResult,
+        clearResult,
+        run: runCode,
+        openResult,
+        openSettings,
+        setCompiler(handler) {
+          if (handler !== null && typeof handler !== 'function') throw new TypeError('Compiler must be a function or null.');
+          compiler = handler;
+          config.onRun = handler;
+        },
+        updateOptions(options) {
+          for (const [key, value] of Object.entries(options)) {
+            config.editor[key] = value && typeof value === 'object' && !Array.isArray(value) ? { ...config.editor[key], ...value } : value;
+          }
+          if (Number.isFinite(options.fontSize)) state.preferences.fontSize = Math.max(10, Math.min(28, options.fontSize));
+          if ('wordWrap' in options) state.preferences.wordWrap = options.wordWrap !== 'off';
+          if (options.minimap && 'enabled' in options.minimap) state.preferences.minimap = options.minimap.enabled;
+          if ('quickSuggestions' in options) state.preferences.suggestions = options.quickSuggestions !== false;
+          if (options.parameterHints && 'enabled' in options.parameterHints) state.preferences.parameterHints = options.parameterHints.enabled;
+          applyEditorOptions();
+          syncSettings();
+          scheduleSave();
+        },
+        addButton(button, position = toolbarButtons.length) {
+          if (!button.id) throw new TypeError('A toolbar button needs a unique id.');
+          if (toolbarButtons.some((item) => item.id === button.id)) throw new Error('Toolbar id already exists: ' + button.id);
+          toolbarButtons.splice(position, 0, { ...button });
+          renderToolbar();
+          return button.id;
+        },
+        removeButton(id) {
+          const index = toolbarButtons.findIndex((button) => button.id === id);
+          if (index >= 0) toolbarButtons.splice(index, 1);
+          renderToolbar();
+        }
+      };
+      window.CodeEditor = api;
+
+      function resolvedAppearance() {
+        return state.preferences.appearance === 'system' ? (systemTheme.matches ? 'dark' : 'light') : state.preferences.appearance;
+      }
+
+      function renderToolbar() {
+        const toolbar = $('toolbar');
+        toolbar.replaceChildren();
+        for (const item of toolbarButtons) {
+          if (item.type === 'separator') {
+            const separator = document.createElement('span');
+            separator.className = 'toolbar-separator';
+            separator.setAttribute('aria-hidden', 'true');
+            toolbar.append(separator);
+            continue;
+          }
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.id = 'action-' + item.id;
+          button.className = 'toolbar-button' + (item.variant === 'primary' ? ' primary' : '') + (item.iconOnly ? ' icon-only' : '');
+          button.title = item.title || item.label || item.id;
+          button.setAttribute('aria-label', item.label || item.id);
+          if (item.icon) button.innerHTML = icon(item.icon);
+          if (!item.iconOnly) {
+            const label = document.createElement('span');
+            label.className = 'button-label';
+            if (item.id === 'run' && item.label === 'Run code') label.innerHTML = 'Run<span class="run-code-suffix"> code</span>';
+            else label.textContent = item.label || item.id;
+            button.append(label);
+          }
+          if (item.shortcut && config.keyboardShortcuts.run) {
+            const shortcut = document.createElement('span');
+            shortcut.className = 'run-shortcut';
+            shortcut.setAttribute('aria-hidden', 'true');
+            shortcut.innerHTML = modifier + icon('enter');
+            button.append(shortcut);
+          }
+          if (item.id === 'run') {
+            if (config.keyboardShortcuts.run) button.setAttribute('aria-keyshortcuts', 'Control+Enter Meta+Enter');
+            button.title = 'Run code' + (config.keyboardShortcuts.run ? ' (' + modifier + '+Enter)' : '');
+          }
+          button.addEventListener('click', async () => {
+            try {
+              if (typeof item.onClick === 'function') await item.onClick(context());
+              else if (item.id === 'run') await runCode();
+              else if (item.id === 'open-result') openResult();
+              else if (item.id === 'theme') setAppearance(resolvedAppearance() === 'dark' ? 'light' : 'dark');
+              else if (item.id === 'settings') openSettings();
+            } catch (error) { showToast(error.message || 'The action could not be completed.'); }
+          });
+          toolbar.append(button);
+        }
+        syncThemeButton();
+        syncRunButton();
+      }
+
+      function context() {
+        return { code: api.getCode(), language: state.language, editor, monaco: monacoInstance, api, setResult, clearResult };
+      }
+
+      function syncThemeButton() {
+        const button = $('action-theme');
+        if (!button) return;
+        const dark = resolvedAppearance() === 'dark';
+        const label = 'Switch to ' + (dark ? 'light' : 'dark') + ' mode';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        const svg = button.querySelector('svg');
+        if (svg) svg.outerHTML = icon(dark ? 'sun' : 'moon');
+      }
+
+      function syncRunButton() {
+        $('result-body').setAttribute('aria-busy', String(isRunning));
+        const button = $('action-run');
+        if (!button) return;
+        button.disabled = isRunning;
+        const label = button.querySelector('.button-label');
+        const item = toolbarButtons.find((item) => item.id === 'run');
+        if (label) {
+          if (isRunning) label.textContent = 'Running...';
+          else if (item.label === 'Run code') label.innerHTML = 'Run<span class="run-code-suffix"> code</span>';
+          else label.textContent = item.label;
+        }
+        const graphic = button.querySelector('svg, .spinner');
+        if (graphic) graphic.outerHTML = isRunning ? '<span class="spinner" aria-hidden="true"></span>' : icon(item.icon || 'play');
+      }
+
+      function setAppearance(mode) {
+        if (!['system', 'light', 'dark'].includes(mode)) throw new TypeError('Appearance must be system, light, or dark.');
+        state.preferences.appearance = mode;
+        applyTheme();
+        scheduleSave();
+      }
+
+      function applyTheme() {
+        const mode = resolvedAppearance();
+        document.documentElement.dataset.theme = mode;
+        document.documentElement.style.colorScheme = mode;
+        if (monacoInstance) monacoInstance.editor.setTheme(state.preferences.themes[mode]);
+        syncThemeButton();
+        syncSettings();
+      }
+
+      function populateLanguages() {
+        if (!config.languages.some((language) => language.id === state.language)) {
+          config.languages.push({ id: state.language, label: state.language, fileName: 'untitled.' + state.language });
+        }
+        $('language-select').replaceChildren();
+        for (const language of config.languages) {
+          const option = document.createElement('option');
+          option.value = language.id;
+          option.textContent = language.label;
+          $('language-select').append(option);
+        }
+        $('language-select').value = state.language;
+        const language = config.languages.find((item) => item.id === state.language);
+        $('file-name').textContent = config.fileName || language.fileName || 'untitled';
+      }
+
+      function setLanguage(language) {
+        if (typeof language !== 'string' || !language.trim()) throw new TypeError('Language must be a nonempty string.');
+        state.language = language;
+        populateLanguages();
+        if (editor) monacoInstance.editor.setModelLanguage(editor.getModel(), language);
+        scheduleSave();
+      }
+
+      function editorOptions() {
+        const preferences = state.preferences;
+        return {
+          ...config.editor,
+          fontSize: preferences.fontSize,
+          wordWrap: preferences.wordWrap ? (config.editor.wordWrap === 'off' ? 'on' : config.editor.wordWrap || 'on') : 'off',
+          minimap: { ...config.editor.minimap, enabled: preferences.minimap },
+          quickSuggestions: preferences.suggestions ? config.editor.quickSuggestions || true : false,
+          suggestOnTriggerCharacters: preferences.suggestions && config.editor.suggestOnTriggerCharacters,
+          wordBasedSuggestions: preferences.suggestions ? config.editor.wordBasedSuggestions : 'off',
+          snippetSuggestions: preferences.suggestions ? config.editor.snippetSuggestions : 'none',
+          inlineSuggest: { ...config.editor.inlineSuggest, enabled: preferences.suggestions && Boolean(config.editor.inlineSuggest?.enabled) },
+          parameterHints: { ...config.editor.parameterHints, enabled: preferences.parameterHints }
+        };
+      }
+
+      function applyEditorOptions() {
+        if (editor) editor.updateOptions(editorOptions());
+        const fallback = $('fallback-editor');
+        fallback.style.fontSize = state.preferences.fontSize + 'px';
+        fallback.style.fontFamily = config.editor.fontFamily;
+        fallback.style.lineHeight = config.editor.lineHeight >= 8 ? config.editor.lineHeight + 'px' : String(config.editor.lineHeight || 1.5);
+        fallback.wrap = state.preferences.wordWrap ? 'soft' : 'off';
+      }
+
+      function setSaveStatus(kind, text) {
+        const status = $('save-status');
+        status.className = 'save-status' + (kind === 'saving' ? ' unsaved' : kind === 'error' ? ' storage-error' : '');
+        status.innerHTML = icon(kind === 'saving' ? 'clock' : kind === 'error' ? 'info' : 'check');
+        const label = document.createElement('span');
+        label.textContent = text;
+        status.append(label);
+      }
+
+      function saveNow() {
+        clearTimeout(saveTimer);
+        if (!config.storage.enabled) {
+          setSaveStatus('saving', 'Local saving is off');
+          return false;
+        }
+        try {
+          localStorage.setItem(config.storage.key, JSON.stringify({ version: 1, code: state.code, language: state.language, preferences: state.preferences, splits: state.splits }));
+          storageAvailable = true;
+          setSaveStatus('saved', 'All changes saved');
+          return true;
+        } catch (_) {
+          storageAvailable = false;
+          setSaveStatus('error', 'Local saving unavailable');
+          return false;
+        }
+      }
+
+      function scheduleSave() {
+        clearTimeout(saveTimer);
+        if (!config.storage.enabled) { setSaveStatus('saving', 'Local saving is off'); return; }
+        setSaveStatus('saving', 'Saving changes...');
+        saveTimer = setTimeout(saveNow, config.storage.debounce);
+      }
+
+      function showToast(message) {
+        clearTimeout(toastTimer);
+        const toast = $('toast');
+        toast.innerHTML = icon('info');
+        const text = document.createElement('span');
+        text.textContent = message;
+        toast.append(text);
+        toast.hidden = false;
+        toastTimer = setTimeout(() => { toast.hidden = true; }, 3500);
+      }
+
+      function syncSettings() {
+        const preferences = state.preferences;
+        for (const radio of document.querySelectorAll('input[name="appearance"]')) radio.checked = radio.value === preferences.appearance;
+        $('font-size').value = preferences.fontSize;
+        $('font-decrease').disabled = preferences.fontSize <= 10;
+        $('font-increase').disabled = preferences.fontSize >= 28;
+        $('setting-word-wrap').checked = preferences.wordWrap;
+        $('setting-minimap').checked = preferences.minimap;
+        $('setting-suggestions').checked = preferences.suggestions;
+        $('setting-parameter-hints').checked = preferences.parameterHints;
+        const mode = resolvedAppearance();
+        const themeSelect = $('editor-theme');
+        const themeOptions = [...config.themeOptions];
+        for (const name of Object.keys(config.customThemes)) {
+          if (!themeOptions.some((theme) => theme.id === name)) themeOptions.push({ id: name, label: name });
+        }
+        for (const name of Object.values(preferences.themes)) {
+          if (!themeOptions.some((theme) => theme.id === name)) themeOptions.push({ id: name, label: name });
+        }
+        themeSelect.replaceChildren();
+        for (const theme of themeOptions) {
+          const option = document.createElement('option');
+          option.value = theme.id;
+          option.textContent = theme.label;
+          themeSelect.append(option);
+        }
+        themeSelect.value = preferences.themes[mode];
+        $('editor-theme-description').textContent = 'For ' + mode + ' mode';
+        syncLayoutSettings();
+      }
+
+      function openSettings() {
+        syncSettings();
+        if (!$('settings-dialog').open) $('settings-dialog').showModal();
+      }
+
+      function updateFontSize(value) {
+        if (!Number.isFinite(value)) { syncSettings(); return; }
+        state.preferences.fontSize = Math.max(10, Math.min(28, Math.round(value)));
+        applyEditorOptions();
+        syncSettings();
+        scheduleSave();
+      }
+
+      function syncLayoutSettings() {
+        const percentage = Math.round(state.splits[state.mobile ? 'mobile' : 'desktop'] * 100);
+        $('layout-range').value = percentage;
+        $('layout-value').textContent = percentage + '%';
+        $('layout-label').textContent = 'Editor ' + (state.mobile ? 'height' : 'width');
+        $('divider').setAttribute('aria-valuenow', percentage);
+        $('divider').setAttribute('aria-valuetext', 'Editor uses ' + percentage + '% of the ' + (state.mobile ? 'height' : 'width'));
+      }
+
+      function setSplit(ratio, persist = true) {
+        const bounds = $('split-view').getBoundingClientRect();
+        const available = (state.mobile ? bounds.height : bounds.width) - 9;
+        const minSize = state.mobile ? config.layout.mobileMinPaneSize : config.layout.minPaneSize;
+        const minimum = Math.min(0.45, Math.max(0.2, minSize / Math.max(1, available)));
+        const clamped = Math.max(minimum, Math.min(1 - minimum, ratio));
+        state.splits[state.mobile ? 'mobile' : 'desktop'] = clamped;
+        $('app').style.setProperty('--split-ratio', String(clamped));
+        $('divider').setAttribute('aria-valuemin', Math.ceil(minimum * 100));
+        $('divider').setAttribute('aria-valuemax', Math.floor((1 - minimum) * 100));
+        $('layout-range').min = Math.ceil(minimum * 100);
+        $('layout-range').max = Math.floor((1 - minimum) * 100);
+        syncLayoutSettings();
+        if (editor) editor.layout();
+        if (persist) scheduleSave();
+      }
+
+      function updateLayout() {
+        const width = $('app').getBoundingClientRect().width;
+        state.mobile = width <= config.layout.mobileBreakpoint;
+        $('app').classList.toggle('is-mobile', state.mobile);
+        $('app').classList.toggle('is-compact', width <= 380);
+        document.body.classList.toggle('is-mobile', state.mobile);
+        $('divider').setAttribute('aria-orientation', state.mobile ? 'horizontal' : 'vertical');
+        setSplit(state.splits[state.mobile ? 'mobile' : 'desktop'], false);
+      }
+
+      function beginResize(event) {
+        if (event.button !== 0 || drag) return;
+        event.preventDefault();
+        drag = { pointerId: event.pointerId };
+        $('divider').setPointerCapture(event.pointerId);
+        document.body.classList.add('resizing');
+        // Iframes and Monaco must not intercept pointer movement during a drag.
+        $('drag-shield').hidden = false;
+        $('divider').focus({ preventScroll: true });
+      }
+
+      function moveResize(event) {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        event.preventDefault();
+        const bounds = $('split-view').getBoundingClientRect();
+        const position = state.mobile ? event.clientY - bounds.top : event.clientX - bounds.left;
+        const available = (state.mobile ? bounds.height : bounds.width) - 9;
+        setSplit((position - 4.5) / available, false);
+      }
+
+      function endResize(event) {
+        if (!drag || (typeof event?.pointerId === 'number' && event.pointerId !== drag.pointerId)) return;
+        const pointerId = drag.pointerId;
+        drag = null;
+        if ($('divider').hasPointerCapture(pointerId)) $('divider').releasePointerCapture(pointerId);
+        document.body.classList.remove('resizing');
+        $('drag-shield').hidden = true;
+        saveNow();
+        if (editor) editor.layout();
+      }
+
+      function setResult(value) {
+        if (typeof value === 'string') value = { type: 'text', content: value };
+        if (!value || !['text', 'html', 'error', 'notice'].includes(value.type)) throw new TypeError('Result must be a string or { type: "text" | "html" | "error" | "notice", content }.');
+        result = { ...value, content: String(value.content ?? '') };
+        renderResult();
+      }
+
+      function renderResult() {
+        const empty = $('result-empty');
+        const text = $('result-text');
+        const frame = $('result-frame');
+        empty.hidden = true;
+        text.hidden = true;
+        frame.hidden = true;
+        text.textContent = '';
+        frame.removeAttribute('srcdoc');
+        $('clear-result').disabled = !result;
+        $('result-announcement').textContent = !result ? 'Result cleared.' : result.type === 'notice' ? result.title || 'Output updated.' : result.type === 'error' ? 'Compiler returned an error.' : 'Output updated.';
+        if (!result || result.type === 'notice') {
+          empty.hidden = false;
+          $('empty-title').textContent = result?.title || 'Your output starts here';
+          $('empty-description').replaceChildren();
+          if (result?.reason === 'no-compiler') {
+            $('empty-description').append('Add an ');
+            const code = document.createElement('code');
+            code.textContent = 'onRun';
+            $('empty-description').append(code, ' handler in EDITOR_CONFIG to connect your compiler.');
+          } else $('empty-description').textContent = result?.content || 'Connect a compiler to turn your code into results.';
+        } else if (result.type === 'html') {
+          frame.setAttribute('sandbox', config.result.sandbox);
+          frame.srcdoc = result.content;
+          frame.hidden = false;
+        } else {
+          text.textContent = result.content;
+          text.classList.toggle('is-error', result.type === 'error');
+          text.hidden = false;
+        }
+      }
+
+      function clearResult() {
+        if (runController) runController.abort();
+        runController = null;
+        isRunning = false;
+        syncRunButton();
+        result = null;
+        renderResult();
+      }
+
+      // This is the only execution entry point. There is intentionally no compiler.
+      async function runCode() {
+        if (isRunning) return;
+        saveNow();
+        if (typeof compiler !== 'function') {
+          setResult({ type: 'notice', title: 'No compiler connected yet', reason: 'no-compiler', content: '' });
+          return;
+        }
+        isRunning = true;
+        runController = new AbortController();
+        const controller = runController;
+        let outputProvided = false;
+        syncRunButton();
+        $('clear-result').disabled = false;
+        try {
+          const output = await compiler({
+            ...context(),
+            signal: controller.signal,
+            setResult(value) {
+              if (!controller.signal.aborted) { outputProvided = true; setResult(value); }
+            }
+          });
+          if (!controller.signal.aborted) {
+            if (output !== undefined && output !== null) setResult(output);
+            else if (!outputProvided) setResult({ type: 'notice', title: 'Finished without output', content: 'Your compiler completed without returning a result.' });
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) setResult({ type: 'error', content: error instanceof Error ? error.message : String(error) });
+        } finally {
+          if (runController === controller) {
+            isRunning = false;
+            runController = null;
+            syncRunButton();
+          }
+        }
+      }
+
+      function openResult() {
+        const outputDocument = document.implementation.createHTMLDocument('Result - Code Editor');
+        outputDocument.documentElement.lang = 'en';
+        const charset = outputDocument.createElement('meta');
+        charset.setAttribute('charset', 'UTF-8');
+        const viewport = outputDocument.createElement('meta');
+        viewport.name = 'viewport';
+        viewport.content = 'width=device-width, initial-scale=1';
+        outputDocument.head.append(charset, viewport);
+        const dark = resolvedAppearance() === 'dark';
+        const style = outputDocument.createElement('style');
+        style.textContent = 'html{color-scheme:' + (dark ? 'dark' : 'light') + '}*{box-sizing:border-box}body{margin:0;font:14px/1.7 system-ui,sans-serif;background:' + (dark ? '#1b1d26' : '#fff') + ';color:' + (dark ? '#e5e5ed' : '#30323c') + '}header{padding:18px 25px;border-bottom:1px solid ' + (dark ? '#30323f' : '#e5e6ec') + ';font-size:14px;font-weight:600}pre{padding:25px;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.8 monospace}main{padding:80px 25px;text-align:center}h1{font-size:20px;font-weight:500}p{opacity:.65;font-size:13px}iframe{border:0;width:100%;height:calc(100dvh - 61px);background:white;display:block}';
+        outputDocument.head.append(style);
+        const header = outputDocument.createElement('header');
+        header.textContent = 'Result';
+        outputDocument.body.append(header);
+        if (result?.type === 'html') {
+          const frame = outputDocument.createElement('iframe');
+          frame.title = 'Code output';
+          frame.setAttribute('sandbox', config.result.sandbox);
+          frame.setAttribute('referrerpolicy', 'no-referrer');
+          frame.srcdoc = result.content;
+          outputDocument.body.append(frame);
+        } else if (result && ['text', 'error'].includes(result.type)) {
+          const pre = outputDocument.createElement('pre');
+          pre.textContent = result.content;
+          outputDocument.body.append(pre);
+        } else {
+          const main = outputDocument.createElement('main');
+          const title = outputDocument.createElement('h1');
+          title.textContent = result?.title || 'Your output starts here';
+          const description = outputDocument.createElement('p');
+          description.textContent = result?.reason === 'no-compiler' ? 'Add an onRun handler in EDITOR_CONFIG to connect your compiler.' : result?.content || 'Connect a compiler to turn your code into results.';
+          main.append(title, description);
+          outputDocument.body.append(main);
+        }
+        const url = URL.createObjectURL(new Blob(['<!DOCTYPE html>\n' + outputDocument.documentElement.outerHTML], { type: 'text/html' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+
+      function defineThemes(monaco) {
+        monaco.editor.defineTheme('soft-light', {
+          base: 'vs', inherit: true,
+          rules: [
+            { token: '', foreground: '464652' },
+            { token: 'comment', foreground: 'A0A1AD', fontStyle: 'italic' },
+            { token: 'keyword', foreground: '9B65B4' },
+            { token: 'string', foreground: '69917B' },
+            { token: 'number', foreground: 'BD8B58' },
+            { token: 'delimiter', foreground: '878895' },
+            { token: 'type.identifier', foreground: '628F9E' }
+          ],
+          colors: {
+            'editor.background': '#FFFFFF', 'editor.foreground': '#464652',
+            'editorLineNumber.foreground': '#C0C1CC', 'editorLineNumber.activeForeground': '#7D7C8C',
+            'editorCursor.foreground': '#7960D5', 'editor.selectionBackground': '#EAE3F8',
+            'editor.inactiveSelectionBackground': '#F0ECF8', 'editor.lineHighlightBackground': '#F9F8FC',
+            'editor.lineHighlightBorder': '#00000000', 'editorIndentGuide.background1': '#EFEFF4',
+            'editorIndentGuide.activeBackground1': '#D8D0E7', 'editorGutter.background': '#FFFFFF',
+            'editorWidget.background': '#FFFFFF', 'editorWidget.border': '#E5E6EC',
+            'editorSuggestWidget.selectedBackground': '#F0ECFB', 'editor.findMatchBackground': '#E3D8FC',
+            'editorBracketMatch.background': '#F0ECFB', 'editorBracketMatch.border': '#DBD1F1',
+            'scrollbarSlider.background': '#D5D3DE66', 'scrollbarSlider.hoverBackground': '#BDB9CC88',
+            'editorOverviewRuler.border': '#00000000'
+          }
+        });
+        monaco.editor.defineTheme('soft-dark', {
+          base: 'vs-dark', inherit: true,
+          rules: [
+            { token: '', foreground: 'D5D4E1' },
+            { token: 'comment', foreground: '717487', fontStyle: 'italic' },
+            { token: 'keyword', foreground: 'BE96D8' },
+            { token: 'string', foreground: 'A1C4AB' },
+            { token: 'number', foreground: 'D9B28C' },
+            { token: 'delimiter', foreground: '9897AE' },
+            { token: 'type.identifier', foreground: '92BDCC' }
+          ],
+          colors: {
+            'editor.background': '#1B1D26', 'editor.foreground': '#D5D4E1',
+            'editorLineNumber.foreground': '#515465', 'editorLineNumber.activeForeground': '#A3A0B6',
+            'editorCursor.foreground': '#B199EE', 'editor.selectionBackground': '#413453',
+            'editor.inactiveSelectionBackground': '#322C43', 'editor.lineHighlightBackground': '#20212E',
+            'editor.lineHighlightBorder': '#00000000', 'editorIndentGuide.background1': '#2B2D3B',
+            'editorIndentGuide.activeBackground1': '#4B405D', 'editorGutter.background': '#1B1D26',
+            'editorWidget.background': '#22242F', 'editorWidget.border': '#363545',
+            'editorSuggestWidget.selectedBackground': '#393047', 'editor.findMatchBackground': '#54406D',
+            'editorBracketMatch.background': '#342B46', 'editorBracketMatch.border': '#55416F',
+            'scrollbarSlider.background': '#68627944', 'scrollbarSlider.hoverBackground': '#837A9966',
+            'editorOverviewRuler.border': '#00000000'
+          }
+        });
+        for (const [name, theme] of Object.entries(config.customThemes)) monaco.editor.defineTheme(name, theme);
+      }
+
+      function initializeMonaco() {
+        if (editor) return;
+        clearTimeout(loadTimer);
+        monacoLoading = false;
+        monacoInstance = window.monaco;
+        defineThemes(monacoInstance);
+        editor = monacoInstance.editor.create($('monaco-editor'), {
+          ...editorOptions(),
+          value: state.code,
+          language: state.language,
+          theme: state.preferences.themes[resolvedAppearance()]
+        });
+        $('editor-loading').hidden = true;
+        $('fallback-editor').hidden = true;
+        $('editor-error').hidden = true;
+        editor.onDidChangeModelContent(() => { state.code = editor.getValue(); scheduleSave(); });
+        editor.onDidChangeCursorPosition((event) => { $('cursor-position').textContent = 'Ln ' + event.position.lineNumber + ', Col ' + event.position.column; });
+        if (document.fonts) document.fonts.ready.then(() => { monacoInstance.editor.remeasureFonts(); editor.layout(); });
+        if (config.keyboardShortcuts.run) editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter, runCode);
+        if (config.keyboardShortcuts.save) editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => { if (saveNow()) showToast('Code saved.'); });
+        if (config.keyboardShortcuts.settings) editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Comma, openSettings);
+        saveNow();
+        resolveReady(api);
+        window.dispatchEvent(new CustomEvent('code-editor:ready', { detail: api }));
+      }
+
+      function showEditorFallback() {
+        if (editor) return;
+        clearTimeout(loadTimer);
+        monacoLoading = false;
+        $('editor-loading').hidden = true;
+        $('fallback-editor').value = state.code;
+        $('fallback-editor').hidden = false;
+        $('editor-error').hidden = false;
+        applyEditorOptions();
+        resolveReady(api);
+      }
+
+      function loadMonaco() {
+        if (monacoLoading || editor) return;
+        monacoLoading = true;
+        $('editor-error').hidden = true;
+        if ($('fallback-editor').hidden) $('editor-loading').hidden = false;
+        const base = config.monacoBaseUrl.replace(/\/$/, '');
+        if (!workerUrl) {
+          const workerSource = 'self.MonacoEnvironment = { baseUrl: ' + JSON.stringify(base.replace(/\/vs$/, '/')) + ' }; importScripts(' + JSON.stringify(base + '/base/worker/workerMain.js') + ');';
+          workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+        }
+        window.MonacoEnvironment = { getWorkerUrl: () => workerUrl };
+        loadTimer = setTimeout(showEditorFallback, 15000);
+        const loadEditor = () => {
+          window.require.config({ paths: { vs: base } });
+          window.require(['vs/editor/editor.main'], () => {
+            try { initializeMonaco(); } catch (_) { showEditorFallback(); }
+          }, showEditorFallback);
+        };
+        if (typeof window.require === 'function' && window.require.config) loadEditor();
+        else {
+          const loader = document.createElement('script');
+          loader.src = base + '/loader.js';
+          loader.async = true;
+          loader.onload = loadEditor;
+          loader.onerror = showEditorFallback;
+          document.head.append(loader);
+        }
+      }
+
+      $('app').style.setProperty('--app-width', config.layout.width);
+      $('app').style.setProperty('--app-height', config.layout.height);
+      $('fallback-editor').value = state.code;
+      $('shortcut-modifier').textContent = modifier;
+      $('keyboard-hint').hidden = !config.keyboardShortcuts.run;
+      $('result-frame').setAttribute('sandbox', config.result.sandbox);
+      populateLanguages();
+      renderToolbar();
+      applyTheme();
+      updateLayout();
+      setSaveStatus(storageAvailable ? 'saving' : 'error', config.storage.enabled ? (storageAvailable ? 'Opening workspace...' : 'Local saving unavailable') : 'Local saving is off');
+
+      $('language-select').addEventListener('change', (event) => setLanguage(event.target.value));
+      $('clear-result').addEventListener('click', clearResult);
+      $('close-settings').addEventListener('click', () => $('settings-dialog').close());
+      $('done-settings').addEventListener('click', () => $('settings-dialog').close());
+      $('settings-dialog').addEventListener('click', (event) => {
+        if (event.target !== $('settings-dialog')) return;
+        const bounds = $('settings-dialog').getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) $('settings-dialog').close();
+      });
+      for (const radio of document.querySelectorAll('input[name="appearance"]')) radio.addEventListener('change', () => setAppearance(radio.value));
+      $('editor-theme').addEventListener('change', (event) => {
+        state.preferences.themes[resolvedAppearance()] = event.target.value;
+        applyTheme();
+        scheduleSave();
+      });
+      $('font-size').addEventListener('change', (event) => updateFontSize(event.target.valueAsNumber));
+      $('font-decrease').addEventListener('click', () => updateFontSize(state.preferences.fontSize - 1));
+      $('font-increase').addEventListener('click', () => updateFontSize(state.preferences.fontSize + 1));
+      for (const [id, key] of Object.entries({ 'setting-word-wrap': 'wordWrap', 'setting-minimap': 'minimap', 'setting-suggestions': 'suggestions', 'setting-parameter-hints': 'parameterHints' })) {
+        $(id).addEventListener('change', (event) => {
+          state.preferences[key] = event.target.checked;
+          applyEditorOptions();
+          scheduleSave();
+        });
+      }
+      $('layout-range').addEventListener('input', (event) => setSplit(Number(event.target.value) / 100));
+      $('reset-settings').addEventListener('click', () => {
+        state.preferences = defaults();
+        state.splits = { desktop: config.layout.desktopSplit, mobile: config.layout.mobileSplit };
+        applyTheme();
+        applyEditorOptions();
+        updateLayout();
+        saveNow();
+        $('reset-settings').textContent = 'Settings reset';
+        setTimeout(() => { $('reset-settings').textContent = 'Reset settings'; }, 1800);
+      });
+      $('divider').addEventListener('pointerdown', beginResize);
+      window.addEventListener('pointermove', moveResize, { passive: false });
+      window.addEventListener('pointerup', endResize);
+      window.addEventListener('pointercancel', endResize);
+      window.addEventListener('blur', endResize);
+      $('divider').addEventListener('lostpointercapture', endResize);
+      $('divider').addEventListener('dblclick', () => setSplit(state.mobile ? config.layout.mobileSplit : config.layout.desktopSplit));
+      $('divider').addEventListener('keydown', (event) => {
+        const increase = state.mobile ? 'ArrowDown' : 'ArrowRight';
+        const decrease = state.mobile ? 'ArrowUp' : 'ArrowLeft';
+        if (![increase, decrease, 'Home', 'End', 'Enter'].includes(event.key)) return;
+        event.preventDefault();
+        const current = state.splits[state.mobile ? 'mobile' : 'desktop'];
+        if (event.key === 'Home') setSplit(0.2);
+        else if (event.key === 'End') setSplit(0.8);
+        else if (event.key === 'Enter') setSplit(state.mobile ? config.layout.mobileSplit : config.layout.desktopSplit);
+        else setSplit(current + (event.key === increase ? 1 : -1) * config.layout.keyboardResizeStep);
+      });
+      $('fallback-editor').addEventListener('input', (event) => {
+        state.code = event.target.value;
+        scheduleSave();
+      });
+      $('fallback-editor').addEventListener('keyup', (event) => {
+        const before = event.target.value.slice(0, event.target.selectionStart);
+        const lines = before.split('\n');
+        $('cursor-position').textContent = 'Ln ' + lines.length + ', Col ' + (lines[lines.length - 1].length + 1);
+      });
+      $('retry-editor').addEventListener('click', () => { saveNow(); window.location.reload(); });
+      document.addEventListener('keydown', (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || event.defaultPrevented) return;
+        if (event.key === 'Enter' && config.keyboardShortcuts.run && !$('settings-dialog').open) {
+          event.preventDefault();
+          runCode();
+        } else if (event.key.toLowerCase() === 's' && config.keyboardShortcuts.save) {
+          event.preventDefault();
+          if (saveNow()) showToast('Code saved.');
+        } else if (event.key === ',' && config.keyboardShortcuts.settings) {
+          event.preventDefault();
+          openSettings();
+        }
+      });
+      systemTheme.addEventListener('change', () => { if (state.preferences.appearance === 'system') applyTheme(); });
+      window.addEventListener('pagehide', saveNow);
+      if (window.ResizeObserver) new ResizeObserver(updateLayout).observe($('split-view'));
+      else window.addEventListener('resize', updateLayout);
+      saveNow();
+      loadMonaco();
+    })();
+  </script>
+</body>
+</html>

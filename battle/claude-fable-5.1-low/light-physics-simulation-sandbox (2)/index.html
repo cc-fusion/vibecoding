@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optics Sandbox</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  html,body{height:100%;overflow:hidden;background:#0b0d12;color:#e2e8f0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:999px;background:#1f2633;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#38bdf8;border:2px solid #0b0d12;cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#38bdf8;border:2px solid #0b0d12;cursor:pointer}
+  input[type=number],select{background:#131824;border:1px solid #232b3a;border-radius:6px;color:#e2e8f0;font-size:12px;padding:3px 6px;outline:none}
+  input[type=number]{width:64px;text-align:right}
+  input[type=number]:focus,select:focus{border-color:#38bdf8}
+  select{width:100%}
+  input[type=checkbox]{accent-color:#38bdf8;width:14px;height:14px}
+  .tool{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 10px;border-radius:8px;font-size:13px;color:#cbd5e1;transition:background .12s}
+  .tool:hover{background:#161c28;color:#fff}
+  .tool .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .field{display:flex;flex-direction:column;gap:5px;padding:8px 0;border-bottom:1px solid #161c28}
+  .field:last-child{border-bottom:none}
+  .lbl{font-size:12px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .btn{padding:5px 10px;border-radius:7px;font-size:12px;border:1px solid #232b3a;background:#131824;color:#cbd5e1;transition:all .12s}
+  .btn:hover{border-color:#38bdf8;color:#fff}
+  .btn.danger:hover{border-color:#f87171;color:#fca5a5}
+  canvas#scene{touch-action:none;display:block}
+  kbd{background:#161c28;border:1px solid #232b3a;border-radius:4px;padding:1px 5px;font-size:11px;color:#cbd5e1}
+  ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#1f2633;border-radius:8px}
+</style>
+</head>
+<body class="flex flex-col h-full">
+
+<header class="h-12 flex items-center justify-between px-4 border-b border-[#161c28] bg-[#0e1118] flex-none">
+  <div class="flex items-center gap-3">
+    <div class="w-2.5 h-2.5 rounded-full" style="background:linear-gradient(135deg,#f87171,#facc15,#4ade80,#38bdf8,#a78bfa)"></div>
+    <h1 class="text-sm font-semibold tracking-wide">Optics Sandbox</h1>
+  </div>
+  <div class="flex items-center gap-5 text-xs text-slate-400">
+    <label class="flex items-center gap-2">Exposure
+      <input id="exposure" type="range" min="0.1" max="6" step="0.1" value="1" class="!w-28">
+      <span id="exposureVal" class="w-8 text-slate-300">1.0</span>
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer"><input id="grid" type="checkbox" checked> Grid</label>
+    <button id="clear" class="btn danger">Clear scene</button>
+  </div>
+</header>
+
+<main class="flex flex-1 min-h-0">
+  <aside class="w-48 flex-none border-r border-[#161c28] bg-[#0e1118] p-3 overflow-y-auto">
+    <div id="toolbar"></div>
+  </aside>
+
+  <div id="stage" class="flex-1 relative min-w-0 bg-[#0b0d12]">
+    <canvas id="scene" class="absolute inset-0"></canvas>
+    <div id="hint" class="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-slate-500 pointer-events-none"></div>
+  </div>
+
+  <aside class="w-72 flex-none border-l border-[#161c28] bg-[#0e1118] overflow-y-auto">
+    <div id="inspector" class="p-4"></div>
+  </aside>
+</main>
+
+<script>
+/* ============================================================
+   Spectral utilities
+   ============================================================ */
+const NB = 32, WL0 = 380, WL1 = 700, BW = (WL1 - WL0) / NB;
+const binWl = i => WL0 + (i + 0.5) * BW;
+const wlBin = wl => Math.min(NB - 1, Math.max(0, Math.floor((wl - WL0) / BW)));
+const SPLIT_GAIN = 6; // display-only gain when a continuous spectrum is fanned into discrete bins
+
+// CIE 1931 colour matching functions – multi-lobe Gaussian fit (Wyman, Sloan & Shirley 2013)
+function gl(l, mu, s1, s2) { const t = (l - mu) / (l < mu ? s1 : s2); return Math.exp(-0.5 * t * t); }
+function cie(l) {
+  return [
+    1.056 * gl(l, 599.8, 37.9, 31.0) + 0.362 * gl(l, 442.0, 16.0, 26.7) - 0.065 * gl(l, 501.1, 20.4, 26.2),
+    0.821 * gl(l, 568.8, 46.9, 40.5) + 0.286 * gl(l, 530.9, 16.3, 31.1),
+    1.217 * gl(l, 437.0, 11.8, 36.0) + 0.681 * gl(l, 459.0, 26.0, 13.8)
+  ];
+}
+// XYZ -> linear sRGB (IEC 61966-2-1), gamut-mapped by adding white, normalised to hue only
+function xyzToRgb(X, Y, Z) {
+  let r = 3.2406 * X - 1.5372 * Y - 0.4986 * Z;
+  let g = -0.9689 * X + 1.8758 * Y + 0.0415 * Z;
+  let b = 0.0557 * X - 0.2040 * Y + 1.0570 * Z;
+  const m = Math.min(r, g, b); if (m < 0) { r -= m; g -= m; b -= m; }
+  const mx = Math.max(r, g, b); if (mx <= 0) return [0, 0, 0];
+  r /= mx; g /= mx; b /= mx;
+  const ga = c => Math.round(255 * Math.pow(c, 1 / 2.2));
+  return [ga(r), ga(g), ga(b)];
+}
+const wlCache = new Map();
+function wlRGB(wl) {
+  const k = Math.round(wl); let c = wlCache.get(k);
+  if (!c) { const [X, Y, Z] = cie(k); c = xyzToRgb(X, Y, Z); wlCache.set(k, c); }
+  return c;
+}
+function specRGB(spec) {
+  let X = 0, Y = 0, Z = 0;
+  for (let i = 0; i < NB; i++) { const w = spec[i]; if (w <= 0) continue; const c = cie(binWl(i)); X += w * c[0]; Y += w * c[1]; Z += w * c[2]; }
+  if (X + Y + Z <= 0) return [120, 120, 120];
+  return xyzToRgb(X, Y, Z);
+}
+function normSpec(s) { let m = 0; for (const v of s) m = Math.max(m, v); if (m > 0) for (let i = 0; i < NB; i++) s[i] /= m; return s; }
+// Planck's law, B(λ,T) ∝ λ⁻⁵ / (exp(hc/λkT) − 1), hc/k = 1.4388e7 nm·K
+function planck(T) { const s = new Float32Array(NB); for (let i = 0; i < NB; i++) { const l = binWl(i); s[i] = Math.pow(l, -5) / (Math.exp(1.4388e7 / (l * T)) - 1); } return normSpec(s); }
+function gauss(parts) { const s = new Float32Array(NB); for (let i = 0; i < NB; i++) { const l = binWl(i); let v = 0; for (const [c, sd, a] of parts) v += a * Math.exp(-0.5 * ((l - c) / sd) ** 2); s[i] = v; } return normSpec(s); }
+const PRESETS = {
+  sunlight: ['Sunlight (5778 K)', () => planck(5778)],
+  daylight: ['Cool daylight (6500 K)', () => planck(6500)],
+  incandescent: ['Incandescent (2700 K)', () => planck(2700)],
+  candle: ['Candle (1900 K)', () => planck(1900)],
+  whiteled: ['White LED', () => gauss([[450, 10, 1], [555, 48, 0.75]])],
+  warmled: ['Warm white LED', () => gauss([[450, 10, 0.45], [595, 55, 1]])],
+  red: ['Red LED (630 nm)', () => gauss([[630, 12, 1]])],
+  green: ['Green LED (525 nm)', () => gauss([[525, 18, 1]])],
+  blue: ['Blue LED (460 nm)', () => gauss([[460, 12, 1]])],
+  sodium: ['Sodium lamp (589 nm)', () => gauss([[589, 2.5, 1]])],
+  flat: ['Flat (equal energy)', () => new Float32Array(NB).fill(1)],
+  custom: ['Custom', null]
+};
+
+/* ============================================================
+   Materials – Sellmeier / Cauchy
+   ============================================================ */
+const MATERIALS = {
+  bk7: { name: 'BK7 crown glass', sell: [1.03961212, 0.231792344, 1.01046945, 0.00600069867, 0.0200179144, 103.560653] },
+  f2: { name: 'F2 flint glass', sell: [1.34533359, 0.209073176, 0.937357162, 0.00997743871, 0.0470450767, 111.886764] },
+  sf11: { name: 'SF11 dense flint', sell: [1.73759695, 0.313747346, 1.89878101, 0.013188707, 0.0623068142, 155.23629] },
+  silica: { name: 'Fused silica', sell: [0.6961663, 0.4079426, 0.8974794, 0.0046791, 0.013512, 97.934] },
+  water: { name: 'Water', cauchy: [1.3199, 6878] },
+  diamond: { name: 'Diamond', cauchy: [2.3818, 12211] },
+  custom: { name: 'Custom (Cauchy)' }
+};
+function refIndex(o, wl) {
+  const m = MATERIALS[o.material];
+  if (m.sell) { const l2 = (wl / 1000) ** 2; const [B1, B2, B3, C1, C2, C3] = m.sell; return Math.sqrt(1 + B1 * l2 / (l2 - C1) + B2 * l2 / (l2 - C2) + B3 * l2 / (l2 - C3)); }
+  if (m.cauchy) return m.cauchy[0] + m.cauchy[1] / (wl * wl);
+  return o.nA + o.nB / (wl * wl);
+}
+
+/* ============================================================
+   Scene objects
+   ============================================================ */
+const TYPES = {
+  flashlight: { name: 'Flashlight', color: '#fbbf24', group: 'Sources' },
+  laser: { name: 'Laser', color: '#f87171', group: 'Sources' },
+  lens: { name: 'Lens', color: '#7dd3fc', group: 'Optics' },
+  mirror: { name: 'Mirror', color: '#e2e8f0', group: 'Optics' },
+  curved: { name: 'Curved mirror', color: '#cbd5e1', group: 'Optics' },
+  prism: { name: 'Prism', color: '#a78bfa', group: 'Optics' },
+  grating: { name: 'Diffraction grating', color: '#818cf8', group: 'Optics' },
+  polarizer: { name: 'Polarizing filter', color: '#c4b5fd', group: 'Optics' },
+  glass: { name: 'Colored glass', color: '#fb7185', group: 'Optics' },
+  blocker: { name: 'Light blocker', color: '#64748b', group: 'Detectors & blockers' },
+  sensor: { name: 'Sensor', color: '#34d399', group: 'Detectors & blockers' }
+};
+const SEG = new Set(['polarizer', 'lens', 'mirror', 'grating', 'glass', 'blocker', 'sensor']);
+const DEFAULTS = {
+  flashlight: { preset: 'whiteled', brightness: 1, divergence: 12, width: 22, rays: 80, polMode: 'unpolarized', polAngle: 0 },
+  laser: { wl: 532, power: 1, polMode: 'linear', polAngle: 0 },
+  polarizer: { length: 120, axis: 0 },
+  lens: { length: 140, kind: 'convex', f: 200 },
+  mirror: { length: 140, reflectance: 1 },
+  curved: { radius: 220, arc: 70, reflectance: 1 },
+  grating: { length: 120, lines: 600, orders: 2, slit: 0.5, mode: 'transmission' },
+  prism: { shape: 'triangle', apex: 60, size: 140, height: 60, material: 'f2', nA: 1.5, nB: 8000, dispersion: true, fresnel: true, coat: 1, maxBounces: 6 },
+  glass: { length: 120, mode: 'pass', lo: 600, hi: 700, soft: 8, peak: 0.9, reflectance: 0.04 },
+  blocker: { length: 120 },
+  sensor: { length: 120 }
+};
+
+let objects = [], selected = null, nextId = 1;
+function createObj(type, props = {}) {
+  const o = Object.assign({ id: nextId++, type, x: 0, y: 0, angle: 0 }, DEFAULTS[type], props);
+  if (type === 'flashlight') o.spectrum = PRESETS[o.preset][1] ? PRESETS[o.preset][1]() : gauss([[550, 60, 1]]);
+  return o;
+}
+function addObj(type, props) { const o = createObj(type, props); objects.push(o); return o; }
+
+/* ============================================================
+   Geometry
+   ============================================================ */
+const rad = d => d * Math.PI / 180;
+function dir(o) { const a = rad(o.angle); return [Math.cos(a), Math.sin(a)]; }
+function segEnds(o) { const [ux, uy] = dir(o); const h = o.length / 2; return { ax: o.x - ux * h, ay: o.y - uy * h, bx: o.x + ux * h, by: o.y + uy * h }; }
+function prismVerts(o) {
+  let v;
+  if (o.shape === 'triangle') { const b = o.size, h = (b / 2) / Math.tan(rad(o.apex) / 2); v = [[-b / 2, h / 2], [b / 2, h / 2], [0, -h / 2]]; }
+  else { const w = o.size / 2, h = o.height / 2; v = [[-w, -h], [w, -h], [w, h], [-w, h]]; }
+  const c = Math.cos(rad(o.angle)), s = Math.sin(rad(o.angle));
+  return v.map(([x, y]) => [o.x + x * c - y * s, o.y + x * s + y * c]);
+}
+function collectSurfaces(o, out) {
+  if (o.type === 'flashlight' || o.type === 'laser') return;
+  if (o.type === 'curved') {
+    const [ux, uy] = dir(o);
+    out.push({ kind: 'arc', cx: o.x + ux * o.radius, cy: o.y + uy * o.radius, r: o.radius, phi0: Math.atan2(-uy, -ux), alpha: rad(o.arc) / 2, obj: o, key: o.id + ':0' });
+    return;
+  }
+  if (o.type === 'prism') {
+    const v = prismVerts(o), n = v.length;
+    const cx = v.reduce((a, p) => a + p[0], 0) / n, cy = v.reduce((a, p) => a + p[1], 0) / n;
+    for (let i = 0; i < n; i++) {
+      const a = v[i], b = v[(i + 1) % n];
+      const ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey);
+      let nx = ey / L, ny = -ex / L;
+      const mx = (a[0] + b[0]) / 2 - cx, my = (a[1] + b[1]) / 2 - cy;
+      if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+      out.push({ kind: 'seg', ax: a[0], ay: a[1], bx: b[0], by: b[1], nx, ny, obj: o, key: o.id + ':' + i });
+    }
+    return;
+  }
+  const s = segEnds(o);
+  out.push({ kind: 'seg', ...s, obj: o, key: o.id + ':0' });
+}
+function segFrame(s) { const ex = s.bx - s.ax, ey = s.by - s.ay, L = Math.hypot(ex, ey); const ux = ex / L, uy = ey / L; return { ux, uy, nx: -uy, ny: ux }; }
+function intersect(r, surfaces) {
+  let best = null;
+  for (const s of surfaces) {
+    if (s.kind === 'seg') {
+      const ex = s.bx - s.ax, ey = s.by - s.ay;
+      const den = r.dx * ey - r.dy * ex; if (Math.abs(den) < 1e-12) continue;
+      const wx = s.ax - r.x, wy = s.ay - r.y;
+      const t = (wx * ey - wy * ex) / den, u = (wx * r.dy - wy * r.dx) / den;
+      if (t <= 1e-6 || u < 0 || u > 1) continue;
+      if (s.key === r.last && t < 0.5) continue;
+      if (!best || t < best.t) best = { s, t };
+    } else {
+      const px = r.x - s.cx, py = r.y - s.cy;
+      const b = 2 * (r.dx * px + r.dy * py), c = px * px + py * py - s.r * s.r;
+      const disc = b * b - 4 * c; if (disc < 0) continue;
+      const sq = Math.sqrt(disc);
+      for (const t of [(-b - sq) / 2, (-b + sq) / 2]) {
+        if (t <= 1e-6) continue;
+        if (s.key === r.last && t < 0.5) continue;
+        const x = r.x + r.dx * t, y = r.y + r.dy * t;
+        const phi = Math.atan2(y - s.cy, x - s.cx);
+        const d = Math.atan2(Math.sin(phi - s.phi0), Math.cos(phi - s.phi0));
+        if (Math.abs(d) > s.alpha) continue;
+        if (!best || t < best.t) best = { s, t };
+      }
+    }
+  }
+  if (best) { best.x = r.x + r.dx * best.t; best.y = r.y + r.dy * best.t; }
+  return best;
+}
+
+/* ============================================================
+   Ray tracing (Stokes-vector polarisation, Fresnel, Snell, grating eq.)
+   ============================================================ */
+const MAX_DEPTH = 80, MAX_RAYS = 60000;
+let exposure = 1;
+function scaleRay(r, k) { r.I *= k; if (r.spec) { const s = new Float32Array(NB); for (let i = 0; i < NB; i++) s[i] = r.spec[i] * k; r.spec = s; } }
+// Mueller matrix of a linear diattenuator with transmittances Tp (in-plane) and Ts (out-of-plane)
+function diatten(r, Tp, Ts) {
+  const a = 0.5 * (Tp + Ts), b = 0.5 * (Tp - Ts);
+  const f = a + b * r.s1;
+  if (f <= 1e-9) { r.I = 0; return; }
+  const s1 = (b + a * r.s1) / f, s2 = Math.sqrt(Math.max(0, Tp * Ts)) * r.s2 / f;
+  scaleRay(r, f); r.s1 = s1; r.s2 = s2;
+}
+function splitSpectral(r) {
+  const out = [];
+  for (let i = 0; i < NB; i++) if (r.spec[i] > 1e-7) out.push({ ...r, wl: binWl(i), spec: null, I: r.spec[i], vis: r.vis * SPLIT_GAIN, rgb: wlRGB(binWl(i)) });
+  return out;
+}
+function glassT(o, wl) {
+  const k = Math.max(0.5, o.soft), sig = x => 1 / (1 + Math.exp(-x));
+  let p = sig((wl - o.lo) / k) * sig((o.hi - wl) / k);
+  if (o.mode === 'block') p = 1 - p;
+  return p * o.peak;
+}
+function polStokes(o) { if (o.polMode === 'unpolarized') return [0, 0]; const a = rad(o.polAngle) * 2; return [Math.cos(a), Math.sin(a)]; }
+
+function emit(o, stack) {
+  const [ux, uy] = dir(o), px = -uy, py = ux;
+  const [s1, s2] = polStokes(o);
+  if (o.type === 'laser') {
+    stack.push({ x: o.x, y: o.y, dx: ux, dy: uy, wl: o.wl, spec: null, I: o.power, s1, s2, depth: 0, last: null, bounces: 0, vis: 1, rgb: wlRGB(o.wl) });
+    return;
+  }
+  const n = o.rays, w = o.width, half = rad(o.divergence) / 2, tanH = Math.tan(half);
+  let sum = 0; for (const v of o.spectrum) sum += v;
+  if (sum <= 0) return;
+  const perRay = o.brightness * 12 / n;
+  const base = new Float32Array(NB); for (let i = 0; i < NB; i++) base[i] = o.spectrum[i] / sum * perRay;
+  const rgb = specRGB(o.spectrum);
+  for (let i = 0; i < n; i++) {
+    const f = n > 1 ? (i / (n - 1) - 0.5) : 0;
+    const s = f * w, ang = Math.atan(2 * f * tanH); // point source behind aperture
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    stack.push({ x: o.x + px * s, y: o.y + py * s, dx: ux * c - uy * sn, dy: uy * c + ux * sn, wl: null, spec: base, I: perRay, s1, s2, depth: 0, last: null, bounces: 0, vis: 1, rgb });
+  }
+}
+
+function interact(r, hit, stack) {
+  const o = hit.s.obj, key = hit.s.key, x = hit.x, y = hit.y;
+  const push = nr => { if (nr.I > 1e-5 && nr.I * nr.vis * exposure > 0.0015 && nr.depth < MAX_DEPTH) stack.push(nr); };
+  const cont = (q, dx, dy) => ({ ...q, x, y, dx, dy, depth: q.depth + 1, last: key });
+  const reflectDir = (q, nx, ny) => { const dn = q.dx * nx + q.dy * ny; return [q.dx - 2 * dn * nx, q.dy - 2 * dn * ny]; };
+  switch (o.type) {
+    case 'blocker': return;
+    case 'sensor': {
+      const d = o.data; d.power += r.I; d.s1 += r.s1 * r.I; d.s2 += r.s2 * r.I;
+      if (r.spec) for (let i = 0; i < NB; i++) d.spec[i] += r.spec[i]; else d.spec[wlBin(r.wl)] += r.I;
+      return;
+    }
+    case 'mirror': case 'curved': {
+      let nx, ny;
+      if (hit.s.kind === 'arc') { nx = (x - hit.s.cx) / hit.s.r; ny = (y - hit.s.cy) / hit.s.r; } else ({ nx, ny } = segFrame(hit.s));
+      const [dx, dy] = reflectDir(r, nx, ny);
+      const nr = cont(r, dx, dy); scaleRay(nr, o.reflectance); nr.s2 = -nr.s2; push(nr); return;
+    }
+    case 'polarizer': { // Malus's law via Mueller matrix of an ideal linear polariser
+      const psi = 2 * rad(o.axis), c = Math.cos(psi), s = Math.sin(psi);
+      const f = 0.5 * (1 + c * r.s1 + s * r.s2);
+      const nr = cont(r, r.dx, r.dy); scaleRay(nr, f); nr.s1 = c; nr.s2 = s; push(nr); return;
+    }
+    case 'lens': { // ideal thin lens: parallel bundles at angle θ converge on the focal plane at f·tanθ
+      const { ux, uy, nx, ny } = segFrame(hit.s);
+      const h = (x - o.x) * ux + (y - o.y) * uy;
+      const dn = r.dx * nx + r.dy * ny, du = r.dx * ux + r.dy * uy;
+      const sg = dn >= 0 ? 1 : -1, tanT = du / Math.max(1e-9, Math.abs(dn));
+      const f = o.kind === 'convex' ? o.f : -o.f, af = Math.abs(f);
+      const un = af * tanT - Math.sign(f) * h;
+      let ox = nx * sg * af + ux * un, oy = ny * sg * af + uy * un; const L = Math.hypot(ox, oy);
+      push(cont(r, ox / L, oy / L)); return;
+    }
+    case 'glass': {
+      const R = o.reflectance;
+      const t = cont(r, r.dx, r.dy);
+      if (r.spec) {
+        const ns = new Float32Array(NB); let sum = 0;
+        for (let i = 0; i < NB; i++) { ns[i] = r.spec[i] * glassT(o, binWl(i)) * (1 - R); sum += ns[i]; }
+        t.spec = ns; t.I = sum; if (sum > 0) t.rgb = specRGB(ns);
+      } else t.I = r.I * glassT(o, r.wl) * (1 - R);
+      push(t);
+      if (R > 0) { const { nx, ny } = segFrame(hit.s); const [dx, dy] = reflectDir(r, nx, ny); const rr = cont(r, dx, dy); scaleRay(rr, R); rr.s2 = -rr.s2; push(rr); }
+      return;
+    }
+    case 'grating': { // d(sinθm − sinθi) = mλ ; order efficiency f²·sinc²(πmf) for slit fraction f
+      const { ux, uy, nx, ny } = segFrame(hit.s);
+      const a = r.dx * ux + r.dy * uy, b = r.dx * nx + r.dy * ny, sb = b >= 0 ? 1 : -1;
+      const d = 1e6 / o.lines, f = o.slit, refl = o.mode === 'reflective';
+      const mono = r.spec ? splitSpectral(r) : [r];
+      for (let m = -o.orders; m <= o.orders; m++) {
+        const arg = Math.PI * m * f, eff = f * f * (m === 0 ? 1 : (Math.sin(arg) / arg) ** 2);
+        const list = (m === 0) ? [r] : mono;
+        for (const q of list) {
+          const sm = a + (m === 0 ? 0 : m * q.wl / d);
+          if (Math.abs(sm) > 1) continue;
+          const cm = Math.sqrt(1 - sm * sm), sn = refl ? -sb : sb;
+          const nr = cont(q, ux * sm + nx * sn * cm, uy * sm + ny * sn * cm);
+          scaleRay(nr, eff); if (refl) nr.s2 = -nr.s2; push(nr);
+        }
+      }
+      return;
+    }
+    case 'prism': { // Snell's law + Fresnel equations (s/p), total internal reflection
+      let nx = hit.s.nx, ny = hit.s.ny;
+      let cosi = -(r.dx * nx + r.dy * ny);
+      const entering = cosi > 0;
+      if (!entering) { nx = -nx; ny = -ny; cosi = -cosi; }
+      const list = (r.spec && o.dispersion) ? splitSpectral(r) : [r];
+      for (const q of list) {
+        const n = refIndex(o, q.wl ?? 589.3);
+        const n1 = entering ? 1 : n, n2 = entering ? n : 1, eta = n1 / n2;
+        const k = 1 - eta * eta * (1 - cosi * cosi);
+        let Rs = 1, Rp = 1;
+        if (k >= 0) {
+          const cost = Math.sqrt(k);
+          const tx = eta * q.dx + (eta * cosi - cost) * nx, ty = eta * q.dy + (eta * cosi - cost) * ny;
+          const rs = (n1 * cosi - n2 * cost) / (n1 * cosi + n2 * cost), rp = (n2 * cosi - n1 * cost) / (n2 * cosi + n1 * cost);
+          const sc = o.fresnel ? o.coat : 0;
+          Rs = rs * rs * sc; Rp = rp * rp * sc;
+          const t = cont(q, tx, ty); t.bounces = 0; diatten(t, 1 - Rp, 1 - Rs); push(t);
+        }
+        if (Rs > 0 || Rp > 0) {
+          const [dx, dy] = reflectDir(q, nx, ny);
+          const rr = cont(q, dx, dy);
+          rr.bounces = entering ? q.bounces : q.bounces + 1;
+          if (!entering && rr.bounces > o.maxBounces) continue;
+          diatten(rr, Rp, Rs); rr.s2 = -rr.s2; push(rr);
+        }
+      }
+      return;
+    }
+  }
+}
+
+function trace() {
+  const surfaces = [];
+  for (const o of objects) { collectSurfaces(o, surfaces); if (o.type === 'sensor') o.data = { power: 0, spec: new Float32Array(NB), s1: 0, s2: 0 }; }
+  const stack = [], lines = [];
+  for (const o of objects) if (o.type === 'flashlight' || o.type === 'laser') emit(o, stack);
+  let count = 0;
+  while (stack.length && count < MAX_RAYS) {
+    const r = stack.pop(); count++;
+    const hit = intersect(r, surfaces);
+    const ex = hit ? hit.x : r.x + r.dx * 5000, ey = hit ? hit.y : r.y + r.dy * 5000;
+    lines.push(r.x, r.y, ex, ey, r.rgb, r.I * r.vis);
+    if (hit) interact(r, hit, stack);
+  }
+  return lines;
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+const canvas = document.getElementById('scene'), ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1, showGrid = true;
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  DPR = window.devicePixelRatio || 1; W = r.width; H = r.height;
+  canvas.width = W * DPR; canvas.height = H * DPR; requestRender();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+function drawRays(lines) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let i = 0; i < lines.length; i += 6) {
+    const c = lines[i + 4], a = lines[i + 5] * exposure;
+    const al = Math.min(1, a);
+    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${al.toFixed(3)})`; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(lines[i], lines[i + 1]); ctx.lineTo(lines[i + 2], lines[i + 3]); ctx.stroke();
+    if (a > 0.5) {
+      ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${Math.min(0.4, (a - 0.5) * 0.25).toFixed(3)})`; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(lines[i], lines[i + 1]); ctx.lineTo(lines[i + 2], lines[i + 3]); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function strokeCol(o, base) { return selected === o ? '#38bdf8' : base; }
+function drawObj(o) {
+  const sel = selected === o;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (o.type === 'flashlight' || o.type === 'laser') {
+    ctx.translate(o.x, o.y); ctx.rotate(rad(o.angle));
+    const col = o.type === 'laser' ? wlRGB(o.wl) : specRGB(o.spectrum);
+    const h = o.type === 'laser' ? 12 : Math.max(16, o.width + 6);
+    const len = o.type === 'laser' ? 34 : 28;
+    ctx.fillStyle = '#1a2130'; ctx.strokeStyle = strokeCol(o, '#475569'); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(-len, -h / 2, len, h, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillRect(-4, -h / 2 + 2, 4, h - 4);
+    ctx.restore(); return;
+  }
+  if (o.type === 'prism') {
+    const v = prismVerts(o);
+    ctx.beginPath(); v.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+    ctx.fillStyle = 'rgba(167,139,250,0.07)'; ctx.fill();
+    ctx.strokeStyle = strokeCol(o, 'rgba(196,181,253,0.75)'); ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore(); return;
+  }
+  if (o.type === 'curved') {
+    const [ux, uy] = dir(o); const cx = o.x + ux * o.radius, cy = o.y + uy * o.radius;
+    const phi0 = Math.atan2(-uy, -ux), al = rad(o.arc) / 2;
+    ctx.strokeStyle = strokeCol(o, '#e2e8f0'); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, o.radius, phi0 - al, phi0 + al); ctx.stroke();
+    ctx.strokeStyle = sel ? 'rgba(56,189,248,0.5)' : 'rgba(148,163,184,0.45)'; ctx.lineWidth = 1;
+    const steps = Math.max(4, Math.floor(o.radius * 2 * al / 10));
+    for (let i = 0; i <= steps; i++) {
+      const p = phi0 - al + 2 * al * i / steps, c = Math.cos(p), s = Math.sin(p);
+      ctx.beginPath(); ctx.moveTo(cx + c * o.radius, cy + s * o.radius); ctx.lineTo(cx + c * (o.radius + 7), cy + s * (o.radius + 7)); ctx.stroke();
+    }
+    ctx.restore(); return;
+  }
+  const { ax, ay, bx, by } = segEnds(o); const [ux, uy] = dir(o); const nx = -uy, ny = ux;
+  const line = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); };
+  switch (o.type) {
+    case 'mirror': {
+      ctx.strokeStyle = strokeCol(o, '#e2e8f0'); ctx.lineWidth = 3; line();
+      ctx.strokeStyle = sel ? 'rgba(56,189,248,0.5)' : 'rgba(148,163,184,0.45)'; ctx.lineWidth = 1;
+      const n = Math.floor(o.length / 10);
+      for (let i = 0; i <= n; i++) { const t = i / n; const px = ax + (bx - ax) * t, py = ay + (by - ay) * t; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - nx * 6 - ux * 4, py - ny * 6 - uy * 4); ctx.stroke(); }
+      break;
+    }
+    case 'lens': {
+      ctx.strokeStyle = strokeCol(o, '#7dd3fc'); ctx.lineWidth = 2; line();
+      const s = o.kind === 'convex' ? 1 : -1, a = 9;
+      for (const [px, py, d] of [[ax, ay, -1], [bx, by, 1]]) {
+        const tx = px + (s < 0 ? -d * ux * a : 0), ty = py + (s < 0 ? -d * uy * a : 0);
+        const hx = tx - s * d * ux * a, hy = ty - s * d * uy * a;
+        const bxp = s > 0 ? px : tx, byp = s > 0 ? py : ty;
+        ctx.beginPath(); ctx.moveTo(hx + nx * a, hy + ny * a); ctx.lineTo(bxp, byp); ctx.lineTo(hx - nx * a, hy - ny * a); ctx.stroke();
+      }
+      break;
+    }
+    case 'polarizer': {
+      ctx.strokeStyle = strokeCol(o, '#c4b5fd'); ctx.lineWidth = 2; line();
+      ctx.fillStyle = '#0b0d12'; ctx.beginPath(); ctx.arc(o.x, o.y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const a = rad(o.angle + o.axis), c = Math.cos(a), s = Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(o.x - c * 6, o.y - s * 6); ctx.lineTo(o.x + c * 6, o.y + s * 6); ctx.stroke();
+      break;
+    }
+    case 'grating': {
+      ctx.strokeStyle = strokeCol(o, '#818cf8'); ctx.lineWidth = 3; ctx.setLineDash([3, 3]); line(); ctx.setLineDash([]);
+      if (o.mode === 'reflective') { ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(ax - nx * 4, ay - ny * 4); ctx.lineTo(bx - nx * 4, by - ny * 4); ctx.stroke(); }
+      break;
+    }
+    case 'glass': {
+      const sp = new Float32Array(NB); for (let i = 0; i < NB; i++) sp[i] = glassT(o, binWl(i));
+      const c = specRGB(sp);
+      ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},0.75)`; ctx.lineWidth = 6; line();
+      if (sel) { ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1; line(); }
+      break;
+    }
+    case 'blocker': ctx.strokeStyle = strokeCol(o, '#475569'); ctx.lineWidth = 6; line(); break;
+    case 'sensor': {
+      ctx.strokeStyle = strokeCol(o, '#34d399'); ctx.lineWidth = 4; line();
+      ctx.strokeStyle = 'rgba(52,211,153,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ax - nx * 6, ay - ny * 6); ctx.lineTo(bx - nx * 6, by - ny * 6); ctx.stroke();
+      ctx.fillStyle = '#6ee7b7'; ctx.font = '11px ui-monospace, monospace'; ctx.textAlign = 'center';
+      ctx.fillText('P = ' + (o.data ? o.data.power : 0).toFixed(2), o.x - nx * 18, o.y - ny * 18 + 4);
+      break;
+    }
+  }
+  ctx.restore();
+}
+function handleExt(o) {
+  if (o.type === 'flashlight' || o.type === 'laser' || o.type === 'curved') return 20;
+  if (o.type === 'prism') return o.size / 2 + 8;
+  return o.length / 2;
+}
+function handlePos(o) { const [ux, uy] = dir(o); const d = handleExt(o) + 24; return [o.x + ux * d, o.y + uy * d]; }
+function drawSelection(o) {
+  const [hx, hy] = handlePos(o);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(56,189,248,0.4)'; ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(hx, hy); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#0b0d12'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function render() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#0b0d12'; ctx.fillRect(0, 0, W, H);
+  if (showGrid) {
+    ctx.fillStyle = 'rgba(148,163,184,0.18)';
+    for (let x = 20; x < W; x += 40) for (let y = 20; y < H; y += 40) ctx.fillRect(x - 0.5, y - 0.5, 1.5, 1.5);
+  }
+  const lines = trace();
+  drawRays(lines);
+  for (const o of objects) drawObj(o);
+  if (selected) drawSelection(selected);
+  updateReadouts();
+}
+let dirty = true;
+function requestRender() { dirty = true; }
+(function loop() { if (dirty) { dirty = false; render(); } requestAnimationFrame(loop); })();
+
+/* ============================================================
+   Hit testing & pointer interaction
+   ============================================================ */
+function distToSeg(px, py, ax, ay, bx, by) {
+  const ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey || 1;
+  const t = Math.max(0, Math.min(1, ((px - ax) * ex + (py - ay) * ey) / L2));
+  return Math.hypot(px - ax - ex * t, py - ay - ey * t);
+}
+function pointInPoly(px, py, v) {
+  let inside = false;
+  for (let i = 0, j = v.length - 1; i < v.length; j = i++) {
+    const [xi, yi] = v[i], [xj, yj] = v[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function hitObj(o, px, py) {
+  if (o.type === 'flashlight' || o.type === 'laser') {
+    const a = -rad(o.angle), dx = px - o.x, dy = py - o.y;
+    const lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a);
+    const h = o.type === 'laser' ? 12 : Math.max(16, o.width + 6), len = o.type === 'laser' ? 34 : 28;
+    return lx > -len - 3 && lx < 4 && Math.abs(ly) < h / 2 + 3;
+  }
+  if (o.type === 'prism') { const v = prismVerts(o); if (pointInPoly(px, py, v)) return true; for (let i = 0; i < v.length; i++) { const a = v[i], b = v[(i + 1) % v.length]; if (distToSeg(px, py, a[0], a[1], b[0], b[1]) < 7) return true; } return false; }
+  if (o.type === 'curved') {
+    const [ux, uy] = dir(o); const cx = o.x + ux * o.radius, cy = o.y + uy * o.radius;
+    const d = Math.hypot(px - cx, py - cy); if (Math.abs(d - o.radius) > 8) return false;
+    const phi = Math.atan2(py - cy, px - cx), phi0 = Math.atan2(-uy, -ux);
+    return Math.abs(Math.atan2(Math.sin(phi - phi0), Math.cos(phi - phi0))) <= rad(o.arc) / 2 + 0.03;
+  }
+  const s = segEnds(o); return distToSeg(px, py, s.ax, s.ay, s.bx, s.by) < 8;
+}
+function hitTest(px, py) { for (let i = objects.length - 1; i >= 0; i--) if (hitObj(objects[i], px, py)) return objects[i]; return null; }
+
+let drag = null;
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  canvas.setPointerCapture(e.pointerId);
+  if (selected) { const [hx, hy] = handlePos(selected); if (Math.hypot(px - hx, py - hy) < 12) { drag = { mode: 'rotate', o: selected }; return; } }
+  const o = hitTest(px, py);
+  if (o) {
+    select(o);
+    objects.splice(objects.indexOf(o), 1); objects.push(o); // bring to front
+    drag = { mode: 'move', o, ox: px - o.x, oy: py - o.y };
+  } else { select(null); drag = null; }
+  requestRender();
+});
+canvas.addEventListener('pointermove', e => {
+  const r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  if (!drag) { const h = hitTest(px, py); let cur = h ? 'grab' : 'default'; if (selected) { const [hx, hy] = handlePos(selected); if (Math.hypot(px - hx, py - hy) < 12) cur = 'crosshair'; } canvas.style.cursor = cur; return; }
+  const o = drag.o;
+  if (drag.mode === 'move') { o.x = Math.round(px - drag.ox); o.y = Math.round(py - drag.oy); canvas.style.cursor = 'grabbing'; }
+  else {
+    let a = Math.atan2(py - o.y, px - o.x) * 180 / Math.PI;
+    a = e.shiftKey ? Math.round(a / 15) * 15 : Math.round(a * 2) / 2;
+    if (a > 180) a -= 360; if (a <= -180) a += 360;
+    o.angle = a; syncField('angle', a);
+  }
+  requestRender();
+});
+canvas.addEventListener('pointerup', () => { drag = null; canvas.style.cursor = 'default'; });
+
+document.addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (!selected) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { deleteObj(selected); e.preventDefault(); }
+  else if (e.key === 'd' && (e.ctrlKey || e.metaKey)) { duplicate(selected); e.preventDefault(); }
+  else if (e.key === '[' || e.key === ']') { selected.angle = ((selected.angle + (e.key === ']' ? 5 : -5) + 180) % 360 + 360) % 360 - 180; syncField('angle', selected.angle); requestRender(); }
+  else if (e.key === 'Escape') select(null);
+});
+function deleteObj(o) { objects = objects.filter(x => x !== o); if (selected === o) select(null); requestRender(); }
+function duplicate(o) { const c = JSON.parse(JSON.stringify(o)); c.id = nextId++; c.x += 30; c.y += 30; delete c.data; if (c.spectrum) c.spectrum = Float32Array.from(Object.values(c.spectrum)); objects.push(c); select(c); requestRender(); }
+
+/* ============================================================
+   Toolbar
+   ============================================================ */
+(function buildToolbar() {
+  const tb = document.getElementById('toolbar'); const groups = {};
+  for (const [t, d] of Object.entries(TYPES)) (groups[d.group] ||= []).push(t);
+  for (const [g, list] of Object.entries(groups)) {
+    const h = document.createElement('div'); h.className = 'text-[10px] uppercase tracking-wider text-slate-500 px-2 mt-3 mb-1 first:mt-0'; h.textContent = g; tb.appendChild(h);
+    for (const t of list) {
+      const b = document.createElement('button'); b.className = 'tool';
+      b.innerHTML = `<span class="dot" style="background:${TYPES[t].color}"></span>${TYPES[t].name}`;
+      b.onclick = () => { const k = objects.length % 6; const o = addObj(t, { x: Math.round(W / 2 + k * 14 - 35), y: Math.round(H / 2 + k * 14 - 35) }); select(o); requestRender(); };
+      tb.appendChild(b);
+    }
+  }
+})();
+
+/* ============================================================
+   Inspector
+   ============================================================ */
+const inspector = document.getElementById('inspector');
+function fieldsFor(o) {
+  const F = [{ k: 'angle', l: 'Rotation', t: 'range', min: -180, max: 180, step: 0.5, u: '°' }];
+  if (SEG.has(o.type)) F.push({ k: 'length', l: 'Length', t: 'range', min: 20, max: 500, step: 2, u: 'px' });
+  const pol = [
+    { k: 'polMode', l: 'Polarization', t: 'select', opts: [['unpolarized', 'Unpolarized'], ['linear', 'Linear']] },
+    { k: 'polAngle', l: 'Polarization angle (0° in‑plane, 90° out‑of‑plane)', t: 'range', min: 0, max: 180, step: 1, u: '°', show: x => x.polMode === 'linear' }
+  ];
+  switch (o.type) {
+    case 'flashlight': F.push(
+      { k: 'preset', l: 'Spectrum preset', t: 'select', opts: Object.entries(PRESETS).map(([k, v]) => [k, v[0]]) },
+      { k: 'spectrum', l: 'Spectrum (drag to paint)', t: 'spectrum' },
+      { k: 'brightness', l: 'Brightness', t: 'range', min: 0.1, max: 5, step: 0.1 },
+      { k: 'divergence', l: 'Beam divergence', t: 'range', min: 0, max: 150, step: 0.5, u: '°' },
+      { k: 'width', l: 'Aperture', t: 'range', min: 1, max: 150, step: 1, u: 'px' },
+      { k: 'rays', l: 'Ray count', t: 'range', min: 3, max: 300, step: 1 }, ...pol); break;
+    case 'laser': F.push(
+      { k: 'wl', l: 'Wavelength', t: 'range', min: 380, max: 750, step: 1, u: 'nm' },
+      { k: 'power', l: 'Power', t: 'range', min: 0.05, max: 4, step: 0.05 }, ...pol); break;
+    case 'polarizer': F.push({ k: 'axis', l: 'Transmission axis (0° in‑plane, 90° out‑of‑plane)', t: 'range', min: 0, max: 180, step: 1, u: '°' }); break;
+    case 'lens': F.push(
+      { k: 'kind', l: 'Type', t: 'select', opts: [['convex', 'Convex (converging)'], ['concave', 'Concave (diverging)']] },
+      { k: 'f', l: 'Focal length', t: 'range', min: 20, max: 1000, step: 5, u: 'px' }); break;
+    case 'mirror': F.push({ k: 'reflectance', l: 'Reflectance', t: 'range', min: 0, max: 1, step: 0.01 }); break;
+    case 'curved': F.push(
+      { k: 'radius', l: 'Radius of curvature', t: 'range', min: 40, max: 1500, step: 5, u: 'px' },
+      { k: 'arc', l: 'Arc angle', t: 'range', min: 5, max: 200, step: 1, u: '°' },
+      { k: 'reflectance', l: 'Reflectance', t: 'range', min: 0, max: 1, step: 0.01 },
+      { t: 'info', l: 'Focal length (R/2)', fn: x => (x.radius / 2).toFixed(0) + ' px' }); break;
+    case 'grating': F.push(
+      { k: 'mode', l: 'Type', t: 'select', opts: [['transmission', 'Transmission'], ['reflective', 'Reflective']] },
+      { k: 'lines', l: 'Line density', t: 'range', min: 50, max: 3000, step: 10, u: '/mm' },
+      { k: 'orders', l: 'Max order shown', t: 'range', min: 1, max: 6, step: 1 },
+      { k: 'slit', l: 'Slit width / period', t: 'range', min: 0.05, max: 1, step: 0.01 },
+      { t: 'info', l: 'Period d', fn: x => (1e6 / x.lines).toFixed(0) + ' nm' }); break;
+    case 'prism': F.push(
+      { k: 'shape', l: 'Shape', t: 'select', opts: [['triangle', 'Triangle'], ['rect', 'Rectangle (slab)']] },
+      { k: 'apex', l: 'Apex angle', t: 'range', min: 10, max: 150, step: 1, u: '°', show: x => x.shape === 'triangle' },
+      { k: 'size', l: x => x.shape === 'triangle' ? 'Base width' : 'Width', t: 'range', min: 20, max: 400, step: 2, u: 'px' },
+      { k: 'height', l: 'Height', t: 'range', min: 10, max: 400, step: 2, u: 'px', show: x => x.shape === 'rect' },
+      { k: 'material', l: 'Material', t: 'select', opts: Object.entries(MATERIALS).map(([k, v]) => [k, v.name]) },
+      { k: 'nA', l: 'Cauchy A', t: 'range', min: 1, max: 3, step: 0.01, show: x => x.material === 'custom' },
+      { k: 'nB', l: 'Cauchy B (nm²)', t: 'range', min: 0, max: 60000, step: 100, show: x => x.material === 'custom' },
+      { t: 'info', l: 'n at 589 nm', fn: x => refIndex(x, 589.3).toFixed(4) + '  ·  Δn(400–700) = ' + (refIndex(x, 400) - refIndex(x, 700)).toFixed(4) },
+      { k: 'dispersion', l: 'Chromatic dispersion', t: 'check' },
+      { k: 'fresnel', l: 'Fresnel partial reflections', t: 'check' },
+      { k: 'coat', l: 'Surface reflectivity (1 = bare glass, 0 = ideal AR coating)', t: 'range', min: 0, max: 1, step: 0.01, show: x => x.fresnel },
+      { k: 'maxBounces', l: 'Max internal reflections', t: 'range', min: 0, max: 30, step: 1 }); break;
+    case 'glass': F.push(
+      { k: 'mode', l: 'Filter mode', t: 'select', opts: [['pass', 'Pass band'], ['block', 'Block band']] },
+      { k: 'lo', l: 'Band start', t: 'range', min: 380, max: 700, step: 1, u: 'nm' },
+      { k: 'hi', l: 'Band end', t: 'range', min: 380, max: 700, step: 1, u: 'nm' },
+      { k: 'soft', l: 'Edge softness', t: 'range', min: 0.5, max: 60, step: 0.5, u: 'nm' },
+      { k: 'peak', l: 'Peak transmission', t: 'range', min: 0, max: 1, step: 0.01 },
+      { k: 'reflectance', l: 'Surface reflectance', t: 'range', min: 0, max: 1, step: 0.01 }); break;
+    case 'sensor': F.push({ t: 'sensor' }); break;
+  }
+  return F;
+}
+const infoFns = [];
+let sensorWidget = null;
+function select(o) { selected = o; buildInspector(); requestRender(); }
+function buildInspector() {
+  inspector.innerHTML = ''; infoFns.length = 0; sensorWidget = null;
+  const o = selected;
+  if (!o) {
+    inspector.innerHTML = `
+      <div class="text-sm text-slate-400">Select an element on the canvas to edit it, or add one from the left.</div>
+      <div class="mt-5 space-y-2 text-xs text-slate-500">
+        <div class="flex justify-between"><span>Move</span><span>drag</span></div>
+        <div class="flex justify-between"><span>Rotate</span><span>drag handle · <kbd>[</kbd> <kbd>]</kbd></span></div>
+        <div class="flex justify-between"><span>Snap rotation</span><span><kbd>Shift</kbd> + drag</span></div>
+        <div class="flex justify-between"><span>Duplicate</span><span><kbd>Ctrl</kbd> + <kbd>D</kbd></span></div>
+        <div class="flex justify-between"><span>Delete</span><span><kbd>Del</kbd></span></div>
+      </div>`;
+    return;
+  }
+  const head = document.createElement('div'); head.className = 'flex items-center justify-between mb-2';
+  head.innerHTML = `<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:${TYPES[o.type].color}"></span><span class="text-sm font-medium">${TYPES[o.type].name}</span></div>
+    <div class="flex gap-1.5"><button class="btn" id="dup">Duplicate</button><button class="btn danger" id="del">Delete</button></div>`;
+  inspector.appendChild(head);
+  head.querySelector('#dup').onclick = () => duplicate(o);
+  head.querySelector('#del').onclick = () => deleteObj(o);
+  for (const f of fieldsFor(o)) {
+    if (f.show && !f.show(o)) continue;
+    const el = document.createElement('div'); el.className = 'field'; el.dataset.key = f.k || '';
+    const label = typeof f.l === 'function' ? f.l(o) : f.l;
+    if (f.t === 'range') {
+      el.innerHTML = `<div class="lbl"><span>${label}</span><span class="flex items-center gap-1"><input type="number" min="${f.min}" max="${f.max}" step="${f.step}" value="${o[f.k]}"><span class="text-slate-500 w-6">${f.u || ''}</span></span></div><input type="range" min="${f.min}" max="${f.max}" step="${f.step}" value="${o[f.k]}">`;
+      const num = el.querySelector('input[type=number]'), rng = el.querySelector('input[type=range]');
+      const set = v => { v = Math.max(f.min, Math.min(f.max, +v)); if (isNaN(v)) return; o[f.k] = v; num.value = v; rng.value = v; refreshInfo(); requestRender(); };
+      rng.oninput = () => set(rng.value); num.onchange = () => set(num.value);
+    } else if (f.t === 'select') {
+      el.innerHTML = `<div class="lbl"><span>${label}</span></div><select>${f.opts.map(([v, n]) => `<option value="${v}" ${o[f.k] === v ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+      el.querySelector('select').onchange = e => {
+        o[f.k] = e.target.value;
+        if (f.k === 'preset' && PRESETS[o.preset][1]) o.spectrum = PRESETS[o.preset][1]();
+        buildInspector(); requestRender();
+      };
+    } else if (f.t === 'check') {
+      el.innerHTML = `<label class="lbl cursor-pointer"><span>${label}</span><input type="checkbox" ${o[f.k] ? 'checked' : ''}></label>`;
+      el.querySelector('input').onchange = e => { o[f.k] = e.target.checked; buildInspector(); requestRender(); };
+    } else if (f.t === 'info') {
+      el.innerHTML = `<div class="lbl"><span>${label}</span><span class="text-slate-300 font-mono text-[11px]"></span></div>`;
+      infoFns.push([el.querySelector('span:last-child'), f.fn]);
+    } else if (f.t === 'spectrum') {
+      el.innerHTML = `<div class="lbl"><span>${label}</span></div>`;
+      el.appendChild(spectrumEditor(o));
+    } else if (f.t === 'sensor') {
+      el.innerHTML = `<div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-[#131824] rounded-lg p-2"><div class="text-slate-500">Power</div><div class="font-mono text-base text-emerald-300" id="sPower">0</div></div>
+          <div class="bg-[#131824] rounded-lg p-2"><div class="text-slate-500">Polarization</div><div class="font-mono text-base text-emerald-300" id="sDop">—</div><div class="text-slate-500" id="sAng"></div></div>
+        </div>
+        <div class="lbl mt-2"><span>Received spectrum</span><span id="sPeak" class="font-mono text-[11px] text-slate-300"></span></div>
+        <canvas id="sSpec" style="width:100%;height:80px;border-radius:8px;background:#131824"></canvas>`;
+      sensorWidget = { o, power: el.querySelector('#sPower'), dop: el.querySelector('#sDop'), ang: el.querySelector('#sAng'), peak: el.querySelector('#sPeak'), cv: el.querySelector('#sSpec') };
+    }
+    inspector.appendChild(el);
+  }
+  refreshInfo();
+}
+function refreshInfo() { for (const [el, fn] of infoFns) el.textContent = fn(selected); }
+function syncField(k, v) { const el = inspector.querySelector(`.field[data-key="${k}"]`); if (!el) return; el.querySelectorAll('input').forEach(i => i.value = v); }
+
+function drawSpecBars(cv, spec, dimColors) {
+  const w = cv.clientWidth || 240, h = cv.clientHeight || 80;
+  cv.width = w * DPR; cv.height = h * DPR; const c = cv.getContext('2d'); c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.clearRect(0, 0, w, h);
+  let m = 0; for (const v of spec) m = Math.max(m, v);
+  const bw = w / NB;
+  for (let i = 0; i < NB; i++) {
+    const col = wlRGB(binWl(i)); const v = m > 0 ? spec[i] / m : 0;
+    c.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${dimColors ? 0.12 : 0.18})`; c.fillRect(i * bw, 0, bw - 1, h);
+    c.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; c.fillRect(i * bw, h - v * (h - 4) - 2, bw - 1, v * (h - 4) + 2);
+  }
+  return m;
+}
+function spectrumEditor(o) {
+  const wrap = document.createElement('div');
+  const cv = document.createElement('canvas'); cv.style.cssText = 'width:100%;height:90px;border-radius:8px;background:#131824;cursor:crosshair;touch-action:none';
+  wrap.appendChild(cv);
+  const axis = document.createElement('div'); axis.className = 'flex justify-between text-[10px] text-slate-500 mt-1 px-0.5'; axis.innerHTML = '<span>380 nm</span><span>540 nm</span><span>700 nm</span>'; wrap.appendChild(axis);
+  const draw = () => drawSpecBars(cv, o.spectrum, false);
+  requestAnimationFrame(draw);
+  let painting = false, lastBin = -1;
+  const paint = e => {
+    const r = cv.getBoundingClientRect(); const i = Math.max(0, Math.min(NB - 1, Math.floor((e.clientX - r.left) / r.width * NB)));
+    const v = Math.max(0, Math.min(1, 1 - (e.clientY - r.top - 2) / (r.height - 4)));
+    if (lastBin >= 0 && Math.abs(lastBin - i) > 1) { const a = Math.min(lastBin, i), b = Math.max(lastBin, i); const va = o.spectrum[lastBin]; for (let j = a; j <= b; j++) o.spectrum[j] = va + (v - va) * (j - lastBin) / (i - lastBin); }
+    o.spectrum[i] = v; lastBin = i;
+    if (o.preset !== 'custom') { o.preset = 'custom'; const s = inspector.querySelector('.field[data-key="preset"] select'); if (s) s.value = 'custom'; }
+    draw(); requestRender();
+  };
+  cv.onpointerdown = e => { painting = true; lastBin = -1; cv.setPointerCapture(e.pointerId); paint(e); };
+  cv.onpointermove = e => { if (painting) paint(e); };
+  cv.onpointerup = cv.onpointercancel = () => { painting = false; lastBin = -1; };
+  return wrap;
+}
+function updateReadouts() {
+  if (!sensorWidget) return;
+  const d = sensorWidget.o.data; if (!d) return;
+  sensorWidget.power.textContent = d.power.toFixed(3);
+  if (d.power > 1e-6) {
+    const s1 = d.s1 / d.power, s2 = d.s2 / d.power, dop = Math.hypot(s1, s2);
+    sensorWidget.dop.textContent = (dop * 100).toFixed(0) + '%';
+    sensorWidget.ang.textContent = dop > 0.02 ? 'linear at ' + (((Math.atan2(s2, s1) * 90 / Math.PI) + 180) % 180).toFixed(0) + '°' : 'unpolarized';
+  } else { sensorWidget.dop.textContent = '—'; sensorWidget.ang.textContent = ''; }
+  let pk = 0, pi = 0; for (let i = 0; i < NB; i++) if (d.spec[i] > pk) { pk = d.spec[i]; pi = i; }
+  sensorWidget.peak.textContent = pk > 0 ? 'peak ≈ ' + binWl(pi).toFixed(0) + ' nm' : 'no light';
+  drawSpecBars(sensorWidget.cv, d.spec, true);
+}
+
+/* ============================================================
+   Header controls & default scene
+   ============================================================ */
+const expo = document.getElementById('exposure'), expoVal = document.getElementById('exposureVal');
+expo.oninput = () => { exposure = +expo.value; expoVal.textContent = exposure.toFixed(1); requestRender(); };
+document.getElementById('grid').onchange = e => { showGrid = e.target.checked; requestRender(); };
+document.getElementById('clear').onclick = () => { objects = []; select(null); requestRender(); };
+
+function defaultScene() {
+  const cx = W / 2, cy = H / 2;
+  addObj('flashlight', { x: cx - 330, y: cy - 140, angle: 0, preset: 'sunlight', divergence: 1.5, width: 8, rays: 40 });
+  addObj('prism', { x: cx - 100, y: cy - 165, angle: 12, size: 130, material: 'f2' });
+  addObj('sensor', { x: cx + 260, y: cy - 40, angle: 100, length: 220 });
+  addObj('laser', { x: cx - 330, y: cy + 150, angle: 0, wl: 532 });
+  addObj('grating', { x: cx - 120, y: cy + 150, angle: 90, lines: 600, orders: 2 });
+  addObj('polarizer', { x: cx - 230, y: cy + 150, angle: 90, axis: 30 });
+  addObj('mirror', { x: cx + 180, y: cy + 150, angle: 55, length: 160 });
+  requestRender();
+}
+requestAnimationFrame(() => { resize(); defaultScene(); buildInspector(); });
+</script>
+</body>
+</html>

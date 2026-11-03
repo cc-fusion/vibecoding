@@ -1,0 +1,1 @@
+export function bootGame(root: HTMLElement): { destroy: () => void };

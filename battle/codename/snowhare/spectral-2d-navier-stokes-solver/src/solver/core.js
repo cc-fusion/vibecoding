@@ -1,0 +1,1028 @@
+/* ===========================================================================
+ *  core.js — 2D incompressible Navier–Stokes solver
+ *  ---------------------------------------------------------------------------
+ *  Numerical method
+ *  ---------------
+ *  Layout ............. staggered MAC grid, fully periodic in x and y
+ *                      u[i,j]  -> x-face  (i*h , (j+1/2)*h)
+ *                      v[i,j]  -> y-face  ((i+1/2)*h , j*h)
+ *                      p[i,j]  -> cell centre ((i+1/2)*h , (j+1/2)*h)
+ *                      omega   -> grid corner (i*h , j*h)
+ *
+ *  Splitting ......... Chorin projection (operator splitting)
+ *      1. advect      semi-Lagrangian, bilinear, optional BFECC
+ *      2. diffuse     explicit (default) or implicit/spectral (optional)
+ *      3. project     DIRECT spectral Poisson solve  lap(phi) = div(u*)
+ *                     via 2D FFT  ->  O(N log N), no iterations at all
+ *      4. u^{n+1} = u* - grad(phi)  (discretely divergence free, machine
+ *                     precision up to floating point round-off)
+ *
+ *  Poisson solve ..... on the MAC grid D*G is exactly the 5-point Laplacian,
+ *                     whose Fourier symbol is
+ *                        kappa(m,n) = 4[ sin^2(pi m/N) + sin^2(pi n/N) ] / h^2
+ *                     so   phi_hat = - div_hat / kappa   (mean-free).
+ *
+ *  Advection ........ fully "vectorised": flat Float64Array/Float32Array
+ *                     buffers, branch-free bilinear gather, no per-cell
+ *                     object allocation, wrap-around by bit masking
+ *                     (grid sizes are powers of two).
+ *
+ *  BFECC ............ Back & Forth Error Compensation and Correction
+ *                     u* = A(u);  u** = A^-1(u*);  u_corr = u* - (u**-u)/2
+ *
+ *  This file is a plain classic script: it publishes `globalThis.NS`.
+ *  It is used unchanged by (a) the React app, (b) the Web Worker and
+ *  (c) the standalone single-file HTML build.
+ * ========================================================================= */
+
+(function (global) {
+  'use strict';
+
+  var TAU = Math.PI * 2;
+
+  function nowMs() {
+    return (typeof performance !== 'undefined' && performance.now)
+      ? performance.now()
+      : Date.now();
+  }
+
+  /* =======================================================================
+   *  FAST FOURIER TRANSFORM  (iterative radix-2 Cooley–Tukey, in place)
+   * ===================================================================== */
+
+  function FFT1D(n) {
+    if (n < 2 || (n & (n - 1)) !== 0) {
+      throw new Error('FFT length must be a power of two, got ' + n);
+    }
+    this.n = n;
+    var levels = Math.round(Math.log(n) / Math.LN2);
+    this.levels = levels;
+
+    /* Bit reversal table.  The transforms below are permutation free:
+       the forward DIF produces the spectrum in bit reversed order and the
+       inverse GS consumes exactly that order, so no separate bit reversal
+       pass (which would touch the whole array) is ever needed.            */
+    var rev = new Uint32Array(n);
+    for (var i = 0; i < n; i++) {
+      var x = i, r = 0;
+      for (var b = 0; b < levels; b++) { r = (r << 1) | (x & 1); x >>>= 1; }
+      rev[i] = r >>> 0;
+    }
+    this.rev = rev;
+
+    /* one contiguous twiddle table per stage (level 1 = len 2 ... )       */
+    this.cos = [];
+    this.sin = [];
+    for (var len = 2, lvl = 1; len <= n; len <<= 1, lvl++) {
+      var half = len >> 1;
+      var c = new Float64Array(half), s = new Float64Array(half);
+      for (var j = 0; j < half; j++) {
+        c[j] = Math.cos(TAU * j / len);
+        s[j] = Math.sin(TAU * j / len);
+      }
+      this.cos.push(c);
+      this.sin.push(s);
+    }
+  }
+
+  /* Forward transform: decimation in frequency (DIF).
+     natural order in  ->  bit reversed order out,  no permutation pass.
+     stage butterfly:  A = a + b ,  B = (a - b) * w ,  w = exp(-2 pi i j/len) */
+  FFT1D.prototype.forward = function (re, im, off) {
+    var n = this.n, level = this.levels;
+    for (var len = n; len >= 2; len >>= 1, level--) {
+      var half = len >> 1;
+      var cT = this.cos[level - 1], sT = this.sin[level - 1];
+      for (var base = off, end = off + n; base < end; base += len) {
+        for (var j = 0; j < half; j++) {
+          var a = base + j, b = a + half;
+          var ar = re[a], ai = im[a], br = re[b], bi = im[b];
+          re[a] = ar + br; im[a] = ai + bi;
+          var dr = ar - br, di = ai - bi;
+          re[b] = dr * cT[j] + di * sT[j];
+          im[b] = di * cT[j] - dr * sT[j];
+        }
+      }
+    }
+  };
+
+  /* Inverse transform: Gentleman-Sande (GS).
+     bit reversed order in  ->  natural order out,  no permutation pass.
+     stage butterfly:  a = (A + B conj(w))/2 ,  b = (A - B conj(w))/2      */
+  FFT1D.prototype.inverse = function (re, im, off) {
+    var n = this.n, len, level;
+    for (len = 2, level = 1; len <= n; len <<= 1, level++) {
+      var half = len >> 1;
+      var cT = this.cos[level - 1], sT = this.sin[level - 1];
+      for (var base = off, end = off + n; base < end; base += len) {
+        for (var j = 0; j < half; j++) {
+          var a = base + j, b = a + half;
+          var ar = re[a], ai = im[a], br = re[b], bi = im[b];
+          var tr = br * cT[j] - bi * sT[j];
+          var ti = br * sT[j] + bi * cT[j];
+          re[a] = 0.5 * (ar + tr); im[a] = 0.5 * (ai + ti);
+          re[b] = 0.5 * (ar - tr); im[b] = 0.5 * (ai - ti);
+        }
+      }
+    }
+    /* NOTE: the stage butterflies above are the exact inverse of the DIF
+       butterflies, so no extra 1/n factor is applied here.  The 1/(N*N)
+       normalisation of the inverse DFT is done once in FFT2D.inverse.     */
+  };
+
+  /* Cache friendly blocked transpose of an n x n square matrix */
+  function transpose(a, n) {
+    var B = 32, i, j, ii, jj;
+    for (i = 0; i < n; i += B) {
+      var iEnd = Math.min(i + B, n);
+      for (j = i; j < n; j += B) {
+        var jEnd = Math.min(j + B, n);
+        for (ii = i; ii < iEnd; ii++) {
+          var rowI = ii * n;
+          for (jj = j; jj < jEnd; jj++) {
+            if (ii < jj) {
+              var rowJ = jj * n;
+              var t = a[rowI + jj];
+              a[rowI + jj] = a[rowJ + ii];
+              a[rowJ + ii] = t;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* 2D complex FFT of a real field (row major, n*n) */
+  function FFT2D(n) {
+    this.n = n;
+    this.fft = new FFT1D(n);
+    this.re = new Float64Array(n * n);
+    this.im = new Float64Array(n * n);
+  }
+
+  /* real field -> spectrum (this.re, this.im) */
+  FFT2D.prototype.forward = function (src) {
+    this.re.set(src);
+    this.im.fill(0);
+    this.transformAll(false);
+  };
+
+  /* spectrum -> real field written into dst.
+     The GS stage butterflies are the exact inverse of the DIF butterflies,
+     so the composition below already IS the normalised inverse DFT
+     (1/N^2 sum_k X_k e^{+2 pi i jk/N}) and needs no extra factor.        */
+  FFT2D.prototype.inverse = function (dst) {
+    this.transformAll(true);
+    var re = this.re, len = this.n * this.n, i;
+    if (dst.length === len) {
+      for (i = 0; i < len; i++) dst[i] = re[i];
+    } else {
+      dst.set(re.subarray(0, len));
+    }
+  };
+
+  /* separable 2D transform: rows -> transpose -> rows -> transpose back */
+  FFT2D.prototype.transformAll = function (inverse) {
+    var n = this.n, re = this.re, im = this.im, r;
+    if (inverse) {
+      for (r = 0; r < n; r++) this.fft.inverse(re, im, r * n);
+      transpose(re, n); transpose(im, n);
+      for (r = 0; r < n; r++) this.fft.inverse(re, im, r * n);
+      transpose(re, n); transpose(im, n);
+    } else {
+      for (r = 0; r < n; r++) this.fft.forward(re, im, r * n);
+      transpose(re, n); transpose(im, n);
+      for (r = 0; r < n; r++) this.fft.forward(re, im, r * n);
+      transpose(re, n); transpose(im, n);
+    }
+  };
+
+  /* =======================================================================
+   *  FLUID SOLVER
+   * ===================================================================== */
+
+  function defaultParams() {
+    return {
+      viscosity: 1.5e-4,     // kinematic viscosity nu
+      cfl: 0.45,             // CFL number used by the automatic time step
+      autoDt: true,
+      dt: 0.02,              // fixed time step when autoDt === false
+      bfecc: true,           // Back & Forth Error Compensation & Correction
+      implicitDiffusion: false,
+      confinement: 0.0,      // vorticity confinement strength
+      forceX: 0.0,           // constant body force
+      forceY: 0.0,
+      dyeDissipation: 0.9995,
+      dyeAmount: 1.0
+    };
+  }
+
+  function FluidSolver(opts) {
+    opts = opts || {};
+    this.params = opts.params || defaultParams();
+    this.N = 0;
+    this.simTime = 0;
+    this.setResolution(opts.N || 512);
+  }
+
+  FluidSolver.prototype.setResolution = function (N) {
+    N = Math.max(32, N | 0);
+    this.N = N;
+    this.n2 = N * N;
+    this.dx = 1 / N;
+    this.invDx = N;
+    this.mask = N - 1;
+
+    var n2 = this.n2;
+
+    /* One single typed-array flavour is used for every velocity field so
+       that all hot loops stay monomorphic for the JIT (mixing Float32Array
+       and Float64Array inside one function de-optimises element access).
+       Double precision is used up to 1024^2, single precision above that
+       to stay inside a sane memory budget.  The pressure buffer always
+       stays double: the spectral Poisson solve amplifies round off in the
+       near-DC modes, and a single precision pressure would destroy the
+       divergence free property of the projection.                          */
+    var A = (N <= 1024) ? Float64Array : Float32Array;
+
+    // state
+    this.u = new A(n2);
+    this.v = new A(n2);
+    this.uWork = new A(n2);
+    this.vWork = new A(n2);
+    this.p = new Float64Array(n2);
+
+    // scratch
+    this.tmpA = new A(n2);
+    this.tmpB = new A(n2);
+    this.vAtU = new A(n2);
+    this.uAtV = new A(n2);
+    this.omega = new A(n2);
+    this.omegaMag = new A(n2);
+    this.dye = new A(n2);
+    this.dyeWork = new A(n2);
+
+    this.fft = new FFT2D(N);
+
+    /* Fourier symbol of the 5-point Laplacian on the MAC grid.
+       The DIF transform stores frequency m at slot rev(m), therefore the
+       table is built in the very same (bit reversed) order.               */
+    this.kappa = new Float64Array(n2);
+    var h2 = this.dx * this.dx, m, n;
+    var rev = this.fft.fft.rev;
+    for (n = 0; n < N; n++) {
+      var sy = Math.sin(Math.PI * rev[n] / N);
+      var ky = sy * sy;
+      for (m = 0; m < N; m++) {
+        var sx = Math.sin(Math.PI * rev[m] / N);
+        this.kappa[n * N + m] = 4 * (sx * sx + ky) / h2;
+      }
+    }
+
+    this.reset();
+    return this;
+  };
+
+  /* --- initial condition: divergence free random stream function ------- */
+  FluidSolver.prototype.reset = function () {
+    var N = this.N, n2 = this.n2, i, j;
+    var psi = this.tmpA, tmp = this.tmpB;
+
+    for (i = 0; i < n2; i++) psi[i] = Math.random() * 2 - 1;
+    smooth(psi, tmp, N, 4);
+
+    var u = this.u, v = this.v, m1 = this.mask;
+    var c = 0.5 * this.invDx;
+    for (j = 0; j < N; j++) {
+      var base = j * N, jp = ((j + 1) & m1) * N, jm = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip = (i + 1) & m1, im = (i - 1) & m1;
+        u[base + i] = (psi[jp + i] - psi[jm + i]) * c;         //  d(psi)/dy
+        v[base + i] = -(psi[base + ip] - psi[base + im]) * c;   // -d(psi)/dx
+      }
+    }
+
+    this.dye.fill(0);
+    this.simTime = 0;
+  };
+
+  /* 3x3 binomial smoothing with periodic wrap */
+  function smooth(a, tmp, N, passes) {
+    var m1 = N - 1, p, j, i;
+    for (p = 0; p < passes; p++) {
+      for (j = 0; j < N; j++) {
+        var base = j * N, jp = ((j + 1) & m1) * N, jm = ((j - 1) & m1) * N;
+        for (i = 0; i < N; i++) {
+          var ip = (i + 1) & m1, im = (i - 1) & m1;
+          tmp[base + i] =
+            0.25 * a[base + i] +
+            0.125 * (a[base + ip] + a[base + im] + a[jp + i] + a[jm + i]) +
+            0.0625 * (a[jp + ip] + a[jp + im] + a[jm + ip] + a[jm + im]);
+        }
+      }
+      a.set(tmp);
+    }
+  }
+
+  /* --- velocity of the flow sampled at the location of each field ------- *
+   *  vAtU[i,j] : v-component evaluated at the u-face  (i , j+1/2)
+   *  uAtV[i,j] : u-component evaluated at the v-face  (i+1/2 , j)          */
+  FluidSolver.prototype.computeFaceVelocities = function () {
+    var N = this.N, m1 = this.mask, u = this.u, v = this.v;
+    var vAtU = this.vAtU, uAtV = this.uAtV;
+    var j, i;
+    for (j = 0; j < N; j++) {
+      var base = j * N, jm = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var im = (i - 1) & m1;
+        vAtU[base + i] = 0.5 * (v[base + i] + v[base + im]);
+        uAtV[base + i] = 0.5 * (u[base + i] + u[jm + i]);
+      }
+    }
+  };
+
+  /* --- semi Lagrangian advection (bilinear, periodic) ------------------- *
+   *  field  : scalar/vector component on its own staggered location
+   *  offx/offy : offset of the field location in cell units
+   *  vx/vy  : velocity sampled at the same locations as `field`
+   *  forward: false -> trace backwards  x - dt*v  (A)
+   *           true  -> trace forwards   x + dt*v  (A^-1)                  */
+  FluidSolver.prototype.slAdvect = function (field, offx, offy, vx, vy, dt, out, forward) {
+    var N = this.N, m1 = this.mask, dx = this.dx, invDx = this.invDx;
+    var sdt = forward ? dt : -dt;
+    var j, i;
+
+    for (j = 0; j < N; j++) {
+      var base = j * N;
+      var y = (j + offy) * dx;
+      for (i = 0; i < N; i++) {
+        var idx = base + i;
+        var x = (i + offx) * dx;
+        var px = x - sdt * vx[idx];
+        var py = y - sdt * vy[idx];
+        var fi = px * invDx - offx;
+        var fj = py * invDx - offy;
+        var i0 = Math.floor(fi), j0 = Math.floor(fj);
+        var fx = fi - i0, fy = fj - j0;
+        var ia = i0 & m1, ib = (i0 + 1) & m1;
+        var ja = (j0 & m1) * N, jb = ((j0 + 1) & m1) * N;
+        var a = field[ja + ia], b = field[ja + ib];
+        var c = field[jb + ia], d = field[jb + ib];
+        var top = a + (b - a) * fx;
+        var bot = c + (d - c) * fx;
+        out[idx] = top + (bot - top) * fy;
+      }
+    }
+  };
+
+  /* --- advect the velocity field (with optional BFECC) ------------------ */
+  FluidSolver.prototype.advectVelocity = function (dt) {
+    var u = this.u, v = this.v, uWork = this.uWork, vWork = this.vWork;
+    var vAtU = this.vAtU, uAtV = this.uAtV, tmpA = this.tmpA, tmpB = this.tmpB;
+    var n2 = this.n2, i;
+
+    if (this.params.bfecc) {
+      /* A(u) ; A^-1(A(u)) ; correction  u* - (u** - u)/2  */
+      this.slAdvect(u, 0, 0.5, u, vAtU, dt, tmpA, false);
+      this.slAdvect(tmpA, 0, 0.5, u, vAtU, dt, tmpB, true);
+      for (i = 0; i < n2; i++) uWork[i] = tmpA[i] - 0.5 * (tmpB[i] - u[i]);
+
+      this.slAdvect(v, 0.5, 0, uAtV, v, dt, tmpA, false);
+      this.slAdvect(tmpA, 0.5, 0, uAtV, v, dt, tmpB, true);
+      for (i = 0; i < n2; i++) vWork[i] = tmpA[i] - 0.5 * (tmpB[i] - v[i]);
+    } else {
+      this.slAdvect(u, 0, 0.5, u, vAtU, dt, uWork, false);
+      this.slAdvect(v, 0.5, 0, uAtV, v, dt, vWork, false);
+    }
+  };
+
+  /* --- explicit diffusion (5-point Laplacian on the staggered sublattice) */
+  FluidSolver.prototype.explicitDiffuse = function (f, out, dt, nu) {
+    var N = this.N, m1 = this.mask;
+    var c = dt * nu * this.invDx * this.invDx;
+    var j, i;
+    for (j = 0; j < N; j++) {
+      var base = j * N, jp = ((j + 1) & m1) * N, jm = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip = (i + 1) & m1, im = (i - 1) & m1;
+        out[base + i] = f[base + i] + c * (
+          f[base + ip] + f[base + im] + f[jp + i] + f[jm + i] - 4 * f[base + i]);
+      }
+    }
+  };
+
+  /* --- implicit (spectral) diffusion:  (I - dt*nu*L) u = f ----------- */
+  FluidSolver.prototype.implicitDiffuse = function (f, out, dt, nu) {
+    var n2 = this.n2, i;
+    this.fft.forward(f);
+    var re = this.fft.re, im = this.fft.im, kap = this.kappa, s = dt * nu;
+    for (i = 0; i < n2; i++) {
+      var g = 1 / (1 + s * kap[i]);
+      re[i] *= g; im[i] *= g;
+    }
+    this.fft.inverse(out);
+  };
+
+  FluidSolver.prototype.applyDiffusion = function (dt) {
+    var nu = this.params.viscosity;
+    if (!(nu > 0)) return;
+    if (this.params.implicitDiffusion) {
+      this.implicitDiffuse(this.uWork, this.uWork, dt, nu);
+      this.implicitDiffuse(this.vWork, this.vWork, dt, nu);
+    } else {
+      this.explicitDiffuse(this.uWork, this.tmpA, dt, nu);
+      this.explicitDiffuse(this.vWork, this.tmpB, dt, nu);
+      var t = this.uWork; this.uWork = this.tmpA; this.tmpA = t;
+      t = this.vWork; this.vWork = this.tmpB; this.tmpB = t;
+    }
+  };
+
+  FluidSolver.prototype.applyForces = function (dt) {
+    var fx = this.params.forceX, fy = this.params.forceY;
+    if (fx === 0 && fy === 0) return;
+    var u = this.uWork, v = this.vWork, n2 = this.n2, i;
+    for (i = 0; i < n2; i++) { u[i] += dt * fx; v[i] += dt * fy; }
+  };
+
+  /* --- vorticity confinement (Steinhoff & Underhill) -------------------- */
+  FluidSolver.prototype.applyConfinement = function (dt) {
+    var eps = this.params.confinement;
+    if (!(eps > 0)) return;
+    var N = this.N, m1 = this.mask, invDx = this.invDx;
+    var u = this.uWork, v = this.vWork, om = this.omega, mag = this.omegaMag;
+    var fxA = this.tmpA, fyA = this.tmpB;
+    var j, i;
+
+    // vorticity at the grid corners
+    for (j = 0; j < N; j++) {
+      var base = j * N, jm = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var im = (i - 1) & m1;
+        om[base + i] = (v[base + i] - v[base + im]) * invDx
+                     - (u[base + i] - u[jm + i]) * invDx;
+      }
+    }
+    // N = grad|omega| / |grad|omega||   and   f = eps*h*(N x omega)
+    for (j = 0; j < N; j++) {
+      var b2 = j * N, jp = ((j + 1) & m1) * N, jm2 = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip = (i + 1) & m1, im2 = (i - 1) & m1;
+        var m = Math.abs(om[b2 + i]);
+        mag[b2 + i] = m;
+        var gx = (mag[b2 + ip] - mag[b2 + im2]) * 0.5 * invDx;
+        var gy = (mag[jp + i] - mag[jm2 + i]) * 0.5 * invDx;
+        var len = Math.sqrt(gx * gx + gy * gy) + 1e-12;
+        var nx = gx / len, ny = gy / len;
+        var w = om[b2 + i];
+        fxA[b2 + i] = eps * this.dx * (ny * w);
+        fyA[b2 + i] = eps * this.dx * (-nx * w);
+      }
+    }
+    // distribute the corner force to the faces
+    for (j = 0; j < N; j++) {
+      var b3 = j * N, jp3 = ((j + 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip3 = (i + 1) & m1;
+        u[b3 + i] += 0.5 * dt * (fxA[b3 + i] + fxA[jp3 + i]);
+        v[b3 + i] += 0.5 * dt * (fyA[b3 + i] + fyA[b3 + ip3]);
+      }
+    }
+  };
+
+  /* --- Chorin projection with a DIRECT spectral Poisson solve ----------- *
+   *      lap(phi) = div(u*)        ->   phi_hat = -div_hat / kappa
+   *      u^{n+1}  = u* - grad(phi)                                        */
+  FluidSolver.prototype.project = function () {
+    var N = this.N, n2 = this.n2, m1 = this.mask, invDx = this.invDx;
+    var u = this.uWork, v = this.vWork, p = this.p;
+    var j, i;
+
+    // 1) divergence at the cell centres
+    for (j = 0; j < N; j++) {
+      var base = j * N, jp = ((j + 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip = (i + 1) & m1;
+        p[base + i] = (u[base + ip] - u[base + i]) * invDx
+                    + (v[jp + i] - v[base + i]) * invDx;
+      }
+    }
+
+    // 2) spectral Poisson solve (O(N log N), no iteration)
+    this.fft.forward(p);
+    var re = this.fft.re, im = this.fft.im, kap = this.kappa;
+    for (i = 0; i < n2; i++) {
+      var kk = kap[i];
+      if (kk > 0) { var f = -1 / kk; re[i] *= f; im[i] *= f; }
+      else { re[i] = 0; im[i] = 0; }        // mean free gauge
+    }
+    this.fft.inverse(p);
+
+    // 3) subtract the pressure gradient
+    for (j = 0; j < N; j++) {
+      var b2 = j * N, jm = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var im2 = (i - 1) & m1;
+        u[b2 + i] -= (p[b2 + i] - p[b2 + im2]) * invDx;
+        v[b2 + i] -= (p[b2 + i] - p[jm + i]) * invDx;
+      }
+    }
+  };
+
+  /* --- vorticity at the grid corners (diagnostics + rendering) --------- */
+  FluidSolver.prototype.computeVorticity = function () {
+    var N = this.N, m1 = this.mask, invDx = this.invDx;
+    var u = this.u, v = this.v, om = this.omega;
+    var j, i;
+    for (j = 0; j < N; j++) {
+      var base = j * N, jm = ((j - 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var im = (i - 1) & m1;
+        om[base + i] = (v[base + i] - v[base + im]) * invDx
+                     - (u[base + i] - u[jm + i]) * invDx;
+      }
+    }
+  };
+
+  /* --- passive scalar (dye) advection ----------------------------------- */
+  FluidSolver.prototype.advectDye = function (dt) {
+    var N = this.N, u = this.uWork, v = this.vWork;
+    var uc = this.tmpA, vc = this.tmpB, dye = this.dye, out = this.dyeWork;
+    var m1 = this.mask, j, i;
+
+    // cell centred velocity of the projected field
+    for (j = 0; j < N; j++) {
+      var base = j * N, jp = ((j + 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip = (i + 1) & m1;
+        uc[base + i] = 0.5 * (u[base + i] + u[base + ip]);
+        vc[base + i] = 0.5 * (v[base + i] + v[jp + i]);
+      }
+    }
+
+    this.slAdvect(dye, 0.5, 0.5, uc, vc, dt, out, false);
+
+    var keep = this.params.dyeDissipation;
+    for (i = 0; i < this.n2; i++) out[i] *= keep;
+  };
+
+  /* --- one full time step --------------------------------------------- */
+  FluidSolver.prototype.step = function (dt) {
+    this.computeFaceVelocities();
+    this.advectVelocity(dt);
+    this.applyDiffusion(dt);
+    this.applyForces(dt);
+    this.applyConfinement(dt);
+    this.project();
+    this.advectDye(dt);
+
+    var t = this.u; this.u = this.uWork; this.uWork = t;
+    t = this.v; this.v = this.vWork; this.vWork = t;
+    t = this.dye; this.dye = this.dyeWork; this.dyeWork = t;
+
+    this.simTime += dt;
+  };
+
+  /* --- diagnostics ------------------------------------------------------ */
+  FluidSolver.prototype.maxSpeed = function () {
+    var u = this.u, v = this.v, n2 = this.n2, i, m = 0;
+    for (i = 0; i < n2; i++) {
+      var a = u[i], b = v[i];
+      var s = a * a + b * b;
+      if (s > m) m = s;
+    }
+    return Math.sqrt(m);
+  };
+
+  FluidSolver.prototype.kineticEnergy = function () {
+    var u = this.u, v = this.v, n2 = this.n2, i, s = 0;
+    for (i = 0; i < n2; i++) s += u[i] * u[i] + v[i] * v[i];
+    return 0.5 * s * this.dx * this.dx;
+  };
+
+  /* max |div u| of the current (projected) field */
+  FluidSolver.prototype.maxDivergence = function () {
+    var N = this.N, m1 = this.mask, invDx = this.invDx;
+    var u = this.u, v = this.v, d = this.tmpA;
+    var j, i, mx = 0;
+    for (j = 0; j < N; j++) {
+      var base = j * N, jp = ((j + 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var ip = (i + 1) & m1;
+        var dv = (u[base + ip] - u[base + i]) * invDx
+               + (v[jp + i] - v[base + i]) * invDx;
+        d[base + i] = dv;
+        var a = dv < 0 ? -dv : dv;
+        if (a > mx) mx = a;
+      }
+    }
+    return mx;
+  };
+
+  /* all diagnostics in a single sweep over the field */
+  FluidSolver.prototype.diagnostics = function () {
+    var N = this.N, m1 = this.mask, invDx = this.invDx;
+    var u = this.u, v = this.v;
+    var j, i, mx = 0, ke = 0, vmax = 0;
+    for (j = 0; j < N; j++) {
+      var base = j * N, jp = ((j + 1) & m1) * N;
+      for (i = 0; i < N; i++) {
+        var idx = base + i;
+        var uu = u[idx], vv = v[idx];
+        var sp = uu * uu + vv * vv;
+        ke += sp;
+        if (sp > vmax) vmax = sp;
+        var ip = (i + 1) & m1;
+        var dv = (u[base + ip] - uu) * invDx + (v[jp + i] - vv) * invDx;
+        var ad = dv < 0 ? -dv : dv;
+        if (ad > mx) mx = ad;
+      }
+    }
+    return {
+      maxDiv: mx,
+      energy: 0.5 * ke * this.dx * this.dx,
+      vmax: Math.sqrt(vmax)
+    };
+  };
+
+  /* suggested time step: CFL + explicit diffusion stability */
+  FluidSolver.prototype.suggestDt = function () {
+    var dx = this.dx, cfl = this.params.cfl;
+    var vmax = this.maxSpeed();
+    var dt = cfl * dx / Math.max(vmax, 1e-6);
+    var nu = this.params.viscosity;
+    if (nu > 0 && !this.params.implicitDiffusion) {
+      dt = Math.min(dt, 0.2 * dx * dx / nu);
+    }
+    return Math.min(Math.max(dt, 1e-6), 0.05);
+  };
+
+  /* --- user interaction ------------------------------------------------- */
+  FluidSolver.prototype.stir = function (x, y, dvx, dvy, radius) {
+    var N = this.N, invDx = this.invDx;
+    var gx = x * invDx, gy = y * invDx, r = radius * invDx;
+    var r2 = r * r;
+    var i0 = Math.floor(gx - r), i1 = Math.ceil(gx + r);
+    var j0 = Math.floor(gy - r), j1 = Math.ceil(gy + r);
+    var i, j, m1 = this.mask;
+    for (j = j0; j <= j1; j++) {
+      var jj = ((j % N) + N) % N;
+      var dy = (j - gy);
+      for (i = i0; i <= i1; i++) {
+        var ii = ((i % N) + N) % N;
+        var dx = (i - gx);
+        var d2 = dx * dx + dy * dy;
+        if (d2 < r2) {
+          var w = 1 - d2 / r2;
+          var idx = jj * N + ii;
+          this.u[idx] += dvx * w;
+          this.v[idx] += dvy * w;
+        }
+      }
+    }
+  };
+
+  FluidSolver.prototype.injectDye = function (x, y, radius, amount) {
+    var N = this.N, invDx = this.invDx;
+    var gx = x * invDx, gy = y * invDx, r = radius * invDx, r2 = r * r;
+    var i0 = Math.floor(gx - r), i1 = Math.ceil(gx + r);
+    var j0 = Math.floor(gy - r), j1 = Math.ceil(gy + r);
+    var i, j;
+    for (j = j0; j <= j1; j++) {
+      var jj = ((j % N) + N) % N;
+      var dy = (j - gy);
+      for (i = i0; i <= i1; i++) {
+        var ii = ((i % N) + N) % N;
+        var dx = (i - gx);
+        var d2 = dx * dx + dy * dy;
+        if (d2 < r2) {
+          var w = 1 - d2 / r2;
+          var idx = jj * N + ii;
+          this.dye[idx] = Math.min(1.5, this.dye[idx] + amount * w);
+        }
+      }
+    }
+  };
+
+  /* =======================================================================
+   *  RENDERING
+   * ===================================================================== */
+
+  function buildLUT(stops) {
+    var lut = new Uint8ClampedArray(256 * 3);
+    for (var i = 0; i < 256; i++) {
+      var t = i / 255;
+      var k = 0;
+      while (k < stops.length - 2 && t > stops[k + 1][0]) k++;
+      var a = stops[k], b = stops[k + 1];
+      var span = b[0] - a[0];
+      var f = span > 0 ? (t - a[0]) / span : 0;
+      if (f < 0) f = 0; if (f > 1) f = 1;
+      lut[i * 3 + 0] = a[1][0] + (b[1][0] - a[1][0]) * f;
+      lut[i * 3 + 1] = a[1][1] + (b[1][1] - a[1][1]) * f;
+      lut[i * 3 + 2] = a[1][2] + (b[1][2] - a[1][2]) * f;
+    }
+    return lut;
+  }
+
+  var LUTS = {
+    vorticity: buildLUT([
+      [0.00, [12, 32, 110]],
+      [0.22, [46, 118, 214]],
+      [0.46, [236, 242, 250]],
+      [0.54, [250, 240, 224]],
+      [0.78, [236, 126, 62]],
+      [1.00, [124, 18, 32]]
+    ]),
+    speed: buildLUT([
+      [0.00, [8, 8, 34]],
+      [0.20, [26, 92, 196]],
+      [0.42, [26, 176, 176]],
+      [0.62, [92, 214, 92]],
+      [0.82, [246, 206, 70]],
+      [1.00, [222, 58, 44]]
+    ]),
+    pressure: buildLUT([
+      [0.00, [18, 52, 140]],
+      [0.30, [72, 150, 230]],
+      [0.50, [246, 246, 246]],
+      [0.70, [236, 150, 90]],
+      [1.00, [140, 24, 60]]
+    ]),
+    dye: buildLUT([
+      [0.00, [10, 8, 24]],
+      [0.35, [86, 36, 132]],
+      [0.65, [206, 92, 76]],
+      [0.85, [250, 196, 96]],
+      [1.00, [255, 250, 226]]
+    ]),
+    divergence: buildLUT([
+      [0.00, [8, 12, 30]],
+      [0.45, [20, 90, 120]],
+      [0.75, [240, 190, 80]],
+      [1.00, [255, 60, 40]]
+    ])
+  };
+
+  function Renderer(N) {
+    this.setSize(N);
+  }
+
+  Renderer.prototype.setSize = function (N) {
+    this.N = N;
+    var c = (typeof document !== 'undefined')
+      ? document.createElement('canvas')
+      : new OffscreenCanvas(N, N);
+    c.width = N; c.height = N;
+    this.canvas = c;
+    this.ctx = c.getContext('2d');
+    this.image = this.ctx.createImageData(N, N);
+    this.data = this.image.data;
+    this.vortMax = 1e-6;
+  };
+
+  /* draw the current field into a 2D context, scaled to (W,H) */
+  Renderer.prototype.draw = function (target, W, H, solver, opts) {
+    opts = opts || {};
+    var N = solver.N;
+    if (N !== this.N) this.setSize(N);
+
+    var data = this.data;
+    var mode = opts.mode || 'vorticity';
+    var lut = LUTS[mode] || LUTS.vorticity;
+    var u = solver.u, v = solver.v, p = solver.p, dye = solver.dye;
+    var om = solver.omega, m1 = solver.mask, invDx = solver.invDx;
+    var showDye = !!opts.showDye && mode !== 'dye';
+    var i, j, py, idx;
+
+    // auto range for the vorticity
+    var vortScale = 1;
+    if (mode === 'vorticity') {
+      var mx = 0;
+      for (i = 0; i < solver.n2; i++) {
+        var a = om[i] < 0 ? -om[i] : om[i];
+        if (a > mx) mx = a;
+      }
+      this.vortMax = Math.max(mx, this.vortMax * 0.97, 1e-6);
+      vortScale = 1 / this.vortMax;
+    }
+
+    var pressureScale = 1;
+    if (mode === 'pressure') {
+      var pm = 0;
+      for (i = 0; i < solver.n2; i++) {
+        var b = p[i] < 0 ? -p[i] : p[i];
+        if (b > pm) pm = b;
+      }
+      pressureScale = 1 / Math.max(pm, 1e-9);
+    }
+
+    var speedScale = 1 / Math.max(solver.maxSpeed(), 1e-6);
+
+    for (py = 0; py < N; py++) {
+      var j2 = N - 1 - py;                 // flip: +y is up
+      var row = j2 * N;
+      var rowOut = py * N * 4;
+      for (i = 0; i < N; i++) {
+        idx = row + i;
+        var t = 0.5;
+        if (mode === 'vorticity') {
+          t = 0.5 + 0.5 * om[idx] * vortScale;
+        } else if (mode === 'speed') {
+          var uc = 0.5 * (u[idx] + u[row + ((i + 1) & m1)]);
+          var vc = 0.5 * (v[idx] + v[((j2 + 1) & m1) * N + i]);
+          var sp = Math.sqrt(uc * uc + vc * vc) * speedScale;
+          t = sp > 1 ? 1 : sp;
+        } else if (mode === 'pressure') {
+          t = 0.5 + 0.5 * p[idx] * pressureScale;
+        } else if (mode === 'dye') {
+          t = dye[idx] > 1 ? 1 : dye[idx];
+        } else if (mode === 'divergence') {
+          var ip = (i + 1) & m1;
+          var jp = ((j2 + 1) & m1) * N;
+          var dv = (u[row + ip] - u[idx]) * invDx + (v[jp + i] - v[idx]) * invDx;
+          var ad = dv < 0 ? -dv : dv;
+          t = Math.min(1, ad * 40);
+        }
+
+        var li = (t * 255) | 0;
+        if (li < 0) li = 0; else if (li > 255) li = 255;
+        var o = rowOut + i * 4;
+        var r = lut[li * 3], g = lut[li * 3 + 1], bl = lut[li * 3 + 2];
+
+        if (showDye) {
+          var d = dye[idx];
+          if (d > 0) {
+            if (d > 1) d = 1;
+            // warm smoke composited over the base field
+            r = r * (1 - d) + 255 * d;
+            g = g * (1 - d) + 206 * d;
+            bl = bl * (1 - d) + 130 * d;
+          }
+        }
+
+        data[o] = r; data[o + 1] = g; data[o + 2] = bl; data[o + 3] = 255;
+      }
+    }
+
+    this.ctx.putImageData(this.image, 0, 0);
+    target.drawImage(this.canvas, 0, 0, N, N, 0, 0, W, H);
+  };
+
+  /* =======================================================================
+   *  ENGINE  (time stepping + rendering + statistics)
+   * ===================================================================== */
+
+  function Engine(opts) {
+    opts = opts || {};
+    this.params = Object.assign({
+      N: 512,
+      colorMode: 'vorticity',
+      showDye: true,
+      autoSteps: true,
+      stepsPerFrame: 1,
+      running: false,
+      dyeAmount: 0.9,
+      stirRadius: 0.03
+    }, opts.params || {});
+
+    this.ctx = opts.ctx;
+    this.onStats = opts.onStats || function () {};
+    this.requestFrame = opts.requestFrame || function (cb) { return requestAnimationFrame(cb); };
+
+    this.solver = new FluidSolver({ N: this.params.N, params: this.params });
+    this.renderer = new Renderer(this.solver.N);
+
+    this.running = false;
+    this.frame = 0;
+    this.simSteps = 0;
+    this.stepMs = 0;
+    this.renderMs = 0;
+    this.fps = 0;
+    this.lastFrameTime = 0;
+    this.pendingReset = false;
+    this.dyeCursor = { x: 0.5, y: 0.5, active: false };
+  }
+
+  Engine.prototype.setParams = function (p) {
+    var prevN = this.params.N;
+    Object.assign(this.params, p);
+    if (p.N && p.N !== prevN) {
+      this.solver.setResolution(p.N);
+      this.renderer.setSize(p.N);
+      this.frame = 0;
+    }
+  };
+
+  Engine.prototype.setSize = function (w, h) { /* handled by the canvas */ };
+
+  Engine.prototype.reset = function () {
+    this.solver.reset();
+    this.frame = 0;
+    this.simSteps = 0;
+  };
+
+  Engine.prototype.start = function () {
+    if (this.running) return;
+    this.running = true;
+    this.lastFrameTime = nowMs();
+    this.loop();
+  };
+
+  Engine.prototype.stop = function () { this.running = false; };
+
+  Engine.prototype.stepOnce = function () {
+    var dt = this.params.autoDt ? this.solver.suggestDt() : this.params.dt;
+    this.solver.step(dt);
+    this.simSteps++;
+    this.render();
+  };
+
+  /* draw the current state into the target context */
+  Engine.prototype.render = function () {
+    if (this.params.colorMode === 'vorticity') this.solver.computeVorticity();
+    var W = this.ctx.canvas.width, H = this.ctx.canvas.height;
+    this.renderer.draw(this.ctx, W, H, this.solver, {
+      mode: this.params.colorMode,
+      showDye: this.params.showDye
+    });
+  };
+
+  Engine.prototype.pointer = function (x, y, dx, dy, down) {
+    var s = this.solver;
+    if (down) {
+      s.stir(x, y, dx * 12, dy * 12, this.params.stirRadius);
+      s.injectDye(x, y, this.params.stirRadius * 0.9, this.params.dyeAmount * 0.35);
+    }
+  };
+
+  Engine.prototype.adaptiveSteps = function () {
+    // keep the solver busy for ~22 ms per frame
+    if (!(this.stepMs > 0)) return 1;
+    var n = Math.floor(22 / this.stepMs);
+    if (n < 1) n = 1;
+    if (n > 8) n = 8;
+    return n;
+  };
+
+  Engine.prototype.loop = function () {
+    if (!this.running) return;
+    var self = this;
+    var t0 = nowMs();
+
+    var steps = this.params.autoSteps ? this.adaptiveSteps() : this.params.stepsPerFrame;
+    var dt = this.params.dt;
+    for (var s = 0; s < steps; s++) {
+      dt = this.params.autoDt ? this.solver.suggestDt() : this.params.dt;
+      this.solver.step(dt);
+      this.simSteps++;
+    }
+    this.lastDt = dt;
+    var t1 = nowMs();
+
+    this.render();
+    var t2 = nowMs();
+
+    this.stepMs = this.stepMs * 0.8 + ((t1 - t0) / Math.max(steps, 1)) * 0.2;
+    this.renderMs = this.renderMs * 0.8 + (t2 - t1) * 0.2;
+
+    var tf = nowMs();
+    if (this.lastFrameTime) {
+      var inst = 1000 / Math.max(tf - this.lastFrameTime, 1);
+      this.fps = this.fps * 0.9 + inst * 0.1;
+    }
+    this.lastFrameTime = tf;
+    this.frame++;
+
+    var diag = this.solver.diagnostics();
+    this.onStats({
+      fps: this.fps,
+      stepMs: this.stepMs,
+      renderMs: this.renderMs,
+      steps: this.simSteps,
+      frames: this.frame,
+      N: this.solver.N,
+      dt: this.lastDt,
+      maxDiv: diag.maxDiv,
+      energy: diag.energy,
+      vmax: diag.vmax,
+      simTime: this.solver.simTime
+    });
+
+    this.requestFrame(function () { self.loop(); });
+  };
+
+  /* ===================================================================== */
+
+  global.NS = {
+    FFT1D: FFT1D,
+    FFT2D: FFT2D,
+    FluidSolver: FluidSolver,
+    Renderer: Renderer,
+    Engine: Engine,
+    LUTS: LUTS,
+    buildLUT: buildLUT,
+    defaultParams: defaultParams,
+    version: '1.0.0'
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
