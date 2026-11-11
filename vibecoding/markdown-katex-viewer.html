@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Markdown + KaTeX Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --bar: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #d9dde3;
+    --accent: #4f46e5;
+    --accent-text: #ffffff;
+    --editor-bg: #ffffff;
+    --editor-text: #111827;
+    --btn: #f3f4f6;
+    --btn-hover: #e5e7eb;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --bar: #171a21;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --border: #2b303b;
+    --accent: #818cf8;
+    --accent-text: #0b0d12;
+    --editor-bg: #12151b;
+    --editor-text: #e5e7eb;
+    --btn: #232834;
+    --btn-hover: #2e3544;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 8px 12px;
+    background: var(--bar);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { font-weight: 700; letter-spacing: .2px; margin-right: 4px; }
+  .brand span { color: var(--accent); }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group > label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .spacer { flex: 1; }
+
+  button, .btn {
+    font: inherit;
+    color: var(--text);
+    background: var(--btn);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+    line-height: 1.2;
+    user-select: none;
+  }
+  button:hover, .btn:hover { background: var(--btn-hover); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.sq { width: 30px; padding: 5px 0; text-align: center; font-weight: 700; }
+
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .seg button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); position: relative; z-index: 1; }
+
+  input[type="number"] {
+    width: 70px;
+    font: inherit;
+    padding: 4px 6px;
+    color: var(--text);
+    background: var(--editor-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  input[type="range"] { accent-color: var(--accent); cursor: pointer; }
+  #fsSlider { width: 190px; }
+  .unit { color: var(--muted); font-size: 12px; margin-left: -2px; }
+  .check { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+  /* ---------- Panes ---------- */
+  .panes {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    --split: 50%;
+  }
+  .editor-pane {
+    flex: 0 0 var(--split);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--editor-bg);
+  }
+  #editor {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    outline: none;
+    resize: none;
+    padding: 16px;
+    background: var(--editor-bg);
+    color: var(--editor-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 14px;
+    line-height: 1.55;
+    tab-size: 2;
+    white-space: pre-wrap;
+    overflow: auto;
+  }
+  .divider {
+    flex: 0 0 6px;
+    cursor: col-resize;
+    background: var(--border);
+    touch-action: none;
+  }
+  .divider:hover, .divider.drag { background: var(--accent); }
+  .preview-pane {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: auto;
+    background: #ffffff;
+  }
+
+  .panes[data-mode="edit"] .preview-pane,
+  .panes[data-mode="edit"] .divider { display: none; }
+  .panes[data-mode="edit"] .editor-pane { flex: 1; }
+  .panes[data-mode="preview"] .editor-pane,
+  .panes[data-mode="preview"] .divider { display: none; }
+
+  /* ---------- Status bar ---------- */
+  .statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--bar);
+    border-top: 1px solid var(--border);
+  }
+
+  /* =====================================================
+     PREVIEW TYPOGRAPHY — everything is in em so that a
+     single --fs value scales text, code, tables AND math.
+     ===================================================== */
+  #preview {
+    --fs: 16px;
+    font-size: var(--fs);
+    line-height: 1.6;
+    padding: 2rem 2.2rem 4rem;
+    color: #1f2328;
+    background: #fff;
+    font-family: "Georgia", "Times New Roman", serif;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+  #preview > :first-child { margin-top: 0; }
+  #preview p, #preview ul, #preview ol, #preview blockquote,
+  #preview pre, #preview table, #preview dl { margin: 0 0 1em; }
+  #preview h1, #preview h2, #preview h3,
+  #preview h4, #preview h5, #preview h6 {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.25;
+    margin: 1.5em 0 .5em;
+    font-weight: 700;
+  }
+  #preview h1 { font-size: 2em;    padding-bottom: .3em; border-bottom: .06em solid #d0d7de; }
+  #preview h2 { font-size: 1.55em; padding-bottom: .25em; border-bottom: .04em solid #d8dee4; }
+  #preview h3 { font-size: 1.25em; }
+  #preview h4 { font-size: 1em; }
+  #preview h5 { font-size: .875em; }
+  #preview h6 { font-size: .85em; color: #57606a; }
+  #preview a { color: #0969da; text-decoration: none; }
+  #preview a:hover { text-decoration: underline; }
+  #preview ul, #preview ol { padding-left: 2em; }
+  #preview li + li { margin-top: .25em; }
+  #preview li > p { margin-bottom: .4em; }
+  #preview ul.contains-task-list, #preview li.task-list-item { list-style: none; }
+  #preview li.task-list-item { margin-left: -1.4em; }
+  #preview li.task-list-item input { margin: 0 .5em 0 0; transform: scale(1.1); }
+  #preview blockquote {
+    padding: .1em 1em;
+    color: #57606a;
+    border-left: .25em solid #d0d7de;
+    background: rgba(0,0,0,.02);
+  }
+  #preview blockquote > :last-child { margin-bottom: 0; }
+  #preview hr { border: 0; border-top: .1em solid #d0d7de; margin: 1.6em 0; }
+  #preview img { max-width: 100%; height: auto; }
+
+  #preview code, #preview pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: .88em;
+  }
+  #preview code {
+    background: rgba(175,184,193,.22);
+    padding: .15em .35em;
+    border-radius: .3em;
+  }
+  #preview pre {
+    background: #f6f8fa;
+    border: .06em solid #e1e4e8;
+    border-radius: .4em;
+    padding: .9em 1.1em;
+    overflow: auto;
+    line-height: 1.45;
+  }
+  #preview pre code { background: none; padding: 0; font-size: 1em; border-radius: 0; }
+  #preview .hljs { background: transparent; padding: 0; }
+
+  #preview table {
+    border-collapse: collapse;
+    display: block;
+    max-width: 100%;
+    overflow: auto;
+  }
+  #preview th, #preview td { border: .06em solid #d0d7de; padding: .4em .8em; }
+  #preview th { background: #f6f8fa; font-weight: 600; }
+  #preview tr:nth-child(even) td { background: #fafbfc; }
+
+  /* KaTeX: inherits the same em-based size, so math follows the slider */
+  #preview .katex { font-size: 1.1em; }
+  #preview .katex-display {
+    margin: 1em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: .1em 0;
+  }
+  #preview .katex-display > .katex { max-width: 100%; }
+  #preview .katex-error { color: #cc0000; font-family: monospace; font-size: .9em; }
+
+  .render-error { color: #b91c1c; padding: 1rem; font-family: monospace; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 760px) {
+    .panes { flex-direction: column; }
+    .editor-pane, .preview-pane { flex: 1 1 0; }
+    .divider { display: none; }
+    #fsSlider { width: 130px; }
+  }
+
+  /* ---------- Print / PDF ---------- */
+  @page { margin: 14mm; }
+  @media print {
+    html, body { height: auto !important; overflow: visible !important; background: #fff !important; display: block !important; }
+    .toolbar, .editor-pane, .divider, .statusbar { display: none !important; }
+    .panes { display: block !important; height: auto !important; overflow: visible !important; }
+    .preview-pane {
+      display: block !important;
+      width: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+      background: #fff !important;
+    }
+    #preview { padding: 0 !important; }
+    #preview, #preview * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    #preview h1, #preview h2, #preview h3, #preview h4 { break-after: avoid; }
+    #preview pre, #preview blockquote, #preview tr, #preview img { break-inside: avoid; }
+    #preview .katex-display { break-inside: avoid; overflow: visible; }
+    #preview pre { white-space: pre-wrap; word-break: break-word; }
+    #preview table { display: table; }
+  }
+</style>
+</head>
+<body>
+
+<header class="toolbar">
+  <div class="brand">MD<span>·</span>KaTeX</div>
+
+  <div class="group seg" id="modeSeg" role="group" aria-label="View mode">
+    <button data-mode="edit"    title="Editor only">Edit</button>
+    <button data-mode="split"   title="Editor + preview" class="active">Split</button>
+    <button data-mode="preview" title="Preview only">Preview</button>
+  </div>
+
+  <div class="group">
+    <label>Preview font</label>
+    <button class="sq" id="fsDown" title="Smaller (−10%)">A−</button>
+    <input type="range" id="fsSlider" min="0" max="1000" step="1" title="Logarithmic slider: 4 px – 400 px">
+    <button class="sq" id="fsUp" title="Larger (+10%)">A+</button>
+    <input type="number" id="fsNum" min="4" max="400" step="1" title="Font size in px">
+    <span class="unit">px</span>
+    <button id="fsReset" title="Reset to 16 px">Reset</button>
+  </div>
+
+  <div class="group">
+    <label>Editor</label>
+    <button class="sq" id="edDown" title="Editor font smaller">A−</button>
+    <button class="sq" id="edUp"   title="Editor font larger">A+</button>
+  </div>
+
+  <label class="check" title="Keep editor and preview scrolled to the same position">
+    <input type="checkbox" id="syncScroll" checked> Sync scroll
+  </label>
+
+  <div class="spacer"></div>
+
+  <div class="group">
+    <button id="openBtn" title="Open a .md / .txt file">Open</button>
+    <button id="saveMd"  title="Download the Markdown source">Save .md</button>
+    <button id="themeBtn" title="Toggle light/dark interface">Theme</button>
+    <button id="pdfBtn" class="primary" title="Opens print dialog — choose “Save as PDF”">Download PDF</button>
+  </div>
+  <input type="file" id="fileInput" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+</header>
+
+<main class="panes" id="panes" data-mode="split">
+  <section class="editor-pane">
+    <textarea id="editor" spellcheck="false" placeholder="Write Markdown and $\LaTeX$ here…"></textarea>
+  </section>
+  <div class="divider" id="divider" title="Drag to resize"></div>
+  <section class="preview-pane" id="previewPane">
+    <article id="preview"></article>
+  </section>
+</main>
+
+<footer class="statusbar">
+  <span id="stWords">0 words</span>
+  <span id="stChars">0 chars</span>
+  <span id="stFont">Preview: 16 px</span>
+  <span>Ctrl + scroll over the preview to zoom text</span>
+  <span>Math: <code>$…$</code> <code>$$…$$</code> <code>\(…\)</code> <code>\[…\]</code></span>
+</footer>
+
+<script type="text/plain" id="sample">
+# Markdown + KaTeX Viewer
+
+Write on the left, see the result on the right. Use the **font slider** in the toolbar
+(from *4 px* all the way to *400 px*) — text, code, tables **and** math all scale together.
+
+## Inline and display math
+
+Euler's identity $e^{i\pi} + 1 = 0$ sits comfortably inside a sentence, and so does
+$\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$.
+
+The Gaussian integral:
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
+The quadratic formula, using the alternative delimiters \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \):
+
+\[
+\mathcal{F}\{f\}(\xi) = \int_{-\infty}^{\infty} f(x)\, e^{-2\pi i x \xi}\, dx
+\]
+
+## Environments
+
+$$
+\begin{aligned}
+\nabla \cdot \mathbf{E} &= \frac{\rho}{\varepsilon_0} \\
+\nabla \cdot \mathbf{B} &= 0 \\
+\nabla \times \mathbf{E} &= -\frac{\partial \mathbf{B}}{\partial t} \\
+\nabla \times \mathbf{B} &= \mu_0\mathbf{J} + \mu_0\varepsilon_0\frac{\partial \mathbf{E}}{\partial t}
+\end{aligned}
+$$
+
+$$
+A = \begin{pmatrix} a & b \\ c & d \end{pmatrix}, \qquad
+|x| = \begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}
+$$
+
+## Rich Markdown
+
+> “Mathematics is the art of giving the same name to different things.”
+> — Henri Poincaré
+
+| Function | Derivative        | Integral               |
+|----------|-------------------|------------------------|
+| $\sin x$ | $\cos x$          | $-\cos x + C$          |
+| $e^x$    | $e^x$             | $e^x + C$              |
+| $\ln x$  | $\dfrac{1}{x}$    | $x\ln x - x + C$       |
+
+- [x] Tables and task lists
+- [x] Syntax-highlighted code
+- [ ] Your own document
+
+~~~python
+def fib(n: int) -> int:
+    """Return the n-th Fibonacci number."""
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+~~~
+
+Inline code such as `$not_math$` is left alone, and currency like $5 and $10 is not mistaken
+for math. Escaped dollars \$ also work.
+
+---
+
+*Tip:* press **Download PDF** and choose “Save as PDF” as the destination.
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const editor = $('editor'), preview = $('preview'), previewPane = $('previewPane');
+  const panes = $('panes'), divider = $('divider');
+  const fsSlider = $('fsSlider'), fsNum = $('fsNum');
+
+  const FS_MIN = 4, FS_MAX = 400, FS_DEFAULT = 16;
+  const ED_MIN = 8, ED_MAX = 48;
+  const store = {
+    get: (k, d) => { try { const v = localStorage.getItem('mdkatex.' + k); return v === null ? d : v; } catch { return d; } },
+    set: (k, v) => { try { localStorage.setItem('mdkatex.' + k, v); } catch {} }
+  };
+
+  /* ================= Rendering ================= */
+
+  // Alternation order matters: code & escaped dollars are matched first and returned untouched.
+  const TOKEN_RE = new RegExp(
+    '(`{3}[\\s\\S]*?`{3}|~{3}[\\s\\S]*?~{3}|`[^`\\n]*`|\\\\\\$)' +   // 1: code / escaped $
+    '|\\$\\$([\\s\\S]+?)\\$\\$' +                                    // 2: $$ display $$
+    '|\\\\\\[([\\s\\S]+?)\\\\\\]' +                                  // 3: \[ display \]
+    '|\\\\\\(([\\s\\S]+?)\\\\\\)' +                                  // 4: \( inline \)
+    '|\\$(?!\\s)((?:\\\\.|[^$\\\\\\n])+?)(?<!\\s)\\$(?!\\d)',        // 5: $ inline $
+    'g'
+  );
+
+  function renderMarkdown(src) {
+    const maths = [];
+    const protectedSrc = src.replace(TOKEN_RE, (m, code, dd, br, par, inl) => {
+      if (code !== undefined) return code;
+      let tex, display;
+      if (dd  !== undefined) { tex = dd;  display = true;  }
+      else if (br  !== undefined) { tex = br;  display = true;  }
+      else if (par !== undefined) { tex = par; display = false; }
+      else { tex = inl; display = false; }
+      maths.push({ tex, display });
+      return 'KTXPH' + (maths.length - 1) + 'ENDKTX';
+    });
+
+    let html = marked.parse(protectedSrc, { gfm: true, breaks: false });
+    html = DOMPurify.sanitize(html);
+
+    return html.replace(/KTXPH(\d+)ENDKTX/g, (_, i) => {
+      const { tex, display } = maths[+i];
+      try {
+        return katex.renderToString(tex.trim(), {
+          displayMode: display,
+          throwOnError: false,
+          strict: 'ignore',
+          trust: false,
+          output: 'htmlAndMathml'
+        });
+      } catch (e) {
+        const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+        return '<span class="katex-error">' + esc(tex) + '</span>';
+      }
+    });
+  }
+  /* Replace KaTeX's em-based borders (which browsers snap to whole pixels)
+    with anti-aliased, transform-scaled bars so thickness stays proportional. */
+  function fixKatexRules(root) {
+    const EM = /^([\d.]+)em$/;
+    root.querySelectorAll('.katex [style*="border-"]').forEach(el => {
+      if (el.classList.contains('rule')) return;               // \rule uses two borders; leave it
+
+      const b = EM.exec(el.style.borderBottomWidth);           // frac bar, \overline, \underline, \hline
+      const r = EM.exec(el.style.borderRightWidth);            // vertical separators in arrays
+      if (!b && !r) return;
+
+      if (getComputedStyle(el).display === 'inline') el.style.display = 'inline-block';
+      if (!el.style.position) el.style.position = 'relative';
+
+      const bar = document.createElement('span');
+      bar.setAttribute('aria-hidden', 'true');
+      const common = 'position:absolute;top:0;left:0;background:currentColor;' +
+                    'pointer-events:none;transform-origin:0 0;';
+
+      if (b) {
+        const t = parseFloat(b[1]);
+        el.style.borderBottomWidth = '0';
+        el.style.height = t + 'em';                            // keep original layout size
+        bar.style.cssText = common + `width:100%;height:1em;transform:scaleY(${t});`;
+        el.appendChild(bar);
+      } else {
+        const t = parseFloat(r[1]);
+        el.style.borderRightWidth = '0';
+        el.style.width = t + 'em';
+        bar.style.cssText = common + `height:100%;width:1em;transform:scaleX(${t});`;
+        el.appendChild(bar);
+      }
+    });
+  }
+  function render() {
+    const src = editor.value;
+    if (!(window.marked && window.katex && window.DOMPurify)) {
+      preview.innerHTML = '<div class="render-error">Could not load rendering libraries (marked / KaTeX / DOMPurify). Check your internet connection.</div>';
+      return;
+    }
+    try {
+      preview.innerHTML = renderMarkdown(src);
+      fixKatexRules(preview);
+      if (window.hljs) {
+        preview.querySelectorAll('pre code').forEach(el => { try { hljs.highlightElement(el); } catch {} });
+      }
+    } catch (e) {
+      preview.innerHTML = '<div class="render-error">Render error: ' + String(e.message || e) + '</div>';
+    }
+    
+    const words = src.trim() ? src.trim().split(/\s+/).length : 0;
+    $('stWords').textContent = words.toLocaleString() + (words === 1 ? ' word' : ' words');
+    $('stChars').textContent = src.length.toLocaleString() + ' chars';
+  }
+
+  let timer = null;
+  function scheduleRender() {
+    clearTimeout(timer);
+    timer = setTimeout(render, 120);
+  }
+
+  /* ================= Preview font size ================= */
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const posToSize = p => FS_MIN * Math.pow(FS_MAX / FS_MIN, p / 1000);
+  const sizeToPos = s => Math.log(s / FS_MIN) / Math.log(FS_MAX / FS_MIN) * 1000;
+  let fontSize = FS_DEFAULT;
+
+  function setFont(px, { fromNum = false, fromSlider = false } = {}) {
+    fontSize = clamp(Math.round(px * 10) / 10, FS_MIN, FS_MAX);
+    preview.style.setProperty('--fs', fontSize + 'px');
+    if (!fromSlider) fsSlider.value = sizeToPos(fontSize);
+    if (!fromNum) fsNum.value = fontSize;
+    $('stFont').textContent = 'Preview: ' + fontSize + ' px';
+    store.set('fs', fontSize);
+  }
+
+  fsSlider.addEventListener('input', () => setFont(posToSize(+fsSlider.value), { fromSlider: true }));
+  fsNum.addEventListener('input', () => {
+    const v = parseFloat(fsNum.value);
+    if (!isNaN(v) && v >= FS_MIN && v <= FS_MAX) setFont(v, { fromNum: true });
+  });
+  fsNum.addEventListener('change', () => {
+    const v = parseFloat(fsNum.value);
+    setFont(isNaN(v) ? fontSize : v);
+  });
+  $('fsUp').addEventListener('click',   () => setFont(Math.max(fontSize * 1.1, fontSize + 0.1)));
+  $('fsDown').addEventListener('click', () => setFont(Math.min(fontSize / 1.1, fontSize - 0.1)));
+  $('fsReset').addEventListener('click', () => setFont(FS_DEFAULT));
+
+  // Ctrl/Cmd + wheel over the preview zooms the text
+  previewPane.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    setFont(fontSize * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+  }, { passive: false });
+
+  /* ================= Editor font size ================= */
+
+  let edSize = 14;
+  function setEditorFont(px) {
+    edSize = clamp(px, ED_MIN, ED_MAX);
+    editor.style.fontSize = edSize + 'px';
+    store.set('ed', edSize);
+  }
+  $('edUp').addEventListener('click',   () => setEditorFont(edSize + 1));
+  $('edDown').addEventListener('click', () => setEditorFont(edSize - 1));
+
+  /* ================= Editor behaviour ================= */
+
+  editor.addEventListener('input', () => {
+    store.set('content', editor.value);
+    scheduleRender();
+  });
+  editor.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      editor.setRangeText('  ', editor.selectionStart, editor.selectionEnd, 'end');
+      editor.dispatchEvent(new Event('input'));
+    }
+  });
+
+  /* ================= Scroll sync ================= */
+
+  let syncLock = false;
+  function syncFrom(src, dst) {
+    if (!$('syncScroll').checked || syncLock) return;
+    const max = src.scrollHeight - src.clientHeight;
+    if (max <= 0) return;
+    const ratio = src.scrollTop / max;
+    syncLock = true;
+    dst.scrollTop = ratio * (dst.scrollHeight - dst.clientHeight);
+    requestAnimationFrame(() => { syncLock = false; });
+  }
+  editor.addEventListener('scroll', () => syncFrom(editor, previewPane));
+  previewPane.addEventListener('scroll', () => syncFrom(previewPane, editor));
+
+  /* ================= View mode & divider ================= */
+
+  $('modeSeg').addEventListener('click', e => {
+    const b = e.target.closest('button[data-mode]');
+    if (!b) return;
+    setMode(b.dataset.mode);
+  });
+  function setMode(m) {
+    panes.dataset.mode = m;
+    document.querySelectorAll('#modeSeg button').forEach(x => x.classList.toggle('active', x.dataset.mode === m));
+    store.set('mode', m);
+  }
+
+  divider.addEventListener('pointerdown', e => {
+    divider.setPointerCapture(e.pointerId);
+    divider.classList.add('drag');
+    document.body.style.userSelect = 'none';
+  });
+  divider.addEventListener('pointermove', e => {
+    if (!divider.classList.contains('drag')) return;
+    const r = panes.getBoundingClientRect();
+    const pct = clamp((e.clientX - r.left) / r.width * 100, 15, 85);
+    panes.style.setProperty('--split', pct + '%');
+  });
+  const endDrag = () => { divider.classList.remove('drag'); document.body.style.userSelect = ''; };
+  divider.addEventListener('pointerup', endDrag);
+  divider.addEventListener('pointercancel', endDrag);
+
+  /* ================= Files ================= */
+
+  function download(name, text, type) {
+    const blob = new Blob([text], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function docName() {
+    const h = preview.querySelector('h1, h2, h3');
+    const raw = (h ? h.textContent : 'document').trim();
+    return raw.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '-').slice(0, 60) || 'document';
+  }
+
+  $('saveMd').addEventListener('click', () => download(docName() + '.md', editor.value, 'text/markdown'));
+  $('openBtn').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) readFile(f);
+    e.target.value = '';
+  });
+  function readFile(f) {
+    const r = new FileReader();
+    r.onload = () => { editor.value = r.result; store.set('content', editor.value); render(); };
+    r.readAsText(f);
+  }
+  ['dragover', 'drop'].forEach(ev => editor.addEventListener(ev, e => {
+    e.preventDefault();
+    if (ev === 'drop' && e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
+  }));
+
+  /* ================= PDF (print to PDF) ================= */
+
+  $('pdfBtn').addEventListener('click', () => {
+    clearTimeout(timer);
+    render();                       // make sure preview is up to date
+    const oldTitle = document.title;
+    document.title = docName();     // becomes the suggested PDF filename
+    const restore = () => { document.title = oldTitle; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    // wait a frame so KaTeX/layout has settled
+    requestAnimationFrame(() => setTimeout(() => window.print(), 50));
+  });
+
+  /* ================= Theme ================= */
+
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    store.set('theme', t);
+  }
+  $('themeBtn').addEventListener('click', () =>
+    setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+
+  /* ================= Init ================= */
+
+  setTheme(store.get('theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  setMode(store.get('mode', 'split'));
+  setEditorFont(parseFloat(store.get('ed', 14)) || 14);
+  setFont(parseFloat(store.get('fs', FS_DEFAULT)) || FS_DEFAULT);
+  editor.value = store.get('content', null) ?? $('sample').textContent.replace(/^\n/, '');
+  render();
+
+  // Re-render once KaTeX fonts are loaded so layout is accurate
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {});
+})();
+</script>
+</body>
+</html>
