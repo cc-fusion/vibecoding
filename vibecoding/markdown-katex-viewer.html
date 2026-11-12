@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 
+<!-- ===================== APP UI STYLES ===================== -->
 <style>
   :root {
     --bg: #f3f4f6;
@@ -39,6 +40,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -58,6 +60,8 @@
     padding: 8px 12px;
     background: var(--bar);
     border-bottom: 1px solid var(--border);
+    position: relative;
+    z-index: 10;
   }
   .brand { font-weight: 700; letter-spacing: .2px; margin-right: 4px; }
   .brand span { color: var(--accent); }
@@ -81,7 +85,7 @@
   button.primary:hover { filter: brightness(1.08); }
   button.sq { width: 30px; padding: 5px 0; text-align: center; font-weight: 700; }
 
-  .seg { display: inline-flex; }
+  .seg { display: inline-flex; gap: 0; }
   .seg button { border-radius: 0; margin-left: -1px; }
   .seg button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
   .seg button:last-child { border-radius: 0 6px 6px 0; }
@@ -100,6 +104,60 @@
   #fsSlider { width: 190px; }
   .unit { color: var(--muted); font-size: 12px; margin-left: -2px; }
   .check { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+  /* Live toggle */
+  button.toggle[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  #refreshBtn.stale {
+    border-color: #d97706;
+    box-shadow: 0 0 0 2px rgba(217,119,6,.35);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(217,119,6,.15); } }
+  #stState.stale { color: #d97706; font-weight: 600; }
+
+  /* Copy-HTML dropdown */
+  .menu-wrap { position: relative; }
+  .menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 50;
+    min-width: 270px;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+  .menu button { text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px; }
+  .menu button:hover { background: var(--btn-hover); }
+  .menu small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 40px;
+    transform: translate(-50%, 12px);
+    background: #111827;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.err { background: #b91c1c; }
 
   /* ---------- Panes ---------- */
   .panes {
@@ -163,10 +221,35 @@
     border-top: 1px solid var(--border);
   }
 
-  /* =====================================================
-     PREVIEW TYPOGRAPHY — everything is in em so that a
-     single --fs value scales text, code, tables AND math.
-     ===================================================== */
+  .render-error { color: #b91c1c; padding: 1rem; font-family: monospace; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 760px) {
+    .panes { flex-direction: column; }
+    .editor-pane, .preview-pane { flex: 1 1 0; }
+    .divider { display: none; }
+    #fsSlider { width: 130px; }
+  }
+
+  /* ---------- Print / PDF (page layout) ---------- */
+  @page { margin: 14mm; }
+  @media print {
+    html, body { height: auto !important; overflow: visible !important; background: #fff !important; display: block !important; }
+    .toolbar, .editor-pane, .divider, .statusbar, #toast { display: none !important; }
+    .panes { display: block !important; height: auto !important; overflow: visible !important; }
+    .preview-pane {
+      display: block !important;
+      width: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+      background: #fff !important;
+    }
+  }
+</style>
+
+<!-- ============ PREVIEW TYPOGRAPHY (also exported with "Copy full HTML page") ============
+     Everything is in em so a single --fs value scales text, code, tables AND math. -->
+<style id="previewCss">
   #preview {
     --fs: 16px;
     font-size: var(--fs);
@@ -242,7 +325,7 @@
   #preview th { background: #f6f8fa; font-weight: 600; }
   #preview tr:nth-child(even) td { background: #fafbfc; }
 
-  /* KaTeX: inherits the same em-based size, so math follows the slider */
+  /* KaTeX inherits the same em-based size, so math follows the slider */
   #preview .katex { font-size: 1.1em; }
   #preview .katex-display {
     margin: 1em 0;
@@ -253,29 +336,7 @@
   #preview .katex-display > .katex { max-width: 100%; }
   #preview .katex-error { color: #cc0000; font-family: monospace; font-size: .9em; }
 
-  .render-error { color: #b91c1c; padding: 1rem; font-family: monospace; }
-
-  /* ---------- Responsive ---------- */
-  @media (max-width: 760px) {
-    .panes { flex-direction: column; }
-    .editor-pane, .preview-pane { flex: 1 1 0; }
-    .divider { display: none; }
-    #fsSlider { width: 130px; }
-  }
-
-  /* ---------- Print / PDF ---------- */
-  @page { margin: 14mm; }
   @media print {
-    html, body { height: auto !important; overflow: visible !important; background: #fff !important; display: block !important; }
-    .toolbar, .editor-pane, .divider, .statusbar { display: none !important; }
-    .panes { display: block !important; height: auto !important; overflow: visible !important; }
-    .preview-pane {
-      display: block !important;
-      width: auto !important;
-      height: auto !important;
-      overflow: visible !important;
-      background: #fff !important;
-    }
     #preview { padding: 0 !important; }
     #preview, #preview * {
       -webkit-print-color-adjust: exact;
@@ -305,7 +366,7 @@
     <button class="sq" id="fsDown" title="Smaller (−10%)">A−</button>
     <input type="range" id="fsSlider" min="0" max="1000" step="1" title="Logarithmic slider: 4 px – 400 px">
     <button class="sq" id="fsUp" title="Larger (+10%)">A+</button>
-    <input type="number" id="fsNum" min="4" max="400" step="1" title="Font size in px">
+    <input type="number" id="fsNum" min="4" max="400" step="any" title="Font size in px">
     <span class="unit">px</span>
     <button id="fsReset" title="Reset to 16 px">Reset</button>
   </div>
@@ -314,6 +375,12 @@
     <label>Editor</label>
     <button class="sq" id="edDown" title="Editor font smaller">A−</button>
     <button class="sq" id="edUp"   title="Editor font larger">A+</button>
+  </div>
+
+  <div class="group">
+    <button id="liveBtn" class="toggle" aria-pressed="true"
+            title="Live preview: re-render as you type">Live: On</button>
+    <button id="refreshBtn" hidden title="Render now (Ctrl/Cmd + Enter)">Refresh</button>
   </div>
 
   <label class="check" title="Keep editor and preview scrolled to the same position">
@@ -325,6 +392,28 @@
   <div class="group">
     <button id="openBtn" title="Open a .md / .txt file">Open</button>
     <button id="saveMd"  title="Download the Markdown source">Save .md</button>
+
+    <div class="menu-wrap" id="htmlMenuWrap">
+      <div class="seg">
+        <button id="copyHtmlBtn" title="Copy the rendered HTML (fragment)">Copy HTML</button>
+        <button id="htmlMenuBtn" class="sq" aria-haspopup="true" aria-expanded="false" title="More HTML options">▾</button>
+      </div>
+      <div class="menu" id="htmlMenu" role="menu" hidden>
+        <button role="menuitem" data-act="fragment">
+          Copy HTML fragment
+          <small>Rendered content only (paste into your own page)</small>
+        </button>
+        <button role="menuitem" data-act="page">
+          Copy full HTML page
+          <small>Standalone document with styles + KaTeX CSS link</small>
+        </button>
+        <button role="menuitem" data-act="download">
+          Download .html file
+          <small>Same standalone document, saved to disk</small>
+        </button>
+      </div>
+    </div>
+
     <button id="themeBtn" title="Toggle light/dark interface">Theme</button>
     <button id="pdfBtn" class="primary" title="Opens print dialog — choose “Save as PDF”">Download PDF</button>
   </div>
@@ -342,12 +431,15 @@
 </main>
 
 <footer class="statusbar">
+  <span id="stState"></span>
   <span id="stWords">0 words</span>
   <span id="stChars">0 chars</span>
   <span id="stFont">Preview: 16 px</span>
   <span>Ctrl + scroll over the preview to zoom text</span>
   <span>Math: <code>$…$</code> <code>$$…$$</code> <code>\(…\)</code> <code>\[…\]</code></span>
 </footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script type="text/plain" id="sample">
 # Markdown + KaTeX Viewer
@@ -358,7 +450,7 @@ Write on the left, see the result on the right. Use the **font slider** in the t
 ## Inline and display math
 
 Euler's identity $e^{i\pi} + 1 = 0$ sits comfortably inside a sentence, and so does
-$\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$.
+$\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$. A small fraction: $\frac{a}{b}$.
 
 The Gaussian integral:
 
@@ -417,7 +509,8 @@ for math. Escaped dollars \$ also work.
 
 ---
 
-*Tip:* press **Download PDF** and choose “Save as PDF” as the destination.
+*Tips:* press **Download PDF** and choose “Save as PDF” as the destination, or use
+**Copy HTML** to grab the rendered markup.
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
@@ -431,13 +524,29 @@ for math. Escaped dollars \$ also work.
   const editor = $('editor'), preview = $('preview'), previewPane = $('previewPane');
   const panes = $('panes'), divider = $('divider');
   const fsSlider = $('fsSlider'), fsNum = $('fsNum');
+  const liveBtn = $('liveBtn'), refreshBtn = $('refreshBtn');
 
   const FS_MIN = 4, FS_MAX = 400, FS_DEFAULT = 16;
   const ED_MIN = 8, ED_MAX = 48;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const escHtml = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
   const store = {
     get: (k, d) => { try { const v = localStorage.getItem('mdkatex.' + k); return v === null ? d : v; } catch { return d; } },
     set: (k, v) => { try { localStorage.setItem('mdkatex.' + k, v); } catch {} }
   };
+
+  /* ================= Toast ================= */
+
+  let toastTimer = null;
+  function toast(msg, isErr = false) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.toggle('err', isErr);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1900);
+  }
 
   /* ================= Rendering ================= */
 
@@ -456,10 +565,10 @@ for math. Escaped dollars \$ also work.
     const protectedSrc = src.replace(TOKEN_RE, (m, code, dd, br, par, inl) => {
       if (code !== undefined) return code;
       let tex, display;
-      if (dd  !== undefined) { tex = dd;  display = true;  }
+      if (dd  !== undefined)      { tex = dd;  display = true;  }
       else if (br  !== undefined) { tex = br;  display = true;  }
       else if (par !== undefined) { tex = par; display = false; }
-      else { tex = inl; display = false; }
+      else                        { tex = inl; display = false; }
       maths.push({ tex, display });
       return 'KTXPH' + (maths.length - 1) + 'ENDKTX';
     });
@@ -478,20 +587,24 @@ for math. Escaped dollars \$ also work.
           output: 'htmlAndMathml'
         });
       } catch (e) {
-        const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-        return '<span class="katex-error">' + esc(tex) + '</span>';
+        return '<span class="katex-error">' + escHtml(tex) + '</span>';
       }
     });
   }
+
   /* Replace KaTeX's em-based borders (which browsers snap to whole pixels)
-    with anti-aliased, transform-scaled bars so thickness stays proportional. */
+     with anti-aliased, transform-scaled bars so thickness stays proportional
+     at every font size. Handles fraction bars, \overline, \underline, \hline
+     and vertical separators in arrays. Boxes, \rule and dashed lines are left alone. */
   function fixKatexRules(root) {
     const EM = /^([\d.]+)em$/;
     root.querySelectorAll('.katex [style*="border-"]').forEach(el => {
-      if (el.classList.contains('rule')) return;               // \rule uses two borders; leave it
+      const cl = el.classList;
+      if (cl.contains('rule') || cl.contains('fbox') || cl.contains('boxpad') || cl.contains('hdashline')) return;
+      if (parseFloat(el.style.borderTopWidth) > 0 || parseFloat(el.style.borderLeftWidth) > 0) return;
 
-      const b = EM.exec(el.style.borderBottomWidth);           // frac bar, \overline, \underline, \hline
-      const r = EM.exec(el.style.borderRightWidth);            // vertical separators in arrays
+      const b = EM.exec(el.style.borderBottomWidth);   // frac bar, \overline, \underline, \hline
+      const r = EM.exec(el.style.borderRightWidth);    // vertical separators in arrays
       if (!b && !r) return;
 
       if (getComputedStyle(el).display === 'inline') el.style.display = 'inline-block';
@@ -500,53 +613,90 @@ for math. Escaped dollars \$ also work.
       const bar = document.createElement('span');
       bar.setAttribute('aria-hidden', 'true');
       const common = 'position:absolute;top:0;left:0;background:currentColor;' +
-                    'pointer-events:none;transform-origin:0 0;';
+                     'pointer-events:none;transform-origin:0 0;';
 
       if (b) {
         const t = parseFloat(b[1]);
         el.style.borderBottomWidth = '0';
-        el.style.height = t + 'em';                            // keep original layout size
+        el.style.height = t + 'em';                    // keep original layout size
         bar.style.cssText = common + `width:100%;height:1em;transform:scaleY(${t});`;
-        el.appendChild(bar);
       } else {
         const t = parseFloat(r[1]);
         el.style.borderRightWidth = '0';
         el.style.width = t + 'em';
         bar.style.cssText = common + `height:100%;width:1em;transform:scaleX(${t});`;
-        el.appendChild(bar);
       }
+      el.appendChild(bar);
     });
   }
-  function render() {
+
+  /* ---- Live preview state ---- */
+  let live = true, stale = false, timer = null;
+  let cleanHtml = '';          // pristine rendered HTML (for "Copy HTML")
+
+  function updateStats() {
     const src = editor.value;
-    if (!(window.marked && window.katex && window.DOMPurify)) {
-      preview.innerHTML = '<div class="render-error">Could not load rendering libraries (marked / KaTeX / DOMPurify). Check your internet connection.</div>';
-      return;
-    }
-    try {
-      preview.innerHTML = renderMarkdown(src);
-      fixKatexRules(preview);
-      if (window.hljs) {
-        preview.querySelectorAll('pre code').forEach(el => { try { hljs.highlightElement(el); } catch {} });
-      }
-    } catch (e) {
-      preview.innerHTML = '<div class="render-error">Render error: ' + String(e.message || e) + '</div>';
-    }
-    
     const words = src.trim() ? src.trim().split(/\s+/).length : 0;
     $('stWords').textContent = words.toLocaleString() + (words === 1 ? ' word' : ' words');
     $('stChars').textContent = src.length.toLocaleString() + ' chars';
   }
 
-  let timer = null;
+  function setStale(v) {
+    stale = v;
+    refreshBtn.classList.toggle('stale', v);
+    const s = $('stState');
+    s.classList.toggle('stale', v);
+    s.textContent = v ? 'Preview out of date: press Refresh (Ctrl+Enter)' : '';
+  }
+
+  function render() {
+    setStale(false);
+    const src = editor.value;
+    if (!(window.marked && window.katex && window.DOMPurify)) {
+      cleanHtml = '';
+      preview.innerHTML = '<div class="render-error">Could not load rendering libraries (marked / KaTeX / DOMPurify). Check your internet connection.</div>';
+      updateStats();
+      return;
+    }
+    try {
+      preview.innerHTML = renderMarkdown(src);
+      if (window.hljs) {
+        preview.querySelectorAll('pre code').forEach(el => { try { hljs.highlightElement(el); } catch {} });
+      }
+      cleanHtml = preview.innerHTML;     // snapshot BEFORE the rule fix so exports stay clean
+      fixKatexRules(preview);
+    } catch (e) {
+      cleanHtml = '';
+      preview.innerHTML = '<div class="render-error">Render error: ' + escHtml(String(e.message || e)) + '</div>';
+    }
+    updateStats();
+  }
+
   function scheduleRender() {
     clearTimeout(timer);
+    if (!live) { setStale(true); updateStats(); return; }
     timer = setTimeout(render, 120);
   }
 
+  function ensureFresh() {
+    if (stale || timer) { clearTimeout(timer); timer = null; render(); }
+  }
+
+  /* ================= Live toggle ================= */
+
+  function setLive(on) {
+    live = on;
+    liveBtn.setAttribute('aria-pressed', String(on));
+    liveBtn.textContent = 'Live: ' + (on ? 'On' : 'Off');
+    refreshBtn.hidden = on;
+    store.set('live', on ? '1' : '0');
+    if (on) { clearTimeout(timer); if (stale) render(); }
+  }
+  liveBtn.addEventListener('click', () => setLive(!live));
+  refreshBtn.addEventListener('click', () => { clearTimeout(timer); render(); });
+
   /* ================= Preview font size ================= */
 
-  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const posToSize = p => FS_MIN * Math.pow(FS_MAX / FS_MIN, p / 1000);
   const sizeToPos = s => Math.log(s / FS_MIN) / Math.log(FS_MAX / FS_MIN) * 1000;
   let fontSize = FS_DEFAULT;
@@ -602,6 +752,10 @@ for math. Escaped dollars \$ also work.
       e.preventDefault();
       editor.setRangeText('  ', editor.selectionStart, editor.selectionEnd, 'end');
       editor.dispatchEvent(new Event('input'));
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      clearTimeout(timer);
+      render();
     }
   });
 
@@ -624,8 +778,7 @@ for math. Escaped dollars \$ also work.
 
   $('modeSeg').addEventListener('click', e => {
     const b = e.target.closest('button[data-mode]');
-    if (!b) return;
-    setMode(b.dataset.mode);
+    if (b) setMode(b.dataset.mode);
   });
   function setMode(m) {
     panes.dataset.mode = m;
@@ -675,7 +828,7 @@ for math. Escaped dollars \$ also work.
   });
   function readFile(f) {
     const r = new FileReader();
-    r.onload = () => { editor.value = r.result; store.set('content', editor.value); render(); };
+    r.onload = () => { editor.value = r.result; store.set('content', editor.value); clearTimeout(timer); render(); };
     r.readAsText(f);
   }
   ['dragover', 'drop'].forEach(ev => editor.addEventListener(ev, e => {
@@ -683,16 +836,90 @@ for math. Escaped dollars \$ also work.
     if (ev === 'drop' && e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
   }));
 
+  /* ================= Copy / export HTML ================= */
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch {}
+      ta.remove();
+      return ok;
+    }
+  }
+
+  function buildPage() {
+    const css = $('previewCss').textContent;
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escHtml(docName())}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>
+  @page { margin: 14mm; }
+  body { margin: 0; background: #fff; }
+${css}
+</style>
+</head>
+<body>
+<article id="preview" style="--fs:${fontSize}px">
+${cleanHtml}
+</article>
+</body>
+</html>
+`;
+  }
+
+  async function htmlAction(act) {
+    ensureFresh();
+    if (!cleanHtml) { toast('Nothing to copy', true); return; }
+    if (act === 'download') {
+      download(docName() + '.html', buildPage(), 'text/html');
+      toast('HTML file downloaded');
+      return;
+    }
+    const isPage = act === 'page';
+    const ok = await copyText(isPage ? buildPage() : cleanHtml);
+    toast(ok ? (isPage ? 'Full HTML page copied' : 'HTML fragment copied')
+             : 'Copy failed: clipboard access blocked', !ok);
+  }
+
+  const menuWrap = $('htmlMenuWrap'), menu = $('htmlMenu'), menuBtn = $('htmlMenuBtn');
+  function toggleMenu(open) {
+    open = open ?? menu.hidden;
+    menu.hidden = !open;
+    menuBtn.setAttribute('aria-expanded', String(open));
+  }
+  menuBtn.addEventListener('click', e => { e.stopPropagation(); toggleMenu(); });
+  document.addEventListener('click', e => { if (!menuWrap.contains(e.target)) toggleMenu(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleMenu(false); });
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    toggleMenu(false);
+    htmlAction(b.dataset.act);
+  });
+  $('copyHtmlBtn').addEventListener('click', () => htmlAction('fragment'));
+
   /* ================= PDF (print to PDF) ================= */
 
   $('pdfBtn').addEventListener('click', () => {
     clearTimeout(timer);
-    render();                       // make sure preview is up to date
+    render();                       // always print an up-to-date preview
     const oldTitle = document.title;
     document.title = docName();     // becomes the suggested PDF filename
     const restore = () => { document.title = oldTitle; window.removeEventListener('afterprint', restore); };
     window.addEventListener('afterprint', restore);
-    // wait a frame so KaTeX/layout has settled
     requestAnimationFrame(() => setTimeout(() => window.print(), 50));
   });
 
@@ -713,9 +940,7 @@ for math. Escaped dollars \$ also work.
   setFont(parseFloat(store.get('fs', FS_DEFAULT)) || FS_DEFAULT);
   editor.value = store.get('content', null) ?? $('sample').textContent.replace(/^\n/, '');
   render();
-
-  // Re-render once KaTeX fonts are loaded so layout is accurate
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {});
+  setLive(store.get('live', '1') === '1');
 })();
 </script>
 </body>
